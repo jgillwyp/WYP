@@ -54,7 +54,7 @@ in TSX.
 - Palette 1 is **light-only**. Do not reintroduce a `prefers-color-scheme: dark`
   block; it inverts the page background and breaks every band and card.
 - Screens render inside `.frame-none` (max-width 480px) — design mobile-first.
-- An unavailable action uses `.is-locked` (§6.17) — never `.btn-secondary` or
+- An unavailable action uses `.is-locked` (§6.22) — never `.btn-secondary` or
   `.btn-quiet`, which both mean "available, lower emphasis". Locked controls
   carry a padlock, adjacent text saying what would unlock them, and
   `aria-disabled="true"` rather than `disabled` so screen readers still reach
@@ -134,8 +134,10 @@ link is built only after the stack is proven on Add Contact.
 
 - `contacts` has only an INSERT policy — SELECT/UPDATE/DELETE policies are
   missing, so reads return nothing. Fix before wiring the contact list.
-- `design/spec/` is empty; the `§` references in every mockup do not yet
-  resolve to a document.
+- The UI spec is `design/spec/WouldYouPlease_UI_Design_Specification_v2_9.docx`.
+  All 27 `§` references in the repo resolve against it. §6 is fully occupied
+  through §6.18, so newly proposed components take §6.19 and upward — check the
+  spec's table of contents before assigning a number.
 - `RequireAuth.tsx` imports `./src/lib/supabaseClient` while everything else
   uses `@/lib/supabaseClient`. Same file, works, inconsistent.
 - Main screen, Add Contact, and Your Account are mockups only. See the status

@@ -1,0 +1,52 @@
+Project: Would You Please (WYP)
+Canonical sources
+
+The current canonical documents in this Project's knowledge base are:
+ - PRD: WouldYouPlease_PRD_v12_6.docx
+ - UI spec: WouldYouPlease_UI_Design_Specification_v2_9.docx
+ - Screen mockups (canonical HTML sources for spec figures): WYP_main_screen_palette1.html, WYP_add_contact_palette1_floating.html, WYP_add_contact_no_contact_dialog_palette1.html, WYP_create_request_palette1.html, WYP_respond_to_request_palette1.html, WYP_storage_maintenance_palette1.html
+  - Icons: wyp_icon_*.svg (10 files: dialog, attachment, expand, contract, print, voice_search, search, lookup, calendar, clock — settings retained but retired/unused)
+  - Logos: wyp_logo_*.svg (horizontal light/dark, checked_request light/dark)
+  - Assets source: wyp_assets_source.md (SVG source of record)
+  - Decisions log: wyp_decisions_log.md (running record of choices made in chat)
+ 
+When knowledge files conflict with anything in chat history, the knowledge files win. When this instructions block conflicts with a knowledge file, the knowledge file wins. If you're uncertain which version a fact comes from, ask before assuming.
+
+Product at a glance 
+Would You Please is a cross-platform Request tracking + personal ToDo app for Windows, iOS, and Android, with a secure web-respond view for non-registered recipients. Domain: wouldyouplease.com. Freemium: free ad-supported (1-year retention) and $17.95/year paid (ad-free, perpetual).
+Three core objects:
+Request — sent from one user to another with a due date
+ToDo — personal task for the logged-in user; no recipient; optional due date; Priority (1=ASAP, 2=SOON, 3=LATER); optional Category
+Dialog — threaded Questions, Answers, and Comments attached to a Request or ToDo
+
+Terminology (use exactly these — don't drift)
+"Request Texting" is used to describe the Send by Text feature which is available to subscribers.
+Dialog — never "Q&A." Q&A is the old name from v3.0 and earlier.
+Request — a tracked ask sent to another contact.
+ToDo — a personal task for the logged-in user.
+Private Category — user-defined label on Requests and ToDos (e.g. "Personal Fin," "Future Dev," "Would You Please").
+Sent / Received / ToDos — the three sections of the main screen.
+Status values: Open, Overdue, Done. Overdue does not apply to ToDos.
+Priority values: ASAP (1), SOON (2), LATER (3).
+Label-affordance glyph — the small grey mark inside a resting field label (lookup, calendar, clock) signaling that focus opens a pull-down or picker (UI spec §6.16). Not a clickable icon.
+Due Time — optional time on a Request in addition to its Due Date; Overdue is evaluated at the stated time (PRD §2.7).
+
+Design constants
+Brand blue: #2A5FC8 (all icons and logo accents)
+Description truncation: max 2 lines; if truncated, replace the last 3 visible characters with an ellipsis (…)
+Overdue rows: entire row in red
+Due dates: bold unless item is Done
+Default sorts: Sent/Received by Due descending; ToDos by Priority ascending
+Label-affordance glyphs render at ≈120% of the resting label font size (≈17 px vs the 14-px label), vertically centered on the label text; they disappear when the label floats.
+A Request row with a Due Time shows three lines on the main screen: the time renders beneath the date in the Due column.
+
+Working preferences for Jim
+Treat the PRD and UI spec as living documents. When I describe a change, propose the exact edit (which section, what wording) rather than re-summarizing what I just said.
+For UI questions, reference the UI Design Specification by section number (e.g. §6.16, §9.2.3), and the PRD likewise.
+When I ask for something that conflicts with an existing PRD decision, flag the conflict before making the change — don't silently overwrite.
+Output style: prose by default; lists only when the content is genuinely a list. No emoji. No excessive bolding.
+For new design proposals, give me the recommendation first, then the alternatives you rejected, then the open questions — in that order.
+Don't pad responses with restatements of what I asked. Start with the answer.
+
+Maintenance rule
+When a new PRD or UI spec version is finalized, replace the old file in project knowledge and update the version numbers in the "Canonical sources" section above. Add any inter-version decisions to wyp_decisions_log.md before they're lost in a chat that scrolls off. Screen renders and design detail are single-homed in the UI spec; the PRD carries functional behavior only (owner decision 2026-07-17).

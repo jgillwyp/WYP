@@ -221,7 +221,7 @@ body {
   outline-offset: 2px;
 }
 
-/* Full-width action button — PROPOSED (§6.1 block variant, auth screens).
+/* Full-width action button — PROPOSED (§6.19, auth screens).
    Auth screens have no band cluster, so the primary action sits in the form. */
 .btn-block {
   display: block;
@@ -231,7 +231,7 @@ body {
   border-radius: 11px;
 }
 
-/* Quiet button — PROPOSED (§6.16).
+/* Quiet button — PROPOSED (§6.21).
    Global actions that must stay reachable but should not compete with the
    Create buttons. One visual step below the §6.11 secondary button. */
 .btn-quiet {
@@ -265,7 +265,7 @@ body {
 }
 
 /* ============================================================================
-   LOCKED CONTROL — PROPOSED (§6.17)
+   LOCKED CONTROL — PROPOSED (§6.22)
    For an action the user cannot take because of the tier of the *request*,
    not because of anything they did. Distinct from .btn-secondary and
    .btn-quiet, which both mean "available, lower emphasis". This means inert.
@@ -436,7 +436,7 @@ body {
 }
 
 /* ============================================================================
-   CHECKBOX ROW — PROPOSED (§6.15)
+   CHECKBOX ROW — PROPOSED (§6.20)
    Chips cover either/or choices; a single persistent toggle reads as a checkbox.
    ========================================================================= */
 .checkrow {

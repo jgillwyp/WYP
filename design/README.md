@@ -93,13 +93,21 @@ into the spec deliberately.
 
 ## Proposed components awaiting spec entry
 
-| Class | Purpose | First used |
-|---|---|---|
-| `.btn-block` | Full-width primary action for auth screens, which have no band cluster | Sign In |
-| `.checkrow` | Single persistent toggle; chips only cover either/or choices | Sign In |
-| `.finput[readonly]` + `--locked` | Read-only field, for the email that is also the sign-in ID | Your Account |
-| `.btn-quiet` | Global action that must stay reachable without competing with Create | Main screen — Log Out |
-| `.is-locked` + `--locked-ink` / `--locked-border` | Action unavailable because of the request's tier | Respond to Request — Add Attachment |
+§6 of the spec is occupied through **§6.18**. Anything new starts at §6.19 —
+check the spec's table of contents before assigning a number.
+
+| § | Class | Purpose | First used |
+|---|---|---|---|
+| §6.19 | `.btn-block` | Full-width primary action for auth screens, which have no band cluster | Sign In |
+| §6.20 | `.checkrow` | Single persistent toggle; chips only cover either/or choices | Sign In |
+| §6.21 | `.btn-quiet` | Global action that must stay reachable without competing with Create | Main screen — Log Out |
+| §6.22 | `.is-locked` + `--locked-ink` / `--locked-border` | Action unavailable because of the request's tier | Respond to Request — Add Attachment |
+| §6.10 variant | `.finput[readonly]` + `--locked` | Read-only field, for the email that is also the sign-in ID | Your Account |
+
+These were first written as §6.15–6.17, which collide with **Reserved ad slot**,
+**Lookup and picker fields**, and **Calendar and clock pickers** in v2.9.
+Renumbered 2026-08-03 once the spec was in the repo — the collision was
+invisible while the spec lived outside it.
 
 ## Entitlements
 

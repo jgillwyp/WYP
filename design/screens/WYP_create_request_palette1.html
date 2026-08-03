@@ -109,7 +109,7 @@
   --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7; /* §6.17 PROPOSED */
 }
 
-/* Locked control (§6.17, PROPOSED) — inert, not "lower emphasis".
+/* Locked control (§6.22, PROPOSED) — inert, not "lower emphasis".
    Pair with adjacent text saying why; aria-disabled, never disabled. */
 .btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
   border:1px solid var(--locked-border);cursor:not-allowed;
@@ -272,7 +272,7 @@ html,body{margin:0;height:100%;background:#fff;}
 .locked .lockttl{font-size:12.5px;font-weight:700;color:var(--ink);}
 .locked .locknote{font-size:12px;line-height:1.35;color:var(--ink-soft);}
 /* superseded 2026-08-03: the solid --ink-soft fill read as an active button.
-   Locked now uses the shared .is-locked treatment (§6.17). */
+   Locked now uses the shared .is-locked treatment (§6.22). */
 </style></head>
 <body>
 <div class="frame-none"><div class="app">
