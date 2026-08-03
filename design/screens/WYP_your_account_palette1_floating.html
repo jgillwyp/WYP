@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 · Floating labels — Would You Please — Your Account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){html,body{background:#eef1f5;}.frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}}
+
+:root{
+  --brand-blue:#2A5FC8;--blue-pressed:#1E4AA0;--btn-top:#3A70DC;
+  --alert-red:#D32F2F;--sort:#FFE34D;--field:#EDF2FD;--icon-grey:#6B7280;
+  --ink:#1F2933;--ink-soft:#5A6675;--row-tint:#F6F7F9;--rule:#E2E6EC;--pad:14px;
+  --strip:#E5ECF7;--band:#E7E7E7;--input-border:#7E8A9A;
+  --focus-halo:0 0 0 3px rgba(42,95,200,.22);
+  --scrim:rgba(31,41,51,.45);
+  --locked:#EDEFF2; /* PROPOSED token: read-only field fill */
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;}
+
+/* Header band (§6.8) */
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+
+/* Heading band (§6.7) */
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.hdr + .band{margin-top:0;border-top:none;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* Buttons (§6.1, §6.11) */
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+/* Text input (§6.10) */
+.form{padding:14px var(--pad) 6px;background:var(--row-tint);flex:1 1 auto;}
+.fgroup{margin-bottom:12px;}
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
+.ffloat{position:relative;}
+.ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
+  color:var(--ink-soft);pointer-events:none;transform-origin:left top;
+  transition:transform .14s ease,color .14s ease;background:transparent;}
+.ffloat .finput:focus + .flabel,
+.ffloat .finput:not(:placeholder-shown) + .flabel{
+  transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
+.ffloat .finput:focus + .flabel{color:var(--brand-blue);}
+@media (prefers-reduced-motion:reduce){.ffloat .flabel{transition:none;}}
+.finput,.ccode{font:inherit;font-size:14px;color:var(--ink);background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;
+  padding:20px 10px 6px;}
+.ccode{min-height:50px;padding:8px 10px;}
+.finput:focus,.ccode:focus{background:var(--field);outline:none;
+  border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+
+/* Read-only field — PROPOSED (§6.10 locked variant).
+   Email is the login ID; it is displayed, never edited here. */
+.finput[readonly]{background:var(--locked);color:var(--ink-soft);border-style:dashed;cursor:default;}
+.finput[readonly]:focus{background:var(--locked);box-shadow:none;border-color:var(--input-border);}
+.ffloat .finput[readonly]:not(:placeholder-shown) + .flabel{color:var(--ink-soft);}
+.lockrow{display:flex;align-items:center;gap:6px;margin:5px 2px 0;font-size:12px;color:var(--ink-soft);line-height:1.4;}
+.lockrow svg{flex:0 0 auto;}
+
+/* Phone variant (§6.10) */
+.phone-row{display:flex;gap:8px;}
+.ccode{flex:0 0 auto;width:auto;min-width:78px;display:inline-flex;align-items:center;gap:6px;
+  cursor:pointer;color:var(--ink);font-weight:600;justify-content:center;}
+.ccode .caret{font-size:10px;color:var(--ink-soft);}
+.phone-row .finput{flex:1 1 auto;}
+
+/* Strip row, reused from Add Contact's Send Requests by (§6.12) */
+.sendrow{display:flex;align-items:center;gap:12px;background:var(--strip);
+  border-radius:9px;padding:6px 10px;width:100%;min-height:44px;}
+.chippair{display:flex;gap:6px;flex:0 0 auto;}
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);
+  border-radius:9px;padding:5px 12px;min-height:30px;}
+.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.gatenote{flex:1 1 auto;min-width:0;font-size:12px;line-height:1.4;color:var(--ink-soft);}
+
+/* Sign-out row — destructive-adjacent action, kept away from Save (§6.11 usage note) */
+.dangerrow{margin:22px 0 4px;padding-top:16px;border-top:1px solid var(--rule);}
+.btn-quiet{font:inherit;font-size:12.5px;font-weight:700;color:var(--ink-soft);background:#fff;
+  border:1.5px solid var(--rule);border-radius:11px;padding:9px 14px;cursor:pointer;}
+.btn-quiet:active{background:var(--row-tint);}
+.btn-quiet:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.minreq{padding:2px var(--pad) 18px;background:var(--row-tint);font-size:13px;color:var(--ink);line-height:1.45;}
+.minreq b{font-weight:700;}
+
+/* Banner + ad slot (§6.14) */
+.subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
+  background:#fff;border-top:1px solid var(--rule);cursor:pointer;
+  font-size:13px;font-weight:700;color:var(--brand-blue);}
+.subbanner:active{background:var(--row-tint);}
+.adslot{flex:0 0 auto;height:50px;border-top:1px solid var(--rule);background:#fff;
+  display:flex;align-items:center;justify-content:center;}
+.adbox{width:320px;height:50px;display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--rule);border-radius:4px;color:var(--ink-soft);font-size:11px;letter-spacing:.04em;}
+</style></head>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+  </div>
+
+  <div class="band">
+    <span class="glabel">Your Account</span>
+    <span class="bandcluster">
+      <button class="btn" type="button">Save</button>
+      <button class="btn-secondary" type="button">Cancel</button>
+    </span>
+  </div>
+
+  <div class="scroll">
+    <div class="form">
+
+      <div class="fgroup ffloat">
+        <input class="finput" id="uem" type="email" placeholder=" "
+               value="jimgillon@gmail.com" readonly aria-describedby="uem-note">
+        <label class="flabel" for="uem">Email &#183; your sign-in ID</label>
+      </div>
+      <div class="lockrow" id="uem-note">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="#5A6675" stroke-width="2"/>
+          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="#5A6675" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span>This is where your sign-in links are sent. Changing it requires confirming from both addresses.</span>
+      </div>
+
+      <div class="fgroup ffloat" style="margin-top:14px;">
+        <input class="finput" id="ufn" type="text" autocomplete="given-name" placeholder=" " value="Jim">
+        <label class="flabel" for="ufn">First Name</label>
+      </div>
+
+      <div class="fgroup ffloat">
+        <input class="finput" id="uln" type="text" autocomplete="family-name" placeholder=" " value="Gillon">
+        <label class="flabel" for="uln">Last Name</label>
+      </div>
+
+      <div class="fgroup ffloat">
+        <input class="finput" id="udn" type="text" placeholder=" " value="Jim Gillon">
+        <label class="flabel" for="udn">Display Name</label>
+      </div>
+      <div class="lockrow">
+        <span>Recipients see this name on every request you send.</span>
+      </div>
+
+      <div class="fgroup" style="margin-top:14px;">
+        <div class="phone-row">
+          <button class="ccode" type="button" aria-label="Country code, United States, +1">US&nbsp;+1 <span class="caret">&#9662;</span></button>
+          <span class="ffloat" style="flex:1 1 auto;min-width:0;display:block;">
+            <input class="finput" id="uph" type="tel" autocomplete="tel-national" inputmode="tel" placeholder=" ">
+            <label class="flabel" for="uph">Phone (optional)</label>
+          </span>
+        </div>
+      </div>
+
+      <div class="fgroup">
+        <span class="flabel" id="notify-label">Notify me by</span>
+        <div class="sendrow">
+          <div class="chippair" role="radiogroup" aria-labelledby="notify-label">
+            <button class="chip selected" type="button" aria-pressed="true">Email</button>
+            <button class="chip" type="button" aria-pressed="false">Text</button>
+          </div>
+          <div class="gatenote">Text notifications are available with a subscription &#8212; see the banner below.</div>
+        </div>
+      </div>
+
+      <div class="dangerrow">
+        <button class="btn-quiet" type="button">Sign out on this device</button>
+      </div>
+
+    </div>
+
+    <div class="minreq">
+      <b>No password on this account</b>&nbsp; You sign in with a one-time link emailed to the
+      address above, so there is nothing to change, reset, or forget.
+    </div>
+  </div>
+
+  <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
+  <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
+
+</div></div>
+</body></html>

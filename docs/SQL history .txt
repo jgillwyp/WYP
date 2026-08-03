@@ -1,0 +1,124 @@
+-- July 30 started
+
+   create table contacts (
+     id          uuid primary key default gen_random_uuid(),
+     owner_id    uuid not null references auth.users(id) on delete cascade,
+     first_name  text,
+     last_name   text,
+     email       text not null,
+     phone       text,
+     send_by     text not null default 'email',   -- 'email' | 'text'
+     notes       text,
+     created_at  timestamptz not null default now()
+   );
+   
+select last_name from contacts
+INSERT INTO contacts (owner_id,first_name,last_name,email,phone,send_by)
+VALUES ('480ab1de-2c16-479a-ae1f-ae0daa4c21ba','Mary','Jones','mjones@somewhere.com','999-333-5812','email');
+
+CREATE POLICY "Allow individual insert" 
+ON contacts 
+FOR INSERT 
+TO authenticated 
+WITH CHECK (auth.uid() = owner_id);
+SELECT id FROM auth.users LIMIT 1;
+select * from contacts
+
+alter table contacts alter column owner_id set default auth.uid();
+
+-- did not work, ERROR:  23502: null value in column "owner_id"
+-- INSERT INTO contacts (first_name, last_name, email, phone, send_by)
+-- VALUES ('Mary','Jones','mjones@somewhere.com','999-333-5812','email');
+
+CREATE POLICY "Allow individual select"
+ON contacts
+FOR SELECT
+TO authenticated
+USING (auth.uid() = owner_id);
+
+select * from contacts
+
+select 
+  column_name, 
+  is_nullable, 
+  column_default 
+from information_schema.columns 
+where table_schema = 'public' and table_name = 'contacts' and column_name = 'owner_id';
+
+select auth.uid()
+
+-- to use within app
+create or replace function public.test_auth_context()
+returns json
+language sql
+security definer
+as $$
+  select json_build_object(
+    'uid', auth.uid(),
+    'jwt', auth.jwt()
+  );
+$$;
+
+-- Aug 2 continued
+
+   create table contacts (
+     id          uuid primary key default gen_random_uuid(),
+     owner_id    uuid not null references auth.users(id) on delete cascade,
+     first_name  text,
+     last_name   text,
+     email       text not null,
+     phone       text,
+     send_by     text not null default 'email',   -- 'email' | 'text'
+     notes       text,
+     created_at  timestamptz not null default now()
+   );
+   
+select last_name from contacts
+INSERT INTO contacts (owner_id,first_name,last_name,email,phone,send_by)
+VALUES ('480ab1de-2c16-479a-ae1f-ae0daa4c21ba','Mary','Jones','mjones@somewhere.com','999-333-5812','email');
+
+CREATE POLICY "Allow individual insert" 
+ON contacts 
+FOR INSERT 
+TO authenticated 
+WITH CHECK (auth.uid() = owner_id);
+SELECT id FROM auth.users LIMIT 1;
+select * from contacts
+
+alter table contacts alter column owner_id set default auth.uid();
+
+-- did not work, ERROR:  23502: null value in column "owner_id"
+-- INSERT INTO contacts (first_name, last_name, email, phone, send_by)
+-- VALUES ('Mary','Jones','mjones@somewhere.com','999-333-5812','email');
+
+CREATE POLICY "Allow individual select"
+ON contacts
+FOR SELECT
+TO authenticated
+USING (auth.uid() = owner_id);
+
+select * from contacts
+
+select 
+  column_name, 
+  is_nullable, 
+  column_default 
+from information_schema.columns 
+where table_schema = 'public' and table_name = 'contacts' and column_name = 'owner_id';
+
+select auth.uid()
+
+-- to use within app
+create or replace function public.test_auth_context()
+returns json
+language sql
+security definer
+as $$
+  select json_build_object(
+    'uid', auth.uid(),
+    'jwt', auth.jwt()
+  );
+$$;
+
+select * from contacts
+

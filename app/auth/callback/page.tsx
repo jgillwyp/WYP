@@ -9,12 +9,22 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     ;(async () => {
-      // Supabase handles token in URL; you need to let it complete then go to app
-      const { data } = await supabase.auth.getSession()
-      if (data.session) router.replace('/')
-      else router.replace('/login')
+      const { data, error } = await supabase.auth.getSession()
+
+      if (error) {
+        console.error('getSession error:', error)
+        router.replace('/login')
+        return
+      }
+
+      if (!data.session) {
+        router.replace('/login')
+        return
+      }
+
+      router.replace('/')
     })()
   }, [router])
 
-  return <div>Signing you in...</div>
+  return <div>Signing you in…</div>
 }

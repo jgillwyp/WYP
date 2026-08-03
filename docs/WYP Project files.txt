@@ -1,0 +1,18 @@
+wyp/
+├── app/                        ← routes and components ONLY
+│   ├── components/WypHeader.tsx
+│   ├── login/page.tsx
+│   ├── auth/callback/page.tsx
+│   ├── globals.css
+│   └── layout.tsx
+├── design/
+│   ├── README.md               ← mockup → route → status map
+│   ├── screens/                ← canonical, approved
+│   │   ├── WYP_main_screen_palette1.html
+│   │   ├── WYP_add_contact_palette1_floating.html
+│   │   ├── WYP_signin_palette1_floating.html
+│   │   └── WYP_your_account_palette1_floating.html
+│   ├── drafts/                 ← variants under discussion
+│   └── spec/                   ← the UI spec the § numbers point to
+├── docs/
+└── public/                     ← publicly served; no mockups
