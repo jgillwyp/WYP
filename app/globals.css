@@ -21,8 +21,8 @@
   --strip: #E5ECF7;
   --band: #E7E7E7;
   --input-border: #7E8A9A;
-  --focus-halo: 0 0 0 3px rgba(42, 95, 200, .22);
-  --scrim: rgba(31, 41, 51, .45);
+  --focus-halo: 0 0 0 3px rgba(42,95,200,.22);
+  --scrim: rgba(31,41,51,.45);
   --locked: #EDEFF2;
 }
 

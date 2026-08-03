@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Palette 1 · Floating labels — Would You Please — Your Account</title>
+<title>Palette 1 — Would You Please — Create my Free Account (first run)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -16,7 +16,7 @@ html,body{margin:0;height:100%;background:#fff;}
   --strip:#E5ECF7;--band:#E7E7E7;--input-border:#7E8A9A;
   --focus-halo:0 0 0 3px rgba(42,95,200,.22);
   --scrim:rgba(31,41,51,.45);
-  --locked:#EDEFF2; /* PROPOSED token: read-only field fill */
+  --locked:#EDEFF2;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 .app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
@@ -25,7 +25,7 @@ html,body{margin:0;height:100%;background:#fff;}
 .scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;}
 
 /* Header band (§6.8) */
-.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;}
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
@@ -34,24 +34,21 @@ html,body{margin:0;height:100%;background:#fff;}
 
 /* Heading band (§6.7) */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
-  margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
+  border-bottom:1px solid var(--rule);}
 .glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
-.hdr + .band{margin-top:0;border-top:none;}
 .bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
 
-/* Buttons (§6.1, §6.11) */
+/* Buttons (§6.1) — FIRST RUN: Save only.
+   No Cancel and no Sign out: at this point the person is authenticated but has
+   no profile row, so an exit here strands the account. Both actions appear on
+   the returning-user Your Account screen instead. */
 .btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
   text-align:center;cursor:pointer;background:var(--brand-blue);
   border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
 .btn:active{background:var(--blue-pressed);}
 .btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
-.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
-  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
-  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
-.btn-secondary:active{background:var(--row-tint);}
-.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 
-/* Text input (§6.10) */
+/* Text input + floating label (§6.10) */
 .form{padding:14px var(--pad) 6px;background:var(--row-tint);flex:1 1 auto;}
 .fgroup{margin-bottom:12px;}
 .flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
@@ -71,13 +68,12 @@ html,body{margin:0;height:100%;background:#fff;}
 .finput:focus,.ccode:focus{background:var(--field);outline:none;
   border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
 
-/* Read-only field — PROPOSED (§6.10 locked variant).
-   Email is the login ID; it is displayed, never edited here. */
+/* Read-only variant — PROPOSED (§6.10 locked) */
 .finput[readonly]{background:var(--locked);color:var(--ink-soft);border-style:dashed;cursor:default;}
 .finput[readonly]:focus{background:var(--locked);box-shadow:none;border-color:var(--input-border);}
 .ffloat .finput[readonly]:not(:placeholder-shown) + .flabel{color:var(--ink-soft);}
-.lockrow{display:flex;align-items:center;gap:6px;margin:5px 2px 0;font-size:12px;color:var(--ink-soft);line-height:1.4;}
-.lockrow svg{flex:0 0 auto;}
+.lockrow{display:flex;align-items:flex-start;gap:6px;margin:5px 2px 0;font-size:12px;color:var(--ink-soft);line-height:1.4;}
+.lockrow svg{flex:0 0 auto;margin-top:1px;}
 
 /* Phone variant (§6.10) */
 .phone-row{display:flex;gap:8px;}
@@ -86,7 +82,7 @@ html,body{margin:0;height:100%;background:#fff;}
 .ccode .caret{font-size:10px;color:var(--ink-soft);}
 .phone-row .finput{flex:1 1 auto;}
 
-/* Strip row, reused from Add Contact's Send Requests by (§6.12) */
+/* Strip row (§6.12) */
 .sendrow{display:flex;align-items:center;gap:12px;background:var(--strip);
   border-radius:9px;padding:6px 10px;width:100%;min-height:44px;}
 .chippair{display:flex;gap:6px;flex:0 0 auto;}
@@ -98,25 +94,12 @@ html,body{margin:0;height:100%;background:#fff;}
 .chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 .gatenote{flex:1 1 auto;min-width:0;font-size:12px;line-height:1.4;color:var(--ink-soft);}
 
-/* Sign-out row — destructive-adjacent action, kept away from Save (§6.11 usage note) */
-.dangerrow{margin:22px 0 4px;padding-top:16px;border-top:1px solid var(--rule);}
-.btn-quiet{font:inherit;font-size:12.5px;font-weight:700;color:var(--ink-soft);background:#fff;
-  border:1.5px solid var(--rule);border-radius:11px;padding:9px 14px;cursor:pointer;}
-.btn-quiet:active{background:var(--row-tint);}
-.btn-quiet:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
-
 .minreq{padding:2px var(--pad) 18px;background:var(--row-tint);font-size:13px;color:var(--ink);line-height:1.45;}
 .minreq b{font-weight:700;}
 
-/* Banner + ad slot (§6.14) */
-.subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
-  background:#fff;border-top:1px solid var(--rule);cursor:pointer;
-  font-size:13px;font-weight:700;color:var(--brand-blue);}
-.subbanner:active{background:var(--row-tint);}
-.adslot{flex:0 0 auto;height:50px;border-top:1px solid var(--rule);background:#fff;
-  display:flex;align-items:center;justify-content:center;}
-.adbox{width:320px;height:50px;display:flex;align-items:center;justify-content:center;
-  border:1px dashed var(--rule);border-radius:4px;color:var(--ink-soft);font-size:11px;letter-spacing:.04em;}
+/* FIRST RUN: no .subbanner and no .adslot.
+   An ad and an upsell before the person has seen the product is a poor first
+   impression; both appear on every screen after this one. */
 </style></head>
 <body>
 <div class="frame-none"><div class="app">
@@ -132,10 +115,9 @@ html,body{margin:0;height:100%;background:#fff;}
   </div>
 
   <div class="band">
-    <span class="glabel">Your Account</span>
+    <span class="glabel">Create my Free Account</span>
     <span class="bandcluster">
       <button class="btn" type="button">Save</button>
-      <button class="btn-secondary" type="button">Cancel</button>
     </span>
   </div>
 
@@ -190,24 +172,17 @@ html,body{margin:0;height:100%;background:#fff;}
             <button class="chip selected" type="button" aria-pressed="true">Email</button>
             <button class="chip" type="button" aria-pressed="false">Text</button>
           </div>
-          <div class="gatenote">Text notifications are available with a subscription &#8212; see the banner below.</div>
+          <div class="gatenote">Text notifications are available with a subscription.</div>
         </div>
-      </div>
-
-      <div class="dangerrow">
-        <button class="btn-quiet" type="button">Sign out on this device</button>
       </div>
 
     </div>
 
     <div class="minreq">
-      <b>No password on this account</b>&nbsp; You sign in with a one-time link emailed to the
-      address above, so there is nothing to change, reset, or forget.
+      <b>No password on this account</b>&nbsp; You have already signed in with the one-time
+      link emailed to the address above, so there is nothing to change, reset, or forget.
     </div>
   </div>
-
-  <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
-  <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
 
 </div></div>
 </body></html>

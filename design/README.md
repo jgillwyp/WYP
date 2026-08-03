@@ -21,9 +21,43 @@ list, so nothing here is typechecked or can break a build.
 | Screen | Mockup | Route | Status |
 |---|---|---|---|
 | Main (Requests + ToDos) | `screens/WYP_main_screen_palette1.html` | `/` | Mockup |
-| Sign In | `screens/WYP_signin_palette1_floating.html` | `/login` | **Converted** |
-| Your Account | `screens/WYP_your_account_palette1_floating.html` | `/account` | Mockup |
+| Start my Free Account / Sign In | `screens/WYP_signin_palette1_floating.html` | `/login` | Converted, **needs update** (React page lacks the two modes) |
+| Create my Free Account — first run | `screens/WYP_create_free_account_palette1.html` | `/account/new` | Mockup |
+| Your Account — returning | `screens/WYP_your_account_palette1_floating.html` | `/account` | Mockup |
 | Add Contact | `screens/WYP_add_contact_palette1_floating.html` | `/contacts/new` | Mockup |
+| Respond to Request | — | `/r/[token]` | Design pending |
+
+## Sign-up flow
+
+There is no sign-up screen, because `signInWithOtp` creates the account on first
+use and cannot tell whether the address already exists. Both entry points make
+the identical call; they differ only in wording, and the paths diverge *after*
+the link is clicked, based on whether the user has a profile row yet.
+
+```
+sales page ──→ "Start my Free Account" ─┐
+                                        ├─→ email sent ─→ [link] ─→ /auth/callback
+returning  ──→ "Sign In" ───────────────┘                              │
+                                                  profile row? ──no──→ Create my Free Account ──→ main
+                                                        │
+                                                       yes ─────────────────────────────────────→ main
+```
+
+Band label, form caption, and the confirmation line all change with the mode —
+three strings, one screen. Only the join path mentions Create my Free Account,
+because only the join path leads there.
+
+Recipients reach the same funnel from the "Create your own Free Account" block
+on Respond to Request.
+
+Two rules fall out of this, both settled 2026-08-02:
+
+- **First run shows Save only.** No Cancel, no Sign out. The user is
+  authenticated but has no profile row, so an exit at that moment leaves an auth
+  user who owns nothing and lands back on the same screen next time.
+- **First run suppresses the subscription banner and ad slot.** An upsell and an
+  ad before the person has seen the product is a poor first impression. Both
+  appear on every screen after this one.
 
 Status values: **Mockup** (design only) → **Converted** (React component exists)
 → **Live** (deployed and wired to real data).
