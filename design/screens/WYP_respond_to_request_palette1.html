@@ -199,18 +199,16 @@ html,body{margin:0;height:100%;background:#fff;}
       <div class="panel">
         <div class="panelhead">Attachments</div>
 
-        <!-- FREE-TIER REQUEST: the issuer had no attachment entitlement when the
-             request was sent, so it has none now regardless of who is reading it. -->
-        <div id="attach-free">
-          <div class="gatenote">Attachments are available on requests sent by subscribers.</div>
-        </div>
-
-        <!-- SUBSCRIBER REQUEST -->
-        <div id="attach-sub" class="is-hidden">
+        <!-- Gates govern ADDING, never VIEWING. Whatever the issuer's tier is
+             now, attachments already on the request stay visible to everyone.
+             Files leave only by lapse-and-auto-delete, which leaves a tombstone. -->
+        <div id="attach-list">
           <a class="attach" href="#">Q3_budget_worksheet.xlsx</a>
           <a class="attach" href="#">insurance_renewal_notice_2026&hellip;final.pdf</a>
           <a class="attach" href="#">porch_photo.jpg</a>
         </div>
+        <div class="gatenote" id="attach-note" style="margin-top:6px;">Adding attachments is
+          available on requests sent by subscribers.</div>
       </div>
 
       <button class="btn is-locked" id="attach-btn" type="button" aria-disabled="true">
@@ -242,12 +240,12 @@ html,body{margin:0;height:100%;background:#fff;}
 </div></div>
 
 <script>
-/* Entitlements come from the request, fixed when it was issued — never from
-   whoever happens to be reading it. */
+/* Rights come from the ISSUER, read live from their profile — never from
+   whoever happens to be reading. Gates cover adding, not viewing. */
 function setTier(t){
   var free = t === 'free';
-  document.getElementById('attach-free').classList.toggle('is-hidden', !free);
-  document.getElementById('attach-sub').classList.toggle('is-hidden', free);
+  /* The list never hides — only the Add control and its explanation change. */
+  document.getElementById('attach-note').classList.toggle('is-hidden', !free);
   var b = document.getElementById('attach-btn');
   b.classList.toggle('is-locked', free);
   b.setAttribute('aria-disabled', free ? 'true' : 'false');

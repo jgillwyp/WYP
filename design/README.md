@@ -113,16 +113,22 @@ invisible while the spec lived outside it.
 
 Settled 2026-08-03.
 
-**Rights come from the request, set by its issuer.** A subscriber reading a
-request sent by a free user gets the free feature set — attachments locked,
-and so on. The recipient's own status is irrelevant; they did not create the
-request.
+**Rights come from the issuer, never from the reader.** A subscriber
+responding to a request sent by a free user gets the free feature set. The
+recipient's own status is irrelevant; they did not create the request.
 
-**Capabilities are captured when the request is issued, and never re-evaluated.**
-Store them on the request row as explicit flags, not by reading the issuer's
-current subscription at display time. If the issuer later upgrades or lapses,
-requests already sent keep the behaviour they were sent with — otherwise the
-screen changes under the recipient between two visits to the same link.
+**Tier lives on `profiles` and is read live.** Revised 2026-08-03. The earlier
+rule snapshotted capability flags onto each request, to stop a lapse changing
+the screen under a recipient. Narrowing the gate makes that unnecessary.
+
+**Gates govern adding, not viewing.** Attachments already on a request stay
+visible to everyone, permanently, whatever anyone's tier is now. Only the Add
+Attachment control locks. Files are reclaimed by lapse-and-auto-delete
+(PRD §6.3), which leaves a tombstone — never by hiding them from a reader.
+
+This is why the gate note reads "Adding attachments is available on requests
+sent by subscribers" rather than "Attachments are available…": the second
+wording implies the files are hidden too, which they are not.
 
 **A locked control is a courtesy, never a control.** The recipient path runs
 through `SECURITY DEFINER` functions, so the function must refuse an attachment

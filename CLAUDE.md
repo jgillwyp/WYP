@@ -64,14 +64,26 @@ in TSX.
 
 ## Entitlements
 
-Rights belong to the **request**, set by its **issuer** at the moment it is
-issued, and are never re-evaluated afterwards.
+Rights on a request come from its **issuer**, never from whoever is reading it.
+A subscriber responding to a request sent by a free user gets the free feature
+set; the recipient's own tier is irrelevant, because they did not create the
+request.
 
-- A subscriber reading a request sent by a free user gets the free feature set.
-  The recipient's own status is irrelevant.
-- Store capabilities as explicit flags on the request row. Do not read the
-  issuer's current subscription at display time — if they upgrade or lapse, an
-  already-sent request would change behaviour under the recipient.
+Revised 2026-08-03 — the earlier rule said to snapshot capability flags onto
+each request row. That was driven by an assumption that a lapse would hide
+existing attachments. It does not:
+
+- **Tier lives on `profiles` as a single value, read live.** One place to
+  update on subscribe or lapse. No per-request flags to drift when the
+  definition of a tier changes.
+- **Gates govern *adding*, never *viewing*.** Attachments already on a request
+  stay visible to everyone forever, whatever anyone's tier is now. Only the
+  Add Attachment control is gated. Files are reclaimed by lapse-and-auto-delete
+  (PRD §6.3), which leaves a tombstone — not by hiding them.
+- Accepted trade-off: a recipient part-way through a response loses Add
+  Attachment if the issuer lapses at that moment. Chosen over snapshotting,
+  which would let a cancelled subscriber keep granting the capability for the
+  life of every request they ever sent.
 - The locked button is a courtesy. The `SECURITY DEFINER` function must refuse
   the write regardless; assume the control was bypassed.
 
@@ -105,11 +117,16 @@ The database enforces access, not application code. Never write an
 - Recipient links (unauthenticated access) use `SECURITY DEFINER` functions,
   never a permissive `anon` policy. A client-supplied `WHERE` clause is not a
   permission check. See `docs/` for the full pattern:
-  store `digest(token,'sha256')` not the token; enforce expiry, revocation and
-  single use inside the function; return the same generic error for every
-  failure; `set search_path = public, extensions` because `digest` lives in
+  store `digest(token,'sha256')` not the token; enforce expiry and revocation
+  inside the function; return the same generic error for every failure;
+  `set search_path = public, extensions` because `digest` lives in
   `extensions`; and `revoke all ... from public` before granting, since new
   functions grant EXECUTE to PUBLIC by default.
+- **Request links are multi-use.** Corrected 2026-08-03. Single use is right
+  for sign-in links and wrong here: the `.ics` file embeds the request link, and
+  dialog continues over days or weeks, so the recipient opens it repeatedly.
+  The token is a durable capability bounded by expiry and revocation. Record
+  each access as an event rather than consuming the token.
 - `service_role` never goes near the browser. If a design seems to need it
   client-side, the design is wrong.
 - Record every migration in `docs/SQL history .txt`.
