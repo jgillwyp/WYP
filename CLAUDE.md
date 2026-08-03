@@ -54,6 +54,26 @@ in TSX.
 - Palette 1 is **light-only**. Do not reintroduce a `prefers-color-scheme: dark`
   block; it inverts the page background and breaks every band and card.
 - Screens render inside `.frame-none` (max-width 480px) — design mobile-first.
+- An unavailable action uses `.is-locked` (§6.17) — never `.btn-secondary` or
+  `.btn-quiet`, which both mean "available, lower emphasis". Locked controls
+  carry a padlock, adjacent text saying what would unlock them, and
+  `aria-disabled="true"` rather than `disabled` so screen readers still reach
+  the explanation. See `design/WYP_component_states_palette1.html`.
+- Control *states* are documented once in that reference. Only a layout or flow
+  difference earns its own screen file.
+
+## Entitlements
+
+Rights belong to the **request**, set by its **issuer** at the moment it is
+issued, and are never re-evaluated afterwards.
+
+- A subscriber reading a request sent by a free user gets the free feature set.
+  The recipient's own status is irrelevant.
+- Store capabilities as explicit flags on the request row. Do not read the
+  issuer's current subscription at display time — if they upgrade or lapse, an
+  already-sent request would change behaviour under the recipient.
+- The locked button is a courtesy. The `SECURITY DEFINER` function must refuse
+  the write regardless; assume the control was bypassed.
 
 ## Auth — magic link only
 

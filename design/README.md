@@ -25,7 +25,14 @@ list, so nothing here is typechecked or can break a build.
 | Create my Free Account — first run | `screens/WYP_create_free_account_palette1.html` | `/account/new` | Mockup |
 | Your Account — returning | `screens/WYP_your_account_palette1_floating.html` | `/account` | Mockup |
 | Add Contact | `screens/WYP_add_contact_palette1_floating.html` | `/contacts/new` | Mockup |
-| Respond to Request | — | `/r/[token]` | Design pending |
+| Respond to Request | `screens/WYP_respond_to_request_palette1.html` | `/r/[token]` | Mockup |
+| Create Request | `screens/WYP_create_request_palette1.html` | `/requests/new` | Mockup |
+| Add Contact — no contact dialog | `screens/WYP_add_contact_no_contact_dialog_palette1.html` | `/contacts/new` | Mockup |
+| Storage Maintenance | `screens/WYP_storage_maintenance_palette1.html` | `/storage` | Mockup |
+| Storage warning strip (§6.18) | `screens/WYP_storage_warning_strip_palette1.html` | — | Component study |
+
+`WYP_component_states_palette1.html` (this folder, not `screens/`) is the
+reference for every control state. It is not a screen.
 
 ## Sign-up flow
 
@@ -76,7 +83,11 @@ external reference is the Inter webfont, so a mockup can be opened directly
 from disk with no build step and no missing assets.
 
 **Tokens are copied, not invented.** The `:root` block in every mockup must
-match `app/globals.css`. When a mockup needs a component the system does not
+match `app/globals.css`. Two reconciliations, both settled 2026-08-03: the
+focused-field fill is `--focus-tint` everywhere (it was `--field` in four older
+mockups and in `globals.css`), and the locked-control treatment is `.is-locked`
+everywhere (Create Request briefly used a solid `--ink-soft` `.btn-locked`,
+which read as an active button). When a mockup needs a component the system does not
 have, add it with a `PROPOSED` comment and a `§` number so it can be folded
 into the spec deliberately.
 
@@ -88,6 +99,45 @@ into the spec deliberately.
 | `.checkrow` | Single persistent toggle; chips only cover either/or choices | Sign In |
 | `.finput[readonly]` + `--locked` | Read-only field, for the email that is also the sign-in ID | Your Account |
 | `.btn-quiet` | Global action that must stay reachable without competing with Create | Main screen — Log Out |
+| `.is-locked` + `--locked-ink` / `--locked-border` | Action unavailable because of the request's tier | Respond to Request — Add Attachment |
+
+## Entitlements
+
+Settled 2026-08-03.
+
+**Rights come from the request, set by its issuer.** A subscriber reading a
+request sent by a free user gets the free feature set — attachments locked,
+and so on. The recipient's own status is irrelevant; they did not create the
+request.
+
+**Capabilities are captured when the request is issued, and never re-evaluated.**
+Store them on the request row as explicit flags, not by reading the issuer's
+current subscription at display time. If the issuer later upgrades or lapses,
+requests already sent keep the behaviour they were sent with — otherwise the
+screen changes under the recipient between two visits to the same link.
+
+**A locked control is a courtesy, never a control.** The recipient path runs
+through `SECURITY DEFINER` functions, so the function must refuse an attachment
+write when the request's flags say no. Assume the button was bypassed.
+
+See `WYP_component_states_palette1.html` for the visual treatment and the
+accessibility rules that go with it.
+
+## When a variant screen is warranted
+
+- **A control changing state** — locked, read-only, invalid, gated — is
+  documented once in the component states reference. Do not fork a screen file
+  to show it; the layout is identical and the copy would drift.
+- **A layout or flow difference** — an empty state, a dialog, a first-run
+  variant that removes actions — gets its own screen file, because it cannot be
+  read off a component gallery.
+
+Rule of thumb: if the difference is "that control is in state X", it belongs in
+the reference. If it is "the screen shows something else", it needs a file.
+
+Where a screen has two meaningful modes that share a layout — Sign In's join and
+returning modes, Respond to Request's free and subscriber tiers — put both in
+one file behind a preview toggle rather than in two files.
 
 ## Notes
 

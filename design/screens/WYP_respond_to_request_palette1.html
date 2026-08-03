@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Palette 1 — Would You Please — Respond to Request</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){html,body{background:#eef1f5;}.frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}}
+
+:root{
+  --brand-blue:#2A5FC8;--blue-pressed:#1E4AA0;--btn-top:#3A70DC;
+  --alert-red:#D32F2F;--sort:#FFE34D;--focus-tint:#EDF2FD;--icon-grey:#6B7280;
+  --ink:#1F2933;--ink-soft:#5A6675;--row-tint:#F6F7F9;--rule:#E2E6EC;--pad:14px;
+  --strip:#E5ECF7;--band:#E7E7E7;--input-border:#7E8A9A;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7;
+  --focus-halo:0 0 0 3px rgba(42,95,200,.22);
+  --scrim:rgba(31,41,51,.45);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;background:var(--row-tint);}
+
+/* Header band (§6.8) */
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;background:#fff;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+
+/* Heading band (§6.7) */
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  border-bottom:1px solid var(--rule);}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* Buttons (§6.1, §6.11) */
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+/* Locked control (§6.17, PROPOSED) — inert, not "lower emphasis".
+   Pair with adjacent text saying why; use aria-disabled, never disabled. */
+.btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
+  border:1px solid var(--locked-border);cursor:not-allowed;
+  display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:700;}
+.btn.is-locked:hover,.btn.is-locked:active,.chip.is-locked:hover,.chip.is-locked:active,.is-locked:hover,.is-locked:active{background:var(--locked);color:var(--locked-ink);
+  border-color:var(--locked-border);}
+.is-locked .lockglyph{flex:0 0 auto;width:1em;height:1em;}
+
+/* Meta block */
+.meta{padding:12px var(--pad) 4px;background:var(--row-tint);}
+.metarow{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;}
+.mlabel{font-size:13.5px;font-weight:700;color:var(--brand-blue);flex:0 0 auto;min-width:46px;}
+.mval{font-size:13.5px;font-weight:600;color:var(--ink);}
+.metatop{display:flex;align-items:flex-start;gap:10px;}
+.metatop .metacol{flex:1 1 auto;min-width:0;}
+.metatop .btn{margin-top:2px;}
+
+/* Description */
+.seclabel{font-size:13.5px;font-weight:700;color:var(--brand-blue);margin:10px 0 3px;padding:0 var(--pad);}
+.desc{padding:0 var(--pad) 12px;font-size:14px;line-height:1.45;color:var(--ink);}
+.grabber{width:38px;height:4px;border-radius:2px;background:var(--rule);margin:2px auto 12px;}
+
+/* Boxed sub-panels */
+.panel{background:#fff;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;}
+.panelhead{font-size:11.5px;font-weight:700;color:var(--brand-blue);margin-bottom:6px;}
+.panelrow{display:flex;gap:10px;align-items:flex-start;padding:0 var(--pad) 12px;}
+.panelrow .panel{flex:1 1 auto;min-width:0;}
+.panelrow .btn,.panelrow .btn-secondary,.panelrow .is-locked{margin-top:0;
+  font-size:12.5px;border-radius:11px;padding:9px 14px;}
+
+/* Two small fields side by side */
+.duo{display:flex;gap:10px;padding:0 var(--pad) 12px;}
+.duo .panel{flex:1 1 0;min-width:0;}
+.fieldval{font-size:13.5px;font-weight:600;color:var(--ink);}
+.fieldhead{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;
+  color:var(--brand-blue);margin-bottom:4px;}
+.fieldhead svg{width:12px;height:12px;flex:0 0 auto;}
+
+/* Dialog entries */
+.dlg{font-size:12.5px;line-height:1.5;color:var(--ink);padding:5px 0;}
+.dlg + .dlg{border-top:1px solid var(--rule);}
+.dlgdate{font-variant-numeric:tabular-nums;color:var(--alert-red);font-weight:600;}
+.dlgkind{font-weight:700;}
+.dlgwho{color:var(--ink-soft);}
+
+/* Attachments */
+.attach{display:block;font-size:12.5px;color:var(--brand-blue);text-decoration:underline;padding:3px 0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gatenote{font-size:12.5px;line-height:1.45;color:var(--ink-soft);}
+
+/* Promo block — the Free Account Features unit merges the pitch and the action
+   so the recipient sees one call, not a banner plus a nearby link. */
+.promo{margin:4px var(--pad) 12px;background:var(--strip);border-radius:12px;padding:13px 14px;}
+.promo-kicker{font-size:11.5px;font-weight:700;color:var(--ink);letter-spacing:.01em;}
+.promo-h{font-size:19px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;margin:3px 0 4px;}
+.promo-p{font-size:12.5px;line-height:1.45;color:var(--ink);margin:0 0 11px;}
+.promo .btn{width:100%;font-size:13.5px;padding:11px 14px;}
+
+/* Banner + ad slot (§6.14) */
+.subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
+  background:#fff;border-top:1px solid var(--rule);cursor:pointer;
+  font-size:13px;font-weight:700;color:var(--brand-blue);}
+.adslot{flex:0 0 auto;height:50px;border-top:1px solid var(--rule);background:#fff;
+  display:flex;align-items:center;justify-content:center;}
+.adbox{width:320px;height:50px;display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--rule);border-radius:4px;color:var(--ink-soft);font-size:11px;letter-spacing:.04em;}
+.is-hidden{display:none;}
+
+/* Demo-only switcher — delete on conversion */
+.demo{flex:0 0 auto;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;
+  background:#1F2933;color:#fff;font-size:11px;font-weight:600;padding:7px 10px;}
+.demo button{font:inherit;background:#3A4652;color:#fff;border:1px solid #566;border-radius:7px;padding:4px 9px;cursor:pointer;}
+.demo button.on{background:var(--brand-blue);border-color:var(--brand-blue);}
+</style></head>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+  </div>
+
+  <div class="band">
+    <span class="glabel">Respond to Request</span>
+    <span class="bandcluster">
+      <button class="btn" type="button">Send</button>
+      <button class="btn-secondary" type="button">Cancel</button>
+    </span>
+  </div>
+
+  <div class="scroll">
+
+    <div class="meta">
+      <div class="metatop">
+        <div class="metacol">
+          <div class="metarow"><span class="mlabel">Date:</span><span class="mval">Tuesday, September 29, 2026</span></div>
+          <div class="metarow"><span class="mlabel">From:</span><span class="mval">Jason Smith</span></div>
+          <div class="metarow"><span class="mlabel">Due:</span><span class="mval">Monday, October 19, 2026&nbsp; 9:00 AM</span></div>
+        </div>
+        <button class="btn" type="button">Add to Calendar</button>
+      </div>
+    </div>
+
+    <div class="seclabel">Request Description</div>
+    <div class="desc">Work with attendees to arrange for a building renovation committee meeting
+      before the end of this month.&nbsp; Also, please include Bob and Mary Jackson &ndash; they have
+      some interesting ideas.</div>
+
+    <div class="grabber" aria-hidden="true"></div>
+
+    <div class="duo">
+      <div class="panel">
+        <div class="fieldhead">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Done Date
+        </div>
+        <div class="fieldval">Monday, October 19, 2026</div>
+      </div>
+      <div class="panel">
+        <div class="fieldhead">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Done Time
+        </div>
+        <div class="fieldval">8:00 AM</div>
+      </div>
+    </div>
+
+    <div class="panelrow">
+      <div class="panel">
+        <div class="panelhead">Dialog (Questions, Answers, Comments)</div>
+        <div class="dlg"><span class="dlgdate">10-02-26</span> <span class="dlgkind">Question</span>
+          <span class="dlgwho">(Mae Baker)</span> Should I also include George?</div>
+        <div class="dlg"><span class="dlgdate">10-04-26</span> <span class="dlgkind">Answer</span>
+          <span class="dlgwho">(Jason Smith)</span> Yes</div>
+      </div>
+      <button class="btn" type="button">Add Dialog</button>
+    </div>
+
+    <div class="panelrow">
+      <div class="panel">
+        <div class="panelhead">Attachments</div>
+
+        <!-- FREE-TIER REQUEST: the issuer had no attachment entitlement when the
+             request was sent, so it has none now regardless of who is reading it. -->
+        <div id="attach-free">
+          <div class="gatenote">Attachments are available on requests sent by subscribers.</div>
+        </div>
+
+        <!-- SUBSCRIBER REQUEST -->
+        <div id="attach-sub" class="is-hidden">
+          <a class="attach" href="#">Q3_budget_worksheet.xlsx</a>
+          <a class="attach" href="#">insurance_renewal_notice_2026&hellip;final.pdf</a>
+          <a class="attach" href="#">porch_photo.jpg</a>
+        </div>
+      </div>
+
+      <button class="btn is-locked" id="attach-btn" type="button" aria-disabled="true">
+        <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/>
+          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>Add Attachment</button>
+    </div>
+
+    <!-- Pitch and action as one unit (was a banner plus a separate link). -->
+    <div class="promo">
+      <div class="promo-kicker">Free Account Features</div>
+      <div class="promo-h">Send it, Track it, Get it Done</div>
+      <p class="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
+      <button class="btn" type="button">Create your own Free Account</button>
+    </div>
+
+  </div>
+
+  <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
+  <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
+
+  <div class="demo">
+    <span>MOCKUP PREVIEW &middot; request was sent by a</span>
+    <button type="button" id="t-free" class="on" onclick="setTier('free')">Free user</button>
+    <button type="button" id="t-sub" onclick="setTier('sub')">Subscriber</button>
+  </div>
+
+</div></div>
+
+<script>
+/* Entitlements come from the request, fixed when it was issued — never from
+   whoever happens to be reading it. */
+function setTier(t){
+  var free = t === 'free';
+  document.getElementById('attach-free').classList.toggle('is-hidden', !free);
+  document.getElementById('attach-sub').classList.toggle('is-hidden', free);
+  var b = document.getElementById('attach-btn');
+  b.classList.toggle('is-locked', free);
+  b.setAttribute('aria-disabled', free ? 'true' : 'false');
+  b.querySelector('.lockglyph').style.display = free ? '' : 'none';
+  document.getElementById('t-free').classList.toggle('on', free);
+  document.getElementById('t-sub').classList.toggle('on', !free);
+}
+</script>
+</body></html>

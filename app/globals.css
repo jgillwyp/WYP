@@ -11,7 +11,7 @@
   --btn-top: #3A70DC;
   --alert-red: #D32F2F;
   --sort: #FFE34D;
-  --field: #EDF2FD;
+  --focus-tint: #EDF2FD;
   --icon-grey: #6B7280;
   --ink: #1F2933;
   --ink-soft: #5A6675;
@@ -24,6 +24,8 @@
   --focus-halo: 0 0 0 3px rgba(42,95,200,.22);
   --scrim: rgba(31,41,51,.45);
   --locked: #EDEFF2;
+  --locked-ink: #8A93A0;
+  --locked-border: #DDE1E7;
 }
 
 @theme inline {
@@ -262,6 +264,51 @@ body {
   outline-offset: 2px;
 }
 
+/* ============================================================================
+   LOCKED CONTROL — PROPOSED (§6.17)
+   For an action the user cannot take because of the tier of the *request*,
+   not because of anything they did. Distinct from .btn-secondary and
+   .btn-quiet, which both mean "available, lower emphasis". This means inert.
+
+   Rules of use:
+   - Pair with adjacent text saying WHY. The control shows that it is locked;
+     the note says what would unlock it.
+   - Mark it `aria-disabled="true"`, never `disabled`. A disabled control drops
+     out of the tab order and screen readers skip it, so the person who most
+     needs the explanation never reaches it. Block the action in the handler.
+   - The padlock is required. Grey alone reads as "broken" or "still loading"
+     as easily as "not available to you".
+   ========================================================================= */
+.btn.is-locked,
+.chip.is-locked,
+.is-locked {
+  background: var(--locked);
+  color: var(--locked-ink);
+  border: 1px solid var(--locked-border);
+  cursor: not-allowed;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: none;
+}
+
+.btn.is-locked:hover,
+.btn.is-locked:active,
+.chip.is-locked:hover,
+.chip.is-locked:active,
+.is-locked:hover,
+.is-locked:active {
+  background: var(--locked);
+  color: var(--locked-ink);
+  border-color: var(--locked-border);
+}
+
+.is-locked .lockglyph {
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+}
+
 .linkbtn {
   font: inherit;
   font-size: 12.5px;
@@ -350,7 +397,7 @@ body {
 
 .finput:focus,
 .ftextarea:focus {
-  background: var(--field);
+  background: var(--focus-tint);
   outline: none;
   border-color: var(--brand-blue);
   box-shadow: var(--focus-halo);
@@ -461,7 +508,7 @@ body {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: var(--field);
+  background: var(--focus-tint);
   display: flex;
   align-items: center;
   justify-content: center;

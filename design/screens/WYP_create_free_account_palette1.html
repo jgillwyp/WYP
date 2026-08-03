@@ -11,12 +11,12 @@ html,body{margin:0;height:100%;background:#fff;}
 
 :root{
   --brand-blue:#2A5FC8;--blue-pressed:#1E4AA0;--btn-top:#3A70DC;
-  --alert-red:#D32F2F;--sort:#FFE34D;--field:#EDF2FD;--icon-grey:#6B7280;
+  --alert-red:#D32F2F;--sort:#FFE34D;--focus-tint:#EDF2FD;--icon-grey:#6B7280;
   --ink:#1F2933;--ink-soft:#5A6675;--row-tint:#F6F7F9;--rule:#E2E6EC;--pad:14px;
   --strip:#E5ECF7;--band:#E7E7E7;--input-border:#7E8A9A;
   --focus-halo:0 0 0 3px rgba(42,95,200,.22);
   --scrim:rgba(31,41,51,.45);
-  --locked:#EDEFF2;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 .app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
@@ -65,7 +65,7 @@ html,body{margin:0;height:100%;background:#fff;}
   border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;
   padding:20px 10px 6px;}
 .ccode{min-height:50px;padding:8px 10px;}
-.finput:focus,.ccode:focus{background:var(--field);outline:none;
+.finput:focus,.ccode:focus{background:var(--focus-tint);outline:none;
   border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
 
 /* Read-only variant — PROPOSED (§6.10 locked) */
@@ -100,6 +100,14 @@ html,body{margin:0;height:100%;background:#fff;}
 /* FIRST RUN: no .subbanner and no .adslot.
    An ad and an upsell before the person has seen the product is a poor first
    impression; both appear on every screen after this one. */
+/* Locked control (§6.17, PROPOSED) — inert, not "lower emphasis".
+   Pair with adjacent text saying why; use aria-disabled, never disabled. */
+.btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
+  border:1px solid var(--locked-border);cursor:not-allowed;
+  display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:600;}
+.btn.is-locked:hover,.btn.is-locked:active,.chip.is-locked:hover,.chip.is-locked:active,.is-locked:hover,.is-locked:active{background:var(--locked);color:var(--locked-ink);
+  border-color:var(--locked-border);}
+.is-locked .lockglyph{flex:0 0 auto;width:1em;height:1em;}
 </style></head>
 <body>
 <div class="frame-none"><div class="app">
@@ -170,7 +178,7 @@ html,body{margin:0;height:100%;background:#fff;}
         <div class="sendrow">
           <div class="chippair" role="radiogroup" aria-labelledby="notify-label">
             <button class="chip selected" type="button" aria-pressed="true">Email</button>
-            <button class="chip" type="button" aria-pressed="false">Text</button>
+            <button class="chip is-locked" type="button" aria-disabled="true" aria-pressed="false"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Text</button>
           </div>
           <div class="gatenote">Text notifications are available with a subscription.</div>
         </div>

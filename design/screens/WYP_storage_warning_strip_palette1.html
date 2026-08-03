@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 — Would You Please — Storage warning strip (states)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Would You Please — Design Tokens (palette 1)
+   Single source of truth for colors, effects, and base spacing.
+
+   Draft v0.1 · July 2026
+   Consolidated from the six palette-1 mockups; values are the union of their
+   :root blocks (all six agreed on every value). Names are reconciled to the
+   UI Design Specification §3.1. This file is the one place a token is defined;
+   every screen imports it rather than re-declaring its own :root block.
+
+   USAGE
+     <link rel="stylesheet" href="tokens.css">   (before the screen's own CSS)
+   or, once the build exists:
+     @import "tokens.css";
+
+   NAMING
+     Token comments give the UI-spec §3.1 name in Title Case, then the token.
+     The CSS custom-property name is the durable handle used in code.
+
+   CHANGE CONTROL
+     Adding, removing, or re-valuing a token here is a change to §3.1 and must
+     be recorded in the decisions log (mirrors the UI-spec §3.3 rule that any
+     new token requires updating §3.1 in a new version).
+   ============================================================================ */
+
+:root {
+
+  /* --- Brand & action -------------------------------------------------------
+     Brand Blue is the only saturated color used at scale besides Alert Red
+     (§3.3). It carries buttons, links, the wordmark, selected-chip outlines,
+     and read-only detail-field labels (§9.3). */
+  --brand-blue:    #2A5FC8;   /* Brand Blue (§3.1) */
+  --blue-pressed:  #1E4AA0;   /* pressed state of the primary button (§6.1) */
+
+  /* --- Status ---------------------------------------------------------------
+     Alert Red is status-only from v2.5: Overdue, inline error, or impending
+     irreversible loss — and nothing else (§3.1). Never decorative. */
+  --alert-red:     #D32F2F;   /* Alert Red (§3.1) */
+
+  /* --- Ink (text) ----------------------------------------------------------- */
+  --ink:           #1F2933;   /* Ink (§3.1) — primary text, group labels */
+  --ink-soft:      #5A6675;   /* Ink Soft (§3.1) — secondary text, captions,
+                                 resting field labels, and label-affordance
+                                 glyphs (calendar/clock, §6.16) */
+
+  /* --- Surfaces & tints -----------------------------------------------------
+     The only tinted backgrounds permitted are Band, Row Tint, and Strip
+     (§3.3). Focus Tint is a state fill, not a surface. */
+  --row-tint:      #F6F7F9;   /* Row Tint (§3.1) — zebra striping; subtle
+                                 pressed states */
+  --band:          #E7E7E7;   /* Band (§3.1) — group-label heading bands and
+                                 the search-bar surface */
+  --strip:         #E5ECF7;   /* Strip (§3.1) — chip-strip background and
+                                 full-width form chip rows (§6.2) */
+
+  /* --- Field & focus --------------------------------------------------------
+     Focus Tint was named --field in four mockups through v2.9; reconciled to
+     --focus-tint here to match §3.1 (all six files now agree). */
+  --focus-tint:    #EDF2FD;   /* Focus Tint (§3.1) — focused-field fill (§6.10)
+                                 and the banner attention wash (§6.14) */
+  --focus-halo:    0 0 0 3px rgba(42,95,200,.22);
+                              /* Focus Halo (§3.1) — outer glow on focused
+                                 inputs (§6.10) */
+  --input-border:  #7E8A9A;   /* Input Border (§3.1) — resting text-input border.
+                                 ~3.5:1 on white, meets the 3:1 non-text minimum
+                                 (§3.2) */
+
+  /* --- Lines & overlay ------------------------------------------------------ */
+  --rule:          #E2E6EC;   /* Rule (§3.1) — hairline borders and separators */
+  --scrim:         rgba(31,41,51,.45);
+                              /* Scrim (§3.1) — Ink at 45% behind modal dialogs
+                                 (§6.12).
+                                 NOTE: two mockups (.scrim) hardcode this value
+                                 inline instead of using the token. Point them
+                                 at var(--scrim) when they are next touched. */
+
+  /* --- Accent (single yellow) ----------------------------------------------- */
+  --sort:          #FFE34D;   /* Sort Highlight (§3.1) — the sole yellow in the
+                                 system from v2.5. Currently used only on the
+                                 active sort pill (§6.3). */
+
+  /* --- Base spacing ---------------------------------------------------------
+     Screen gutter. The full spacing scale lives in UI-spec §7.2; only the
+     shared page padding is tokenized today. */
+  --pad:           14px;      /* screen side padding (§7.3) */
+
+
+  /* --- Deprecated / unused --------------------------------------------------
+     Defined in the mockups but not referenced through var() anywhere. Kept
+     here so existing files that declare them do not break, and so the decision
+     to retire them is explicit rather than silent. Remove once confirmed unused
+     in the build.
+
+     --btn-top  #3A70DC   never referenced; likely a leftover from an earlier
+                          gradient-topped button treatment.
+     --icon-grey #6B7280  never referenced; §5 information-only icons actually
+                          render in --ink-soft (#5A6675). §5.1's "icon-grey"
+                          maps to Ink Soft in practice — verify before deleting. */
+  --btn-top:       #3A70DC;
+  --icon-grey:     #6B7280;
+}
+
+</style>
+<style>
+/* ============================================================================
+   Would You Please — Components (palette 1)
+   Shared component styles, extracted from the six palette-1 mockups.
+   Reads its colors and effects from tokens.css — link tokens.css FIRST.
+
+   Draft v0.1 · July 2026
+
+   ORDER OF STYLESHEETS on every screen:
+     1. Google Fonts (Inter)      — loads the type family
+     2. tokens.css                — defines every --token
+     3. components.css            — this file; the shared parts
+     4. <style> in the screen     — only that screen's specific rules
+
+   Selectors here map to UI Design Specification §6 components. A screen that
+   needs a variant (e.g. a taller textarea, an acknowledge-only modal) overrides
+   the specific property in its own <style>, which wins by source order.
+   ============================================================================ */
+
+/* --- Shell & frame -------------------------------------------------------- */
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;
+  box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){
+  html,body{background:#eef1f5;}
+  .frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;}
+
+/* --- Header band (§6.8) --------------------------------------------------- */
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+
+/* --- Group-label heading band (§6.7) -------------------------------------- */
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
+.hdr + .band{margin-top:0;border-top:none;}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* --- Primary button (§6.1) ----------------------------------------------- */
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+/* --- Secondary button (§6.11) -------------------------------------------- */
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+/* --- Text input & floating label (§6.10) ---------------------------------
+   Resting label floats inside the field; on focus or when filled it rises and
+   shrinks. The label row is a flex line so a §6.16 affordance glyph can sit
+   before the label text on screens that use one (harmless where none is set). */
+.form{padding:14px var(--pad) 6px;background:var(--row-tint);flex:1 1 auto;}
+.fgroup{margin-bottom:12px;}
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
+.ffloat{position:relative;}
+.ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
+  color:var(--ink-soft);pointer-events:none;transform-origin:left top;
+  transition:transform .14s ease,color .14s ease;background:transparent;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.ffloat .finput:focus + .flabel,
+.ffloat .finput:not(:placeholder-shown) + .flabel,
+.ffloat .ftextarea:focus + .flabel,
+.ffloat .ftextarea:not(:placeholder-shown) + .flabel{
+  transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
+.ffloat .finput:focus + .flabel,
+.ffloat .ftextarea:focus + .flabel{color:var(--brand-blue);}
+@media (prefers-reduced-motion:reduce){.ffloat .flabel{transition:none;}}
+.finput,.ftextarea{font:inherit;font-size:14px;color:var(--ink);background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;
+  padding:20px 10px 6px;}
+.finput:focus,.ftextarea:focus{background:var(--focus-tint);outline:none;
+  border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+.ftextarea{resize:vertical;min-height:84px;line-height:1.4;}
+
+/* --- Subscription / Account banner (§6.14) + reserved ad slot (§6.15) ----- */
+.subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
+  background:#fff;border-top:1px solid var(--rule);cursor:pointer;
+  font-size:13px;font-weight:700;color:var(--brand-blue);}
+.subbanner:active{background:var(--row-tint);}
+.adslot{flex:0 0 auto;height:50px;border-top:1px solid var(--rule);background:#fff;
+  display:flex;align-items:center;justify-content:center;}
+.adbox{width:320px;height:50px;display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--rule);border-radius:4px;color:var(--ink-soft);font-size:11px;letter-spacing:.04em;}
+
+/* --- Modal dialog frame (§6.12) ------------------------------------------
+   Shared frame for both variants. The acknowledge-only variant adds cursor
+   and per-paragraph spacing in its screen; the action variant adds .modalacts
+   with buttons. Scrim now reads the --scrim token (previously hardcoded). */
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:10;}
+.modal{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);z-index:11;
+  background:#fff;border-radius:11px;padding:16px 18px;width:min(88%,380px);
+  box-shadow:0 8px 28px rgba(20,30,50,.28);}
+.modalacts{display:flex;justify-content:flex-end;gap:8px;}
+
+</style>
+<style>
+/* States catalog, not a single screen: multiple static app cards on a grey page.
+   Header, brand, band, and buttons come from components.css; the frame below is
+   overridden because these are static cards rather than one full-height screen. */
+html,body{background:#eef1f5;height:auto;}
+body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
+  -webkit-font-smoothing:antialiased;padding:20px 12px 40px;}
+.app{display:block;height:auto;background:#fff;box-shadow:0 6px 30px rgba(20,30,50,.14);overflow:hidden;}
+.band{margin-top:0;border-top:none;}   /* band sits under the warn strip here, not the header */
+.btn{margin-left:auto;}
+
+/* Sheet annotation (not UI) */
+.sheet{max-width:480px;margin:0 auto;}
+.sheet h1{font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0 0 4px;}
+.sheet p.note{font-size:12px;line-height:1.5;color:var(--ink-soft);margin:0 0 20px;}
+.caption{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:22px 0 6px;}
+.caption span{font-weight:500;letter-spacing:0;text-transform:none;}
+
+/* §6.18 Storage warning strip */
+.warn{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:9px var(--pad);
+  font:inherit;text-align:left;cursor:pointer;border:none;border-radius:0;}
+.warn .wtext{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;line-height:1.3;}
+.warn .waction{flex:0 0 auto;font-size:13px;font-weight:800;white-space:nowrap;}
+.warn.caution{background:var(--focus-tint);border-bottom:1px solid var(--brand-blue);color:var(--brand-blue);}
+.warn.caution:active{background:#E2EAFB;}
+.warn.critical{background:#fff;border-top:1px solid var(--alert-red);border-bottom:1px solid var(--alert-red);color:var(--alert-red);}
+.warn.critical .wtext{font-weight:700;}
+.warn.critical:active{background:var(--row-tint);}
+.warn.lapse{background:#fff;border-top:1px solid var(--alert-red);border-bottom:1px solid var(--alert-red);color:var(--alert-red);}
+.warn.lapse .wtext{font-weight:700;}
+.warn.lapse:active{background:var(--row-tint);}
+
+.filler{height:26px;background:#fff;}
+</style></head>
+<body>
+<div class="sheet">
+
+  <h1>Storage warning strip — §6.18 (proposed)</h1>
+  <p class="note">Full-width strip directly beneath the header band, above the first heading band.
+  Caution appears on the main screen only; Critical and the lapse countdown appear on every screen.
+  Tapping the strip opens Storage Maintenance (§9.19). Grey labels below are sheet annotation, not UI.</p>
+
+  <div class="caption">Caution <span>— 20% or less remaining (main screen only)</span></div>
+  <div class="app">
+    <div class="hdr">
+      <span class="logo" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      </span>
+      <span class="brand">
+        <span class="word">Would You Please</span>
+        <span class="tag">Tracking Requests and ToDos</span>
+      </span>
+    </div>
+    <button class="warn caution" type="button">
+      <span class="wtext">Attachment storage is 82% full.</span>
+      <span class="waction">Free up space &rsaquo;</span>
+    </button>
+    <div class="band">
+      <span class="glabel">Requests</span>
+      <button class="btn" type="button">Create Request</button>
+    </div>
+    <div class="filler"></div>
+  </div>
+
+  <div class="caption">Critical <span>— 10% or less remaining, or storage full (all screens)</span></div>
+  <div class="app">
+    <div class="hdr">
+      <span class="logo" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      </span>
+      <span class="brand">
+        <span class="word">Would You Please</span>
+        <span class="tag">Tracking Requests and ToDos</span>
+      </span>
+    </div>
+    <button class="warn critical" type="button">
+      <span class="wtext">Attachment storage is full. New attachments will fail.</span>
+      <span class="waction">Free up space &rsaquo;</span>
+    </button>
+    <div class="band">
+      <span class="glabel">Requests</span>
+      <button class="btn" type="button">Create Request</button>
+    </div>
+    <div class="filler"></div>
+  </div>
+
+  <div class="caption">Lapse countdown <span>— 30-day grace window, auto-delete pending (all screens)</span></div>
+  <div class="app">
+    <div class="hdr">
+      <span class="logo" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      </span>
+      <span class="brand">
+        <span class="word">Would You Please</span>
+        <span class="tag">Tracking Requests and ToDos</span>
+      </span>
+    </div>
+    <button class="warn lapse" type="button">
+      <span class="wtext">Your subscription ended. Attachments over 100&nbsp;MB are removed in 12 days, on Wednesday, September&nbsp;8.</span>
+      <span class="waction">Review &rsaquo;</span>
+    </button>
+    <div class="band">
+      <span class="glabel">Requests</span>
+      <button class="btn" type="button">Create Request</button>
+    </div>
+    <div class="filler"></div>
+  </div>
+
+</div>
+</body></html>

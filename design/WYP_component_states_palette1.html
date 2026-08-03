@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palette 1 — Would You Please — Component states reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brand-blue:#2A5FC8;--blue-pressed:#1E4AA0;--btn-top:#3A70DC;
+  --alert-red:#D32F2F;--sort:#FFE34D;--focus-tint:#EDF2FD;--icon-grey:#6B7280;
+  --ink:#1F2933;--ink-soft:#5A6675;--row-tint:#F6F7F9;--rule:#E2E6EC;--pad:14px;
+  --strip:#E5ECF7;--band:#E7E7E7;--input-border:#7E8A9A;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7;
+  --focus-halo:0 0 0 3px rgba(42,95,200,.22);
+  --scrim:rgba(31,41,51,.45);
+}
+*{box-sizing:border-box;}
+body{margin:0;background:#eef1f5;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;}
+.wrap{max-width:820px;margin:0 auto;padding:26px 18px 60px;}
+h1{font-size:24px;font-weight:800;letter-spacing:-.01em;margin:0 0 4px;}
+.lede{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 26px;max-width:60ch;}
+h2{font-size:16px;font-weight:800;margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--rule);}
+.card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:16px;margin-bottom:14px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(184px,1fr));gap:16px;}
+.cell .demo{min-height:46px;display:flex;align-items:center;}
+.name{font-size:12.5px;font-weight:700;margin:9px 0 2px;}
+.use{font-size:12px;color:var(--ink-soft);line-height:1.45;margin:0;}
+.sect{font-size:11.5px;font-weight:700;color:var(--brand-blue);letter-spacing:.02em;margin:0 0 10px;}
+.rulebox{background:#fff;border-left:3px solid var(--brand-blue);border-radius:0;padding:12px 14px;margin:10px 0;}
+.rulebox p{margin:0 0 7px;font-size:13px;line-height:1.5;}
+.rulebox p:last-child{margin:0;}
+.rulebox b{font-weight:700;}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+  background:var(--row-tint);border:1px solid var(--rule);border-radius:4px;padding:1px 5px;}
+
+/* ---- components under test: copied verbatim from app/globals.css ---- */
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.btn:disabled{background:#A8B7D6;cursor:not-allowed;}
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-quiet{font:inherit;font-size:12px;font-weight:700;color:var(--ink-soft);background:#fff;
+  border:1px solid var(--rule);border-radius:11px;padding:8px 13px;cursor:pointer;}
+.btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);border:1px solid var(--locked-border);
+  cursor:not-allowed;display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:700;}
+.btn.is-locked:hover,.btn.is-locked:active,.chip.is-locked:hover,.chip.is-locked:active,.is-locked:hover,.is-locked:active{background:var(--locked);color:var(--locked-ink);
+  border-color:var(--locked-border);}
+.is-locked .lockglyph{flex:0 0 auto;width:1em;height:1em;}
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);
+  border-radius:9px;padding:5px 12px;min-height:30px;}
+.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip.danger{color:var(--alert-red);}
+.sendrow{display:flex;align-items:center;gap:12px;background:var(--strip);
+  border-radius:9px;padding:6px 10px;min-height:44px;}
+.gatenote{font-size:12px;line-height:1.4;color:var(--ink-soft);}
+.finput{font:inherit;font-size:14px;color:var(--ink);background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;padding:20px 10px 6px;}
+.finput.focusdemo{background:var(--focus-tint);border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+.finput[readonly]{background:var(--locked);color:var(--ink-soft);border-style:dashed;cursor:default;}
+.finput.invaliddemo{border-color:var(--alert-red);}
+.ffloat{position:relative;}
+.ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
+  color:var(--ink-soft);pointer-events:none;transform-origin:left top;
+  transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
+.ferror{font-size:12.5px;font-weight:600;color:var(--alert-red);margin:5px 2px 0;}
+</style></head>
+<body>
+<div class="wrap">
+
+<h1>Component states &mdash; palette 1</h1>
+<p class="lede">One reference for every control state, so a screen mockup is only needed when the
+<em>layout</em> differs, not when a single control changes state. Values here are copied verbatim
+from <code>app/globals.css</code>; if the two ever disagree, globals.css wins.</p>
+
+<h2>Buttons</h2>
+<div class="card">
+  <p class="sect">AVAILABILITY IS NOT EMPHASIS</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="demo"><button class="btn" type="button">Add Attachment</button></div>
+      <p class="name">.btn &mdash; primary (&sect;6.1)</p>
+      <p class="use">The main action on the screen. One per band.</p>
+    </div>
+    <div class="cell">
+      <div class="demo"><button class="btn-secondary" type="button">Cancel</button></div>
+      <p class="name">.btn-secondary (&sect;6.11)</p>
+      <p class="use">Available, deliberately not the main action.</p>
+    </div>
+    <div class="cell">
+      <div class="demo"><button class="btn-quiet" type="button">Log Out</button></div>
+      <p class="name">.btn-quiet (&sect;6.16)</p>
+      <p class="use">Global action that must stay reachable without competing.</p>
+    </div>
+    <div class="cell">
+      <div class="demo"><button class="btn is-locked" type="button" aria-disabled="true">
+        <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/>
+          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>Add Attachment</button></div>
+      <p class="name">.is-locked (&sect;6.17, PROPOSED)</p>
+      <p class="use">Not available because of the request&rsquo;s tier. Inert, not lower emphasis.</p>
+    </div>
+  </div>
+</div>
+
+<div class="rulebox">
+  <p><b>Locked is a different axis from emphasis.</b> Secondary and quiet both mean
+  &ldquo;you may do this.&rdquo; Locked means you may not. It never borrows their styling.</p>
+  <p><b>Always pair a locked control with adjacent text saying why.</b> The control shows
+  <em>that</em> it is locked; the note says what would unlock it.</p>
+  <p><b>Use <code>aria-disabled="true"</code>, never <code>disabled</code>.</b> A disabled control
+  leaves the tab order and screen readers skip it, so the person who most needs the explanation
+  never reaches it. Block the action in the handler instead.</p>
+  <p><b>The padlock is required.</b> Grey alone reads as &ldquo;broken&rdquo; or &ldquo;still
+  loading&rdquo; as easily as &ldquo;not available to you&rdquo;.</p>
+  <p><b>It is a courtesy, not a control.</b> The database refuses the write regardless. A locked
+  button that is bypassed must still fail server-side.</p>
+</div>
+
+<h2>Chips</h2>
+<div class="card">
+  <div class="sendrow" style="margin-bottom:14px;">
+    <div style="display:flex;gap:6px;">
+      <button class="chip selected" type="button" aria-pressed="true">Email</button>
+      <button class="chip is-locked" type="button" aria-disabled="true" aria-pressed="false">
+        <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/>
+          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>Text</button>
+    </div>
+    <div class="gatenote">Request Texting is available with a subscription &mdash; see the banner below.</div>
+  </div>
+  <div class="grid">
+    <div class="cell">
+      <div class="demo"><button class="chip selected" type="button">All</button></div>
+      <p class="name">.chip.selected</p>
+      <p class="use">Current choice in a radiogroup or filter set.</p>
+    </div>
+    <div class="cell">
+      <div class="demo"><button class="chip" type="button">Open</button></div>
+      <p class="name">.chip</p>
+      <p class="use">Available, not currently chosen.</p>
+    </div>
+    <div class="cell">
+      <div class="demo"><button class="chip danger" type="button">Overdue</button></div>
+      <p class="name">.chip.danger</p>
+      <p class="use">Filter whose contents need attention.</p>
+    </div>
+    <div class="cell">
+      <div class="demo"><button class="chip is-locked" type="button" aria-disabled="true">
+        <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/>
+          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>Text</button></div>
+      <p class="name">.chip.is-locked</p>
+      <p class="use">Gated by tier. Same rule as a locked button.</p>
+    </div>
+  </div>
+</div>
+
+<h2>Fields</h2>
+<div class="card">
+  <div class="grid">
+    <div class="cell">
+      <div class="ffloat"><input class="finput" value="Jim" readonly aria-label="rest"><label class="flabel">First Name</label></div>
+      <p class="name">.finput &mdash; at rest</p>
+      <p class="use">White fill, Input Border.</p>
+    </div>
+    <div class="cell">
+      <div class="ffloat"><input class="finput focusdemo" value="Jim" readonly aria-label="focus"><label class="flabel">First Name</label></div>
+      <p class="name">.finput:focus</p>
+      <p class="use">Field tint, Brand Blue border, focus halo.</p>
+    </div>
+    <div class="cell">
+      <div class="ffloat"><input class="finput" value="jgillon@versys.com" readonly aria-label="readonly"><label class="flabel">Email &middot; sign-in ID</label></div>
+      <p class="name">.finput[readonly] (&sect;6.10 locked)</p>
+      <p class="use">Dashed border, Locked fill. Shown, never edited here.</p>
+    </div>
+    <div class="cell">
+      <div class="ffloat"><input class="finput invaliddemo" value="not-an-email" readonly aria-label="invalid"><label class="flabel">Email</label></div>
+      <p class="ferror" style="margin-bottom:4px;">Enter a valid email address.</p>
+      <p class="name">.fgroup.is-invalid</p>
+      <p class="use">Alert Red border plus a message naming the fix.</p>
+    </div>
+  </div>
+</div>
+
+<h2>When a variant screen is warranted</h2>
+<div class="rulebox">
+  <p><b>Control state &rarr; this page.</b> A button that is locked, a field that is read-only, a
+  chip that is gated. The layout is unchanged, so a second screen file would duplicate everything
+  to show one difference &mdash; and then drift.</p>
+  <p><b>Layout or flow difference &rarr; its own screen file.</b> An empty state, a modal or
+  dialog, a first-run variant that removes actions, a screen whose sections change. These cannot
+  be read off a component gallery.</p>
+  <p><b>Rule of thumb:</b> if you can describe the difference as &ldquo;that control is in state
+  X&rdquo;, it belongs here. If you have to describe it as &ldquo;the screen shows something
+  else&rdquo;, it needs a file.</p>
+</div>
+
+</div>
+</body></html>
