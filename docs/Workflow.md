@@ -72,7 +72,19 @@ seen. A file that was never committed is gone for good once deleted.
 | `.env.local` (local only) | Restart `npm run dev` |
 | Vercel → Settings → Environment Variables | Redeploy; existing deployments keep the old values |
 
-`.env.local` is git-ignored and must stay that way. Anything named
+`.env.local` is git-ignored and must stay that way — which also means it never
+reaches Vercel. Every variable the app needs must be entered in Vercel
+separately.
+
+Two things that have already caused a failed deploy (2026-08-03):
+
+- **Scope.** Variables are set per environment. `vercel env pull` writes the
+  *Development* set, so a variable can be present locally and absent from
+  Production. Tick Production and Preview.
+- **Exact name.** The code reads `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is a different variable and will not
+  be found.
+
 `NEXT_PUBLIC_*` is visible in the browser — never put a secret behind that
 prefix. The `service_role` key never belongs in either place.
 
