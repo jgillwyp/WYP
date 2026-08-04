@@ -203,12 +203,80 @@ revoke all on public.events from anon, authenticated;
 commit;
 
 -- ============================================================================
--- Verify as a client, not here.
+-- VERIFICATION
 --
---   select * from contacts;            -- from the browser: your rows only
---   update profiles set tier='subscriber' where id = auth.uid();
---                                      -- must FAIL: no column grant on tier
---   select * from events;              -- must return nothing / permission denied
+-- Running the checks in the SQL editor and seeing them pass proves nothing.
+-- That connection is a SUPERUSER: it ignores RLS and it ignores column grants.
+-- auth.uid() is also NULL there, because there is no JWT, so any policy or
+-- predicate written as `= auth.uid()` matches zero rows and every statement
+-- "succeeds" without touching anything.
 --
--- A second account must see none of the first account's contacts.
+-- ---------------------------------------------------------------------------
+-- A. Prove the CONFIGURATION. Safe in the SQL editor, because these read the
+--    catalog rather than relying on enforcement.
+-- ---------------------------------------------------------------------------
+
+-- Which columns may `authenticated` update? tier must NOT appear.
+select column_name
+from information_schema.column_privileges
+where table_schema = 'public'
+  and table_name   = 'profiles'
+  and grantee      = 'authenticated'
+  and privilege_type = 'UPDATE'
+order by column_name;
+
+-- Every policy on the three tables, and which command each covers.
+select tablename, policyname, cmd, roles
+from pg_policies
+where schemaname = 'public'
+  and tablename in ('profiles', 'contacts', 'events')
+order by tablename, cmd, policyname;
+
+-- RLS actually on?  rowsecurity must be true for all three.
+select relname, relrowsecurity
+from pg_class
+where relnamespace = 'public'::regnamespace
+  and relname in ('profiles', 'contacts', 'events');
+
+-- ---------------------------------------------------------------------------
+-- B. Prove the ENFORCEMENT by impersonating a real client. Still the SQL
+--    editor, but as the `authenticated` role with a JWT claim in place.
+--    Wrapped in a transaction that is rolled back, so nothing persists.
+--    Substitute a real user id for <USER_UUID>.
+-- ---------------------------------------------------------------------------
+
+-- begin;
+--   set local role authenticated;
+--   set local request.jwt.claims = '{"sub":"<USER_UUID>","role":"authenticated"}';
+--
+--   select auth.uid();                 -- must return <USER_UUID>, not null
+--
+--   update profiles set display_name = 'test' where id = auth.uid();
+--                                      -- must SUCCEED (1 row)
+--
+--   update profiles set tier = 'subscriber' where id = auth.uid();
+--                                      -- must FAIL: permission denied for
+--                                      -- column tier of relation profiles
+-- rollback;
+
+-- If that UPDATE succeeds, the column grants did not take and the live-tier
+-- design is unsound. Re-run the revoke/grant pair and check query A again.
+
+-- ---------------------------------------------------------------------------
+-- C. Prove it end to end from the browser, signed in, with the anon key.
+-- ---------------------------------------------------------------------------
+--
+--   await supabase.from('profiles').update({ tier: 'subscriber' })
+--                 .eq('id', (await supabase.auth.getUser()).data.user.id)
+--                 .select()
+--        -> error, code 42501, "permission denied for column tier"
+--
+--   await supabase.from('contacts').select('*')
+--        -> only rows owned by the signed-in user
+--
+--   await supabase.from('events').select('*')
+--        -> permission denied, or zero rows
+--
+-- Then sign in as a second account: it must see none of the first account's
+-- contacts.
 -- ============================================================================
