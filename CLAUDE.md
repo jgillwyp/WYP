@@ -149,13 +149,18 @@ link is built only after the stack is proven on Add Contact.
 
 ## Known gaps
 
-- `contacts` has only an INSERT policy — SELECT/UPDATE/DELETE policies are
-  missing, so reads return nothing. Fix before wiring the contact list.
 - The UI spec is `design/spec/WouldYouPlease_UI_Design_Specification_v2_9.docx`.
   All 27 `§` references in the repo resolve against it. §6 is fully occupied
   through §6.18, so newly proposed components take §6.19 and upward — check the
   spec's table of contents before assigning a number.
 - `RequireAuth.tsx` imports `./src/lib/supabaseClient` while everything else
   uses `@/lib/supabaseClient`. Same file, works, inconsistent.
-- Main screen, Add Contact, and Your Account are mockups only. See the status
-  table in `design/README.md`.
+- Main screen and Your Account are mockups only. Add Contact is now Converted
+  (`app/components/AddContactForm.tsx`, `/contacts/new`) but not yet Live: no
+  list view reads `contacts` back, and the no-contact interception dialog
+  (`design/screens/WYP_add_contact_no_contact_dialog_palette1.html`) isn't
+  built. See the status table in `design/README.md`.
+- Add Contact's phone country-code selector (`.ccode`) is visual only — it
+  opens no picker. One fixed value, US +1, same as the mockup.
+- Add Contact's Email chip has no click handler. It's the only legal `send_by`
+  value while Text stays locked, so there's nothing to switch it to yet.

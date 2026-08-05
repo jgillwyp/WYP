@@ -24,7 +24,7 @@ list, so nothing here is typechecked or can break a build.
 | Start my Free Account / Sign In | `screens/WYP_signin_palette1_floating.html` | `/login` | Converted, **needs update** (React page lacks the two modes) |
 | Create my Free Account — first run | `screens/WYP_create_free_account_palette1.html` | `/account/new` | Mockup |
 | Your Account — returning | `screens/WYP_your_account_palette1_floating.html` | `/account` | Mockup |
-| Add Contact | `screens/WYP_add_contact_palette1_floating.html` | `/contacts/new` | Mockup |
+| Add Contact | `screens/WYP_add_contact_palette1_floating.html` | `/contacts/new` | Converted (Save wires to `contacts`; list view and the no-contact dialog below are still pending) |
 | Respond to Request | `screens/WYP_respond_to_request_palette1.html` | `/r/[token]` | Mockup |
 | Create Request | `screens/WYP_create_request_palette1.html` | `/requests/new` | Mockup |
 | Add Contact — no contact dialog | `screens/WYP_add_contact_no_contact_dialog_palette1.html` | `/contacts/new` | Mockup |
