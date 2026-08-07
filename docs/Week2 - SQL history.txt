@@ -1,0 +1,192 @@
+-- ============================================================================
+-- WYP migration 003 — requests (unified Request/ToDo), categories
+-- Run 2026-08-06 in the Supabase SQL editor.
+--
+-- RUN NOTE: the categories table below originally used a table-level
+-- `unique (owner_id, lower(name))` constraint, which Postgres rejects —
+-- `ERROR 42601: syntax error at or near "("`. Table-level UNIQUE only accepts
+-- plain columns, not expressions. Fixed by dropping the inline constraint and
+-- adding a separate unique index (categories_owner_name_ci_idx) after the
+-- table, which is the correct form for a case-insensitive uniqueness rule.
+-- The block below is the corrected, as-run version.
+-- ============================================================================
+
+begin;
+
+-- ----------------------------------------------------------------------------
+-- 1. categories — owner-scoped labels, 20-cap enforced at the app layer
+--    (matches contacts' existing owner-only shape; nothing new to explain here)
+-- ----------------------------------------------------------------------------
+create table if not exists public.categories (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null references auth.users(id) on delete cascade,
+  name        text not null,
+  created_at  timestamptz not null default now()
+);
+
+-- table-level `unique (...)` only accepts plain columns, not expressions like
+-- lower(name) — a unique index is the correct form here.
+create unique index if not exists categories_owner_name_ci_idx
+  on public.categories (owner_id, lower(name));
+
+alter table public.categories enable row level security;
+
+create policy "categories: owners select own"
+  on public.categories for select to authenticated
+  using (owner_id = auth.uid());
+create policy "categories: owners insert own"
+  on public.categories for insert to authenticated
+  with check (owner_id = auth.uid());
+create policy "categories: owners update own"
+  on public.categories for update to authenticated
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "categories: owners delete own"
+  on public.categories for delete to authenticated
+  using (owner_id = auth.uid());
+
+-- ----------------------------------------------------------------------------
+-- 2. requests — PRD §2.5: "ToDos are stored as Requests." One table.
+--    contact_id null            -> ToDo (no recipient)
+--    contact_id not null        -> Request
+--    priority is meaningful only when contact_id is null (ToDo); PRD gives
+--    Requests no Priority field
+--    due_date/due_time required by the app for a Request, optional for a ToDo
+-- ----------------------------------------------------------------------------
+create table if not exists public.requests (
+  id            uuid primary key default gen_random_uuid(),
+  owner_id      uuid not null references auth.users(id) on delete cascade,
+  contact_id    uuid references public.contacts(id) on delete set null,
+  category_id   uuid references public.categories(id) on delete set null,
+
+  description   text not null,                 -- 500-char app-wide convention (§2.4) — confirm
+  priority      smallint check (priority in (1,2,3)),  -- 1 ASAP / 2 SOON / 3 LATER; ToDo only
+
+  due_date      date,
+  due_time      time,                           -- sender's local wall-clock (§2.7)
+  done_date     date,
+  done_time     time,
+
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+comment on column public.requests.contact_id is
+  'Null = ToDo (PRD §2.5). Not null = Request, and this is the recipient.';
+comment on column public.requests.priority is
+  'ToDo-only per §2.1 core objects table. Requests have no Priority field.';
+
+create index if not exists requests_owner_idx    on public.requests (owner_id);
+create index if not exists requests_contact_idx  on public.requests (contact_id);
+create index if not exists requests_category_idx on public.requests (category_id);
+
+alter table public.requests enable row level security;
+
+-- Owner (sender) only, for now — see the note above on recipient visibility.
+create policy "requests: owners select own"
+  on public.requests for select to authenticated
+  using (owner_id = auth.uid());
+create policy "requests: owners insert own"
+  on public.requests for insert to authenticated
+  with check (owner_id = auth.uid());
+create policy "requests: owners update own"
+  on public.requests for update to authenticated
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "requests: owners delete own"
+  on public.requests for delete to authenticated
+  using (owner_id = auth.uid());
+
+create trigger requests_touch_updated_at
+  before update on public.requests
+  for each row execute function public.touch_updated_at();  -- reused from migration 002
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here — same caution as migration 002: this
+-- connection is superuser and auth.uid() is null, so every RLS-dependent
+-- check below "succeeds" here without proving anything.
+--
+--   await supabase.from('requests').insert({ description: 'test todo' })
+--        -> succeeds; owner_id must be set by the client (no default here,
+--           same choice AddContactForm.tsx made over trusting a DB default)
+--   await supabase.from('requests').select('*')
+--        -> only rows owned by the signed-in user
+--   Second account -> sees none of the first account's rows
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 004 — dialog
+-- Not yet run. Needed to back the Dialog field added to Create Request
+-- (and, later, Create ToDo) — 2026-08-06.
+--
+-- request_id covers both Requests and ToDos, since ToDos are rows in
+-- `requests` too (§2.5) — one dialog table, no per-object-type duplication.
+--
+-- `who` is a display-name SNAPSHOT at post time, not a live join to
+-- `profiles`. Matches the immutable-fact reasoning already used for `events`
+-- (migration 002): if the owner later renames themselves, a Dialog entry from
+-- last month should still show the name it showed then, not silently rewrite
+-- history. `author_user_id` is kept alongside for anything that does need a
+-- live identity (recipient-side dialog, once that's built) but `who` is what
+-- the UI reads for display.
+--
+-- No UPDATE or DELETE policy: append-only, same as `events` — editing or
+-- retracting a past Question/Answer/Comment would falsify the thread.
+--
+-- `id` is a plain sequential bigint on purpose — it doubles as the sort key
+-- alongside `created_at` when two entries land on the same day (decisions
+-- log, 2026-08-05: "if internal IDs are sequentially assigned, they could be
+-- used for this sort").
+-- ============================================================================
+
+begin;
+
+create table if not exists public.dialog (
+  id              bigint      generated always as identity primary key,
+  request_id      uuid        not null references public.requests(id) on delete cascade,
+  kind            text        not null default 'comment'
+                              check (kind in ('question', 'answer', 'comment')),
+  body            text        not null,
+  who             text        not null,   -- display-name snapshot, see note above
+  author_user_id  uuid        references auth.users(id) on delete set null,
+  created_at      timestamptz not null default now()
+);
+
+comment on column public.dialog.who is
+  'Display-name snapshot at post time, not a live join to profiles. A later name change must not rewrite what a past entry showed.';
+comment on column public.dialog.id is
+  'Sequential by design — the sort key, alongside created_at, when entries share a date. See decisions log 2026-08-05.';
+
+create index if not exists dialog_request_idx on public.dialog (request_id, id);
+
+alter table public.dialog enable row level security;
+
+create policy "dialog: owners select own"
+  on public.dialog for select to authenticated
+  using (request_id in (select id from public.requests where owner_id = auth.uid()));
+
+create policy "dialog: owners insert own"
+  on public.dialog for insert to authenticated
+  with check (
+    request_id in (select id from public.requests where owner_id = auth.uid())
+    and author_user_id = auth.uid()
+  );
+
+-- No update or delete policy — see the append-only note above.
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here (same caution as every migration above).
+--
+--   await supabase.from('dialog').insert({
+--     request_id: '<a request id you own>', body: 'test', who: 'Jim Gillon'
+--   })
+--        -> succeeds; author_user_id must be set by the client, same pattern
+--           as owner_id everywhere else
+--   await supabase.from('dialog').insert({ ...same, author_user_id: '<not-you>' })
+--        -> must FAIL: with check requires author_user_id = auth.uid()
+--   await supabase.from('dialog').update({ body: 'edited' }).eq('id', <id>)
+--        -> must FAIL: no update policy exists
+--   Second account, same request_id -> sees no rows (request isn't theirs)
+-- ============================================================================

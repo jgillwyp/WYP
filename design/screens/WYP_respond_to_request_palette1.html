@@ -51,6 +51,16 @@ html,body{margin:0;height:100%;background:#fff;}
 .btn-secondary:active{background:var(--row-tint);}
 .btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 
+/* Icon button (band cluster addition, 2026-08-05) — same shape as the
+   equivalent added to Create Request: 40-px touch target / 22-px glyph,
+   inline SVG so this stays self-contained with no raster asset. */
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
+  border-radius:10px;cursor:pointer;color:var(--ink-soft);background:none;border:none;padding:0;}
+.iconbtn:hover{background:rgba(42,95,200,.08);color:var(--brand-blue);}
+.iconbtn:active{background:rgba(42,95,200,.16);}
+.iconbtn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.iconbtn svg{width:22px;height:22px;display:block;}
+
 /* Locked control (§6.22, PROPOSED) — inert, not "lower emphasis".
    Pair with adjacent text saying why; use aria-disabled, never disabled. */
 .btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
@@ -93,7 +103,11 @@ html,body{margin:0;height:100%;background:#fff;}
 /* Dialog entries */
 .dlg{font-size:12.5px;line-height:1.5;color:var(--ink);padding:5px 0;}
 .dlg + .dlg{border-top:1px solid var(--rule);}
-.dlgdate{font-variant-numeric:tabular-nums;color:var(--alert-red);font-weight:600;}
+/* Corrected 2026-08-05: Alert Red is status-only (§3.1) — reserved for
+   Overdue, inline error, or impending irreversible loss. A Dialog entry's
+   date isn't any of those, so red here was decorative and off-convention;
+   Dialog type (.dlgkind) already carries the emphasis in bold Ink. */
+.dlgdate{font-variant-numeric:tabular-nums;color:var(--brand-blue);font-weight:600;}
 .dlgkind{font-weight:700;}
 .dlgwho{color:var(--ink-soft);}
 
@@ -142,6 +156,14 @@ html,body{margin:0;height:100%;background:#fff;}
   <div class="band">
     <span class="glabel">Respond to Request</span>
     <span class="bandcluster">
+      <button class="iconbtn" type="button" aria-label="Print Request">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="17" cy="11" r="1" fill="currentColor"/>
+        </svg>
+      </button>
       <button class="btn" type="button">Send</button>
       <button class="btn-secondary" type="button">Cancel</button>
     </span>
@@ -187,10 +209,17 @@ html,body{margin:0;height:100%;background:#fff;}
     <div class="panelrow">
       <div class="panel">
         <div class="panelhead">Dialog (Questions, Answers, Comments)</div>
-        <div class="dlg"><span class="dlgdate">10-02-26</span> <span class="dlgkind">Question</span>
-          <span class="dlgwho">(Mae Baker)</span> Should I also include George?</div>
+        <!-- Corrected 2026-08-05: newest first (descending), was ascending.
+             Sorted by date alone here for the mockup, but the real dialog
+             table (§9.5, not yet built) needs to sort by a true timestamp or
+             a sequential id, not date alone — two entries on the same date
+             would otherwise have no defined order relative to each other.
+             Time of day itself isn't meant to be shown or to matter, only
+             that the sort is unambiguous. -->
         <div class="dlg"><span class="dlgdate">10-04-26</span> <span class="dlgkind">Answer</span>
           <span class="dlgwho">(Jason Smith)</span> Yes</div>
+        <div class="dlg"><span class="dlgdate">10-02-26</span> <span class="dlgkind">Question</span>
+          <span class="dlgwho">(Mae Baker)</span> Should I also include George?</div>
       </div>
       <button class="btn" type="button">Add Dialog</button>
     </div>

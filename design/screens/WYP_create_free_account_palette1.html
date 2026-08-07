@@ -55,12 +55,22 @@ html,body{margin:0;height:100%;background:#fff;}
 .ffloat{position:relative;}
 .ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
   color:var(--ink-soft);pointer-events:none;transform-origin:left top;
-  transition:transform .14s ease,color .14s ease;background:transparent;}
+  transition:transform .14s ease,color .14s ease;background:transparent;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;}
 .ffloat .finput:focus + .flabel,
 .ffloat .finput:not(:placeholder-shown) + .flabel{
   transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
 .ffloat .finput:focus + .flabel{color:var(--brand-blue);}
 @media (prefers-reduced-motion:reduce){.ffloat .flabel{transition:none;}}
+
+/* Lookup / picker glyph (§6.16) — new to this screen 2026-08-05, for Time
+   Zone. Ported from Create Request. */
+.lglyph{flex:0 0 auto;width:17px;height:17px;display:inline-block;}
+.lglyph svg{width:17px;height:17px;display:block;}
+.ffloat .finput:focus + .flabel .lglyph,
+.ffloat .finput:not(:placeholder-shown) + .flabel .lglyph{display:none;}
+.ffloat.picker .finput:focus + .flabel .lglyph,
+.ffloat.picker .finput:not(:placeholder-shown) + .flabel .lglyph{display:inline-block;}
 .finput,.ccode{font:inherit;font-size:14px;color:var(--ink);background:#fff;
   border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;
   padding:20px 10px 6px;}
@@ -161,6 +171,17 @@ html,body{margin:0;height:100%;background:#fff;}
       </div>
       <div class="lockrow">
         <span>Recipients see this name on every request you send.</span>
+      </div>
+
+      <!-- Time Zone — new 2026-08-05, §6.16 lookup/picker field. This is the
+           signed-in user's own time zone, so it defaults from the browser
+           (Intl.DateTimeFormat().resolvedOptions().timeZone) — shown filled
+           here like every other field on this first-run screen. Editable if
+           the browser guesses wrong (e.g. a laptop still set to a previous
+           city). -->
+      <div class="fgroup ffloat picker" style="margin-top:14px;">
+        <input class="finput" id="utz" type="text" placeholder=" " value="Central Time (Chicago)">
+        <label class="flabel" for="utz"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Time Zone</label>
       </div>
 
       <div class="fgroup" style="margin-top:14px;">

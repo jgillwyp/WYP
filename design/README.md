@@ -26,8 +26,9 @@ list, so nothing here is typechecked or can break a build.
 | Your Account — returning | `screens/WYP_your_account_palette1_floating.html` | `/account` | Mockup |
 | Add Contact | `screens/WYP_add_contact_palette1_floating.html` | `/contacts/new` | Converted (Save wires to `contacts`; list view and the no-contact dialog below are still pending) |
 | Respond to Request | `screens/WYP_respond_to_request_palette1.html` | `/r/[token]` | Mockup |
-| Create Request | `screens/WYP_create_request_palette1.html` | `/requests/new` | Mockup |
+| Create Request | `screens/WYP_create_request_palette1.html` | `/requests/new` | Converted (Send wires to `requests`; Recipient/Category lookups and Add Category are functional; Print is `window.print()`; Dialog entries are staged client-side and written to `dialog` — migration 004, not yet run — together with the Request on Send; Attachments stays in the v1 locked state; no in-place no-contact interception yet — see §6.24 below) |
 | Add Contact — no contact dialog | `screens/WYP_add_contact_no_contact_dialog_palette1.html` | `/contacts/new` | Mockup |
+| Create ToDo | `screens/WYP_create_todo_palette1.html` | `/todos/new` | Mockup (§9.4 had no mockup at all before 2026-08-06 — see decisions log) |
 | Storage Maintenance | `screens/WYP_storage_maintenance_palette1.html` | `/storage` | Mockup |
 | Storage warning strip (§6.18) | `screens/WYP_storage_warning_strip_palette1.html` | — | Component study |
 
@@ -103,6 +104,8 @@ check the spec's table of contents before assigning a number.
 | §6.21 | `.btn-quiet` | Global action that must stay reachable without competing with Create | Main screen — Log Out |
 | §6.22 | `.is-locked` + `--locked-ink` / `--locked-border` | Action unavailable because of the request's tier | Respond to Request — Add Attachment |
 | §6.10 variant | `.finput[readonly]` + `--locked` | Read-only field, for the email that is also the sign-in ID | Your Account |
+| §6.23 | `.hkrows`/`.hkrow`/`.hktitle`/`.hknote` | Navigational row — bold Brand-Blue title, em-dash, regular Ink description, 2-line clamp (same visual language as the §6.5 ToDo row, distinct class since the meaning isn't Priority). No chevron: tappable by the same row-context convention as every other list row in the app. First entry point for Contacts and Account Profile, which otherwise have none — see decisions log 2026-08-05 | Main screen — Housekeeping |
+| §6.24 | `.lookup-results`/`.lookup-item`/`.lookup-empty` | Pull-down list under a §6.16 lookup field. Neither the mockup nor the spec draws this state — only the resting field is shown, and the mockup's own comment ("selecting from either field's pull-down fills both fields") implies a list without designing one. Kept plain: Row Tint hover, Rule dividers, no new visual language. Needs a real design pass if it earns a dedicated screen state later. Behavior rule added 2026-08-07: on focus, browse the full list immediately if it has fewer than 12 options; at 12 or more, wait for typed input before showing anything (matching search-vs-browse UX conventions) — see `LOOKUP_BROWSE_THRESHOLD` in `CreateRequestForm.tsx`, meant to apply to every §6.24 lookup, not just Create Request's | Create Request — Recipient, Category |
 
 These were first written as §6.15–6.17, which collide with **Reserved ad slot**,
 **Lookup and picker fields**, and **Calendar and clock pickers** in v2.9.

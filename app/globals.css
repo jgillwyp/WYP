@@ -83,6 +83,11 @@ body {
   font-family: var(--font-inter), Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-feature-settings: "tnum" 1;
   -webkit-font-smoothing: antialiased;
+  /* Positioned so .scrim/.modal (§6.12) confine to the app frame rather than
+     the full viewport on wide screens. Not declared in the mockups — they
+     have no position:absolute children to confine yet. First needed by
+     Create Request's Add Category modal, 2026-08-06. */
+  position: relative;
 }
 
 .scroll {
@@ -360,6 +365,10 @@ body {
   transform-origin: left top;
   transition: transform .14s ease, color .14s ease;
   background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .ffloat .finput:focus + .flabel,
@@ -433,6 +442,364 @@ body {
   font-weight: 600;
   color: var(--alert-red);
   margin: 5px 2px 0;
+}
+
+/* ============================================================================
+   LOOKUP / PICKER GLYPH (§6.16)
+   Small grey mark inside a resting field label signaling that focus opens a
+   pull-down or picker. Hidden once the label floats — except .picker fields,
+   which keep it visible so the picker can be re-opened from a filled field.
+   ========================================================================= */
+.lglyph {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  display: inline-block;
+}
+
+.lglyph svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+.ffloat .finput:focus + .flabel .lglyph,
+.ffloat .finput:not(:placeholder-shown) + .flabel .lglyph {
+  display: none;
+}
+
+.ffloat.picker .finput:focus + .flabel .lglyph,
+.ffloat.picker .finput:not(:placeholder-shown) + .flabel .lglyph {
+  display: inline-block;
+}
+
+/* Native date/time pickers (Due Date, Due Time) don't support the
+   :placeholder-shown trick the floating label above relies on — the browser's
+   own "mm/dd/yyyy" isn't a CSS placeholder, so the label would never rise.
+   .ffloat.picker.native keeps the label permanently in the risen position
+   instead, so it reads as a fixed caption above the browser's own control. */
+.ffloat.picker.native .flabel {
+  transform: translateY(-9px) scale(.79);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ============================================================================
+   FIELD ROW (§6.16) — two or more fields plus a button on one line.
+   ========================================================================= */
+.frow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.frow .ffloat {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.frow .btn {
+  align-self: center;
+}
+
+/* Dialog row (§9.2.2 / §9.4, 2026-08-06): Add Dialog sits at the top of the
+   field rather than centered against its full height. .frow .btn's
+   align-self:center above always wins over the container's align-items for
+   that child, so .frow.top needs its own override — this was a real bug
+   caught on Create ToDo (decisions log, 2026-08-06), not just belt-and-suspenders. */
+.frow.top {
+  align-items: flex-start;
+}
+
+.frow.top .btn {
+  align-self: flex-start;
+}
+
+/* Taller textarea for Request Description — same field as Notes, just more
+   room by default (§9.2.2 mockup convention). */
+.ftextarea.ftextarea-desc {
+  min-height: 96px;
+}
+
+.ftextarea.ftextarea-dialog {
+  min-height: 130px;
+}
+
+/* ============================================================================
+   LOOKUP RESULTS — PROPOSED (§6.24)
+   Pull-down list under a §6.16 lookup field. Neither the Create Request
+   mockup nor the spec draws this state (only its resting field is shown);
+   the mockup's own comment says selecting from it "fills both fields," so a
+   result list has to exist somewhere. Kept visually plain — matches the
+   Row Tint / Rule language used everywhere else in the app rather than
+   introducing a new list style. First used by Create Request's Recipient and
+   Category lookups (2026-08-06); record in design/README.md when adopted.
+   ========================================================================= */
+.lookup-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  box-shadow: 0 4px 14px rgba(20, 30, 50, .14);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.lookup-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: none;
+  border: none;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.lookup-item + .lookup-item {
+  border-top: 1px solid var(--rule);
+}
+
+.lookup-item:hover,
+.lookup-item:focus-visible {
+  background: var(--row-tint);
+}
+
+.lookup-empty {
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+/* ============================================================================
+   DELIVERY-CHANNEL CAPTION (§9.2.2) — shown after a contact is selected.
+   ========================================================================= */
+.chancap {
+  display: none;
+  font-size: 12px;
+  color: var(--ink-soft);
+  /* Ported from the mockup as margin: -8px 0 12px 2px, which overlapped the
+     Recipient row's bottom edge once actually rendered — the mockup always
+     kept .chancap hidden (display:none), so the negative margin was never
+     visually verified. Positive top margin, matching .ferror's convention. */
+  margin: 4px 0 12px 2px;
+}
+
+.chancap.is-visible {
+  display: block;
+}
+
+/* ============================================================================
+   ATTACHMENTS PANEL (§9.2.2)
+   ========================================================================= */
+.attachrow {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.attachpanel {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--input-border);
+  border-radius: 9px;
+  height: 118px;
+  padding: 24px 4px 6px 4px;
+}
+
+.attachpanel .plabel {
+  position: absolute;
+  left: 11px;
+  top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.attachlist {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.attitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.attitem + .attitem {
+  border-top: 1px solid var(--rule);
+}
+
+.attname {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attremove {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 6px;
+}
+
+.attremove:active {
+  background: var(--row-tint);
+  color: var(--alert-red);
+}
+
+.attremove:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 1px;
+}
+
+/* ============================================================================
+   STAGED DIALOG ENTRIES (2026-08-06) — reuses .attitem/.attname/.attremove's
+   row styling rather than inventing a second list treatment. Unlike the
+   Attachments panel, this list has no fixed-height frame: it grows with the
+   number of drafted entries, so it skips .attachpanel's absolute-positioned
+   .plabel and 118px height.
+   ========================================================================= */
+.dlgstaged {
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: #fff;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+/* Paid-feature locked state — attachments deferred to the paid tier (v1).
+   Keeps the attachments panel frame; replaces the functional list with a
+   lock glyph + gating copy pointing at the subscription banner (§6.14). */
+.locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 100%;
+  text-align: center;
+  padding: 4px 12px;
+}
+
+.locked .lock {
+  width: 20px;
+  height: 20px;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+}
+
+.locked .lockttl {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.locked .locknote {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+/* ============================================================================
+   ICON BUTTON (band cluster addition, 2026-08-05)
+   40-px touch target / 22-px glyph. Used for the Print icon on Create
+   Request and Respond to Request.
+   ========================================================================= */
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.iconbtn:hover {
+  background: rgba(42, 95, 200, .08);
+  color: var(--brand-blue);
+}
+
+.iconbtn:active {
+  background: rgba(42, 95, 200, .16);
+}
+
+.iconbtn:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 2px;
+}
+
+.iconbtn svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+/* ============================================================================
+   MODAL DIALOG FRAME (§6.12)
+   Shared frame; a screen adds .modalacts for an action variant or extra
+   per-paragraph spacing for an acknowledge-only variant.
+   ========================================================================= */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 10;
+}
+
+.modal {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  z-index: 11;
+  background: #fff;
+  border-radius: 11px;
+  padding: 16px 18px;
+  width: min(88%, 380px);
+  box-shadow: 0 8px 28px rgba(20, 30, 50, .28);
+}
+
+.modalacts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal h2,
+.modal .modal-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0 0 12px;
 }
 
 /* ============================================================================

@@ -164,3 +164,24 @@ link is built only after the stack is proven on Add Contact.
   opens no picker. One fixed value, US +1, same as the mockup.
 - Add Contact's Email chip has no click handler. It's the only legal `send_by`
   value while Text stays locked, so there's nothing to switch it to yet.
+- Create Request is now Converted (`app/components/CreateRequestForm.tsx`,
+  `/requests/new`). Its Recipient and Category fields use a lookup dropdown
+  (`.lookup-results`, proposed §6.24 — design/README.md) that neither the
+  mockup nor the spec actually draws; built plain (Row Tint/Rule) rather than
+  invented from nothing. Recipient and Category lists are fetched once on
+  mount and filtered client-side — fine at personal/20-item scale, worth
+  revisiting if either list grows. Clicking Add Contact from this screen just
+  navigates to `/contacts/new` and drops whatever was typed — the real §9.9.5
+  no-contact interception dialog still isn't built (same gap noted above for
+  Add Contact itself).
+- Create Request's Dialog field (2026-08-06) writes to a `dialog` table that
+  **migration 004 has not been run yet** (`docs/Week2 - SQL history.txt`) —
+  Send will fail on the Dialog insert step until that migration is applied.
+  Only `kind = 'comment'` is ever written; there's no kind picker in this v1,
+  since nothing has been asked yet at creation time for an entry to answer.
+  Create ToDo's own Dialog field (`design/screens/WYP_create_todo_palette1.html`)
+  is mockup-only and not wired to anything yet.
+- `npm run build` cannot be verified in this sandbox — the SWC native binary
+  fails to load here (`Failed to load SWC binary for linux/x64`), unrelated to
+  any code change. `npx tsc --noEmit` and `npm run lint` both pass clean; run
+  `npm run build` locally before pushing, per the Commands section above.

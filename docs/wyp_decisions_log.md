@@ -6,6 +6,102 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-07 — §6.24 lookup fields: browse a short list on focus, search a long one
+
+Owner noticed Category's lookup on Create Request shows nothing until a character is typed, which is unnecessary friction when the whole list would fit on screen. Rule adopted, meant to apply to every §6.24 lookup app-wide, not just this one: on focus, if the field's full option list has fewer than 12 entries, show all of them immediately; at 12 or more, wait for typed input before showing anything, same as before. `LOOKUP_BROWSE_THRESHOLD = 12` in `CreateRequestForm.tsx`; applied to both Recipient (contacts) and Category (categories). Recorded against the §6.24 component definition in `design/README.md` rather than only in code, so it isn't rediscovered per-field. Empty-list messaging was split too: "No contacts yet" when browsing an empty list vs. "No matching contact" when a typed query has no hits — different situations, shouldn't read the same.
+
+\---
+
+## 2026-08-06 — Dialog added to Create Request (live); migration 004; chancap overlap bug fixed
+
+**Dialog field.** Added to both the Create Request mockup and the live `CreateRequestForm.tsx`, matching Create ToDo's field exactly (floating label, top-aligned Add Dialog, same `.frow.top` fix). Entries are staged as plain client-side draft state (an array of strings — no kind picker in this v1) and written to a new `dialog` table together with the Request when Send succeeds, using the new row's id. Reuses `.attitem`/`.attname`/`.attremove` for the staged-entries list (new `.dlgstaged` wrapper, since the fixed-height `.attachpanel` frame doesn't fit a list that grows with entries) rather than inventing a second list treatment.
+
+**Migration 004 — `dialog` table, not yet run.** `request_id` covers both Requests and ToDos uniformly, since ToDos are rows in `requests` too (§2.5). `who` is a display-name **snapshot** taken at post time, not a live join to `profiles` — matches the immutable-fact reasoning already used for `events` (migration 002): a later name change shouldn't rewrite what a past Dialog entry showed. `id` is a plain sequential `bigint`, deliberately, so it doubles as the sort key alongside `created_at` when two entries land on the same day — this is the mechanism the 2026-08-05 entry called for ("if internal IDs are sequentially assigned, they could be used for this sort"). No UPDATE or DELETE policy: append-only, same reasoning as `events`. Full SQL in `docs/Week2 - SQL history.txt`; **owner needs to run this in the Supabase SQL editor before Send will succeed on a Request with any Dialog entries** — until then, Send fails at the Dialog insert step with the Request already saved (handled as a distinct partial-failure error message, not a silent loss).
+
+**Attachments alignment carried over.** Add Attachment stays top-aligned on Create Request too, for the same reasoning worked out on Create ToDo (2026-08-06 entry above) — it was already correct there and untouched by this change.
+
+**Bug found and fixed — `.chancap` overlap.** The "Will be sent by Email" caption under Recipient used `margin: -8px 0 12px 2px`, copied verbatim from the mockup. The mockup never actually renders this caption (`display:none` always, since the mockup has no live contact-selection state), so the negative margin was never visually checked — live, it overlapped the bottom edge of the First/Last Name row. Fixed to a small positive top margin (`4px`, matching `.ferror`'s spacing convention) in both `globals.css` and the mockup's duplicate rule. Worth remembering as a general risk: CSS ported from a mockup for a state the mockup itself never actually shows isn't verified by the mockup looking right.
+
+\---
+
+## 2026-08-06 — Create ToDo designed (§9.4 had no mockup); Dialog/Attachments held as client-side draft state rather than a staging table
+
+Owner mocked up Create ToDo by hand and pasted it in — the first design pass this screen has ever had; §9.4 was a placeholder with no mockup at all (Week 2 plan, "three screens that don't exist yet"). Built as `design/screens/WYP_create_todo_palette1.html`, reusing Create Request's structure (band cluster, Category lookup, Attachments locked panel) rather than inventing new patterns.
+
+**Priority — caught before building, not after.** The pasted mockup omitted Priority (ASAP/SOON/LATER), which is the one field that actually distinguishes a ToDo from a Request in the unified `requests` table (§2.5), and Main Screen's default ToDo sort is Priority ascending — without it, every ToDo would sort identically. Added as a one-of-three chip row, reusing the §6.2 chip-row pattern already established for Send Requests by (previously only ever used as a two-way choice).
+
+**Due Date — confirmed intentionally absent.** PRD lists Due Date as optional for ToDos; owner confirmed omitting the field entirely from this screen (rather than including it as an optional picker) is deliberate, not an oversight.
+
+**Description and Dialog use the floating-label pattern (§6.10)**, not the fixed top-left `.plabel` caption style Attachments uses. Owner's call, given both styles exist in the system and the pasted mockup was ambiguous between them.
+
+**Dialog and Attachments on an unsaved ToDo — client-side draft state, not a staging table.** Owner raised a real concern from prior CRM work (law-firm systems where users were blocked by database sequencing from entering data in the order they expected) and described a pattern used there: a temporary table, one row per user per draft "kind," holding entries not yet linked to a master record, reconciled to the real row on save.
+
+Recommendation given and accepted: for Create ToDo specifically, Dialog entries (and, later, Attachments) are held as ordinary client-side form state — the same mechanism already used for every other field on this form — and written to the database together with the ToDo row itself, using its just-created id, in one Save. This avoids inventing a new persistent table for state that only needs to survive one browser tab, one sitting.
+
+The staging-table pattern is *not* rejected outright — it's the right tool for a different screen. Once a Request exists and Dialog is added to it over time by two different people (owner and recipient, separate sessions, no single overarching Save action — the Detailed Item / Respond to Request case), there's no browser tab to hold that state in, and something server-side is required there. That's a decision for whenever Detailed Item (§9.6) gets designed, not for Create ToDo.
+
+**Follow-up — abandoned-form data loss.** Owner noted that if a session times out or the tab is abandoned mid-entry, losing unsaved Dialog/Description work without warning is standard behavior across most software, but a `beforeunload` "you have unsaved changes" browser prompt would be a cheap, standard way to soften it. Not built yet — Supabase's session in this app is long-lived (no idle-timeout mechanism exists currently), so the realistic failure mode is closing the tab or navigating away, which `beforeunload` does address. Flagged as a small, deferred enhancement rather than built unprompted, per CLAUDE.md's scope-discipline convention.
+
+**Add Attachment alignment — top, not centered.** Briefly changed to vertically centered on the panel, then reverted. Top-aligned is correct: the panel's 118px height is an artifact of the locked v1 state, not real content, so a top-anchored button stays consistent once the panel becomes content-driven and its height changes; a centered button would drift with it. Matches Add Dialog's existing top alignment, and matches Create Request's Attachments row, which was already top-aligned and untouched throughout this back-and-forth.
+
+\---
+
+## 2026-08-05 — Print icon (Create/Respond), Dialog order + color fix, Time Zone field added across three mockups
+
+**Print icon.** Added a print icon (`.iconbtn`, inline SVG, 40×40 touch target) to the band cluster on Create Request and Respond to Request, first child before Send/Cancel, per owner's rough mockups.
+
+**Dialog panel fix (Respond to Request).** Two changes, both in `WYP_respond_to_request_palette1.html`:
+
+1. Entries reordered to descending/newest-first (was ascending). The demo data has no real ordering field yet, so this is a manual reorder of the two mocked entries, flagged in an HTML comment for the real implementation.
+2. `.dlgdate` color changed from `var(--alert-red)` to `var(--brand-blue)`. Red is reserved for Overdue and other status/error use (§3.1); decorative use on Dialog dates was a mismatch. Dialog type label stays bold black, unchanged.
+
+**Follow-up — Dialog needs a real ordering field.** Owner's observation: a Question and Answer landing on the same date is ambiguous under date-only sort. If entries carry a sequentially-assigned internal ID (or a timestamp used only for ordering, not display), that resolves it without exposing time-of-day in the UI, which isn't meant to matter. No `dialog` table exists yet (Week 2 plan doesn't include it), so this is a schema note for whenever Dialog is designed, not an open bug: **the `dialog` table's primary key or a `created_at` timestamptz should double as the sort key**, not the display date.
+
+**Time Zone field.** Added a §6.16 lookup/picker field labeled "Time Zone" to three mockups:
+
+- `WYP_add_contact_palette1_floating.html` — after Phone, before Send Requests by. Empty (no default rendered in the mockup).
+- `WYP_add_contact_no_contact_dialog_palette1.html` — same position, propagated to match (this file didn't yet have `.lglyph` CSS; added it here).
+- `WYP_create_free_account_palette1.html` — after the Display Name note, before Phone. Pre-filled with "Central Time (Chicago)" to match this screen's convention of showing example data throughout.
+
+**Defaulting — answering owner's question directly.** These are two different fields with two different answers:
+
+- **Create My Free Account's Time Zone is the signed-in user's own** — browser-detectable (`Intl.DateTimeFormat().resolvedOptions().timeZone`), so defaulting it is correct and is what the mockup's pre-filled value implies. This also becomes `profiles.time_zone`, already an open item in `WYP_Week2_Plan.md` for §2.7 Overdue evaluation.
+- **Add Contact's Time Zone is the *contact's*, not the user's.** Resolved 2026-08-06: default it to the owner's own profile time zone (`profiles.time_zone`) at Add Contact's initial render — most contacts share the owner's zone often enough that this is a reasonable starting guess, and the field stays editable so the owner can correct it when they know otherwise. This makes `profiles.time_zone` a dependency for populating the default (not just for Overdue evaluation), and it's the reason `contacts.time_zone` should default from the *client-side* value already on hand rather than a second lookup. Mockup comments in both Add Contact files updated to reflect this.
+
+**Schema follow-up — `contacts` needs the same column `profiles` needs.** `WYP_Week2_Plan.md`'s open-questions section already flags `profiles.time_zone` as undecided; this now needs a `contacts.time_zone` counterpart for the same reason (§2.7-adjacent: knowing a contact's zone matters for showing them times/dates meaningfully, even though Overdue itself is anchored to the sender). Not yet added to the migration 003 draft.
+
+**Live-component gap.** `app/components/AddContactForm.tsx` and the `contacts` table (migration 002) do not have a Time Zone field or column — Add Contact is the one screen among those touched here that's already Converted/Live, so this mockup change is now ahead of the live component. Flagging rather than silently adding a column: the field needs the defaulting question above resolved first, and touching the live form/table for a still-open design question isn't the right order.
+
+\---
+
+## 2026-08-05 — Housekeeping section added to Main Screen mockup (Contacts and Account Profile gain an entry point); new §6.23 row component
+
+Neither Contacts nor Account Profile had a way in. §9.8 retired the standalone contact-browse screen in v2.7 (contacts are reached only via Add/Edit Contact or the Create Request type-ahead), and §6.14's Subscription/Account banner opens Settings for subscribers but reads as an upsell strip, not an "edit your profile" entry point. Owner mocked up a "Housekeeping" section at the bottom of the Main Screen scroll, below ToDos, to hold both.
+
+**Decisions taken**
+
+1. **Housekeeping is a new top-level section on the Main Screen**, structured identically to Requests and ToDos: a `.band`/`.glabel` heading ("Housekeeping", no button — nothing to create) followed by a `.subcard` with a `.subhead`/`.subname` label ("Tasks").
+2. **New row component, §6.23: `.hkrows`/`.hkrow`/`.hktitle`/`.hknote`.** Bold Brand-Blue title, em-dash, regular Ink description, 2-line clamp — the same visual language as the §6.5 ToDo row's Priority/description pairing, in its own classes rather than reused `.pri`/`.tdd`, since the meaning here is navigation, not Priority. No chevron or other new affordance glyph: every list row in the app (Sent, Received, ToDo) already signals "tappable" by row context and convention alone, and Housekeeping stays consistent with that rather than introducing a new one.
+3. **Two rows shipped in the mockup: "My Contacts — view and edit" and "Account Profile — view and edit".** Both carry a description even though the title alone would likely read fine, so the pattern is established consistently from the first two items — future rows (Storage Maintenance is the obvious next candidate, and already has a screen with no entry point either) follow the same shape without a new styling decision.
+4. **Punctuation is the em-dash from §6.5's convention** ("—", not a hyphen), for consistency with the row style being reused.
+
+**Alternatives considered and rejected**
+
+* *Restoring the Settings gear to the search bar* — owner's first instinct, self-rejected before proposing Housekeeping. §6.6.1 already states the gear was removed in v2.5 in favor of the bottom banner; reintroducing it would reopen a settled decision and bury the entry point behind an icon rather than plain-language text.
+* *Underlined link-style text for each row* — owner's original sketch. Reads as inline hypertext inside a paragraph, not a navigational list row, and doesn't hold a two-line title-plus-description gracefully.
+* *Stacked `.btn`/`.btn-secondary` per item* — rejected; buttons in this system are single-line, fixed-emphasis controls, would compete visually with the actual primary actions on the same screen (Create Request, Create ToDo), and have no room for a description line.
+* *Reusing `.checkrow`, checkbox included* — rejected; there's no on/off state being represented, and a checkbox implies one that isn't there.
+
+**Follow-ups**
+
+* §9.13 Settings' Purpose line still describes the retired gear-icon entry point rather than the bottom banner (§6.14) — stale, needs a correction pass independent of this change.
+* Whether Account Profile via Housekeeping duplicates or supplements the existing banner→Settings path is intentionally left as two entry points to the same destination (owner confirmed comfortable with that), not resolved as a single canonical path.
+* Not yet promoted to the UI spec proper (§6 fully occupied through §6.22 plus this §6.23) or converted to React — Main Screen remains Mockup status.
+
+**Confirmed** — owner reviewed the rendered mockup (`WYP_main_screen_palette1.html`) and approved it as-is, 2026-08-05, including the `.subname` blue heading treatment on the Tasks subcard. §6.23 and the Housekeeping section are locked; further changes go through a new entry rather than editing this one.
+
+\---
+
 ## 2026-07-28 — v1 scope cuts (attachments → paid; voice search deferred; .ics kept; monetization deferred); offering/messaging rework; local + free-tier build approach adopted; PRD finalized to v12.7 (sales one-pager v3; UI spec §6.18/§9.19 still to update)
 
 A roadmap-and-sequencing session. No UI-spec component anatomy changed, but the free/paid feature split was reworked, two mockups gained a locked "paid feature" attachments state, and the build path was set to a local + free-tier stack rather than the PRD §8.2 AWS target. Reasoning, alternatives, and document impacts below.

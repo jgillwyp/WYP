@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>No-contact dialog — Palette 1 · Floating labels — Would You Please — Add Contact</title>
+<title>Palette 1 — Would You Please — Create a ToDo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -76,10 +76,7 @@
   --rule:          #E2E6EC;   /* Rule (§3.1) — hairline borders and separators */
   --scrim:         rgba(31,41,51,.45);
                               /* Scrim (§3.1) — Ink at 45% behind modal dialogs
-                                 (§6.12).
-                                 NOTE: two mockups (.scrim) hardcode this value
-                                 inline instead of using the token. Point them
-                                 at var(--scrim) when they are next touched. */
+                                 (§6.12). */
 
   /* --- Accent (single yellow) ----------------------------------------------- */
   --sort:          #FFE34D;   /* Sort Highlight (§3.1) — the sole yellow in the
@@ -91,22 +88,17 @@
      shared page padding is tokenized today. */
   --pad:           14px;      /* screen side padding (§7.3) */
 
-
-  /* --- Deprecated / unused --------------------------------------------------
-     Defined in the mockups but not referenced through var() anywhere. Kept
-     here so existing files that declare them do not break, and so the decision
-     to retire them is explicit rather than silent. Remove once confirmed unused
-     in the build.
-
-     --btn-top  #3A70DC   never referenced; likely a leftover from an earlier
-                          gradient-topped button treatment.
-     --icon-grey #6B7280  never referenced; §5 information-only icons actually
-                          render in --ink-soft (#5A6675). §5.1's "icon-grey"
-                          maps to Ink Soft in practice — verify before deleting. */
-  --btn-top:       #3A70DC;
-  --icon-grey:     #6B7280;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7; /* §6.17 PROPOSED */
 }
 
+/* Locked control (§6.22, PROPOSED) — inert, not "lower emphasis".
+   Pair with adjacent text saying why; aria-disabled, never disabled. */
+.btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
+  border:1px solid var(--locked-border);cursor:not-allowed;
+  display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:700;}
+.btn.is-locked:hover,.btn.is-locked:active,.chip.is-locked:hover,.chip.is-locked:active,.is-locked:hover,.is-locked:active{background:var(--locked);color:var(--locked-ink);
+  border-color:var(--locked-border);}
+.is-locked .lockglyph{flex:0 0 auto;width:1em;height:1em;}
 </style>
 <style>
 /* ============================================================================
@@ -114,17 +106,11 @@
    Shared component styles, extracted from the six palette-1 mockups.
    Reads its colors and effects from tokens.css — link tokens.css FIRST.
 
-   Draft v0.1 · July 2026
-
    ORDER OF STYLESHEETS on every screen:
      1. Google Fonts (Inter)      — loads the type family
      2. tokens.css                — defines every --token
      3. components.css            — this file; the shared parts
      4. <style> in the screen     — only that screen's specific rules
-
-   Selectors here map to UI Design Specification §6 components. A screen that
-   needs a variant (e.g. a taller textarea, an acknowledge-only modal) overrides
-   the specific property in its own <style>, which wins by source order.
    ============================================================================ */
 
 /* --- Shell & frame -------------------------------------------------------- */
@@ -197,6 +183,15 @@ html,body{margin:0;height:100%;background:#fff;}
   border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
 .ftextarea{resize:vertical;min-height:84px;line-height:1.4;}
 
+/* --- Chip row (§6.2 form variant) — either/or or one-of-N choice ---------- */
+.chippair{display:flex;gap:6px;flex:0 0 auto;flex-wrap:wrap;}
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);border-radius:9px;
+  padding:5px 12px;min-height:30px;}
+.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
 /* --- Subscription / Account banner (§6.14) + reserved ad slot (§6.15) ----- */
 .subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
   background:#fff;border-top:1px solid var(--rule);cursor:pointer;
@@ -207,18 +202,36 @@ html,body{margin:0;height:100%;background:#fff;}
 .adbox{width:320px;height:50px;display:flex;align-items:center;justify-content:center;
   border:1px dashed var(--rule);border-radius:4px;color:var(--ink-soft);font-size:11px;letter-spacing:.04em;}
 
-/* --- Modal dialog frame (§6.12) ------------------------------------------
-   Shared frame for both variants. The acknowledge-only variant adds cursor
-   and per-paragraph spacing in its screen; the action variant adds .modalacts
-   with buttons. Scrim now reads the --scrim token (previously hardcoded). */
-.scrim{position:absolute;inset:0;background:var(--scrim);z-index:10;}
-.modal{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);z-index:11;
-  background:#fff;border-radius:11px;padding:16px 18px;width:min(88%,380px);
-  box-shadow:0 8px 28px rgba(20,30,50,.28);}
-.modalacts{display:flex;justify-content:flex-end;gap:8px;}
+/* --- Icon button (band cluster addition, 2026-08-05) ----------------------
+   40-px touch target / 22-px glyph, same sizing as Main Screen's .iconbtn. */
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
+  border-radius:10px;cursor:pointer;color:var(--ink-soft);background:none;border:none;padding:0;}
+.iconbtn:hover{background:rgba(42,95,200,.08);color:var(--brand-blue);}
+.iconbtn:active{background:rgba(42,95,200,.16);}
+.iconbtn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.iconbtn svg{width:22px;height:22px;display:block;}
 
-/* Lookup / picker glyph (§6.16) — new to this screen 2026-08-05, for the
-   Time Zone field. Ported from Create Request / Add Contact. */
+</style>
+<style>
+/* Field rows */
+.frow{display:flex;gap:8px;align-items:center;}
+.frow .ffloat{flex:1 1 auto;min-width:0;}
+.frow .btn{align-self:center;}
+/* Description and Dialog sit beside their Add button at the TOP of the
+   textarea, not vertically centered against its full height — .frow's
+   default align-items:center reads oddly once the field is taller than the
+   button. Scoped here rather than added to the shared .frow rule, since
+   Create Request's two .frow uses (Recipient, Category, Due) are all
+   single-line fields where centering is correct. */
+.frow.top{align-items:flex-start;}
+/* .frow .btn{align-self:center} above wins over the container's align-items
+   for this specific child (align-self always overrides align-items on flex
+   children), so .frow.top needs its own override or Add Dialog stays
+   centered regardless of the container rule. This was the actual bug. */
+.frow.top .btn{align-self:flex-start;}
+
+/* Lookup / picker glyph (§6.16) — part of the resting label; hidden when floated,
+   except picker fields keep it while a value is present so the picker re-opens */
 .lglyph{flex:0 0 auto;width:17px;height:17px;display:inline-block;}
 .lglyph svg{width:17px;height:17px;display:block;}
 .ffloat .finput:focus + .flabel .lglyph,
@@ -226,37 +239,25 @@ html,body{margin:0;height:100%;background:#fff;}
 .ffloat.picker .finput:focus + .flabel .lglyph,
 .ffloat.picker .finput:not(:placeholder-shown) + .flabel .lglyph{display:inline-block;}
 
-</style>
-<style>
-/* Phone: country-code selector + number field (§6.10 phone variant) */
-.phone-row{display:flex;gap:8px;}
-.ccode{font:inherit;font-size:14px;color:var(--ink);background:#fff;border:1px solid var(--input-border);
-  border-radius:9px;min-height:50px;padding:8px 10px;width:auto;min-width:78px;display:inline-flex;
-  align-items:center;gap:6px;cursor:pointer;font-weight:600;justify-content:center;}
-.ccode .caret{font-size:10px;color:var(--ink-soft);}
-.ccode:focus{background:var(--focus-tint);outline:none;border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
-.phone-row .finput{flex:1 1 auto;}
+/* Taller textareas — Description matches Create Request's convention;
+   Dialog is given a bit more room since entries accumulate there. */
+.ftextarea.ftextarea-desc{min-height:96px;}
+.ftextarea.ftextarea-dialog{min-height:130px;}
 
-/* Minimum-required caption */
-.minreq{padding:2px var(--pad) 18px;background:var(--row-tint);font-size:13px;color:var(--ink);line-height:1.45;}
-.minreq b{font-weight:700;}
-
-/* Send Requests by — full-width Strip chip row (§6.2 form variant) */
-.sendrow{display:flex;align-items:center;gap:12px;background:var(--strip);border-radius:9px;
-  padding:6px 10px;width:100%;min-height:44px;}
-.chippair{display:flex;gap:6px;flex:0 0 auto;}
-.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
-  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);border-radius:9px;padding:5px 12px;min-height:30px;}
-.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
-  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
-.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
-.gatenote{flex:1 1 auto;min-width:0;font-size:12px;line-height:1.4;color:var(--ink-soft);}
-
-/* Acknowledge-only modal variant (§6.12) — whole dialog dismisses on click */
-.scrim{cursor:pointer;}
-.modal{cursor:pointer;}
-.modal p{margin:0 0 10px;font-size:13.5px;line-height:1.45;color:var(--ink);}
-.modal p:last-child{margin-bottom:0;}
+/* Attachments panel (§9.2.2) — identical to Create Request's v1 locked state.
+   Top-aligned, matching Add Dialog above: the panel's height is an artifact
+   of the locked state (118px, fixed) rather than real content, so anchoring
+   the button to the field's top keeps it consistent once the panel becomes
+   content-driven. See decisions log, 2026-08-06. */
+.attachrow{display:flex;gap:8px;align-items:flex-start;}
+.attachpanel{flex:1 1 auto;min-width:0;position:relative;background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;height:118px;padding:24px 4px 6px 4px;}
+.attachpanel .plabel{position:absolute;left:11px;top:6px;font-size:11px;font-weight:600;color:var(--ink);pointer-events:none;}
+.locked{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;height:100%;text-align:center;padding:4px 12px;}
+.locked .lock{width:20px;height:20px;color:var(--ink-soft);flex:0 0 auto;}
+.locked .lockttl{font-size:12.5px;font-weight:700;color:var(--ink);}
+.locked .locknote{font-size:12px;line-height:1.35;color:var(--ink-soft);}
 </style></head>
 <body>
 <div class="frame-none"><div class="app">
@@ -272,8 +273,16 @@ html,body{margin:0;height:100%;background:#fff;}
   </div>
 
   <div class="band">
-    <span class="glabel">Add Contact</span>
+    <span class="glabel">Create a ToDo</span>
     <span class="bandcluster">
+      <button class="iconbtn" type="button" aria-label="Print ToDo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="17" cy="11" r="1" fill="currentColor"/>
+        </svg>
+      </button>
       <button class="btn" type="button">Save</button>
       <button class="btn-secondary" type="button">Cancel</button>
     </span>
@@ -281,69 +290,73 @@ html,body{margin:0;height:100%;background:#fff;}
 
   <div class="scroll">
     <div class="form">
-      <div class="fgroup ffloat">
-        <input class="finput" id="fn" type="text" autocomplete="given-name" placeholder=" ">
-        <label class="flabel" for="fn">First Name</label>
-      </div>
-      <div class="fgroup ffloat">
-        <input class="finput" id="ln" type="text" autocomplete="family-name" placeholder=" ">
-        <label class="flabel" for="ln">Last Name</label>
-      </div>
-      <div class="fgroup ffloat">
-        <input class="finput" id="em" type="email" autocomplete="email" inputmode="email" placeholder=" " value="roman.atley@example.com">
-        <label class="flabel" for="em">Email</label>
-      </div>
+
+      <!-- Priority (§2.1 core object field — ToDo-only, no Request equivalent).
+           Reuses the §6.2 chip-row pattern already established for Send
+           Requests by (Add Contact) and Delivery-channel choices, extended
+           here to a one-of-three choice instead of one-of-two. Terms match
+           Main Screen's ToDo row exactly (ASAP/SOON/LATER, §6.5 .pri). -->
       <div class="fgroup">
-        <div class="phone-row">
-          <button class="ccode" type="button" aria-label="Country code, United States, +1">US&nbsp;+1 <span class="caret">&#9662;</span></button>
-          <span class="ffloat" style="flex:1 1 auto;min-width:0;display:block;">
-            <input class="finput" id="ph" type="tel" autocomplete="tel-national" inputmode="tel" placeholder=" ">
-            <label class="flabel" for="ph">Phone</label>
-          </span>
+        <span class="flabel" id="pri-label">Priority</span>
+        <div class="chippair" role="radiogroup" aria-labelledby="pri-label">
+          <button class="chip selected" type="button" aria-pressed="true">ASAP</button>
+          <button class="chip" type="button" aria-pressed="false">SOON</button>
+          <button class="chip" type="button" aria-pressed="false">LATER</button>
         </div>
       </div>
-      <!-- Time Zone — new 2026-08-05, §6.16 lookup/picker field. This is the
-           CONTACT's time zone, not the signed-in user's, so there's no
-           browser to detect it from directly. Resolved 2026-08-06: default
-           this field to the owner's own profile time zone (profiles.time_zone)
-           on Add Contact's initial render; the field stays editable so the
-           owner can correct it when they know the contact is elsewhere.
-           See decisions log. -->
-      <div class="fgroup ffloat picker">
-        <input class="finput" id="tz" type="text" autocomplete="off" placeholder=" ">
-        <label class="flabel" for="tz"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Time Zone</label>
+
+      <!-- Category row — identical pattern to Create Request's Category field. -->
+      <div class="fgroup frow">
+        <span class="ffloat">
+          <input class="finput" id="cat" type="text" autocomplete="off" placeholder=" " value="Personal Fin">
+          <label class="flabel" for="cat"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Private Category (optional)</label>
+        </span>
+        <button class="btn" type="button">Add Category</button>
       </div>
-      <div class="fgroup">
-        <span class="flabel" id="sendby-label">Send Requests by</span>
-        <div class="sendrow">
-          <div class="chippair" role="radiogroup" aria-labelledby="sendby-label">
-            <button class="chip selected" type="button" aria-pressed="true">Email</button>
-            <button class="chip" type="button" aria-pressed="false">Text</button>
+
+      <!-- ToDo Description (§6.10): 500-char limit, same convention as
+           Request Description / Add Contact Notes. Floating label, per
+           2026-08-06 decision — not the fixed .plabel style Attachments
+           uses below. -->
+      <div class="fgroup ffloat">
+        <textarea class="ftextarea ftextarea-desc" id="desc" maxlength="500" placeholder=" "></textarea>
+        <label class="flabel" for="desc">ToDo Description</label>
+      </div>
+
+      <!-- Dialog — new to Create ToDo, 2026-08-06. Entries composed here are
+           held as client-side draft state, same as every other field on this
+           form, and written to the database together with the ToDo itself
+           when Save is pressed (decisions log, 2026-08-06: one continuous
+           sitting, no staging table). Floating label, matching Description
+           above rather than the fixed-caption Attachments style. -->
+      <div class="fgroup frow top">
+        <span class="ffloat">
+          <textarea class="ftextarea ftextarea-dialog" id="dlg" maxlength="1000" placeholder=" "></textarea>
+          <label class="flabel" for="dlg">Dialog (Questions, Answers, Comments)</label>
+        </span>
+        <button class="btn" type="button">Add Dialog</button>
+      </div>
+
+      <!-- Attachments panel — v1 locked "paid feature" state, identical to
+           Create Request. Also held as client-side draft state until Save,
+           same reasoning as Dialog above. -->
+      <div class="fgroup attachrow">
+        <div class="attachpanel">
+          <span class="plabel">Attachments</span>
+          <div class="locked">
+            <svg class="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg>
+            <span class="lockttl">A subscription feature</span>
+            <span class="locknote">Attach files to your Requests with a subscription &#8212; see the banner below.</span>
           </div>
-          <!-- Notice wording is tier-differentiated; "Request Texting" is the locked feature name (2026-07-16).
-               Free user shown. Subscriber string: "Request Texting is included in your subscription &#8212; see the Account banner below for other options."
-               Banner now shows for both tiers (§6.14 revision), so the subscriber reference resolves. -->
-          <div class="gatenote">Request Texting is available with a subscription &#8212; see the banner below.</div>
         </div>
+        <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
       </div>
-      <div class="fgroup ffloat">
-        <textarea class="ftextarea" id="nt" maxlength="500" placeholder=" "></textarea>
-        <label class="flabel" for="nt">Notes (optional)</label>
-      </div>
+
     </div>
-    <div class="minreq"><b>Minimum required</b>&nbsp; Either First or Last Name, and an Email. Phone is optional and can be used for Text delivery with a subscription.</div>
   </div>
 
   <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
   <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
 
-
-  <div class="scrim" onclick="this.style.display='none';document.querySelector('.modal').style.display='none';" aria-hidden="true"></div>
-  <div class="modal" role="alertdialog" aria-label="A Contact is needed"
-       onclick="this.style.display='none';document.querySelector('.scrim').style.display='none';">
-    <p>To create a Request, a Contact is needed.</p>
-    <p>Click anywhere to proceed.</p>
-    <p>After you click Save, you&rsquo;ll be returned to Create Request.</p>
-  </div>
 </div></div>
 </body></html>
