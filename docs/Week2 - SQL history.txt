@@ -190,3 +190,61 @@ commit;
 --        -> must FAIL: no update policy exists
 --   Second account, same request_id -> sees no rows (request isn't theirs)
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 005 — contacts.display_name
+-- Not yet run. Needed before Add Contact / Create Request can be converted to
+-- the single-Name-field UI decided 2026-08-07.
+--
+-- first_name/last_name are KEPT, not dropped — the owner's call: Create my
+-- Free Account still collects both First and Last Name plus a Display Name
+-- (unchanged), and a Request recipient who signs up gets their contact's
+-- Display Name copied into that Display Name field, then must add at least a
+-- First or Last Name of their own. Contacts and profiles are different
+-- objects with different rules; contacts' first_name/last_name stay in the
+-- table for possible later use but the app stops writing them going forward
+-- — Add Contact becomes a single Name field that writes only display_name.
+-- The few existing test rows keep whatever first_name/last_name they already
+-- have; no further action needed on those values.
+-- ============================================================================
+
+begin;
+
+alter table public.contacts add column if not exists display_name text;
+
+-- Backfill: concatenate what's there today. A handful of rows have neither
+-- name (email-only test inserts, see Week1 SQL history) — fall back to email
+-- so the not-null/non-blank constraint below has something to hold onto.
+update public.contacts
+  set display_name = nullif(trim(concat_ws(' ', first_name, last_name)), '')
+  where display_name is null;
+
+update public.contacts
+  set display_name = email
+  where display_name is null or trim(display_name) = '';
+
+alter table public.contacts
+  alter column display_name set not null;
+
+alter table public.contacts
+  add constraint contacts_display_name_not_blank check (trim(display_name) <> '');
+
+comment on column public.contacts.display_name is
+  'The name the app shows and edits from 2026-08-07 forward — Add Contact writes only this column now.';
+comment on column public.contacts.first_name is
+  'Preserved but not populated by the app going forward (2026-08-07 decision) — kept for possible later use, not read by any current screen.';
+comment on column public.contacts.last_name is
+  'Preserved but not populated by the app going forward (2026-08-07 decision) — kept for possible later use, not read by any current screen.';
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here (same caution as every migration above).
+--
+--   await supabase.from('contacts').select('display_name').limit(5)
+--        -> every existing row has a non-blank display_name
+--   await supabase.from('contacts').insert({ email: 'x@y.com', send_by: 'email' })
+--        -> must FAIL: display_name is not-null with no default
+--   await supabase.from('contacts').insert({ email: 'x@y.com', send_by: 'email', display_name: '  ' })
+--        -> must FAIL: contacts_display_name_not_blank
+-- ============================================================================

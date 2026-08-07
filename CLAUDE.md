@@ -164,23 +164,41 @@ link is built only after the stack is proven on Add Contact.
   opens no picker. One fixed value, US +1, same as the mockup.
 - Add Contact's Email chip has no click handler. It's the only legal `send_by`
   value while Text stays locked, so there's nothing to switch it to yet.
+- Add Contact and Create Request's Recipient field were both First/Last Name
+  until 2026-08-07; both now collect a single Name and write/read only
+  `contacts.display_name`. `first_name`/`last_name` stay in the table
+  (**migration 005, `docs/Week2 - SQL history.txt`, written but not yet run**)
+  but nothing in the app populates or reads them going forward — see the
+  decisions log for why they were kept rather than dropped. Until migration
+  005 runs, `display_name` doesn't exist on the live table and both forms will
+  fail against it.
 - Create Request is now Converted (`app/components/CreateRequestForm.tsx`,
   `/requests/new`). Its Recipient and Category fields use a lookup dropdown
   (`.lookup-results`, proposed §6.24 — design/README.md) that neither the
   mockup nor the spec actually draws; built plain (Row Tint/Rule) rather than
   invented from nothing. Recipient and Category lists are fetched once on
   mount and filtered client-side — fine at personal/20-item scale, worth
-  revisiting if either list grows. Clicking Add Contact from this screen just
-  navigates to `/contacts/new` and drops whatever was typed — the real §9.9.5
-  no-contact interception dialog still isn't built (same gap noted above for
-  Add Contact itself).
-- Create Request's Dialog field (2026-08-06) writes to a `dialog` table that
-  **migration 004 has not been run yet** (`docs/Week2 - SQL history.txt`) —
-  Send will fail on the Dialog insert step until that migration is applied.
-  Only `kind = 'comment'` is ever written; there's no kind picker in this v1,
-  since nothing has been asked yet at creation time for an entry to answer.
-  Create ToDo's own Dialog field (`design/screens/WYP_create_todo_palette1.html`)
-  is mockup-only and not wired to anything yet.
+  revisiting if either list grows. Contacts sort alphabetically by
+  `display_name`, categories by `name` — every lookup/pull-down in the app
+  sorts alphabetically except the Housekeeping task list's Log Out entry
+  (2026-08-07 rule). Clicking Add Contact from this screen just navigates to
+  `/contacts/new` and drops whatever was typed — the real §9.9.5 no-contact
+  interception dialog still isn't built (same gap noted above for Add Contact
+  itself).
+- Create Request's Dialog field (2026-08-06) writes to a `dialog` table —
+  **migration 004 has been run** (confirmed by the owner 2026-08-06), so Send
+  succeeds on the Dialog insert step. Only `kind = 'comment'` is ever written;
+  there's no kind picker in this v1, since nothing has been asked yet at
+  creation time for an entry to answer. Create ToDo's own Dialog field
+  (`design/screens/WYP_create_todo_palette1.html`) is mockup-only and not
+  wired to anything yet.
+- Due Time, Category, and Dialog on Create Request (and Category/Dialog on the
+  Create ToDo mockup) carry Row Tint while empty and switch to white once they
+  hold content (§6.25, `.opt` — 2026-08-07). The Attachments panel is
+  permanently Row-Tinted everywhere it appears, since it can never hold real
+  content in the v1 locked state. `.btn-secondary` now rests on Strip
+  (`var(--strip)`), not white, so it doesn't visually join the white
+  required/filled-field group.
 - `npm run build` cannot be verified in this sandbox — the SWC native binary
   fails to load here (`Failed to load SWC binary for linux/x64`), unrelated to
   any code change. `npx tsc --noEmit` and `npm run lint` both pass clean; run

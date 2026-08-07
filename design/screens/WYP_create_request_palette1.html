@@ -175,7 +175,7 @@ html,body{margin:0;height:100%;background:#fff;}
 
 /* --- Secondary button (§6.11) -------------------------------------------- */
 .btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
-  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
   border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
 .btn-secondary:active{background:var(--row-tint);}
 .btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
@@ -254,7 +254,34 @@ html,body{margin:0;height:100%;background:#fff;}
    see design/screens/WYP_create_todo_palette1.html for the same fix. */
 .frow.top{align-items:flex-start;}
 .frow.top .btn{align-self:flex-start;}
-.ftextarea.ftextarea-dialog{min-height:130px;}
+.ftextarea.ftextarea-dialog{min-height:130px;padding-top:36px;}
+
+/* Small parenthetical label text (2026-08-07) — "(optional)" was crowding
+   Category/Due Time on narrow Android widths; Dialog's subtitle needed its
+   own line entirely. */
+.subnote{font-size:11px;font-weight:500;color:var(--ink-soft);}
+.flabel.twoline{display:block;white-space:normal;}
+.flabel.twoline .subnote{display:block;margin-top:1px;}
+
+/* Optional-field shading (2026-08-07 PREVIEW) — owner's "squint test" idea:
+   tint optional fields so required ones (plain white) are what visually
+   stands out, rather than marking required fields with an asterisk or a
+   legend at the top of the screen. Reuses --row-tint (already the .form's
+   own page background) rather than a new color — this file's owner-drawn
+   original used a pale green not tied to any existing token; light blue was
+   also considered and rejected, since --focus-tint and --strip already use
+   that hue for focus state and chip-strip surfaces, and a third blue-ish
+   surface would blur those meanings. Row Tint's own connotation
+   (de-emphasis: zebra striping, subtle pressed states) already matches
+   "optional" reasonably well, and reusing it keeps this from needing a
+   fourth tinted-background token, which §3.3 doesn't otherwise allow
+   (Band, Row Tint, Strip are the only three). Still focuses to
+   --focus-tint like every other field — this only changes the RESTING fill.
+   Applied here to Due Time, Category, and Dialog — the three actually-
+   optional fields on this screen. Not yet applied anywhere outside this
+   mockup; pending a decision on whether to adopt it app-wide. */
+.finput.opt,.ftextarea.opt{background:var(--row-tint);}
+.finput.opt:focus,.ftextarea.opt:focus{background:var(--focus-tint);}
 
 /* Lookup / picker glyph (§6.16) — part of the resting label; hidden when floated,
    except picker fields keep it while a value is present so the picker re-opens */
@@ -273,8 +300,12 @@ html,body{margin:0;height:100%;background:#fff;}
 
 /* Attachments panel (§9.2.2) */
 .attachrow{display:flex;gap:8px;align-items:flex-start;}
-.attachpanel{flex:1 1 auto;min-width:0;position:relative;background:#fff;
-  border:1px solid var(--input-border);border-radius:9px;height:118px;padding:24px 4px 6px 4px;}
+/* min-height, not height (2026-08-07): a fixed height clipped .locknote on
+   narrow widths / larger Android font-scale settings. */
+/* Row Tint, not white (2026-08-07): always empty in this v1 locked state,
+   so it always gets the "optional and empty" treatment. */
+.attachpanel{flex:1 1 auto;min-width:0;position:relative;background:var(--row-tint);
+  border:1px solid var(--input-border);border-radius:9px;min-height:118px;padding:24px 4px 6px 4px;}
 .attachpanel .plabel{position:absolute;left:11px;top:6px;font-size:11px;font-weight:600;color:var(--ink);pointer-events:none;}
 .attachlist{height:100%;overflow-y:auto;scrollbar-gutter:stable;}
 .attitem{display:flex;align-items:center;gap:8px;padding:5px 7px;font-size:13px;color:var(--ink);}
@@ -309,19 +340,23 @@ html,body{margin:0;height:100%;background:#fff;}
       <span class="word">Would You Please</span>
       <span class="tag">Tracking Requests and ToDos</span>
     </span>
+    <!-- Print moved out of the band cluster 2026-08-07 — narrow Android
+         widths crowded it against Send/Cancel and the "Create a Request"
+         title wrapped. Header has room; matches where Log Out used to sit
+         on Main Screen (moved further, see that screen's own 2026-08-07 fix). -->
+    <button class="iconbtn" type="button" aria-label="Print Request" style="margin-left:auto;">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="17" cy="11" r="1" fill="currentColor"/>
+      </svg>
+    </button>
   </div>
 
   <div class="band">
     <span class="glabel">Create a Request</span>
     <span class="bandcluster">
-      <button class="iconbtn" type="button" aria-label="Print Request">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
-          <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-          <circle cx="17" cy="11" r="1" fill="currentColor"/>
-        </svg>
-      </button>
       <button class="btn" type="button">Send</button>
       <button class="btn-secondary" type="button">Cancel</button>
     </span>
@@ -330,18 +365,15 @@ html,body{margin:0;height:100%;background:#fff;}
   <div class="scroll">
     <div class="form">
 
-      <!-- Recipient row (§9.2.2): First/Last lookup fields (§6.16) + Add Contact.
+      <!-- Recipient row (§9.2.2): single Name lookup field (§6.16) + Add
+           Contact. Merged from First/Last Name 2026-08-07 — matches Add
+           Contact and reads contacts.display_name (migration 005).
            Lookup glyph (wyp_icon_lookup.svg — faded-grey magnifier in Input Border #7E8A9A, overlaid by a solid Ink down-pointer with a white knockout that breaks the lens stroke) sits inside the resting label at ~120% of the label font size and
-           disappears when the label floats. Selecting from either field's
-           pull-down fills both fields. -->
+           disappears when the label floats. -->
       <div class="fgroup frow">
         <span class="ffloat">
-          <input class="finput" id="fn" type="text" autocomplete="off" placeholder=" ">
-          <label class="flabel" for="fn"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>First Name</label>
-        </span>
-        <span class="ffloat">
-          <input class="finput" id="ln" type="text" autocomplete="off" placeholder=" ">
-          <label class="flabel" for="ln"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Last Name</label>
+          <input class="finput" id="rn" type="text" autocomplete="off" placeholder=" ">
+          <label class="flabel" for="rn"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Recipient</label>
         </span>
         <button class="btn" type="button">Add Contact</button>
       </div>
@@ -355,8 +387,8 @@ html,body{margin:0;height:100%;background:#fff;}
           <label class="flabel" for="dd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Due Date</label>
         </span>
         <span class="ffloat picker">
-          <input class="finput" id="dt" type="text" inputmode="numeric" placeholder=" ">
-          <label class="flabel" for="dt"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/></svg></span>Due Time (optional)</label>
+          <input class="finput opt" id="dt" type="text" inputmode="numeric" placeholder=" ">
+          <label class="flabel" for="dt"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/></svg></span>Due Time <span class="subnote">(optional)</span></label>
         </span>
       </div>
 
@@ -364,8 +396,8 @@ html,body{margin:0;height:100%;background:#fff;}
            (glyph hidden when floated, §6.16) + Add Category -->
       <div class="fgroup frow">
         <span class="ffloat">
-          <input class="finput" id="cat" type="text" autocomplete="off" placeholder=" " value="Personal Fin">
-          <label class="flabel" for="cat"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Private Category (optional)</label>
+          <input class="finput opt" id="cat" type="text" autocomplete="off" placeholder=" ">
+          <label class="flabel" for="cat"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Private Category <span class="subnote">(optional)</span></label>
         </span>
         <button class="btn" type="button">Add Category</button>
       </div>
@@ -383,8 +415,8 @@ html,body{margin:0;height:100%;background:#fff;}
            Create ToDo's Dialog field (decisions log, 2026-08-06). -->
       <div class="fgroup frow top">
         <span class="ffloat">
-          <textarea class="ftextarea ftextarea-dialog" id="dlg" maxlength="1000" placeholder=" "></textarea>
-          <label class="flabel" for="dlg">Dialog (Questions, Answers, Comments)</label>
+          <textarea class="ftextarea ftextarea-dialog opt" id="dlg" maxlength="1000" placeholder=" "></textarea>
+          <label class="flabel twoline" for="dlg">Dialog<span class="subnote">(Questions, Answers, Comments)</span></label>
         </span>
         <button class="btn" type="button">Add Dialog</button>
       </div>

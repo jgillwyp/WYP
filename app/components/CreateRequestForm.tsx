@@ -36,8 +36,7 @@ import { supabase } from '@/lib/supabaseClient'
 
 type Contact = {
   id: string
-  first_name: string | null
-  last_name: string | null
+  display_name: string
   send_by: 'email' | 'text'
 }
 
@@ -47,8 +46,7 @@ type Category = {
 }
 
 type RequestFormState = {
-  firstName: string
-  lastName: string
+  recipientName: string
   dueDate: string
   dueTime: string
   categoryName: string
@@ -56,8 +54,7 @@ type RequestFormState = {
 }
 
 const initialState: RequestFormState = {
-  firstName: '',
-  lastName: '',
+  recipientName: '',
   dueDate: '',
   dueTime: '',
   categoryName: '',
@@ -106,9 +103,13 @@ export default function CreateRequestForm() {
   // both to owner_id = auth.uid() (migration 002 / 003) — no client-side
   // "is this mine" filter is added on top of that.
   useEffect(() => {
+    // Alphabetical, not creation order (owner's rule, 2026-08-07) — applies
+    // to every pull-down/lookup list in the app except the Housekeeping task
+    // list's Log Out entry.
     supabase
       .from('contacts')
-      .select('id, first_name, last_name, send_by')
+      .select('id, display_name, send_by')
+      .order('display_name')
       .then(({ data }) => setContacts(data ?? []))
 
     supabase
@@ -141,18 +142,14 @@ export default function CreateRequestForm() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  const contactQueryEmpty = form.firstName.trim() === '' && form.lastName.trim() === ''
+  const contactQueryEmpty = form.recipientName.trim() === ''
   const contactsBrowsable = contacts.length < LOOKUP_BROWSE_THRESHOLD
 
   const filteredContacts = contactQueryEmpty
     ? (contactsBrowsable ? contacts : [])
-    : contacts.filter((c) => {
-        const fn = form.firstName.trim().toLowerCase()
-        const ln = form.lastName.trim().toLowerCase()
-        const cfn = (c.first_name ?? '').toLowerCase()
-        const cln = (c.last_name ?? '').toLowerCase()
-        return (fn === '' || cfn.includes(fn)) && (ln === '' || cln.includes(ln))
-      })
+    : contacts.filter((c) =>
+        c.display_name.toLowerCase().includes(form.recipientName.trim().toLowerCase())
+      )
 
   // Show the dropdown on focus when there's something to browse (query empty
   // but the list is short enough to just list) or once the user has typed
@@ -171,7 +168,7 @@ export default function CreateRequestForm() {
 
   function selectContact(c: Contact) {
     setSelectedContact(c)
-    setForm((f) => ({ ...f, firstName: c.first_name ?? '', lastName: c.last_name ?? '' }))
+    setForm((f) => ({ ...f, recipientName: c.display_name }))
     setShowContactResults(false)
     setContactInvalid(false)
   }
@@ -314,16 +311,14 @@ export default function CreateRequestForm() {
   return (
     <div className="frame-none">
       <div className="app">
-        <WypHeader />
-
-        <div className="band">
-          <span className="glabel">Create a Request</span>
-          <span className="bandcluster">
+        <WypHeader
+          action={
             <button
               className="iconbtn"
               type="button"
               aria-label="Print Request"
               onClick={() => window.print()}
+              style={{ marginLeft: 'auto' }}
             >
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M7 8V3h10v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -332,6 +327,12 @@ export default function CreateRequestForm() {
                 <circle cx="17" cy="11" r="1" fill="currentColor" />
               </svg>
             </button>
+          }
+        />
+
+        <div className="band">
+          <span className="glabel">Create a Request</span>
+          <span className="bandcluster">
             <button className="btn" type="submit" form="create-request-form" disabled={saving}>
               {saving ? 'Sending…' : 'Send'}
             </button>
@@ -344,19 +345,21 @@ export default function CreateRequestForm() {
         <div className="scroll">
           <form className="form" id="create-request-form" onSubmit={handleSubmit} noValidate>
 
-            {/* Recipient row (§9.2.2) */}
+            {/* Recipient row (§9.2.2) — single Name lookup (2026-08-07,
+                merged from First/Last Name; matches Add Contact and reads
+                contacts.display_name, see migration 005). */}
             <div className="fgroup">
               <div className="frow" style={{ position: 'relative' }}>
                 <span className="ffloat">
                   <input
                     className="finput"
-                    id="fn"
+                    id="rn"
                     type="text"
                     autoComplete="off"
                     placeholder=" "
-                    value={form.firstName}
+                    value={form.recipientName}
                     onChange={(e) => {
-                      set('firstName', e.target.value)
+                      set('recipientName', e.target.value)
                       setSelectedContact(null)
                       setShowContactResults(true)
                       if (contactInvalid) setContactInvalid(false)
@@ -364,7 +367,7 @@ export default function CreateRequestForm() {
                     onFocus={() => setShowContactResults(true)}
                     onBlur={() => setTimeout(() => setShowContactResults(false), 120)}
                   />
-                  <label className="flabel" htmlFor="fn">
+                  <label className="flabel" htmlFor="rn">
                     <span className="lglyph" aria-hidden="true">
                       <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
@@ -373,36 +376,7 @@ export default function CreateRequestForm() {
                         <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
                       </svg>
                     </span>
-                    First Name
-                  </label>
-                </span>
-                <span className="ffloat">
-                  <input
-                    className="finput"
-                    id="ln"
-                    type="text"
-                    autoComplete="off"
-                    placeholder=" "
-                    value={form.lastName}
-                    onChange={(e) => {
-                      set('lastName', e.target.value)
-                      setSelectedContact(null)
-                      setShowContactResults(true)
-                      if (contactInvalid) setContactInvalid(false)
-                    }}
-                    onFocus={() => setShowContactResults(true)}
-                    onBlur={() => setTimeout(() => setShowContactResults(false), 120)}
-                  />
-                  <label className="flabel" htmlFor="ln">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
-                        <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
-                      </svg>
-                    </span>
-                    Last Name
+                    Recipient
                   </label>
                 </span>
                 {/* No in-place "no contact found" interception (§9.9.5) yet —
@@ -429,7 +403,7 @@ export default function CreateRequestForm() {
                           aria-selected={selectedContact?.id === c.id}
                           onMouseDown={() => selectContact(c)}
                         >
-                          {[c.first_name, c.last_name].filter(Boolean).join(' ') || '(no name)'}
+                          {c.display_name}
                         </button>
                       ))
                     )}
@@ -476,7 +450,7 @@ export default function CreateRequestForm() {
               </span>
               <span className="ffloat picker native">
                 <input
-                  className="finput"
+                  className={`finput${form.dueTime.trim() === '' ? ' opt' : ''}`}
                   id="dt"
                   type="time"
                   value={form.dueTime}
@@ -490,7 +464,7 @@ export default function CreateRequestForm() {
                       <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
                     </svg>
                   </span>
-                  Due Time (optional)
+                  Due Time <span className="subnote">(optional)</span>
                 </label>
               </span>
             </div>
@@ -501,7 +475,7 @@ export default function CreateRequestForm() {
               <div className="frow" style={{ position: 'relative' }}>
                 <span className="ffloat">
                   <input
-                    className="finput"
+                    className={`finput${form.categoryName.trim() === '' ? ' opt' : ''}`}
                     id="cat"
                     type="text"
                     autoComplete="off"
@@ -526,7 +500,7 @@ export default function CreateRequestForm() {
                         <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
                       </svg>
                     </span>
-                    Private Category (optional)
+                    Private Category <span className="subnote">(optional)</span>
                   </label>
                 </span>
                 <button className="btn" type="button" onClick={openAddCategory}>
@@ -583,15 +557,16 @@ export default function CreateRequestForm() {
             <div className="fgroup frow top">
               <span className="ffloat">
                 <textarea
-                  className="ftextarea ftextarea-dialog"
+                  className={`ftextarea ftextarea-dialog${dialogDraft.trim() === '' ? ' opt' : ''}`}
                   id="dlg"
                   maxLength={1000}
                   placeholder=" "
                   value={dialogDraft}
                   onChange={(e) => setDialogDraft(e.target.value)}
                 />
-                <label className="flabel" htmlFor="dlg">
-                  Dialog (Questions, Answers, Comments)
+                <label className="flabel twoline" htmlFor="dlg">
+                  Dialog
+                  <span className="subnote">(Questions, Answers, Comments)</span>
                 </label>
               </span>
               <button className="btn" type="button" onClick={addDialogEntry}>

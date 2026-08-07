@@ -46,7 +46,7 @@ html,body{margin:0;height:100%;background:#fff;}
 .btn:active{background:var(--blue-pressed);}
 .btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 .btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
-  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
   border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
 .btn-secondary:active{background:var(--row-tint);}
 .btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
@@ -151,19 +151,22 @@ html,body{margin:0;height:100%;background:#fff;}
       <span class="word">Would You Please</span>
       <span class="tag">Tracking Requests and ToDos</span>
     </span>
+    <!-- Print moved out of the band cluster 2026-08-07 — same fix as Create
+         Request; narrow Android widths crowded it against the response
+         buttons and the title wrapped. -->
+    <button class="iconbtn" type="button" aria-label="Print Request" style="margin-left:auto;">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="17" cy="11" r="1" fill="currentColor"/>
+      </svg>
+    </button>
   </div>
 
   <div class="band">
     <span class="glabel">Respond to Request</span>
     <span class="bandcluster">
-      <button class="iconbtn" type="button" aria-label="Print Request">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
-          <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-          <circle cx="17" cy="11" r="1" fill="currentColor"/>
-        </svg>
-      </button>
       <button class="btn" type="button">Send</button>
       <button class="btn-secondary" type="button">Cancel</button>
     </span>

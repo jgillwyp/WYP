@@ -201,6 +201,12 @@ body {
   cursor: not-allowed;
 }
 
+/* Resting background is Strip (2026-08-07), not white — once white marks
+   "required and empty/unfilled", a white secondary button reads as part of
+   that same required-field group and pops out of place next to it. Strip is
+   applied as an opaque fill, not the chip's translucent white-over-Strip
+   trick: a Row-Tint-toned surface behind a semi-transparent white wouldn't
+   read as blue the way it does over the Strip-colored .sendrow. */
 .btn-secondary {
   flex: 0 0 auto;
   font: inherit;
@@ -210,7 +216,7 @@ body {
   color: var(--brand-blue);
   text-align: center;
   cursor: pointer;
-  background: #fff;
+  background: var(--strip);
   border: 1.5px solid var(--brand-blue);
   border-radius: 11px;
   padding: 8px 14px;
@@ -418,6 +424,22 @@ body {
   line-height: 1.4;
 }
 
+/* Optional-field shading (2026-08-07): empty optional fields get Row Tint as
+   a squint-test cue; once a field has content it goes white like a required
+   field, since a filled field no longer needs the "you could skip this"
+   signal. .opt is toggled by the component per keystroke — see
+   CreateRequestForm.tsx (Create ToDo is mockup-only, not yet converted).
+   Matches the mockups' .opt rule (design/screens/WYP_create_request_palette1.html,
+   WYP_create_todo_palette1.html). */
+.finput.opt,
+.ftextarea.opt {
+  background: var(--row-tint);
+}
+.finput.opt:focus,
+.ftextarea.opt:focus {
+  background: var(--focus-tint);
+}
+
 /* Read-only variant — PROPOSED (§6.10 locked) */
 .finput[readonly] {
   background: var(--locked);
@@ -523,6 +545,33 @@ body {
 
 .ftextarea.ftextarea-dialog {
   min-height: 130px;
+  /* Extra top clearance for the two-line label below (.flabel.twoline). */
+  padding-top: 36px;
+}
+
+/* ============================================================================
+   SMALL PARENTHETICAL LABEL TEXT (2026-08-07)
+   "(optional)" was crowding or overflowing narrow fields on Android
+   (Category, Due Time); Dialog's "(Questions, Answers, Comments)" needed to
+   drop to its own line entirely. .subnote is the shared small-text
+   treatment; .flabel.twoline is the block-layout variant a label needs when
+   its subnote moves to a second line (the default .flabel is a flex row,
+   for the §6.16 glyph + text case, and does not wrap).
+   ========================================================================= */
+.subnote {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.flabel.twoline {
+  display: block;
+  white-space: normal;
+}
+
+.flabel.twoline .subnote {
+  display: block;
+  margin-top: 1px;
 }
 
 /* ============================================================================
@@ -608,10 +657,17 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   position: relative;
-  background: #fff;
+  /* Row Tint, not white (2026-08-07): Attachments is optional, and in this
+     v1 locked state it's always empty (no upload mechanism yet), so it
+     always gets the "optional and empty" treatment — never switches to
+     white the way Category/Dialog do once filled, since it can't be. */
+  background: var(--row-tint);
   border: 1px solid var(--input-border);
   border-radius: 9px;
-  height: 118px;
+  /* min-height, not height (2026-08-07): a fixed height clipped the
+     .locknote copy on narrow widths / larger Android font-scale settings —
+     it grows to fit instead of cutting text off below the box. */
+  min-height: 118px;
   padding: 24px 4px 6px 4px;
 }
 

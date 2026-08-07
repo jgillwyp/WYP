@@ -151,7 +151,7 @@ html,body{margin:0;height:100%;background:#fff;}
 
 /* --- Secondary button (§6.11) -------------------------------------------- */
 .btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
-  color:var(--brand-blue);text-align:center;cursor:pointer;background:#fff;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
   border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
 .btn-secondary:active{background:var(--row-tint);}
 .btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
@@ -230,6 +230,19 @@ html,body{margin:0;height:100%;background:#fff;}
    centered regardless of the container rule. This was the actual bug. */
 .frow.top .btn{align-self:flex-start;}
 
+/* Small parenthetical label text (2026-08-07) — "(optional)" was crowding
+   Category on narrow Android widths; Dialog's subtitle needed its own line
+   entirely. */
+.subnote{font-size:11px;font-weight:500;color:var(--ink-soft);}
+.flabel.twoline{display:block;white-space:normal;}
+.flabel.twoline .subnote{display:block;margin-top:1px;}
+
+/* Optional-field shading (2026-08-07 preview, same as Create Request) —
+   reuses --row-tint, the .form's own page background, rather than a new
+   color. See that mockup's fuller comment. */
+.finput.opt,.ftextarea.opt{background:var(--row-tint);}
+.finput.opt:focus,.ftextarea.opt:focus{background:var(--focus-tint);}
+
 /* Lookup / picker glyph (§6.16) — part of the resting label; hidden when floated,
    except picker fields keep it while a value is present so the picker re-opens */
 .lglyph{flex:0 0 auto;width:17px;height:17px;display:inline-block;}
@@ -242,7 +255,7 @@ html,body{margin:0;height:100%;background:#fff;}
 /* Taller textareas — Description matches Create Request's convention;
    Dialog is given a bit more room since entries accumulate there. */
 .ftextarea.ftextarea-desc{min-height:96px;}
-.ftextarea.ftextarea-dialog{min-height:130px;}
+.ftextarea.ftextarea-dialog{min-height:130px;padding-top:36px;}
 
 /* Attachments panel (§9.2.2) — identical to Create Request's v1 locked state.
    Top-aligned, matching Add Dialog above: the panel's height is an artifact
@@ -250,8 +263,12 @@ html,body{margin:0;height:100%;background:#fff;}
    the button to the field's top keeps it consistent once the panel becomes
    content-driven. See decisions log, 2026-08-06. */
 .attachrow{display:flex;gap:8px;align-items:flex-start;}
-.attachpanel{flex:1 1 auto;min-width:0;position:relative;background:#fff;
-  border:1px solid var(--input-border);border-radius:9px;height:118px;padding:24px 4px 6px 4px;}
+/* min-height, not height (2026-08-07): a fixed height clipped .locknote on
+   narrow widths / larger Android font-scale settings. */
+/* Row Tint, not white (2026-08-07): always empty in this v1 locked state,
+   so it always gets the "optional and empty" treatment. */
+.attachpanel{flex:1 1 auto;min-width:0;position:relative;background:var(--row-tint);
+  border:1px solid var(--input-border);border-radius:9px;min-height:118px;padding:24px 4px 6px 4px;}
 .attachpanel .plabel{position:absolute;left:11px;top:6px;font-size:11px;font-weight:600;color:var(--ink);pointer-events:none;}
 .locked{display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:5px;height:100%;text-align:center;padding:4px 12px;}
@@ -270,19 +287,21 @@ html,body{margin:0;height:100%;background:#fff;}
       <span class="word">Would You Please</span>
       <span class="tag">Tracking Requests and ToDos</span>
     </span>
+    <!-- Print moved out of the band cluster 2026-08-07, matching Create
+         Request / Respond to Request. -->
+    <button class="iconbtn" type="button" aria-label="Print ToDo" style="margin-left:auto;">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="17" cy="11" r="1" fill="currentColor"/>
+      </svg>
+    </button>
   </div>
 
   <div class="band">
     <span class="glabel">Create a ToDo</span>
     <span class="bandcluster">
-      <button class="iconbtn" type="button" aria-label="Print ToDo">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
-          <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-          <circle cx="17" cy="11" r="1" fill="currentColor"/>
-        </svg>
-      </button>
       <button class="btn" type="button">Save</button>
       <button class="btn-secondary" type="button">Cancel</button>
     </span>
@@ -308,8 +327,8 @@ html,body{margin:0;height:100%;background:#fff;}
       <!-- Category row — identical pattern to Create Request's Category field. -->
       <div class="fgroup frow">
         <span class="ffloat">
-          <input class="finput" id="cat" type="text" autocomplete="off" placeholder=" " value="Personal Fin">
-          <label class="flabel" for="cat"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Private Category (optional)</label>
+          <input class="finput opt" id="cat" type="text" autocomplete="off" placeholder=" ">
+          <label class="flabel" for="cat"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Private Category <span class="subnote">(optional)</span></label>
         </span>
         <button class="btn" type="button">Add Category</button>
       </div>
@@ -331,8 +350,8 @@ html,body{margin:0;height:100%;background:#fff;}
            above rather than the fixed-caption Attachments style. -->
       <div class="fgroup frow top">
         <span class="ffloat">
-          <textarea class="ftextarea ftextarea-dialog" id="dlg" maxlength="1000" placeholder=" "></textarea>
-          <label class="flabel" for="dlg">Dialog (Questions, Answers, Comments)</label>
+          <textarea class="ftextarea ftextarea-dialog opt" id="dlg" maxlength="1000" placeholder=" "></textarea>
+          <label class="flabel twoline" for="dlg">Dialog<span class="subnote">(Questions, Answers, Comments)</span></label>
         </span>
         <button class="btn" type="button">Add Dialog</button>
       </div>

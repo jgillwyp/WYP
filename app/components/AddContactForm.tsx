@@ -25,16 +25,14 @@ import { supabase } from '@/lib/supabaseClient'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type ContactFormState = {
-  firstName: string
-  lastName: string
+  name: string
   email: string
   phone: string
   notes: string
 }
 
 const initialState: ContactFormState = {
-  firstName: '',
-  lastName: '',
+  name: '',
   email: '',
   phone: '',
   notes: '',
@@ -62,7 +60,7 @@ export default function AddContactForm() {
   }
 
   function validate(): boolean {
-    const hasName = form.firstName.trim() !== '' || form.lastName.trim() !== ''
+    const hasName = form.name.trim() !== ''
     const hasEmail = EMAIL_RE.test(form.email.trim())
 
     setNameInvalid(!hasName)
@@ -92,10 +90,12 @@ export default function AddContactForm() {
       return
     }
 
+    // first_name/last_name are not written here (2026-08-07 decision,
+    // migration 005) — the columns stay in the table for possible later use,
+    // but this app writes only display_name going forward.
     const { error: insertError } = await supabase.from('contacts').insert({
       owner_id: userData.user.id,
-      first_name: form.firstName.trim() || null,
-      last_name: form.lastName.trim() || null,
+      display_name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim() || null,
       send_by: sendBy,
@@ -154,40 +154,20 @@ export default function AddContactForm() {
             <div className={`fgroup ffloat${nameInvalid ? ' is-invalid' : ''}`}>
               <input
                 className="finput"
-                id="fn"
+                id="nm"
                 type="text"
-                autoComplete="given-name"
+                autoComplete="name"
                 placeholder=" "
-                value={form.firstName}
+                value={form.name}
                 onChange={(e) => {
-                  set('firstName', e.target.value)
+                  set('name', e.target.value)
                   if (nameInvalid) setNameInvalid(false)
                 }}
               />
-              <label className="flabel" htmlFor="fn">
-                First Name
+              <label className="flabel" htmlFor="nm">
+                Name
               </label>
-            </div>
-
-            <div className={`fgroup ffloat${nameInvalid ? ' is-invalid' : ''}`}>
-              <input
-                className="finput"
-                id="ln"
-                type="text"
-                autoComplete="family-name"
-                placeholder=" "
-                value={form.lastName}
-                onChange={(e) => {
-                  set('lastName', e.target.value)
-                  if (nameInvalid) setNameInvalid(false)
-                }}
-              />
-              <label className="flabel" htmlFor="ln">
-                Last Name
-              </label>
-              {nameInvalid && (
-                <p className="ferror">Enter a First or Last Name.</p>
-              )}
+              {nameInvalid && <p className="ferror">Enter a Name.</p>}
             </div>
 
             <div className={`fgroup ffloat${emailInvalid ? ' is-invalid' : ''}`}>
@@ -328,9 +308,8 @@ export default function AddContactForm() {
           </form>
 
           <div className="minreq">
-            <b>Minimum required</b>&nbsp; Either First or Last Name, and an
-            Email. Phone is optional and can be used for Text delivery with a
-            subscription.
+            <b>Minimum required</b>&nbsp; A Name and an Email. Phone is
+            optional and can be used for Text delivery with a subscription.
           </div>
         </div>
 
