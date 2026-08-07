@@ -30,8 +30,8 @@ html,body{margin:0;height:100%;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
-.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
-.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
 
 /* Heading band (§6.7) */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
@@ -87,10 +87,25 @@ html,body{margin:0;height:100%;background:#fff;}
 /* Boxed sub-panels */
 .panel{background:#fff;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;}
 .panelhead{font-size:11.5px;font-weight:700;color:var(--brand-blue);margin-bottom:6px;}
-.panelrow{display:flex;gap:10px;align-items:flex-start;padding:0 var(--pad) 12px;}
-.panelrow .panel{flex:1 1 auto;min-width:0;}
-.panelrow .btn,.panelrow .btn-secondary,.panelrow .is-locked{margin-top:0;
+
+/* Required-field border (2026-08-07) — see Create Request's fuller
+   comment/decisions log. .panel's own resting border is --rule (a plain
+   hairline, correct for Dialog/Attachments, which aren't required); .req
+   overrides it to Ink for Done Date/Done Time in the state where they
+   function as required. */
+.panel.req{border-color:var(--ink);}
+
+/* Stacked action row (§6.26, PROPOSED, 2026-08-07) — Add Dialog / Add
+   Attachment sit alone on their own row, right-aligned, above the full-width
+   panel, replacing the earlier .panelrow side-by-side layout (a fixed-width
+   button starved the Dialog/Attachments panel of horizontal space on narrow
+   Android widths — same fix as Create Request/Create ToDo, see those
+   mockups' fuller comment). .panelact carries the row's own padding since
+   this screen has no .form/.fgroup wrapper to supply it. */
+.panelact{display:flex;justify-content:flex-end;padding:0 var(--pad);margin-bottom:6px;}
+.panelact .btn,.panelact .btn-secondary,.panelact .is-locked{
   font-size:12.5px;border-radius:11px;padding:9px 14px;}
+.panelfull{padding:0 var(--pad) 12px;}
 
 /* Two small fields side by side */
 .duo{display:flex;gap:10px;padding:0 var(--pad) 12px;}
@@ -193,14 +208,22 @@ html,body{margin:0;height:100%;background:#fff;}
     <div class="grabber" aria-hidden="true"></div>
 
     <div class="duo">
-      <div class="panel">
+      <!-- Ink border (2026-08-07): in this shown state, Done Date equals the
+           Due Date and the Request carries a Due Time, so both fields are
+           the "required, even though normally optional" case the Row Tint
+           rule always anticipated (decisions log, 2026-08-07 — "a Done Time
+           if the Done Date is the same as the Due Date and a Due Time was
+           part of the Request"). Once Done Date/Done Time become real
+           pickers rather than static text, .req should be conditional on
+           that same comparison, not permanent. -->
+      <div class="panel req">
         <div class="fieldhead">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           Done Date
         </div>
         <div class="fieldval">Monday, October 19, 2026</div>
       </div>
-      <div class="panel">
+      <div class="panel req">
         <div class="fieldhead">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Done Time
@@ -209,7 +232,10 @@ html,body{margin:0;height:100%;background:#fff;}
       </div>
     </div>
 
-    <div class="panelrow">
+    <!-- Stacked action row (§6.26, 2026-08-07): Add Dialog above, full-width
+         panel below — was .panelrow, side by side. -->
+    <div class="panelact"><button class="btn" type="button">Add Dialog</button></div>
+    <div class="panelfull">
       <div class="panel">
         <div class="panelhead">Dialog (Questions, Answers, Comments)</div>
         <!-- Corrected 2026-08-05: newest first (descending), was ascending.
@@ -224,10 +250,16 @@ html,body{margin:0;height:100%;background:#fff;}
         <div class="dlg"><span class="dlgdate">10-02-26</span> <span class="dlgkind">Question</span>
           <span class="dlgwho">(Mae Baker)</span> Should I also include George?</div>
       </div>
-      <button class="btn" type="button">Add Dialog</button>
     </div>
 
-    <div class="panelrow">
+    <div class="panelact">
+      <button class="btn is-locked" id="attach-btn" type="button" aria-disabled="true">
+        <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/>
+          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>Add Attachment</button>
+    </div>
+    <div class="panelfull">
       <div class="panel">
         <div class="panelhead">Attachments</div>
 
@@ -242,12 +274,6 @@ html,body{margin:0;height:100%;background:#fff;}
         <div class="gatenote" id="attach-note" style="margin-top:6px;">Adding attachments is
           available on requests sent by subscribers.</div>
       </div>
-
-      <button class="btn is-locked" id="attach-btn" type="button" aria-disabled="true">
-        <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/>
-          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-        </svg>Add Attachment</button>
     </div>
 
     <!-- Pitch and action as one unit (was a banner plus a separate link). -->

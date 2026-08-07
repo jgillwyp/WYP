@@ -153,7 +153,7 @@ export default function AddContactForm() {
           >
             <div className={`fgroup ffloat${nameInvalid ? ' is-invalid' : ''}`}>
               <input
-                className="finput"
+                className="finput req"
                 id="nm"
                 type="text"
                 autoComplete="name"
@@ -172,7 +172,7 @@ export default function AddContactForm() {
 
             <div className={`fgroup ffloat${emailInvalid ? ' is-invalid' : ''}`}>
               <input
-                className="finput"
+                className="finput req"
                 id="em"
                 type="email"
                 autoComplete="email"
@@ -201,7 +201,7 @@ export default function AddContactForm() {
                 {/* Country-code picker isn't wired yet — one fixed value, no
                     dropdown. See CLAUDE.md Known gaps. */}
                 <button
-                  className="ccode"
+                  className="ccode opt"
                   type="button"
                   aria-label="Country code, United States, +1"
                 >
@@ -211,8 +211,17 @@ export default function AddContactForm() {
                   className="ffloat"
                   style={{ flex: '1 1 auto', minWidth: 0, display: 'block' }}
                 >
+                  {/* Row Tint while Email is the send-by channel (2026-08-07)
+                      — Phone genuinely isn't needed yet, since Text is
+                      locked and Email is the only way a Request actually
+                      sends. Goes white the moment sendBy is 'text', the same
+                      "required/actively used" treatment as everywhere else
+                      §6.25 governs — Phone stops being skippable once it's
+                      the delivery channel. Reads off sendBy, not a hardcoded
+                      class, so this needs no further change the day Text
+                      unlocks. */}
                   <input
-                    className="finput"
+                    className={`finput${sendBy === 'email' ? ' opt' : ''}`}
                     id="ph"
                     type="tel"
                     autoComplete="tel-national"

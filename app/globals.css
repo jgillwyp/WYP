@@ -121,8 +121,12 @@ body {
   line-height: 1.05;
 }
 
+/* Wordmark shrunk 27px -> 23px and tagline pulled up 3px -> 1px (2026-08-07):
+   "Would You Please" itself was wrapping to two lines on narrow Android
+   widths once the header also had to fit the print icon. 23px matches
+   .glabel, so the wordmark and a screen title now read at the same scale. */
 .word {
-  font-size: 27px;
+  font-size: 23px;
   font-weight: 800;
   color: var(--brand-blue);
   letter-spacing: -.01em;
@@ -132,7 +136,7 @@ body {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--ink-soft);
-  margin-top: 3px;
+  margin-top: 1px;
 }
 
 /* ============================================================================
@@ -432,12 +436,30 @@ body {
    Matches the mockups' .opt rule (design/screens/WYP_create_request_palette1.html,
    WYP_create_todo_palette1.html). */
 .finput.opt,
-.ftextarea.opt {
+.ftextarea.opt,
+.ccode.opt {
   background: var(--row-tint);
 }
 .finput.opt:focus,
-.ftextarea.opt:focus {
+.ftextarea.opt:focus,
+.ccode.opt:focus {
   background: var(--focus-tint);
+}
+
+/* Required-field border (2026-08-07) — Row Tint alone didn't make white
+   required fields "pop" the way the owner wanted; a darker resting border
+   gives required fields their own edge, without waiting for --alert-red
+   (already reserved for Overdue/error/impending-loss, §3.1) or a new hex.
+   Uses --ink rather than literal black — the system has no pure-black token
+   and #1F2933 reads as black at 1px. Always resting white, so .req and .opt
+   never combine on the same field. */
+.finput.req,
+.ftextarea.req {
+  border-color: var(--ink);
+}
+.finput.req:focus,
+.ftextarea.req:focus {
+  border-color: var(--brand-blue);
 }
 
 /* Read-only variant — PROPOSED (§6.10 locked) */
@@ -537,6 +559,25 @@ body {
   align-self: flex-start;
 }
 
+/* ============================================================================
+   STACKED ACTION ROW (§6.26, PROPOSED, 2026-08-07) — Add control above a
+   full-width box, not beside it.
+   Dialog and Attachments hold a full-paragraph textarea or a file list, not
+   a single line — putting their Add button in a .frow next to that box
+   (§6.16's pattern, right for Recipient/Category's one-line inputs) gives the
+   button a fixed width and leaves the box whatever's left, which starves it
+   on narrow Android widths. .fieldact puts the button alone on its own row,
+   right-aligned, and the box below gets the full row's width. Costs one
+   extra line of vertical space; recovers most of the row's horizontal space
+   for the box that actually needs it. Replaces .frow.top/.attachrow for
+   Dialog and Attachments specifically — Recipient and Category keep .frow,
+   since a single-line input doesn't have this problem. */
+.fieldact {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
 /* Taller textarea for Request Description — same field as Notes, just more
    room by default (§9.2.2 mockup convention). */
 .ftextarea.ftextarea-desc {
@@ -545,8 +586,9 @@ body {
 
 .ftextarea.ftextarea-dialog {
   min-height: 130px;
-  /* Extra top clearance for the two-line label below (.flabel.twoline). */
-  padding-top: 36px;
+  /* padding-top reverted to the base .ftextarea value (2026-08-07): the
+     label went back to one line now that the box is full-width — see
+     decisions log. */
 }
 
 /* ============================================================================
@@ -554,24 +596,15 @@ body {
    "(optional)" was crowding or overflowing narrow fields on Android
    (Category, Due Time); Dialog's "(Questions, Answers, Comments)" needed to
    drop to its own line entirely. .subnote is the shared small-text
-   treatment; .flabel.twoline is the block-layout variant a label needs when
-   its subnote moves to a second line (the default .flabel is a flex row,
-   for the §6.16 glyph + text case, and does not wrap).
+   treatment. (Dialog briefly used a .flabel.twoline block-layout variant to
+   wrap its subnote to a second line; retired 2026-08-07 once the box went
+   full-width and "Dialog (Questions, Answers, Comments)" fit on one line at
+   the normal label size — see decisions log. No other field needed it.)
    ========================================================================= */
 .subnote {
   font-size: 11px;
   font-weight: 500;
   color: var(--ink-soft);
-}
-
-.flabel.twoline {
-  display: block;
-  white-space: normal;
-}
-
-.flabel.twoline .subnote {
-  display: block;
-  margin-top: 1px;
 }
 
 /* ============================================================================

@@ -29,8 +29,8 @@ html,body{margin:0;height:100%;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
-.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
-.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
 
 /* Heading band (§6.7) */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
@@ -70,6 +70,20 @@ html,body{margin:0;height:100%;background:#fff;}
 .ccode{min-height:50px;padding:8px 10px;}
 .finput:focus,.ccode:focus{background:var(--focus-tint);outline:none;
   border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+
+/* Optional-field shading (2026-08-07) — see Create Request's fuller
+   comment/decisions log. Phone is the only optional field on this screen. */
+.finput.opt,.ccode.opt{background:var(--row-tint);}
+.finput.opt:focus,.ccode.opt:focus{background:var(--focus-tint);}
+
+/* Required-field border (2026-08-07) — see Create Request's fuller
+   comment/decisions log. First/Last/Display Name read as required (no
+   "(optional)" label) once Phone and the country-code selector went Row
+   Tint. Not applied to the readonly Email field — it already has its own
+   locked/dashed treatment (§6.10 locked variant), a stronger and more
+   specific signal than a border color. */
+.finput.req{border-color:var(--ink);}
+.finput.req:focus{border-color:var(--brand-blue);}
 
 /* Read-only field — PROPOSED (§6.10 locked variant).
    Email is the login ID; it is displayed, never edited here. */
@@ -164,17 +178,17 @@ html,body{margin:0;height:100%;background:#fff;}
       </div>
 
       <div class="fgroup ffloat" style="margin-top:14px;">
-        <input class="finput" id="ufn" type="text" autocomplete="given-name" placeholder=" " value="Jim">
+        <input class="finput req" id="ufn" type="text" autocomplete="given-name" placeholder=" " value="Jim">
         <label class="flabel" for="ufn">First Name</label>
       </div>
 
       <div class="fgroup ffloat">
-        <input class="finput" id="uln" type="text" autocomplete="family-name" placeholder=" " value="Gillon">
+        <input class="finput req" id="uln" type="text" autocomplete="family-name" placeholder=" " value="Gillon">
         <label class="flabel" for="uln">Last Name</label>
       </div>
 
       <div class="fgroup ffloat">
-        <input class="finput" id="udn" type="text" placeholder=" " value="Jim Gillon">
+        <input class="finput req" id="udn" type="text" placeholder=" " value="Jim Gillon">
         <label class="flabel" for="udn">Display Name</label>
       </div>
       <div class="lockrow">
@@ -183,9 +197,9 @@ html,body{margin:0;height:100%;background:#fff;}
 
       <div class="fgroup" style="margin-top:14px;">
         <div class="phone-row">
-          <button class="ccode" type="button" aria-label="Country code, United States, +1">US&nbsp;+1 <span class="caret">&#9662;</span></button>
+          <button class="ccode opt" type="button" aria-label="Country code, United States, +1">US&nbsp;+1 <span class="caret">&#9662;</span></button>
           <span class="ffloat" style="flex:1 1 auto;min-width:0;display:block;">
-            <input class="finput" id="uph" type="tel" autocomplete="tel-national" inputmode="tel" placeholder=" ">
+            <input class="finput opt" id="uph" type="tel" autocomplete="tel-national" inputmode="tel" placeholder=" ">
             <label class="flabel" for="uph">Phone (optional)</label>
           </span>
         </div>

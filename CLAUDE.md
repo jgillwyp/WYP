@@ -166,12 +166,10 @@ link is built only after the stack is proven on Add Contact.
   value while Text stays locked, so there's nothing to switch it to yet.
 - Add Contact and Create Request's Recipient field were both First/Last Name
   until 2026-08-07; both now collect a single Name and write/read only
-  `contacts.display_name`. `first_name`/`last_name` stay in the table
-  (**migration 005, `docs/Week2 - SQL history.txt`, written but not yet run**)
-  but nothing in the app populates or reads them going forward — see the
-  decisions log for why they were kept rather than dropped. Until migration
-  005 runs, `display_name` doesn't exist on the live table and both forms will
-  fail against it.
+  `contacts.display_name`. **Migration 005 has been run** (confirmed by the
+  owner 2026-08-07). `first_name`/`last_name` stay in the table but nothing in
+  the app populates or reads them going forward — see the decisions log for
+  why they were kept rather than dropped.
 - Create Request is now Converted (`app/components/CreateRequestForm.tsx`,
   `/requests/new`). Its Recipient and Category fields use a lookup dropdown
   (`.lookup-results`, proposed §6.24 — design/README.md) that neither the
@@ -185,6 +183,19 @@ link is built only after the stack is proven on Add Contact.
   `/contacts/new` and drops whatever was typed — the real §9.9.5 no-contact
   interception dialog still isn't built (same gap noted above for Add Contact
   itself).
+- Header wordmark (`.word`) is 23px app-wide as of 2026-08-07 (was 27px) — it
+  was wrapping to two lines on narrow Android widths. Four screen titles
+  shortened the same day for the same reason: "Create Request" (was "Create a
+  Request"), "Create ToDo" (was "Create a ToDo", mockup only), "Create Free
+  Account" and "Start Free Account" (both mockup only, "my" dropped).
+  "Respond to Request" is unchanged — confirmed it would still wrap either
+  way. Dialog and Attachments on Create Request/Create ToDo/Respond to
+  Request now put their Add button on its own row above a full-width box
+  (§6.26, `.fieldact`/`.panelact`+`.panelfull`) instead of beside it — see
+  design/README.md's proposed-components table. Create Request's Recipient,
+  Due Date, and Description (and Create ToDo's Description) carry an
+  Ink-colored border (`.req`) at rest to read as required against
+  optional-but-filled fields, which are also white under §6.25's rule.
 - Create Request's Dialog field (2026-08-06) writes to a `dialog` table —
   **migration 004 has been run** (confirmed by the owner 2026-08-06), so Send
   succeeds on the Dialog insert step. Only `kind = 'comment'` is ever written;

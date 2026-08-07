@@ -331,7 +331,7 @@ export default function CreateRequestForm() {
         />
 
         <div className="band">
-          <span className="glabel">Create a Request</span>
+          <span className="glabel">Create Request</span>
           <span className="bandcluster">
             <button className="btn" type="submit" form="create-request-form" disabled={saving}>
               {saving ? 'Sending…' : 'Send'}
@@ -352,7 +352,7 @@ export default function CreateRequestForm() {
               <div className="frow" style={{ position: 'relative' }}>
                 <span className="ffloat">
                   <input
-                    className="finput"
+                    className="finput req"
                     id="rn"
                     type="text"
                     autoComplete="off"
@@ -422,7 +422,7 @@ export default function CreateRequestForm() {
             <div className="fgroup frow">
               <span className={`ffloat picker native${dueDateInvalid ? ' is-invalid' : ''}`}>
                 <input
-                  className="finput"
+                  className="finput req"
                   id="dd"
                   type="date"
                   value={form.dueDate}
@@ -535,7 +535,7 @@ export default function CreateRequestForm() {
             {/* Request Description (§6.10): 500-char limit */}
             <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>
               <textarea
-                className="ftextarea ftextarea-desc"
+                className="ftextarea ftextarea-desc req"
                 id="desc"
                 maxLength={500}
                 placeholder=" "
@@ -553,9 +553,22 @@ export default function CreateRequestForm() {
 
             {/* Dialog — held as client-side draft state, written to the
                 `dialog` table together with the Request on Send (see the
-                file-level comment and migration 004). */}
-            <div className="fgroup frow top">
-              <span className="ffloat">
+                file-level comment and migration 004). Stacked action row
+                (§6.26, 2026-08-07): Add Dialog above, full-width box below —
+                was .frow.top, side by side.
+                NOTE: .ffloat must be a div here, not a span — it's no longer
+                a flex child (that .frow removal is exactly what moved it out
+                of the row), so an inline span isn't blockified and the
+                absolutely-positioned label mispositions. Caught 2026-08-07
+                after the restructure shipped; every other .ffloat here still
+                lives inside a .frow, which blockifies its span for free. */}
+            <div className="fgroup">
+              <div className="fieldact">
+                <button className="btn" type="button" onClick={addDialogEntry}>
+                  Add Dialog
+                </button>
+              </div>
+              <div className="ffloat">
                 <textarea
                   className={`ftextarea ftextarea-dialog${dialogDraft.trim() === '' ? ' opt' : ''}`}
                   id="dlg"
@@ -564,14 +577,10 @@ export default function CreateRequestForm() {
                   value={dialogDraft}
                   onChange={(e) => setDialogDraft(e.target.value)}
                 />
-                <label className="flabel twoline" htmlFor="dlg">
-                  Dialog
-                  <span className="subnote">(Questions, Answers, Comments)</span>
+                <label className="flabel" htmlFor="dlg">
+                  Dialog (Questions, Answers, Comments)
                 </label>
-              </span>
-              <button className="btn" type="button" onClick={addDialogEntry}>
-                Add Dialog
-              </button>
+              </div>
             </div>
             {dialogEntries.length > 0 && (
               <div className="dlgstaged">
@@ -592,8 +601,19 @@ export default function CreateRequestForm() {
             )}
 
             {/* Attachments panel — v1 locked "paid feature" state, static
-                markup only, matching AddContactForm's Text-chip treatment. */}
-            <div className="fgroup attachrow">
+                markup only, matching AddContactForm's Text-chip treatment.
+                Stacked action row (§6.26, 2026-08-07): Add Attachment above,
+                full-width panel below — was .attachrow. */}
+            <div className="fgroup">
+              <div className="fieldact">
+                <button className="btn is-locked" type="button" aria-disabled="true">
+                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
+                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                  </svg>
+                  Add Attachment
+                </button>
+              </div>
               <div className="attachpanel">
                 <span className="plabel">Attachments</span>
                 <div className="locked">
@@ -607,13 +627,6 @@ export default function CreateRequestForm() {
                   </span>
                 </div>
               </div>
-              <button className="btn is-locked" type="button" aria-disabled="true">
-                <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                Add Attachment
-              </button>
             </div>
 
             {error && (

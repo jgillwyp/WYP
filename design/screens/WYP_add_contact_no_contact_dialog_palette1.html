@@ -146,8 +146,8 @@ html,body{margin:0;height:100%;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
-.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
-.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
 
 /* --- Group-label heading band (§6.7) -------------------------------------- */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
@@ -196,6 +196,19 @@ html,body{margin:0;height:100%;background:#fff;}
 .finput:focus,.ftextarea:focus{background:var(--focus-tint);outline:none;
   border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
 .ftextarea{resize:vertical;min-height:84px;line-height:1.4;}
+
+/* Optional-field shading (2026-08-07) — see Create Request's fuller
+   comment/decisions log. Phone is Row Tint while Email is the send-by
+   channel (the only one that actually works today). */
+.finput.opt,.ccode.opt{background:var(--row-tint);}
+.finput.opt:focus,.ccode.opt:focus{background:var(--focus-tint);}
+
+/* Required-field border (2026-08-07) — see Create Request's fuller
+   comment/decisions log. Name, Email, and Time Zone read as required (no
+   "(optional)" label) once Phone and the country-code selector went Row
+   Tint. */
+.finput.req{border-color:var(--ink);}
+.finput.req:focus{border-color:var(--brand-blue);}
 
 /* --- Subscription / Account banner (§6.14) + reserved ad slot (§6.15) ----- */
 .subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
@@ -284,18 +297,18 @@ html,body{margin:0;height:100%;background:#fff;}
       <!-- First/Last Name merged into a single Name field (2026-08-07) —
            writes contacts.display_name; see migration 005. -->
       <div class="fgroup ffloat">
-        <input class="finput" id="nm" type="text" autocomplete="name" placeholder=" ">
+        <input class="finput req" id="nm" type="text" autocomplete="name" placeholder=" ">
         <label class="flabel" for="nm">Name</label>
       </div>
       <div class="fgroup ffloat">
-        <input class="finput" id="em" type="email" autocomplete="email" inputmode="email" placeholder=" " value="roman.atley@example.com">
+        <input class="finput req" id="em" type="email" autocomplete="email" inputmode="email" placeholder=" " value="roman.atley@example.com">
         <label class="flabel" for="em">Email</label>
       </div>
       <div class="fgroup">
         <div class="phone-row">
-          <button class="ccode" type="button" aria-label="Country code, United States, +1">US&nbsp;+1 <span class="caret">&#9662;</span></button>
+          <button class="ccode opt" type="button" aria-label="Country code, United States, +1">US&nbsp;+1 <span class="caret">&#9662;</span></button>
           <span class="ffloat" style="flex:1 1 auto;min-width:0;display:block;">
-            <input class="finput" id="ph" type="tel" autocomplete="tel-national" inputmode="tel" placeholder=" ">
+            <input class="finput opt" id="ph" type="tel" autocomplete="tel-national" inputmode="tel" placeholder=" ">
             <label class="flabel" for="ph">Phone</label>
           </span>
         </div>
@@ -308,7 +321,7 @@ html,body{margin:0;height:100%;background:#fff;}
            owner can correct it when they know the contact is elsewhere.
            See decisions log. -->
       <div class="fgroup ffloat picker">
-        <input class="finput" id="tz" type="text" autocomplete="off" placeholder=" ">
+        <input class="finput req" id="tz" type="text" autocomplete="off" placeholder=" ">
         <label class="flabel" for="tz"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Time Zone</label>
       </div>
       <div class="fgroup">

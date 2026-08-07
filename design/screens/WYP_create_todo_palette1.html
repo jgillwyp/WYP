@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Palette 1 — Would You Please — Create a ToDo</title>
+<title>Palette 1 — Would You Please — Create ToDo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -132,8 +132,8 @@ html,body{margin:0;height:100%;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
-.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
-.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
 
 /* --- Group-label heading band (§6.7) -------------------------------------- */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
@@ -217,25 +217,24 @@ html,body{margin:0;height:100%;background:#fff;}
 .frow{display:flex;gap:8px;align-items:center;}
 .frow .ffloat{flex:1 1 auto;min-width:0;}
 .frow .btn{align-self:center;}
-/* Description and Dialog sit beside their Add button at the TOP of the
-   textarea, not vertically centered against its full height — .frow's
-   default align-items:center reads oddly once the field is taller than the
-   button. Scoped here rather than added to the shared .frow rule, since
-   Create Request's two .frow uses (Recipient, Category, Due) are all
-   single-line fields where centering is correct. */
-.frow.top{align-items:flex-start;}
-/* .frow .btn{align-self:center} above wins over the container's align-items
-   for this specific child (align-self always overrides align-items on flex
-   children), so .frow.top needs its own override or Add Dialog stays
-   centered regardless of the container rule. This was the actual bug. */
-.frow.top .btn{align-self:flex-start;}
+
+/* Stacked action row (§6.26, PROPOSED, 2026-08-07) — Add Dialog / Add
+   Attachment sit alone on their own row, right-aligned, above a full-width
+   box, replacing the earlier .frow.top/.attachrow side-by-side layout. See
+   Create Request's fuller comment (same reasoning, same fix). Category keeps
+   .frow: a one-line input doesn't have this problem. */
+.fieldact{display:flex;justify-content:flex-end;margin-bottom:6px;}
+
+/* Required-field border (2026-08-07) — see Create Request's fuller comment.
+   ToDo Description is the only required field on this screen. */
+.finput.req,.ftextarea.req{border-color:var(--ink);}
+.finput.req:focus,.ftextarea.req:focus{border-color:var(--brand-blue);}
 
 /* Small parenthetical label text (2026-08-07) — "(optional)" was crowding
-   Category on narrow Android widths; Dialog's subtitle needed its own line
-   entirely. */
+   Category on narrow Android widths. (Dialog used a two-line .twoline
+   variant briefly; removed 2026-08-07 once the box went full-width — see
+   decisions log.) */
 .subnote{font-size:11px;font-weight:500;color:var(--ink-soft);}
-.flabel.twoline{display:block;white-space:normal;}
-.flabel.twoline .subnote{display:block;margin-top:1px;}
 
 /* Optional-field shading (2026-08-07 preview, same as Create Request) —
    reuses --row-tint, the .form's own page background, rather than a new
@@ -255,14 +254,11 @@ html,body{margin:0;height:100%;background:#fff;}
 /* Taller textareas — Description matches Create Request's convention;
    Dialog is given a bit more room since entries accumulate there. */
 .ftextarea.ftextarea-desc{min-height:96px;}
-.ftextarea.ftextarea-dialog{min-height:130px;padding-top:36px;}
+.ftextarea.ftextarea-dialog{min-height:130px;}
 
 /* Attachments panel (§9.2.2) — identical to Create Request's v1 locked state.
-   Top-aligned, matching Add Dialog above: the panel's height is an artifact
-   of the locked state (118px, fixed) rather than real content, so anchoring
-   the button to the field's top keeps it consistent once the panel becomes
-   content-driven. See decisions log, 2026-08-06. */
-.attachrow{display:flex;gap:8px;align-items:flex-start;}
+   Full-width under .fieldact's Add Attachment row (2026-08-07); no longer
+   paired with the button via .attachrow. */
 /* min-height, not height (2026-08-07): a fixed height clipped .locknote on
    narrow widths / larger Android font-scale settings. */
 /* Row Tint, not white (2026-08-07): always empty in this v1 locked state,
@@ -300,7 +296,7 @@ html,body{margin:0;height:100%;background:#fff;}
   </div>
 
   <div class="band">
-    <span class="glabel">Create a ToDo</span>
+    <span class="glabel">Create ToDo</span>
     <span class="bandcluster">
       <button class="btn" type="button">Save</button>
       <button class="btn-secondary" type="button">Cancel</button>
@@ -338,7 +334,7 @@ html,body{margin:0;height:100%;background:#fff;}
            2026-08-06 decision — not the fixed .plabel style Attachments
            uses below. -->
       <div class="fgroup ffloat">
-        <textarea class="ftextarea ftextarea-desc" id="desc" maxlength="500" placeholder=" "></textarea>
+        <textarea class="ftextarea ftextarea-desc req" id="desc" maxlength="500" placeholder=" "></textarea>
         <label class="flabel" for="desc">ToDo Description</label>
       </div>
 
@@ -347,19 +343,26 @@ html,body{margin:0;height:100%;background:#fff;}
            form, and written to the database together with the ToDo itself
            when Save is pressed (decisions log, 2026-08-06: one continuous
            sitting, no staging table). Floating label, matching Description
-           above rather than the fixed-caption Attachments style. -->
-      <div class="fgroup frow top">
-        <span class="ffloat">
+           above rather than the fixed-caption Attachments style. Stacked
+           action row (§6.26, 2026-08-07): Add Dialog above, full-width box
+           below — was .frow.top, side by side. -->
+      <div class="fgroup">
+        <div class="fieldact"><button class="btn" type="button">Add Dialog</button></div>
+        <div class="ffloat">
           <textarea class="ftextarea ftextarea-dialog opt" id="dlg" maxlength="1000" placeholder=" "></textarea>
-          <label class="flabel twoline" for="dlg">Dialog<span class="subnote">(Questions, Answers, Comments)</span></label>
-        </span>
-        <button class="btn" type="button">Add Dialog</button>
+          <label class="flabel" for="dlg">Dialog (Questions, Answers, Comments)</label>
+        </div>
       </div>
 
       <!-- Attachments panel — v1 locked "paid feature" state, identical to
            Create Request. Also held as client-side draft state until Save,
-           same reasoning as Dialog above. -->
-      <div class="fgroup attachrow">
+           same reasoning as Dialog above. Stacked action row (§6.26,
+           2026-08-07): Add Attachment above, full-width panel below — was
+           .attachrow. -->
+      <div class="fgroup">
+        <div class="fieldact">
+          <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
+        </div>
         <div class="attachpanel">
           <span class="plabel">Attachments</span>
           <div class="locked">
@@ -368,7 +371,6 @@ html,body{margin:0;height:100%;background:#fff;}
             <span class="locknote">Attach files to your Requests with a subscription &#8212; see the banner below.</span>
           </div>
         </div>
-        <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
       </div>
 
     </div>

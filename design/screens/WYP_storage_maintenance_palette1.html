@@ -146,8 +146,8 @@ html,body{margin:0;height:100%;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
-.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
-.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
 
 /* --- Group-label heading band (§6.7) -------------------------------------- */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
@@ -285,8 +285,14 @@ html,body{margin:0;height:100%;background:#fff;}
     <span class="bandcluster">
       <!-- No commit action: removals apply immediately, each behind the §6.12
            confirm dialog. Close returns to the immediately prior screen; the
-           Enter key does the same when focus is not in a control. -->
-      <button class="btn-secondary" type="button">Close</button>
+           Enter key does the same when focus is not in a control.
+           Primary, not secondary (2026-08-07 correction) — Secondary means
+           "available, lower emphasis than a Primary also on this row" (per
+           .is-locked's own contrast rule), which presupposes a Primary
+           sibling. Close is the only button on this band, so it reads as
+           the primary action by default; a blue-outline Secondary here was
+           just wrong, not a deliberate de-emphasis. -->
+      <button class="btn" type="button">Close</button>
     </span>
   </div>
 

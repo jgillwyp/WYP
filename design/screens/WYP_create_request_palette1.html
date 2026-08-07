@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Palette 1 — Would You Please — Create a Request</title>
+<title>Palette 1 — Would You Please — Create Request</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -156,8 +156,8 @@ html,body{margin:0;height:100%;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
-.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
-.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
 
 /* --- Group-label heading band (§6.7) -------------------------------------- */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
@@ -247,21 +247,34 @@ html,body{margin:0;height:100%;background:#fff;}
 .frow .btn{align-self:center;}
 .ftextarea{min-height:96px;}
 
-/* Dialog row (new 2026-08-06, matching Create ToDo): Add Dialog sits at the
-   TOP of the field, not vertically centered against its full height. .frow's
-   default align-items:center (and .frow .btn's align-self:center above,
-   which otherwise wins regardless of the container) both need overriding —
-   see design/screens/WYP_create_todo_palette1.html for the same fix. */
-.frow.top{align-items:flex-start;}
-.frow.top .btn{align-self:flex-start;}
-.ftextarea.ftextarea-dialog{min-height:130px;padding-top:36px;}
+/* Stacked action row (§6.26, PROPOSED, 2026-08-07) — Add Dialog / Add
+   Attachment sit alone on their own row, right-aligned, above a full-width
+   box, replacing the earlier .frow.top/.attachrow side-by-side layout.
+   Dialog and Attachments hold a full paragraph or a file list, not a single
+   line, so giving the button a fixed width beside them starved the box on
+   narrow Android widths — costs one line of vertical space, returns most of
+   the row's horizontal space to the box that needs it. Recipient/Category
+   keep .frow: a one-line input doesn't have this problem. */
+.fieldact{display:flex;justify-content:flex-end;margin-bottom:6px;}
+/* padding-top reverted to the base .ftextarea value (2026-08-07): the label
+   went back to one line (below) now that the box is full-width, so the extra
+   36px clearance for a two-line label is no longer needed — kept it would
+   have left a dead gap above the text. */
+.ftextarea.ftextarea-dialog{min-height:130px;}
+
+/* Required-field border (2026-08-07) — a white required field wasn't
+   visually distinct enough from an optional field that's been filled in
+   (also white, per .opt below). Uses --ink, not literal black: no pure-black
+   token exists, and #1F2933 reads as black at 1px. */
+.finput.req,.ftextarea.req{border-color:var(--ink);}
+.finput.req:focus,.ftextarea.req:focus{border-color:var(--brand-blue);}
 
 /* Small parenthetical label text (2026-08-07) — "(optional)" was crowding
-   Category/Due Time on narrow Android widths; Dialog's subtitle needed its
-   own line entirely. */
+   Category/Due Time on narrow Android widths. (Dialog used a two-line
+   .twoline variant briefly; removed 2026-08-07 once the box went full-width
+   and "Dialog (Questions, Answers, Comments)" fit on one line at the normal
+   label size — see decisions log.) */
 .subnote{font-size:11px;font-weight:500;color:var(--ink-soft);}
-.flabel.twoline{display:block;white-space:normal;}
-.flabel.twoline .subnote{display:block;margin-top:1px;}
 
 /* Optional-field shading (2026-08-07 PREVIEW) — owner's "squint test" idea:
    tint optional fields so required ones (plain white) are what visually
@@ -298,8 +311,8 @@ html,body{margin:0;height:100%;background:#fff;}
    .chancap hidden, so it was never visually verified here). */
 .chancap{display:none;font-size:12px;color:var(--ink-soft);margin:4px 0 12px 2px;}
 
-/* Attachments panel (§9.2.2) */
-.attachrow{display:flex;gap:8px;align-items:flex-start;}
+/* Attachments panel (§9.2.2) — full-width under .fieldact's Add Attachment
+   row (2026-08-07); no longer paired with the button via .attachrow. */
 /* min-height, not height (2026-08-07): a fixed height clipped .locknote on
    narrow widths / larger Android font-scale settings. */
 /* Row Tint, not white (2026-08-07): always empty in this v1 locked state,
@@ -355,7 +368,7 @@ html,body{margin:0;height:100%;background:#fff;}
   </div>
 
   <div class="band">
-    <span class="glabel">Create a Request</span>
+    <span class="glabel">Create Request</span>
     <span class="bandcluster">
       <button class="btn" type="button">Send</button>
       <button class="btn-secondary" type="button">Cancel</button>
@@ -372,7 +385,7 @@ html,body{margin:0;height:100%;background:#fff;}
            disappears when the label floats. -->
       <div class="fgroup frow">
         <span class="ffloat">
-          <input class="finput" id="rn" type="text" autocomplete="off" placeholder=" ">
+          <input class="finput req" id="rn" type="text" autocomplete="off" placeholder=" ">
           <label class="flabel" for="rn"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Recipient</label>
         </span>
         <button class="btn" type="button">Add Contact</button>
@@ -383,7 +396,7 @@ html,body{margin:0;height:100%;background:#fff;}
       <!-- Due row: Due Date (calendar glyph) and Due Time (clock glyph), §6.16 pickers -->
       <div class="fgroup frow">
         <span class="ffloat picker">
-          <input class="finput" id="dd" type="text" inputmode="numeric" placeholder=" ">
+          <input class="finput req" id="dd" type="text" inputmode="numeric" placeholder=" ">
           <label class="flabel" for="dd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Due Date</label>
         </span>
         <span class="ffloat picker">
@@ -404,7 +417,7 @@ html,body{margin:0;height:100%;background:#fff;}
 
       <!-- Request Description (§6.10): 500-char limit; counter appears past 400 -->
       <div class="fgroup ffloat">
-        <textarea class="ftextarea" id="desc" maxlength="500" placeholder=" "></textarea>
+        <textarea class="ftextarea req" id="desc" maxlength="500" placeholder=" "></textarea>
         <label class="flabel" for="desc">Request Description</label>
       </div>
 
@@ -412,20 +425,26 @@ html,body{margin:0;height:100%;background:#fff;}
            here are held as client-side draft state and written to the
            `dialog` table (migration 004) together with the Request itself
            when Send is pressed, using the new row's id — same reasoning as
-           Create ToDo's Dialog field (decisions log, 2026-08-06). -->
-      <div class="fgroup frow top">
-        <span class="ffloat">
+           Create ToDo's Dialog field (decisions log, 2026-08-06). Stacked
+           action row (§6.26, 2026-08-07): Add Dialog above, full-width box
+           below — was .frow.top, side by side. -->
+      <div class="fgroup">
+        <div class="fieldact"><button class="btn" type="button">Add Dialog</button></div>
+        <div class="ffloat">
           <textarea class="ftextarea ftextarea-dialog opt" id="dlg" maxlength="1000" placeholder=" "></textarea>
-          <label class="flabel twoline" for="dlg">Dialog<span class="subnote">(Questions, Answers, Comments)</span></label>
-        </span>
-        <button class="btn" type="button">Add Dialog</button>
+          <label class="flabel" for="dlg">Dialog (Questions, Answers, Comments)</label>
+        </div>
       </div>
 
       <!-- Attachments panel — v1 locked "paid feature" state (attachments deferred
            to the paid tier). The functional list + Add control return with the paid
            tier; here the panel advertises the upcoming capability and points to the
-           subscription banner (§6.14). -->
-      <div class="fgroup attachrow">
+           subscription banner (§6.14). Stacked action row (§6.26, 2026-08-07):
+           Add Attachment above, full-width panel below — was .attachrow. -->
+      <div class="fgroup">
+        <div class="fieldact">
+          <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
+        </div>
         <div class="attachpanel">
           <span class="plabel">Attachments</span>
           <div class="locked">
@@ -434,7 +453,6 @@ html,body{margin:0;height:100%;background:#fff;}
             <span class="locknote">Attach files to your Requests with a subscription &#8212; see the banner below.</span>
           </div>
         </div>
-        <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
       </div>
 
     </div>

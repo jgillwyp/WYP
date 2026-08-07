@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
-<title>Palette 1 — Would You Please — Start my Free Account / Sign In</title>
+<title>Palette 1 — Would You Please — Start Free Account / Sign In</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -31,8 +31,8 @@ html,body{margin:0;height:100%;background:#fff;}
 .logo{flex:0 0 auto;display:flex;}
 .logo svg{height:40px;width:auto;display:block;}
 .brand{display:flex;flex-direction:column;line-height:1.05;}
-.word{font-size:27px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
-.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
 
 /* Heading band (§6.7) */
 .band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
@@ -69,6 +69,10 @@ html,body{margin:0;height:100%;background:#fff;}
   padding:20px 10px 6px;}
 .finput:focus{background:var(--focus-tint);outline:none;
   border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+/* Required-field border (2026-08-07) — see Create Request's fuller
+   comment/decisions log. Email is the only field on this screen. */
+.finput.req{border-color:var(--ink);}
+.finput.req:focus{border-color:var(--brand-blue);}
 .fgroup.is-invalid .finput{border-color:var(--alert-red);}
 .ferror{display:none;font-size:12.5px;font-weight:600;color:var(--alert-red);margin:5px 2px 0;}
 .fgroup.is-invalid .ferror{display:block;}
@@ -117,14 +121,14 @@ html,body{margin:0;height:100%;background:#fff;}
   <!-- Band label is mode-dependent. JOIN = arrived from the sales page or a
        recipient's "Create your own Free Account" link. RETURN = existing user. -->
   <div class="band">
-    <span class="glabel" id="band-label">Start my Free Account</span>
+    <span class="glabel" id="band-label">Start Free Account</span>
   </div>
 
   <!-- STATE 1 — email entry -->
   <div class="scroll" id="state-form">
     <form class="form" id="signin-form" novalidate>
       <div class="fgroup ffloat" id="email-group">
-        <input class="finput" id="em" type="email" autocomplete="email" inputmode="email"
+        <input class="finput req" id="em" type="email" autocomplete="email" inputmode="email"
                autocapitalize="off" spellcheck="false" placeholder=" " value="jgillon@versys.com">
         <label class="flabel" for="em">Email</label>
         <p class="ferror" id="em-error">Enter a valid email address.</p>
@@ -140,10 +144,10 @@ html,body{margin:0;height:100%;background:#fff;}
       <button class="btn btn-block" type="submit">Email me a sign-in link</button>
     </form>
 
-    <!-- Caption is mode-dependent: only the JOIN path leads to Create my Free Account. -->
+    <!-- Caption is mode-dependent: only the JOIN path leads to Create Free Account. -->
     <div class="minreq" id="caption-join">
       <b>No password to create or credit card needed</b>&nbsp; We email you a one-time link.
-      Clicking it confirms your address and opens a short &ldquo;Create my Free Account&rdquo;
+      Clicking it confirms your address and opens a short &ldquo;Create Free Account&rdquo;
       screen. It takes about a minute.
     </div>
     <div class="minreq is-hidden" id="caption-return">
@@ -164,7 +168,7 @@ html,body{margin:0;height:100%;background:#fff;}
       <h2 class="sent-h">Check your email</h2>
       <p class="sent-p">We sent a sign-in link to<br><span class="sent-addr">jgillon@versys.com</span></p>
       <p class="sent-p" id="sent-join">Open that email and click the link. You&rsquo;ll be signed
-        in and taken to a short &ldquo;Create my Free Account&rdquo; screen.</p>
+        in and taken to a short &ldquo;Create Free Account&rdquo; screen.</p>
       <p class="sent-p is-hidden" id="sent-return">Open that email and click the link. You&rsquo;ll be
         signed in and taken straight to your requests.</p>
       <p class="sent-meta">
@@ -176,7 +180,7 @@ html,body{margin:0;height:100%;background:#fff;}
 
   <div class="demo">
     <span>MOCKUP PREVIEW</span>
-    <button type="button" id="m-join" class="on" onclick="setMode('join')">Start (new user)</button>
+    <button type="button" id="m-join" class="on" onclick="setMode('join')">Start Free Account (new user)</button>
     <button type="button" id="m-return" onclick="setMode('return')">Sign In (returning)</button>
     <span>&middot;</span>
     <button type="button" id="s-form" class="on" onclick="setState('form')">Email entry</button>
@@ -189,7 +193,7 @@ html,body{margin:0;height:100%;background:#fff;}
 function setMode(m){
   var join = m === 'join';
   document.getElementById('band-label').textContent =
-    join ? 'Start my Free Account' : 'Sign In';
+    join ? 'Start Free Account' : 'Sign In';
   document.getElementById('caption-join').classList.toggle('is-hidden', !join);
   document.getElementById('caption-return').classList.toggle('is-hidden', join);
   document.getElementById('sent-join').classList.toggle('is-hidden', !join);
