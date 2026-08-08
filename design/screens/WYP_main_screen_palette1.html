@@ -63,6 +63,10 @@ html,body{margin:0;height:100%;background:#fff;}
 .subhead.todos-head{display:flex;align-items:center;gap:8px;padding-top:7px;padding-bottom:7px;}
 .subhead.todos-head .chips{margin-top:0;}
 .subhead.todos-head .subicons{margin-left:auto;}
+/* Housekeeping header strip (2026-08-08) — same "chips row inside a header,
+   no top margin" fix as todos-head above, for the new Tasks/How-to Videos
+   toggle replacing the old plain .subname label. */
+.subhead.hk-head .chips{margin-top:0;}
 
 /* clickable icons: 23px glyph inside 40px touch target */
 .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
@@ -225,13 +229,33 @@ html,body{margin:0;height:100%;background:#fff;}
 
     <div class="band"><span class="glabel">Housekeeping</span><button class="btn-quiet" type="button">Log Out</button></div>
 
+    <!-- Tasks / How-to Videos chip toggle (2026-08-08) — was a plain
+         .subname label; now reuses the same .chips/.chip/.chip.sel pattern
+         already established for the ToDos filter row (this screen's own
+         local convention: .sel, not the app-wide .chip.selected used
+         elsewhere — kept as-is rather than reconciled, since this whole
+         screen predates that naming and isn't being touched otherwise).
+         Tasks stays the default-selected tab; its content (My Contacts,
+         Account Profile) is unchanged. How-to Videos is a new second tab —
+         titles below are placeholders, not real content/links, which are
+         out of scope for this pass. -->
     <div class="subcard">
-      <div class="subhead">
-        <div class="subhead-top"><span class="subname">Tasks</span></div>
+      <div class="subhead hk-head">
+        <div class="subhead-top">
+          <div class="chips" role="tablist" aria-label="Housekeeping section">
+            <button class="chip sel" type="button" id="hk-chip-tasks" role="tab" aria-selected="true" onclick="selectHkTab('tasks')">Tasks</button>
+            <button class="chip" type="button" id="hk-chip-videos" role="tab" aria-selected="false" onclick="selectHkTab('videos')">How-to Videos</button>
+          </div>
+        </div>
       </div>
-      <div class="subbody"><div class="hkrows">
+      <div class="subbody" id="hk-tasks-body"><div class="hkrows">
         <div class="hkrow" role="button" tabindex="0"><span class="hktext"><span class="hktitle">My Contacts</span><span class="hknote"> &#8212; view and edit</span></span></div>
-        <div class="hkrow" role="button" tabindex="0"><span class="hktext"><span class="hktitle">Account Profile</span><span class="hknote"> &#8212; view and edit</span></span></div>
+        <div class="hkrow" role="button" tabindex="0"><span class="hktext"><span class="hktitle">Your Account</span><span class="hknote"> &#8212; view and edit</span></span></div>
+      </div></div>
+      <div class="subbody" id="hk-videos-body" style="display:none;"><div class="hkrows">
+        <div class="hkrow" role="button" tabindex="0"><span class="hktext"><span class="hktitle">Getting Started</span><span class="hknote"> &#8212; placeholder, no video linked yet</span></span></div>
+        <div class="hkrow" role="button" tabindex="0"><span class="hktext"><span class="hktitle">Creating a Request</span><span class="hknote"> &#8212; placeholder, no video linked yet</span></span></div>
+        <div class="hkrow" role="button" tabindex="0"><span class="hktext"><span class="hktitle">Responding to a Request</span><span class="hknote"> &#8212; placeholder, no video linked yet</span></span></div>
       </div></div>
     </div>
 
@@ -249,4 +273,17 @@ html,body{margin:0;height:100%;background:#fff;}
   <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
   <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
 
-</div></div></body></html>
+</div></div>
+<script>
+/* Tasks / How-to Videos tab toggle (2026-08-08) — mockup-only demo state. */
+function selectHkTab(tab){
+  var tasksOn = tab === 'tasks';
+  document.getElementById('hk-chip-tasks').classList.toggle('sel', tasksOn);
+  document.getElementById('hk-chip-videos').classList.toggle('sel', !tasksOn);
+  document.getElementById('hk-chip-tasks').setAttribute('aria-selected', tasksOn ? 'true' : 'false');
+  document.getElementById('hk-chip-videos').setAttribute('aria-selected', !tasksOn ? 'true' : 'false');
+  document.getElementById('hk-tasks-body').style.display = tasksOn ? '' : 'none';
+  document.getElementById('hk-videos-body').style.display = tasksOn ? 'none' : '';
+}
+</script>
+</body></html>

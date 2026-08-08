@@ -307,3 +307,244 @@ commit;
 --           insert) — dialog_replies_to_not_self exists as a backstop, not a
 --           reachable app path today
 -- ============================================================================
+
+-- ============================================================================
+-- WYP seed — demo Contacts, Sent Requests, and ToDos for the Main Screen
+-- Not run yet. Written 2026-08-08 for the Main Screen React conversion —
+-- "I would like to see the WYP app ... have a working main screen." Not a
+-- schema migration (nothing here alters a table), so it isn't numbered
+-- alongside 001-006. Run it yourself, once, in the Supabase SQL editor.
+--
+-- Scoped to jimgillon@gmail.com only, via an auth.users lookup by email —
+-- never hardcode a uuid here. Guarded to be safe to re-run: every insert
+-- first checks whether its row already exists (by owner + a natural key) and
+-- skips it if so, rather than relying on a unique constraint that doesn't
+-- exist on contacts or requests.
+--
+-- Dates are CURRENT_DATE-relative (INTERVAL offsets), not hardcoded, so the
+-- Sent rows still land as a believable mix of open / upcoming / overdue /
+-- done whenever this actually gets run, not only on 2026-08-08.
+--
+-- Received is deliberately NOT seeded — no schema/RLS path exists yet for a
+-- signed-in recipient to see a Request sent to them (flagged separately,
+-- unresolved). The Main Screen's Received subcard shows its own coming-soon
+-- state regardless of what's in this table.
+--
+-- One live Dialog entry is seeded (on the Jack Smith request) so the Sent
+-- row's "Dialog present" info icon has something real to reflect — Dialog is
+-- fully built and RLS-enforced, unlike Attachments (still deferred per
+-- CLAUDE.md Scope discipline), so no attachment-present demo data is seeded;
+-- that icon simply won't appear on any row yet.
+-- ============================================================================
+
+do $$
+declare
+  v_owner     uuid;
+  v_display   text;
+  v_jack      uuid;
+  v_jill      uuid;
+  v_beatrice  uuid;
+  v_rita      uuid;
+  v_cat_wyp   uuid;
+  v_cat_dev   uuid;
+  v_cat_fin   uuid;
+  v_req_jack  uuid;
+begin
+  select id into v_owner from auth.users where email = 'jimgillon@gmail.com';
+  if v_owner is null then
+    raise exception 'No auth.users row for jimgillon@gmail.com — sign in once first, then re-run.';
+  end if;
+
+  select display_name into v_display from public.profiles where id = v_owner;
+  if v_display is null or trim(v_display) = '' then
+    v_display := 'Jim';
+  end if;
+
+  -- ------------------------------------------------------------------------
+  -- Contacts (Sent recipients)
+  -- ------------------------------------------------------------------------
+  select id into v_jack from public.contacts
+    where owner_id = v_owner and email = 'jack.smith.demo@example.com';
+  if v_jack is null then
+    insert into public.contacts (owner_id, display_name, email, send_by)
+    values (v_owner, 'Jack Smith', 'jack.smith.demo@example.com', 'email')
+    returning id into v_jack;
+  end if;
+
+  select id into v_jill from public.contacts
+    where owner_id = v_owner and email = 'jill.smith.demo@example.com';
+  if v_jill is null then
+    insert into public.contacts (owner_id, display_name, email, send_by)
+    values (v_owner, 'Jill Smith', 'jill.smith.demo@example.com', 'email')
+    returning id into v_jill;
+  end if;
+
+  select id into v_beatrice from public.contacts
+    where owner_id = v_owner and email = 'beatrice.barrington.demo@example.com';
+  if v_beatrice is null then
+    insert into public.contacts (owner_id, display_name, email, send_by)
+    values (v_owner, 'Beatrice Barrington', 'beatrice.barrington.demo@example.com', 'email')
+    returning id into v_beatrice;
+  end if;
+
+  select id into v_rita from public.contacts
+    where owner_id = v_owner and email = 'rita.anderson.demo@example.com';
+  if v_rita is null then
+    insert into public.contacts (owner_id, display_name, email, send_by)
+    values (v_owner, 'Rita Anderson', 'rita.anderson.demo@example.com', 'email')
+    returning id into v_rita;
+  end if;
+
+  -- ------------------------------------------------------------------------
+  -- Categories (ToDos) — real unique index exists (categories_owner_name_ci_idx),
+  -- so ON CONFLICT is safe here, unlike contacts/requests above and below.
+  -- ------------------------------------------------------------------------
+  insert into public.categories (owner_id, name)
+    values (v_owner, 'Would You Please')
+    on conflict (owner_id, (lower(name))) do nothing;
+  select id into v_cat_wyp from public.categories
+    where owner_id = v_owner and lower(name) = lower('Would You Please');
+
+  insert into public.categories (owner_id, name)
+    values (v_owner, 'Future Dev')
+    on conflict (owner_id, (lower(name))) do nothing;
+  select id into v_cat_dev from public.categories
+    where owner_id = v_owner and lower(name) = lower('Future Dev');
+
+  insert into public.categories (owner_id, name)
+    values (v_owner, 'Personal Fin')
+    on conflict (owner_id, (lower(name))) do nothing;
+  select id into v_cat_fin from public.categories
+    where owner_id = v_owner and lower(name) = lower('Personal Fin');
+
+  -- ------------------------------------------------------------------------
+  -- Sent Requests (contact_id not null). due_date/created_at are relative to
+  -- today so Open/Overdue/Done stay meaningful on whatever day this runs.
+  -- ------------------------------------------------------------------------
+
+  -- 1. Open, due soon. Also gets a seeded Question so its "Dialog present"
+  --    icon is live rather than staged.
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner and description = 'Prepare the June cash flow report for Ally Chemical'
+  ) then
+    insert into public.requests (owner_id, contact_id, description, due_date, created_at)
+    values (
+      v_owner, v_jack, 'Prepare the June cash flow report for Ally Chemical',
+      current_date + 5, now() - interval '21 days'
+    )
+    returning id into v_req_jack;
+
+    insert into public.dialog (request_id, kind, body, who, author_user_id)
+    values (
+      v_req_jack, 'question',
+      'Do you need this broken out by division, or just the company total?',
+      v_display, v_owner
+    );
+  end if;
+
+  -- 2. Overdue — due date in the past, never done.
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner and description = 'Hire referees for Valley Little League'
+  ) then
+    insert into public.requests (owner_id, contact_id, description, due_date, created_at)
+    values (
+      v_owner, v_jill, 'Hire referees for Valley Little League',
+      current_date - 21, now() - interval '2 months'
+    );
+  end if;
+
+  -- 3. Open, due soon.
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner and description = 'Send Lease Termination letter unless all back rent is paid.'
+  ) then
+    insert into public.requests (owner_id, contact_id, description, due_date, created_at)
+    values (
+      v_owner, v_beatrice, 'Send Lease Termination letter unless all back rent is paid.',
+      current_date + 2, now() - interval '1 month'
+    );
+  end if;
+
+  -- 4. Done, on time — exercises the Done-row styling and the Done column.
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner and description = 'Confirm the office lease renewal terms with the landlord'
+  ) then
+    insert into public.requests (owner_id, contact_id, description, due_date, done_date, created_at)
+    values (
+      v_owner, v_rita, 'Confirm the office lease renewal terms with the landlord',
+      current_date - 21, current_date - 21, now() - interval '2 months'
+    );
+  end if;
+
+  -- ------------------------------------------------------------------------
+  -- ToDos (contact_id null). Priority is required for a ToDo; due_date is
+  -- optional and the Main Screen ToDos row doesn't render it, but a couple
+  -- are populated anyway for realism.
+  -- ------------------------------------------------------------------------
+
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner and description = 'Finish the PRD for the WYP Request and ToDo Application'
+      and contact_id is null
+  ) then
+    insert into public.requests (owner_id, category_id, description, priority, due_date)
+    values (
+      v_owner, v_cat_wyp, 'Finish the PRD for the WYP Request and ToDo Application', 1,
+      current_date + 3
+    );
+  end if;
+
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner
+      and description = 'Respond to dev quote request for the new user interface related to mailing list preparation and subscriber onboarding flows'
+      and contact_id is null
+  ) then
+    insert into public.requests (owner_id, category_id, description, priority, due_date)
+    values (
+      v_owner, v_cat_dev,
+      'Respond to dev quote request for the new user interface related to mailing list preparation and subscriber onboarding flows',
+      1, current_date + 1
+    );
+  end if;
+
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner and description = 'Prepare a budget for an August fishing trip to Alaska'
+      and contact_id is null
+  ) then
+    insert into public.requests (owner_id, category_id, description, priority, due_date)
+    values (v_owner, v_cat_fin, 'Prepare a budget for an August fishing trip to Alaska', 2, current_date + 14);
+  end if;
+
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner and description = 'Choose a C Corp filing preparation company for Would You Please'
+      and contact_id is null
+  ) then
+    insert into public.requests (owner_id, category_id, description, priority)
+    values (v_owner, v_cat_wyp, 'Choose a C Corp filing preparation company for Would You Please', 3);
+  end if;
+
+end $$;
+
+-- ============================================================================
+-- Verify (as yourself, signed in — the SQL editor's superuser caveat applies
+-- here too, RLS-wise, though this script only ever targets your own owner_id
+-- regardless):
+--
+--   await supabase.from('requests').select('*, contacts(display_name)')
+--                 .not('contact_id', 'is', null).order('due_date', { ascending: false })
+--        -> 4 Sent rows: Jack Smith, Jill Smith, Beatrice Barrington, Rita Anderson
+--   await supabase.from('requests').select('*').is('contact_id', null)
+--                 .order('priority', { ascending: true })
+--        -> 4 ToDo rows, sorted ASAP, ASAP, SOON, LATER
+--   await supabase.from('dialog').select('*')
+--        -> 1 row, kind = 'question', on the Jack Smith request
+--
+-- Re-running this whole block is safe — every insert is guarded and will
+-- find its row already there and skip it.
+-- ============================================================================

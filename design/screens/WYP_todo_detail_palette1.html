@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 — Would You Please — ToDo Detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   ToDo Detail (2026-08-08) — identical to Create ToDo's mockup in every
+   respect except the screen title (owner's explicit instruction: "the only
+   difference with the Create ToDo screen is the screen title"). Kept as a
+   full duplicate file rather than a shared template, matching how every
+   other screen in this app is its own self-contained mockup (see
+   design/README.md's "Self-contained files" convention) — a future edit to
+   Create ToDo's fields should be mirrored here by hand, the same as any
+   other pair of related mockups in this project.
+   ============================================================================ */
+
+:root {
+  --brand-blue:    #2A5FC8;
+  --blue-pressed:  #1E4AA0;
+  --alert-red:     #D32F2F;
+  --ink:           #1F2933;
+  --ink-soft:      #5A6675;
+  --row-tint:      #F6F7F9;
+  --band:          #E7E7E7;
+  --strip:         #E5ECF7;
+  --focus-tint:    #EDF2FD;
+  --focus-halo:    0 0 0 3px rgba(42,95,200,.22);
+  --input-border:  #7E8A9A;
+  --rule:          #E2E6EC;
+  --scrim:         rgba(31,41,51,.45);
+  --sort:          #FFE34D;
+  --pad:           14px;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7;
+}
+
+.btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
+  border:1px solid var(--locked-border);cursor:not-allowed;
+  display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:700;}
+.btn.is-locked:hover,.btn.is-locked:active,.chip.is-locked:hover,.chip.is-locked:active,.is-locked:hover,.is-locked:active{background:var(--locked);color:var(--locked-ink);
+  border-color:var(--locked-border);}
+.is-locked .lockglyph{flex:0 0 auto;width:1em;height:1em;}
+</style>
+<style>
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;
+  box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){
+  html,body{background:#eef1f5;}
+  .frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;}
+
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
+
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
+.hdr + .band{margin-top:0;border-top:none;}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.form{padding:14px var(--pad) 6px;background:var(--row-tint);flex:1 1 auto;}
+.fgroup{margin-bottom:12px;}
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
+.ffloat{position:relative;}
+.ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
+  color:var(--ink-soft);pointer-events:none;transform-origin:left top;
+  transition:transform .14s ease,color .14s ease;background:transparent;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.ffloat .finput:focus + .flabel,
+.ffloat .finput:not(:placeholder-shown) + .flabel,
+.ffloat .ftextarea:focus + .flabel,
+.ffloat .ftextarea:not(:placeholder-shown) + .flabel{
+  transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
+.ffloat .finput:focus + .flabel,
+.ffloat .ftextarea:focus + .flabel{color:var(--brand-blue);}
+@media (prefers-reduced-motion:reduce){.ffloat .flabel{transition:none;}}
+.finput,.ftextarea{font:inherit;font-size:14px;color:var(--ink);background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;
+  padding:20px 10px 6px;}
+.finput:focus,.ftextarea:focus{background:var(--focus-tint);outline:none;
+  border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+.ftextarea{resize:vertical;min-height:84px;line-height:1.4;}
+
+.chippair{display:flex;gap:6px;flex:0 0 auto;flex-wrap:wrap;}
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);border-radius:9px;
+  padding:5px 12px;min-height:30px;}
+.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
+  background:#fff;border-top:1px solid var(--rule);cursor:pointer;
+  font-size:13px;font-weight:700;color:var(--brand-blue);}
+.subbanner:active{background:var(--row-tint);}
+.adslot{flex:0 0 auto;height:50px;border-top:1px solid var(--rule);background:#fff;
+  display:flex;align-items:center;justify-content:center;}
+.adbox{width:320px;height:50px;display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--rule);border-radius:4px;color:var(--ink-soft);font-size:11px;letter-spacing:.04em;}
+
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
+  border-radius:10px;cursor:pointer;color:var(--ink-soft);background:none;border:none;padding:0;}
+.iconbtn:hover{background:rgba(42,95,200,.08);color:var(--brand-blue);}
+.iconbtn:active{background:rgba(42,95,200,.16);}
+.iconbtn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.iconbtn svg{width:22px;height:22px;display:block;}
+</style>
+<style>
+.frow{display:flex;gap:8px;align-items:center;}
+.frow .ffloat{flex:1 1 auto;min-width:0;}
+.frow .btn{align-self:center;}
+
+.fieldact{display:flex;justify-content:flex-end;margin-bottom:6px;}
+
+.finput.req,.ftextarea.req{border-color:var(--ink);}
+.finput.req:focus,.ftextarea.req:focus{border-color:var(--brand-blue);}
+
+.subnote{font-size:11px;font-weight:500;color:var(--ink-soft);}
+
+.finput.opt,.ftextarea.opt{background:var(--row-tint);}
+.finput.opt:focus,.ftextarea.opt:focus{background:var(--focus-tint);}
+
+.lglyph{flex:0 0 auto;width:17px;height:17px;display:inline-block;}
+.lglyph svg{width:17px;height:17px;display:block;}
+.ffloat .finput:focus + .flabel .lglyph,
+.ffloat .finput:not(:placeholder-shown) + .flabel .lglyph{display:none;}
+.ffloat.picker .finput:focus + .flabel .lglyph,
+.ffloat.picker .finput:not(:placeholder-shown) + .flabel .lglyph{display:inline-block;}
+
+.ftextarea.ftextarea-desc{min-height:96px;}
+.ftextarea.ftextarea-dialog{min-height:130px;}
+
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:10;}
+.modal{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);z-index:11;
+  background:#fff;border-radius:11px;padding:16px 18px;width:min(88%,380px);
+  box-shadow:0 8px 28px rgba(20,30,50,.28);}
+.modalacts{display:flex;justify-content:flex-end;gap:8px;}
+.modal .modal-title{font-size:16px;font-weight:800;color:var(--ink);margin:0 0 12px;}
+.modalhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.modalhead .modal-title{margin:0;}
+.modalhead .modalacts{flex:0 0 auto;}
+.chiprow{display:flex;align-items:center;gap:6px;background:var(--strip);border-radius:9px;
+  padding:6px 10px;width:100%;min-height:44px;flex-wrap:wrap;}
+
+.dlgstaged{border:1px solid var(--rule);border-radius:9px;background:#fff;margin-top:8px;overflow:hidden;}
+.attitem{display:flex;align-items:center;gap:8px;padding:5px 7px;font-size:13px;color:var(--ink);}
+.attitem + .attitem{border-top:1px solid var(--rule);}
+.attname{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.attremove{flex:0 0 auto;font:inherit;font-size:15px;font-weight:700;line-height:1;
+  color:var(--ink-soft);background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:6px;}
+.attremove:active{background:var(--row-tint);color:var(--alert-red);}
+.attremove:focus-visible{outline:2px solid var(--brand-blue);outline-offset:1px;}
+
+.attachpanel{flex:1 1 auto;min-width:0;position:relative;background:var(--row-tint);
+  border:1px solid var(--input-border);border-radius:9px;min-height:118px;padding:24px 4px 6px 4px;}
+.attachpanel .plabel{position:absolute;left:11px;top:6px;font-size:11px;font-weight:600;color:var(--ink);pointer-events:none;}
+.locked{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;height:100%;text-align:center;padding:4px 12px;}
+.locked .lock{width:20px;height:20px;color:var(--ink-soft);flex:0 0 auto;}
+.locked .lockttl{font-size:12.5px;font-weight:700;color:var(--ink);}
+.locked .locknote{font-size:12px;line-height:1.35;color:var(--ink-soft);}
+</style></head>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+    <button class="iconbtn" type="button" aria-label="Print ToDo" style="margin-left:auto;">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="17" cy="11" r="1" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="band">
+    <span class="glabel">ToDo Detail</span>
+    <span class="bandcluster">
+      <button class="btn" type="button">Save</button>
+      <button class="btn-secondary" type="button">Cancel</button>
+    </span>
+  </div>
+
+  <div class="scroll">
+    <div class="form">
+
+      <div class="fgroup">
+        <span class="flabel" id="pri-label">Priority</span>
+        <div class="chippair" role="radiogroup" aria-labelledby="pri-label">
+          <button class="chip selected" type="button" aria-pressed="true">ASAP</button>
+          <button class="chip" type="button" aria-pressed="false">SOON</button>
+          <button class="chip" type="button" aria-pressed="false">LATER</button>
+        </div>
+      </div>
+
+      <div class="fgroup frow">
+        <span class="ffloat">
+          <input class="finput opt" id="cat" type="text" autocomplete="off" placeholder=" ">
+          <label class="flabel" for="cat"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Private Category <span class="subnote">(optional)</span></label>
+        </span>
+        <button class="btn" type="button">Add Category</button>
+      </div>
+
+      <div class="fgroup ffloat">
+        <textarea class="ftextarea ftextarea-desc req" id="desc" maxlength="500" placeholder=" "></textarea>
+        <label class="flabel" for="desc">ToDo Description</label>
+      </div>
+
+      <div class="fgroup">
+        <div class="fieldact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
+        <div class="dlgstaged" id="dlg-staged" style="display:none;"></div>
+      </div>
+
+      <div class="fgroup">
+        <div class="fieldact">
+          <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
+        </div>
+        <div class="attachpanel">
+          <span class="plabel">Attachments</span>
+          <div class="locked">
+            <svg class="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg>
+            <span class="lockttl">A subscription feature</span>
+            <span class="locknote">Attach files to your Requests with a subscription &#8212; see the banner below.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
+  <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
+
+  <div class="scrim" id="dlg-scrim" style="display:none;" onclick="closeDialogModal()"></div>
+  <div class="modal" id="dlg-modal" role="dialog" aria-modal="true" aria-labelledby="adddlg-title" style="display:none;">
+    <div class="modalhead">
+      <p class="modal-title" id="adddlg-title">Add Dialog</p>
+      <div class="modalacts">
+        <button class="btn-secondary" type="button" onclick="closeDialogModal()">Cancel</button>
+        <button class="btn" type="button" onclick="saveDialogEntry()">Save</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="flabel" id="dlgkind-label">Dialog Entry Type</span>
+      <div class="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
+        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onclick="selectKind('question')">Question</button>
+        <button class="chip is-locked" type="button" aria-disabled="true" aria-pressed="false">
+          <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Answer</button>
+        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onclick="selectKind('comment')">Comment</button>
+      </div>
+    </div>
+    <div class="fgroup ffloat">
+      <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
+      <label class="flabel" for="dlgtext">Dialog Text</label>
+    </div>
+    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text.</p>
+  </div>
+
+</div></div>
+<script>
+var dlgKind = 'question';
+function openDialogModal(){
+  dlgKind = 'question';
+  selectKind('question');
+  document.getElementById('dlgtext').value = '';
+  document.getElementById('dlg-error').style.display = 'none';
+  document.getElementById('dlg-scrim').style.display = 'block';
+  document.getElementById('dlg-modal').style.display = 'block';
+}
+function closeDialogModal(){
+  document.getElementById('dlg-scrim').style.display = 'none';
+  document.getElementById('dlg-modal').style.display = 'none';
+}
+function selectKind(kind){
+  dlgKind = kind;
+  document.getElementById('chip-question').classList.toggle('selected', kind === 'question');
+  document.getElementById('chip-comment').classList.toggle('selected', kind === 'comment');
+}
+function saveDialogEntry(){
+  var text = document.getElementById('dlgtext').value.trim();
+  if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
+  var list = document.getElementById('dlg-staged');
+  var row = document.createElement('div');
+  row.className = 'attitem';
+  var label = dlgKind === 'question' ? 'Question' : 'Comment';
+  row.innerHTML = '<span class="attname"><b>' + label + ':</b> ' + text.replace(/</g,'&lt;') + '</span>' +
+    '<button class="attremove" type="button" aria-label="Remove this Dialog entry" onclick="this.parentElement.remove()">&times;</button>';
+  list.appendChild(row);
+  list.style.display = 'block';
+  closeDialogModal();
+}
+</script>
+</body></html>

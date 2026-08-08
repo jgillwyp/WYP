@@ -155,7 +155,7 @@ link is built only after the stack is proven on Add Contact.
   spec's table of contents before assigning a number.
 - `RequireAuth.tsx` imports `./src/lib/supabaseClient` while everything else
   uses `@/lib/supabaseClient`. Same file, works, inconsistent.
-- Main screen and Your Account are mockups only. Add Contact is now Converted
+- Your Account is a mockup only. Add Contact is now Converted
   (`app/components/AddContactForm.tsx`, `/contacts/new`) but not yet Live: no
   list view reads `contacts` back, and the no-contact interception dialog
   (`design/screens/WYP_add_contact_no_contact_dialog_palette1.html`) isn't
@@ -231,7 +231,69 @@ link is built only after the stack is proven on Add Contact.
   can never hold real content in the v1 locked state. `.btn-secondary` now
   rests on Strip (`var(--strip)`), not white, so it doesn't visually join the
   white required/filled-field group.
+- Four new mockup-only screens (2026-08-08), none wired or routed yet:
+  `design/screens/WYP_request_detail_palette1.html` (Request Detail — Create
+  Request's layout with Recipient shown as non-modifiable text, an added
+  Done Date/Done Time row, and a Strip-background notice band about
+  Recipient notification), `WYP_response_detail_palette1.html` (Response
+  Detail — Request Response's layout for a signed-in in-app user),
+  `WYP_todo_detail_palette1.html` (ToDo Detail — a byte-for-byte duplicate of
+  Create ToDo, retitled only), and `WYP_dialog_detail_palette1.html` (Dialog
+  Detail — deliberately **read-only**: `dialog` has no UPDATE/DELETE policy,
+  so a past entry can be viewed, never edited, from any screen). See
+  `design/README.md` §6.28 and the decisions log's two 2026-08-08 entries.
+- **Non-modifiable values render as label:value text, never a boxed field**
+  (§6.28, 2026-08-08) — retires the `.finput[readonly]`/`--locked`
+  dashed-box variant everywhere it had spread (Your Account's and Create
+  Free Account's Email, Request Detail's Recipient), all now `.metarow`
+  (reused from Request Response's existing Date:/From:/Due: block, not a new
+  component). Dialog Detail's Kind display is the same rule applied further:
+  no chip row, just the Kind itself as a bold label-as-value ("Answer:")
+  over a horizontal rule (`.dlgtype`/`.dlghr`).
+- "Respond to Request" is now titled **"Request Response"** (band label and
+  `<title>` in `WYP_respond_to_request_palette1.html`; filename unchanged,
+  same precedent as "Create a Request" → "Create Request"). This supersedes
+  the 2026-08-07 finding that the rename wraps on Android — the owner
+  re-requested it on different grounds (naming consistency with the Detail
+  screens, "unrelated to word-wrapping"), so it's applied, not overridden
+  silently.
+- Your Account has a "Change my email address" button next to "Sign out on
+  this device" — `.btn-quiet`, not wired to anything. The actual change-email
+  flow (verification, confirming from both addresses) is intentionally
+  undesigned; see the decisions log.
 - `npm run build` cannot be verified in this sandbox — the SWC native binary
   fails to load here (`Failed to load SWC binary for linux/x64`), unrelated to
   any code change. `npx tsc --noEmit` and `npm run lint` both pass clean; run
   `npm run build` locally before pushing, per the Commands section above.
+- **Main Screen is now Live** (`app/components/MainScreen.tsx`, `/`, 2026-08-08)
+  — `app/page.tsx` renders it inside `RequireAuth`, so signing in now lands on
+  a real screen instead of the placeholder "Logged in ✅" div. This was the
+  point of the exercise: "I would like to see the WYP app retain the
+  device-login validation and be able to test it in a more normal way than
+  needing to each time fill-in the URL." Sent and ToDos are real `requests`
+  rows with their default sort pills actually driving the query (`due_date`
+  descending / `priority` ascending) — RLS already scopes both to the signed-in
+  owner, same as every other converted screen, so no client-side owner filter
+  was added. **Received is not live and has no path to becoming live without
+  a schema change**: `requests` RLS is owner-only (migration 003) and no
+  column links a row to its recipient's own account, so there is currently no
+  way for a signed-in user to query "Requests sent to me." The Received
+  subcard renders a `.subempty` explanatory note (§6.29) instead. Search bar
+  and every filter chip are visual-only this pass — confirmed with the owner
+  ("Stay visual-only for now") rather than assumed. Three controls are inert
+  placeholders because they have nowhere to go yet: the ToDos band's Create
+  ToDo button (`/todos/new` doesn't exist — Create ToDo is still
+  Mockup-only), and Housekeeping's My Contacts / Your Account rows (neither a
+  contacts list view nor `/account` exists yet). Log Out is real
+  (`supabase.auth.signOut()`, then redirect to `/login`) — it's what actually
+  makes the sign-in loop testable, which is the whole reason this screen got
+  built now.
+- **Seed script for the Main Screen's demo data** — `docs/Week2 - SQL
+  history.txt`, appended 2026-08-08, not yet run. Not a numbered migration
+  (nothing in it alters a table); inserts Contacts, Sent Requests, and ToDos
+  under `jimgillon@gmail.com` specifically (looked up by email inside the
+  script, never a hardcoded uuid), with CURRENT_DATE-relative due dates so the
+  Open/Overdue/Done mix stays believable whenever it's actually run. Every
+  insert is existence-checked first, so re-running the whole block is safe.
+  Run it once, in the Supabase SQL editor, to see the live Sent/ToDos sections
+  populated.

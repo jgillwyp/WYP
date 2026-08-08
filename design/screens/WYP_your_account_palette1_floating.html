@@ -85,11 +85,15 @@ html,body{margin:0;height:100%;background:#fff;}
 .finput.req{border-color:var(--ink);}
 .finput.req:focus{border-color:var(--brand-blue);}
 
-/* Read-only field — PROPOSED (§6.10 locked variant).
-   Email is the login ID; it is displayed, never edited here. */
-.finput[readonly]{background:var(--locked);color:var(--ink-soft);border-style:dashed;cursor:default;}
-.finput[readonly]:focus{background:var(--locked);box-shadow:none;border-color:var(--input-border);}
-.ffloat .finput[readonly]:not(:placeholder-shown) + .flabel{color:var(--ink-soft);}
+/* Non-modifiable value — label:value text, not a boxed field (2026-08-08
+   rule, superseding the boxed .finput[readonly] variant this screen shipped
+   with). Reuses Respond to Request's .metarow/.mlabel/.mval exactly. */
+.metarow{display:flex;align-items:flex-start;gap:8px;margin-bottom:4px;}
+.mlabel{font-size:13.5px;font-weight:700;color:var(--brand-blue);flex:0 0 auto;min-width:46px;}
+.mval{font-size:13.5px;font-weight:600;color:var(--ink);}
+
+/* Plain caption row — no icon (the icon made sense pairing with a boxed
+   "locked field" look; plain text next to plain text doesn't need one). */
 .lockrow{display:flex;align-items:center;gap:6px;margin:5px 2px 0;font-size:12px;color:var(--ink-soft);line-height:1.4;}
 .lockrow svg{flex:0 0 auto;}
 
@@ -112,8 +116,15 @@ html,body{margin:0;height:100%;background:#fff;}
 .chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 .gatenote{flex:1 1 auto;min-width:0;font-size:12px;line-height:1.4;color:var(--ink-soft);}
 
-/* Sign-out row — destructive-adjacent action, kept away from Save (§6.11 usage note) */
-.dangerrow{margin:22px 0 4px;padding-top:16px;border-top:1px solid var(--rule);}
+/* Sign-out row — destructive-adjacent action, kept away from Save (§6.11 usage note).
+   Change my email address joins it 2026-08-08: same low-emphasis .btn-quiet
+   treatment, same reasoning (a real action that shouldn't visually compete
+   with Save) — not yet wired to anything; the owner flagged the actual
+   change-email flow (verification, confirming from both addresses — see
+   this screen's history, the sentence that used to live under Email above)
+   as still to be designed. */
+.dangerrow{margin:22px 0 4px;padding-top:16px;border-top:1px solid var(--rule);
+  display:flex;gap:8px;flex-wrap:wrap;}
 .btn-quiet{font:inherit;font-size:12.5px;font-weight:700;color:var(--ink-soft);background:#fff;
   border:1.5px solid var(--rule);border-radius:11px;padding:9px 14px;cursor:pointer;}
 .btn-quiet:active{background:var(--row-tint);}
@@ -164,17 +175,9 @@ html,body{margin:0;height:100%;background:#fff;}
   <div class="scroll">
     <div class="form">
 
-      <div class="fgroup ffloat">
-        <input class="finput" id="uem" type="email" placeholder=" "
-               value="jgillon@versys.com" readonly aria-describedby="uem-note">
-        <label class="flabel" for="uem">Email &#183; your sign-in ID</label>
-      </div>
-      <div class="lockrow" id="uem-note">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="#5A6675" stroke-width="2"/>
-          <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="#5A6675" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <span>This is where your sign-in links are sent. Changing it requires confirming from both addresses.</span>
+      <div class="fgroup">
+        <div class="metarow"><span class="mlabel">Email:</span><span class="mval">jgillon@versys.com</span></div>
+        <div class="lockrow"><span>Your email address is also your sign-in ID.</span></div>
       </div>
 
       <div class="fgroup ffloat" style="margin-top:14px;">
@@ -192,7 +195,7 @@ html,body{margin:0;height:100%;background:#fff;}
         <label class="flabel" for="udn">Display Name</label>
       </div>
       <div class="lockrow">
-        <span>Recipients see this name on every request you send.</span>
+        <span>Recipients see your Display Name on every request you send.</span>
       </div>
 
       <div class="fgroup" style="margin-top:14px;">
@@ -218,6 +221,7 @@ html,body{margin:0;height:100%;background:#fff;}
 
       <div class="dangerrow">
         <button class="btn-quiet" type="button">Sign out on this device</button>
+        <button class="btn-quiet" type="button">Change my email address</button>
       </div>
 
     </div>

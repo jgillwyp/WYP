@@ -1208,3 +1208,415 @@ body {
   font-size: 11px;
   letter-spacing: .04em;
 }
+
+/* ============================================================================
+   MAIN SCREEN (§6.7 band + new components) — ported from
+   design/screens/WYP_main_screen_palette1.html for MainScreen.tsx, 2026-08-08.
+   The mockup's icons are inline base64 PNGs; the live component uses inline
+   SVG instead, matching every other converted screen, so no image sizing
+   rules are ported here — .iconbtn's existing 40px target / 22px glyph
+   (defined above) is reused as-is rather than the mockup's own 23px/24px img
+   rules.
+   ========================================================================= */
+.scroll-pad {
+  height: 10px;
+}
+
+/* Sent / Received / ToDos lined sub-section cards */
+.subcard {
+  margin: 10px var(--pad) 0;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.subhead {
+  background: var(--strip);
+  padding: 6px 10px 8px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.subhead-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.subname {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--brand-blue);
+  letter-spacing: -.01em;
+}
+
+.subicons {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.subbody {
+  padding: 9px 12px 10px;
+}
+
+/* ToDos and Housekeeping header strips: chips on the left, icons/actions on
+   the right, one row — .chips' own top margin is zeroed so it doesn't add a
+   second line of space inside the already-padded strip. */
+.subhead.todos-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.subhead.todos-head .chips,
+.subhead.hk-head .chips {
+  margin-top: 0;
+}
+
+.subhead.todos-head .subicons {
+  margin-left: auto;
+}
+
+/* info icons: sit to the left of a row's description, not interactive */
+.ii {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 5px;
+  padding-top: 1px;
+  color: var(--icon-grey);
+}
+
+.iico {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+/* filter chips (§6.7 row filters) — this screen's own local .sel/.over/.done
+   convention (not the app-wide .chip.selected used on Add Contact/Add
+   Dialog); kept as-is rather than reconciled, per design/README.md. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.chips .chip.over {
+  color: var(--alert-red);
+}
+
+.chips .chip.done {
+  color: var(--ink-soft);
+}
+
+.chips .chip.sel {
+  background: #fff;
+  border: 1.5px solid var(--brand-blue);
+  color: var(--brand-blue);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(42, 95, 200, .18);
+}
+
+.chips .chip.over.sel {
+  border-color: var(--alert-red);
+  color: var(--alert-red);
+  box-shadow: 0 1px 2px rgba(211, 47, 47, .18);
+}
+
+.chips .chip.done.sel {
+  border-color: var(--ink-soft);
+  color: var(--ink-soft);
+  box-shadow: 0 1px 2px rgba(90, 102, 117, .18);
+}
+
+/* column header bar + sort pill */
+.colbar {
+  background: var(--brand-blue);
+  color: #fff;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 6px;
+  display: grid;
+  align-items: center;
+  column-gap: 6px;
+}
+
+.colbar.sr {
+  grid-template-columns: 1fr 58px 58px 58px;
+  column-gap: 16px;
+}
+
+.colbar.td {
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+}
+
+.colbar .c-dt,
+.colbar .c-due,
+.colbar .c-dn {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pill {
+  background: var(--sort);
+  color: var(--ink);
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* Sent / Received rows */
+.rows {
+  margin-top: 3px;
+}
+
+.row {
+  padding: 7px 6px 8px;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 5px;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:nth-child(even) {
+  background: var(--row-tint);
+}
+
+.r1 {
+  display: grid;
+  grid-template-columns: 1fr 58px 58px 58px;
+  column-gap: 16px;
+  align-items: baseline;
+}
+
+.nm {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.due {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.dn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.r2 {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 2px;
+}
+
+/* Description truncation: 2-line max (design constant). */
+.desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.28;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Overdue rows render entirely in red (design constant). */
+.row.overdue .nm,
+.row.overdue .dt,
+.row.overdue .due,
+.row.overdue .dn,
+.row.overdue .desc {
+  color: var(--alert-red);
+}
+
+/* Done rows render entirely in grey: nothing here needs the user's
+   attention. Open-Overdue rows stay fully red per the rule above. */
+.row.done .nm,
+.row.done .dt,
+.row.done .due,
+.row.done .dn,
+.row.done .desc {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+/* except: completed after its Due Date -> Done Date renders in red */
+.row.done .dn.late {
+  color: var(--alert-red);
+  font-weight: 700;
+}
+
+/* ToDo rows: one flowing line — icons, Priority (blue), Category (bold),
+   em-dash, description. */
+.row.td {
+  padding-top: 8px;
+  padding-bottom: 9px;
+}
+
+.t1 {
+  display: flex;
+  align-items: flex-start;
+}
+
+.tdc {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pri {
+  font-weight: 700;
+  color: var(--brand-blue);
+}
+
+.cat {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tdd {
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* Housekeeping row (§6.23, PROPOSED) — same title/description visual
+   language as the ToDo row above: bold Brand-Blue label, em-dash, regular
+   Ink description, 2-line clamp. Distinct classes rather than reusing
+   .pri/.tdd directly — this is a navigational row, not a Priority value. */
+.hkrows {
+  margin-top: 3px;
+}
+
+.hkrow {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+.hkrow:last-child {
+  border-bottom: none;
+}
+
+.hkrow:nth-child(even) {
+  background: var(--row-tint);
+}
+
+.hkrow:hover {
+  background: var(--focus-tint);
+}
+
+.hktext {
+  font-size: 12.5px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hktitle {
+  font-weight: 700;
+  color: var(--brand-blue);
+}
+
+.hknote {
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* Search bar (visual-only this pass — see CLAUDE.md Known gaps) */
+.searchbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--band);
+  border-top: 1px solid var(--rule);
+  padding: 8px var(--pad);
+}
+
+.scope {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.field {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: #fff;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.field::placeholder {
+  color: var(--ink-soft);
+  opacity: .85;
+}
+
+/* Received subcard empty state (2026-08-08) — no schema/RLS path exists yet
+   for a signed-in recipient to see a Request sent to them (see CLAUDE.md
+   Known gaps), so this subcard never has real rows to show. Plain centered
+   note rather than a fabricated/demo row, so it doesn't misrepresent
+   something live. */
+.subempty {
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}

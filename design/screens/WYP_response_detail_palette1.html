@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="referrer" content="no-referrer">
-<title>Palette 1 — Would You Please — Request Response</title>
+<title>Palette 1 — Would You Please — Response Detail</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -51,9 +50,6 @@ html,body{margin:0;height:100%;background:#fff;}
 .btn-secondary:active{background:var(--row-tint);}
 .btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 
-/* Icon button (band cluster addition, 2026-08-05) — same shape as the
-   equivalent added to Create Request: 40-px touch target / 22-px glyph,
-   inline SVG so this stays self-contained with no raster asset. */
 .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
   border-radius:10px;cursor:pointer;color:var(--ink-soft);background:none;border:none;padding:0;}
 .iconbtn:hover{background:rgba(42,95,200,.08);color:var(--brand-blue);}
@@ -61,8 +57,6 @@ html,body{margin:0;height:100%;background:#fff;}
 .iconbtn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 .iconbtn svg{width:22px;height:22px;display:block;}
 
-/* Locked control (§6.22, PROPOSED) — inert, not "lower emphasis".
-   Pair with adjacent text saying why; use aria-disabled, never disabled. */
 .btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
   border:1px solid var(--locked-border);cursor:not-allowed;
   display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:700;}
@@ -87,27 +81,13 @@ html,body{margin:0;height:100%;background:#fff;}
 /* Boxed sub-panels */
 .panel{background:#fff;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;}
 .panelhead{font-size:11.5px;font-weight:700;color:var(--brand-blue);margin-bottom:6px;}
-
-/* Required-field border (2026-08-07) — see Create Request's fuller
-   comment/decisions log. .panel's own resting border is --rule (a plain
-   hairline, correct for Dialog/Attachments, which aren't required); .req
-   overrides it to Ink for Done Date/Done Time in the state where they
-   function as required. */
 .panel.req{border-color:var(--ink);}
 
-/* Stacked action row (§6.26, PROPOSED, 2026-08-07) — Add Dialog / Add
-   Attachment sit alone on their own row, right-aligned, above the full-width
-   panel, replacing the earlier .panelrow side-by-side layout (a fixed-width
-   button starved the Dialog/Attachments panel of horizontal space on narrow
-   Android widths — same fix as Create Request/Create ToDo, see those
-   mockups' fuller comment). .panelact carries the row's own padding since
-   this screen has no .form/.fgroup wrapper to supply it. */
 .panelact{display:flex;justify-content:flex-end;padding:0 var(--pad);margin-bottom:6px;}
 .panelact .btn,.panelact .btn-secondary,.panelact .is-locked{
   font-size:12.5px;border-radius:11px;padding:9px 14px;}
 .panelfull{padding:0 var(--pad) 12px;}
 
-/* Two small fields side by side */
 .duo{display:flex;gap:10px;padding:0 var(--pad) 12px;}
 .duo .panel{flex:1 1 0;min-width:0;}
 .fieldval{font-size:13.5px;font-weight:600;color:var(--ink);}
@@ -118,37 +98,19 @@ html,body{margin:0;height:100%;background:#fff;}
 /* Dialog entries */
 .dlg{font-size:12.5px;line-height:1.5;color:var(--ink);padding:5px 0;}
 .dlg + .dlg{border-top:1px solid var(--rule);}
-/* Corrected 2026-08-05: Alert Red is status-only (§3.1) — reserved for
-   Overdue, inline error, or impending irreversible loss. A Dialog entry's
-   date isn't any of those, so red here was decorative and off-convention;
-   Dialog type (.dlgkind) already carries the emphasis in bold Ink. */
 .dlgdate{font-variant-numeric:tabular-nums;color:var(--brand-blue);font-weight:600;}
 .dlgkind{font-weight:700;}
 .dlgwho{color:var(--ink-soft);}
+.dlgre{display:block;font-size:11px;font-style:italic;color:var(--ink-soft);margin:3px 0 2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dlgbody{font-weight:700;}
 
 /* Attachments */
 .attach{display:block;font-size:12.5px;color:var(--brand-blue);text-decoration:underline;padding:3px 0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .gatenote{font-size:12.5px;line-height:1.45;color:var(--ink-soft);}
 
-/* Answer display — "Re: <question>" quote + bolded answer text (2026-08-07,
-   owner's ask). Sits between the meta line (date/kind/who) and the answer
-   body on a .dlg-answer entry only; Question/Comment entries are unchanged,
-   plain inline text. Single-line ellipsis truncation, matching .attach's
-   convention above — not the 2-line/3-char Description rule (CLAUDE.md
-   Design constants), since this is a compact inline quote, not a
-   description preview. Bold chosen over a new text color: Brand Blue
-   already carries several meanings (dates, links, kind labels via
-   .dlgkind's weight) and Alert Red is status-only (§3.1) — bold reuses
-   emphasis language already established rather than adding a fourth color
-   role for body text. */
-.dlgre{display:block;font-size:11px;font-style:italic;color:var(--ink-soft);margin:3px 0 2px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dlgbody{font-weight:700;}
-
-/* --- Form field basics (§6.10) — this screen had none until the Add Dialog
-   modal (2026-08-07) needed a Dialog Text box; ported from Create Request's
-   identical rules rather than inventing new ones. --- */
+/* Form field basics (§6.10) — for the Add Dialog modal's Dialog Text box */
 .fgroup{margin-bottom:12px;}
 .flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
 .ffloat{position:relative;}
@@ -167,8 +129,7 @@ html,body{margin:0;height:100%;background:#fff;}
 .ferror{font-size:12px;color:var(--alert-red);margin:4px 0 0;}
 .fgroup.is-invalid .finput,.fgroup.is-invalid .ftextarea{border-color:var(--alert-red);}
 
-/* --- Modal dialog frame (§6.12) + chip row — same values as Create
-   Request/Create ToDo's Add Dialog modal. --- */
+/* Modal dialog frame (§6.12) + chip row */
 .scrim{position:absolute;inset:0;background:var(--scrim);z-index:10;}
 .modal{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);z-index:11;
   background:#fff;border-radius:11px;padding:16px 18px;width:min(88%,380px);
@@ -188,11 +149,6 @@ html,body{margin:0;height:100%;background:#fff;}
 .chiprow{display:flex;align-items:center;gap:6px;background:var(--strip);border-radius:9px;
   padding:6px 10px;width:100%;min-height:44px;flex-wrap:wrap;}
 
-/* Which-Question picker (2026-08-07, migration 006 dialog.replies_to_id) —
-   shown only when Answer is selected and more than one Question is still
-   open; a single open Question is linked silently. See globals.css for the
-   fuller comment — same .lookup-item row styling, in-flow rather than a
-   floating dropdown, selection stays marked rather than closing on pick. */
 .qpicker{border:1px solid var(--rule);border-radius:9px;max-height:160px;overflow-y:auto;margin:2px 0 12px;}
 .lookup-item{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;color:var(--ink);
   background:none;border:none;padding:9px 12px;cursor:pointer;
@@ -201,15 +157,12 @@ html,body{margin:0;height:100%;background:#fff;}
 .lookup-item:hover,.lookup-item:focus-visible{background:var(--row-tint);}
 .lookup-item.selected{background:var(--focus-tint);color:var(--brand-blue);font-weight:700;}
 
-/* Promo block — the Free Account Features unit merges the pitch and the action
-   so the recipient sees one call, not a banner plus a nearby link. */
-.promo{margin:4px var(--pad) 12px;background:var(--strip);border-radius:12px;padding:13px 14px;}
-.promo-kicker{font-size:11.5px;font-weight:700;color:var(--ink);letter-spacing:.01em;}
-.promo-h{font-size:19px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;margin:3px 0 4px;}
-.promo-p{font-size:12.5px;line-height:1.45;color:var(--ink);margin:0 0 11px;}
-.promo .btn{width:100%;font-size:13.5px;padding:11px 14px;}
-
-/* Banner + ad slot (§6.14) */
+/* Banner + ad slot (§6.14) — Response Detail is an in-app screen for a
+   signed-in user, so the anonymous-recipient "Create your own Free Account"
+   .promo block from Respond to Request is dropped (2026-08-08): whoever's
+   looking at this already has an account. The subscription upsell banner
+   stays — it's the same free-vs-subscriber pitch shown everywhere else in
+   the app, not specific to the anonymous secure-link flow. */
 .subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
   background:#fff;border-top:1px solid var(--rule);cursor:pointer;
   font-size:13px;font-weight:700;color:var(--brand-blue);}
@@ -236,9 +189,6 @@ html,body{margin:0;height:100%;background:#fff;}
       <span class="word">Would You Please</span>
       <span class="tag">Tracking Requests and ToDos</span>
     </span>
-    <!-- Print moved out of the band cluster 2026-08-07 — same fix as Create
-         Request; narrow Android widths crowded it against the response
-         buttons and the title wrapped. -->
     <button class="iconbtn" type="button" aria-label="Print Request" style="margin-left:auto;">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -249,15 +199,8 @@ html,body{margin:0;height:100%;background:#fff;}
     </button>
   </div>
 
-  <!-- Renamed from "Respond to Request" 2026-08-08, for consistency with
-       Request Detail / Response Detail / Dialog Detail — explicitly NOT for
-       word-wrap reasons (superseding the 2026-08-07 finding that this exact
-       rename still wraps on Android; owner confirmed the wrap either way).
-       Filename unchanged, matching the "Create a Request" → "Create Request"
-       precedent (2026-08-07): the title changes, the canonical filename
-       doesn't. -->
   <div class="band">
-    <span class="glabel">Request Response</span>
+    <span class="glabel">Response Detail</span>
     <span class="bandcluster">
       <button class="btn" type="button">Send</button>
       <button class="btn-secondary" type="button">Cancel</button>
@@ -285,14 +228,6 @@ html,body{margin:0;height:100%;background:#fff;}
     <div class="grabber" aria-hidden="true"></div>
 
     <div class="duo">
-      <!-- Ink border (2026-08-07): in this shown state, Done Date equals the
-           Due Date and the Request carries a Due Time, so both fields are
-           the "required, even though normally optional" case the Row Tint
-           rule always anticipated (decisions log, 2026-08-07 — "a Done Time
-           if the Done Date is the same as the Due Date and a Due Time was
-           part of the Request"). Once Done Date/Done Time become real
-           pickers rather than static text, .req should be conditional on
-           that same comparison, not permanent. -->
       <div class="panel req">
         <div class="fieldhead">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -309,19 +244,10 @@ html,body{margin:0;height:100%;background:#fff;}
       </div>
     </div>
 
-    <!-- Stacked action row (§6.26, 2026-08-07): Add Dialog above, full-width
-         panel below — was .panelrow, side by side. -->
     <div class="panelact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
     <div class="panelfull">
       <div class="panel">
         <div class="panelhead">Dialog (Questions, Answers, Comments)</div>
-        <!-- Corrected 2026-08-05: newest first (descending), was ascending —
-             sorted by id (see migration 004's note on id doubling as the
-             sort key when entries share a date). Populated by
-             renderDialogList() below from the dialogEntries demo array, not
-             static markup, so Add Dialog's effects (a new Answer, the
-             open-Question count that gates the Answer chip) are actually
-             visible in this mockup rather than only described. -->
         <div id="dlg-list"></div>
       </div>
     </div>
@@ -336,10 +262,6 @@ html,body{margin:0;height:100%;background:#fff;}
     <div class="panelfull">
       <div class="panel">
         <div class="panelhead">Attachments</div>
-
-        <!-- Gates govern ADDING, never VIEWING. Whatever the issuer's tier is
-             now, attachments already on the request stay visible to everyone.
-             Files leave only by lapse-and-auto-delete, which leaves a tombstone. -->
         <div id="attach-list">
           <a class="attach" href="#">Q3_budget_worksheet.xlsx</a>
           <a class="attach" href="#">insurance_renewal_notice_2026&hellip;final.pdf</a>
@@ -348,14 +270,6 @@ html,body{margin:0;height:100%;background:#fff;}
         <div class="gatenote" id="attach-note" style="margin-top:6px;">Adding attachments is
           available on requests sent by subscribers.</div>
       </div>
-    </div>
-
-    <!-- Pitch and action as one unit (was a banner plus a separate link). -->
-    <div class="promo">
-      <div class="promo-kicker">Free Account Features</div>
-      <div class="promo-h">Send it, Track it, Get it Done</div>
-      <p class="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
-      <button class="btn" type="button">Create your own Free Account</button>
     </div>
 
   </div>
@@ -369,11 +283,6 @@ html,body{margin:0;height:100%;background:#fff;}
     <button type="button" id="t-sub" onclick="setTier('sub')">Subscriber</button>
   </div>
 
-  <!-- Add Dialog modal (2026-08-07) — same §6.12 title+actions-same-row
-       variant as Create Request/Create ToDo. Unlike those two, Answer here
-       is dynamic (locked only when no Question is currently open, migration
-       006), and a second-open-question case shows the which-question
-       picker, defaulting to the most recent open Question. -->
   <div class="scrim" id="dlg-scrim" style="display:none;" onclick="closeDialogModal()"></div>
   <div class="modal" id="dlg-modal" role="dialog" aria-modal="true" aria-labelledby="adddlg-title" style="display:none;">
     <div class="modalhead">
@@ -405,11 +314,8 @@ html,body{margin:0;height:100%;background:#fff;}
 </div></div>
 
 <script>
-/* Rights come from the ISSUER, read live from their profile — never from
-   whoever happens to be reading. Gates cover adding, not viewing. */
 function setTier(t){
   var free = t === 'free';
-  /* The list never hides — only the Add control and its explanation change. */
   document.getElementById('attach-note').classList.toggle('is-hidden', !free);
   var b = document.getElementById('attach-btn');
   b.classList.toggle('is-locked', free);
@@ -419,13 +325,8 @@ function setTier(t){
   document.getElementById('t-sub').classList.toggle('on', !free);
 }
 
-/* Add Dialog modal + Dialog list (2026-08-07) — mockup-only demo state.
-   Real data would come from the `dialog` table (migrations 004/006); this
-   plain array stands in for it so the dynamic Answer-locking and
-   which-Question picker are actually demonstrable here, not just described.
-   Seeded with two open Questions (ids 3 and 4) on purpose, so the picker's
-   multi-question branch is the state a reviewer sees by default rather than
-   something only reachable by clicking through several Adds first. */
+/* Same demo Dialog data as Request Detail (2026-08-08) — one Request, same
+   thread, viewed from the Recipient's side here rather than the issuer's. */
 var dialogEntries = [
   { id: 1, kind: 'question', date: '10-01-26', who: 'Mae Baker', body: 'Should I also include George?' },
   { id: 2, kind: 'answer', date: '10-02-26', who: 'Jason Smith', body: 'Yes', repliesTo: 1 },
@@ -440,12 +341,6 @@ function questionById(id){
   for (var i = 0; i < dialogEntries.length; i++) if (dialogEntries[i].id === id) return dialogEntries[i];
   return null;
 }
-
-/* Open = a Question with no Answer entry whose repliesTo points at it.
-   Walks the array in creation order (id ascending), not display order
-   (newest-first) — display order is cosmetic only, per the owner's
-   2026-08-07 note that reordering isn't needed once an Answer carries its
-   own repliesTo link. */
 function openQuestions(){
   var answeredIds = {};
   for (var i = 0; i < dialogEntries.length; i++){
@@ -457,15 +352,13 @@ function openQuestions(){
     var q = dialogEntries[j];
     if (q.kind === 'question' && !answeredIds[q.id]) open.push(q);
   }
-  return open; // already in creation order; last element is most recent
+  return open;
 }
-
 function truncateText(s){
   return s.length > 60 ? s.slice(0, 57) + '...' : s;
 }
-
 function renderDialogList(){
-  var sorted = dialogEntries.slice().sort(function(a, b){ return b.id - a.id; }); // newest first
+  var sorted = dialogEntries.slice().sort(function(a, b){ return b.id - a.id; });
   var html = '';
   for (var i = 0; i < sorted.length; i++){
     var e = sorted[i];
@@ -483,7 +376,6 @@ function renderDialogList(){
   }
   document.getElementById('dlg-list').innerHTML = html;
 }
-
 function openDialogModal(){
   dlgKind = 'question';
   dlgSelectedQuestionId = null;
@@ -497,10 +389,9 @@ function closeDialogModal(){
   document.getElementById('dlg-scrim').style.display = 'none';
   document.getElementById('dlg-modal').style.display = 'none';
 }
-
 function selectKind(kind){
   var open = openQuestions();
-  if (kind === 'answer' && open.length === 0) return; // locked, not selectable
+  if (kind === 'answer' && open.length === 0) return;
   dlgKind = kind;
   document.getElementById('chip-question').classList.toggle('selected', kind === 'question');
   document.getElementById('chip-answer').classList.toggle('selected', kind === 'answer');
@@ -512,7 +403,6 @@ function selectKind(kind){
 
   var wrap = document.getElementById('dlg-qpicker-wrap');
   if (kind === 'answer' && open.length > 1){
-    // Default to the most recently created open Question (last in the array).
     dlgSelectedQuestionId = open[open.length - 1].id;
     renderQuestionPicker(open);
     wrap.style.display = 'block';
@@ -521,7 +411,6 @@ function selectKind(kind){
     wrap.style.display = 'none';
   }
 }
-
 function renderQuestionPicker(open){
   var html = '';
   for (var i = 0; i < open.length; i++){
@@ -536,7 +425,6 @@ function pickQuestion(id){
   dlgSelectedQuestionId = id;
   renderQuestionPicker(openQuestions());
 }
-
 function saveDialogEntry(){
   var text = document.getElementById('dlgtext').value.trim();
   if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }

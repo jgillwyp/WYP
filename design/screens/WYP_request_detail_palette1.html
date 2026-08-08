@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 — Would You Please — Request Detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Would You Please — Design Tokens (palette 1)
+   See Create Request's identical block for the full header comment — this
+   file is a new screen (2026-08-08), built from Create Request's mockup, so
+   it carries the same tokens rather than re-deriving them.
+   ============================================================================ */
+
+:root {
+  --brand-blue:    #2A5FC8;
+  --blue-pressed:  #1E4AA0;
+  --alert-red:     #D32F2F;
+  --ink:           #1F2933;
+  --ink-soft:      #5A6675;
+  --row-tint:      #F6F7F9;
+  --band:          #E7E7E7;
+  --strip:         #E5ECF7;
+  --focus-tint:    #EDF2FD;
+  --focus-halo:    0 0 0 3px rgba(42,95,200,.22);
+  --input-border:  #7E8A9A;
+  --rule:          #E2E6EC;
+  --scrim:         rgba(31,41,51,.45);
+  --sort:          #FFE34D;
+  --pad:           14px;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7;
+}
+
+.btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
+  border:1px solid var(--locked-border);cursor:not-allowed;
+  display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:700;}
+.btn.is-locked:hover,.btn.is-locked:active,.chip.is-locked:hover,.chip.is-locked:active,.is-locked:hover,.is-locked:active{background:var(--locked);color:var(--locked-ink);
+  border-color:var(--locked-border);}
+.is-locked .lockglyph{flex:0 0 auto;width:1em;height:1em;}
+</style>
+<style>
+/* --- Shell & frame -------------------------------------------------------- */
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;
+  box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){
+  html,body{background:#eef1f5;}
+  .frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;}
+
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
+
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
+.hdr + .band{margin-top:0;border-top:none;}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* Notice band (2026-08-08, PROPOSED) — a change on Request Detail reaches a
+   real person who already has this Request; the owner asked for this to
+   read the way a chip strip does (Strip background) rather than as an
+   .ferror-style warning, since it isn't an error — it's a heads-up.
+   Sits directly under the title band, full width, no icon: the "Note:"
+   lead-in carries the same job a padlock icon does elsewhere (flag that
+   this row means something before reading it). */
+.noticeband{background:var(--strip);padding:9px var(--pad);font-size:12.5px;
+  line-height:1.4;color:var(--ink);}
+.noticeband b{font-weight:700;}
+
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.form{padding:14px var(--pad) 6px;background:var(--row-tint);flex:1 1 auto;}
+.fgroup{margin-bottom:12px;}
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
+.ffloat{position:relative;}
+.ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
+  color:var(--ink-soft);pointer-events:none;transform-origin:left top;
+  transition:transform .14s ease,color .14s ease;background:transparent;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.ffloat .finput:focus + .flabel,
+.ffloat .finput:not(:placeholder-shown) + .flabel,
+.ffloat .ftextarea:focus + .flabel,
+.ffloat .ftextarea:not(:placeholder-shown) + .flabel{
+  transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
+.ffloat .finput:focus + .flabel,
+.ffloat .ftextarea:focus + .flabel{color:var(--brand-blue);}
+@media (prefers-reduced-motion:reduce){.ffloat .flabel{transition:none;}}
+.finput,.ftextarea{font:inherit;font-size:14px;color:var(--ink);background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;
+  padding:20px 10px 6px;}
+.finput:focus,.ftextarea:focus{background:var(--focus-tint);outline:none;
+  border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+.ftextarea{resize:vertical;min-height:96px;line-height:1.4;}
+
+/* Non-modifiable value — label:value text, not a boxed field (2026-08-08
+   rule, superseding the boxed .finput[readonly] variant this screen shipped
+   with a day earlier). Owner's ask: every non-modifiable data field should
+   read as text with a field title, "as is now done for Respond to
+   Request" — reuses that screen's own .metarow/.mlabel/.mval exactly,
+   rather than inventing a second label:value component. */
+.metarow{display:flex;align-items:flex-start;gap:8px;margin-bottom:4px;}
+.mlabel{font-size:13.5px;font-weight:700;color:var(--brand-blue);flex:0 0 auto;min-width:46px;}
+.mval{font-size:13.5px;font-weight:600;color:var(--ink);}
+
+.subbanner{flex:0 0 auto;display:flex;align-items:center;justify-content:center;min-height:40px;
+  background:#fff;border-top:1px solid var(--rule);cursor:pointer;
+  font-size:13px;font-weight:700;color:var(--brand-blue);}
+.subbanner:active{background:var(--row-tint);}
+.adslot{flex:0 0 auto;height:50px;border-top:1px solid var(--rule);background:#fff;
+  display:flex;align-items:center;justify-content:center;}
+.adbox{width:320px;height:50px;display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--rule);border-radius:4px;color:var(--ink-soft);font-size:11px;letter-spacing:.04em;}
+
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:10;}
+.modal{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);z-index:11;
+  background:#fff;border-radius:11px;padding:16px 18px;width:min(88%,380px);
+  box-shadow:0 8px 28px rgba(20,30,50,.28);}
+.modalacts{display:flex;justify-content:flex-end;gap:8px;}
+.modal .modal-title{font-size:16px;font-weight:800;color:var(--ink);margin:0 0 12px;}
+.modalhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.modalhead .modal-title{margin:0;}
+.modalhead .modalacts{flex:0 0 auto;}
+.chippair{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);border-radius:9px;
+  padding:5px 12px;min-height:30px;}
+.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.chiprow{display:flex;align-items:center;gap:6px;background:var(--strip);border-radius:9px;
+  padding:6px 10px;width:100%;min-height:44px;flex-wrap:wrap;}
+.ferror{font-size:12px;color:var(--alert-red);margin:4px 0 0;}
+
+.qpicker{border:1px solid var(--rule);border-radius:9px;max-height:160px;overflow-y:auto;margin:2px 0 12px;}
+.lookup-item{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;color:var(--ink);
+  background:none;border:none;padding:9px 12px;cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lookup-item + .lookup-item{border-top:1px solid var(--rule);}
+.lookup-item:hover,.lookup-item:focus-visible{background:var(--row-tint);}
+.lookup-item.selected{background:var(--focus-tint);color:var(--brand-blue);font-weight:700;}
+
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
+  border-radius:10px;cursor:pointer;color:var(--ink-soft);background:none;border:none;padding:0;}
+.iconbtn:hover{background:rgba(42,95,200,.08);color:var(--brand-blue);}
+.iconbtn:active{background:rgba(42,95,200,.16);}
+.iconbtn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.iconbtn svg{width:22px;height:22px;display:block;}
+</style>
+<style>
+/* Field rows */
+.frow{display:flex;gap:8px;align-items:center;}
+.frow .ffloat{flex:1 1 auto;min-width:0;}
+.frow .btn{align-self:center;}
+
+.fieldact{display:flex;justify-content:flex-end;margin-bottom:6px;}
+
+.finput.req,.ftextarea.req{border-color:var(--ink);}
+.finput.req:focus,.ftextarea.req:focus{border-color:var(--brand-blue);}
+
+.subnote{font-size:11px;font-weight:500;color:var(--ink-soft);}
+
+.finput.opt,.ftextarea.opt{background:var(--row-tint);}
+.finput.opt:focus,.ftextarea.opt:focus{background:var(--focus-tint);}
+
+.lglyph{flex:0 0 auto;width:17px;height:17px;display:inline-block;}
+.lglyph svg{width:17px;height:17px;display:block;}
+.ffloat .finput:focus + .flabel .lglyph,
+.ffloat .finput:not(:placeholder-shown) + .flabel .lglyph{display:none;}
+.ffloat.picker .finput:focus + .flabel .lglyph,
+.ffloat.picker .finput:not(:placeholder-shown) + .flabel .lglyph{display:inline-block;}
+
+/* Dialog read panel (ported from Respond to Request — Request Detail shows
+   an EXISTING thread, so it needs the read-format list, not Create
+   Request's blank-staged-list starting point). */
+.panel{background:#fff;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;}
+.panelhead{font-size:11.5px;font-weight:700;color:var(--brand-blue);margin-bottom:6px;}
+.dlg{font-size:12.5px;line-height:1.5;color:var(--ink);padding:5px 0;}
+.dlg + .dlg{border-top:1px solid var(--rule);}
+.dlgdate{font-variant-numeric:tabular-nums;color:var(--brand-blue);font-weight:600;}
+.dlgkind{font-weight:700;}
+.dlgwho{color:var(--ink-soft);}
+.dlgre{display:block;font-size:11px;font-style:italic;color:var(--ink-soft);margin:3px 0 2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dlgbody{font-weight:700;}
+
+/* Attachments panel (§9.2.2) — identical v1 locked state to Create Request;
+   attachments stay out of scope for this pass regardless of who's viewing. */
+.attachpanel{flex:1 1 auto;min-width:0;position:relative;background:var(--row-tint);
+  border:1px solid var(--input-border);border-radius:9px;min-height:118px;padding:24px 4px 6px 4px;}
+.attachpanel .plabel{position:absolute;left:11px;top:6px;font-size:11px;font-weight:600;color:var(--ink);pointer-events:none;}
+.locked{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;height:100%;text-align:center;padding:4px 12px;}
+.locked .lock{width:20px;height:20px;color:var(--ink-soft);flex:0 0 auto;}
+.locked .lockttl{font-size:12.5px;font-weight:700;color:var(--ink);}
+.locked .locknote{font-size:12px;line-height:1.35;color:var(--ink-soft);}
+</style></head>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+    <button class="iconbtn" type="button" aria-label="Print Request" style="margin-left:auto;">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="17" cy="11" r="1" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="band">
+    <span class="glabel">Request Detail</span>
+    <span class="bandcluster">
+      <button class="btn" type="button">Send</button>
+      <button class="btn-secondary" type="button">Cancel</button>
+    </span>
+  </div>
+
+  <!-- 2026-08-08, owner's ask: a change here reaches the Recipient. -->
+  <div class="noticeband"><b>Note:</b> The Request Recipient is notified of changes.</div>
+
+  <div class="scroll">
+    <div class="form">
+
+      <!-- Recipient — non-modifiable, shown as text (2026-08-08 rule), not
+           the boxed readonly variant this screen shipped with a day
+           earlier. No separate "can't be changed" note: the notice band
+           above already covers it, and plain text with no box is its own
+           signal that there's nothing to click. -->
+      <div class="fgroup">
+        <div class="metarow"><span class="mlabel">Recipient:</span><span class="mval">Mae Baker</span></div>
+      </div>
+
+      <!-- Due row: pre-filled — Due Time now has content, so it's white
+           rather than Row-Tinted (§6.25's has-content rule), same as
+           Category below. -->
+      <div class="fgroup frow">
+        <span class="ffloat picker">
+          <input class="finput req" id="dd" type="text" inputmode="numeric" placeholder=" " value="10/19/2026">
+          <label class="flabel" for="dd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Due Date</label>
+        </span>
+        <span class="ffloat picker">
+          <input class="finput" id="dt" type="text" inputmode="numeric" placeholder=" " value="9:00 AM">
+          <label class="flabel" for="dt"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/></svg></span>Due Time <span class="subnote">(optional)</span></label>
+        </span>
+      </div>
+
+      <!-- Done row — new 2026-08-08 (owner's ask: "the requestor may want to
+           update the request as completed"). Same box treatment as Due
+           Date/Due Time, since both are genuinely settable here, not
+           read-only — just empty until the Request is marked done. Row
+           Tint while empty (§6.25's rule), like any other optional-and-
+           empty field; "(optional)" added to both labels for the same
+           reason Due Time gets it — neither is required to Send a change. -->
+      <div class="fgroup frow">
+        <span class="ffloat picker">
+          <input class="finput opt" id="dnd" type="text" inputmode="numeric" placeholder=" ">
+          <label class="flabel" for="dnd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Done Date <span class="subnote">(optional)</span></label>
+        </span>
+        <span class="ffloat picker">
+          <input class="finput opt" id="dnt" type="text" inputmode="numeric" placeholder=" ">
+          <label class="flabel" for="dnt"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/></svg></span>Done Time <span class="subnote">(optional)</span></label>
+        </span>
+      </div>
+
+      <div class="fgroup frow">
+        <span class="ffloat">
+          <input class="finput" id="cat" type="text" autocomplete="off" placeholder=" " value="Committee Work">
+          <label class="flabel" for="cat"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Private Category <span class="subnote">(optional)</span></label>
+        </span>
+        <button class="btn" type="button">Add Category</button>
+      </div>
+
+      <div class="fgroup ffloat">
+        <textarea class="ftextarea req" id="desc" maxlength="500" placeholder=" ">Work with attendees to arrange for a building renovation committee meeting before the end of this month.  Also, please include Bob and Mary Jackson &#8211; they have some interesting ideas.</textarea>
+        <label class="flabel" for="desc">Request Description</label>
+      </div>
+
+      <!-- Dialog — shows the EXISTING thread (unlike Create Request's blank
+           staged list). Add Dialog's Kind picker is dynamic here, not
+           permanently Answer-locked: unlike Create Request/ToDo, a Request
+           being viewed in Detail can already have open Questions waiting
+           on the issuer, so Answer follows the same open-Question rule as
+           Respond to Request (migration 006, dialog.replies_to_id). -->
+      <div class="fgroup">
+        <div class="fieldact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
+        <div class="panel">
+          <div class="panelhead">Dialog (Questions, Answers, Comments)</div>
+          <div id="dlg-list"></div>
+        </div>
+      </div>
+
+      <div class="fgroup">
+        <div class="fieldact">
+          <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
+        </div>
+        <div class="attachpanel">
+          <span class="plabel">Attachments</span>
+          <div class="locked">
+            <svg class="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg>
+            <span class="lockttl">A subscription feature</span>
+            <span class="locknote">Attach files to your Requests with a subscription &#8212; see the banner below.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
+  <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
+
+  <!-- Add Dialog modal — dynamic Answer + which-Question picker, identical
+       logic to Respond to Request (see that mockup for the fuller comment). -->
+  <div class="scrim" id="dlg-scrim" style="display:none;" onclick="closeDialogModal()"></div>
+  <div class="modal" id="dlg-modal" role="dialog" aria-modal="true" aria-labelledby="adddlg-title" style="display:none;">
+    <div class="modalhead">
+      <p class="modal-title" id="adddlg-title">Add Dialog</p>
+      <div class="modalacts">
+        <button class="btn-secondary" type="button" onclick="closeDialogModal()">Cancel</button>
+        <button class="btn" type="button" onclick="saveDialogEntry()">Save</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="flabel" id="dlgkind-label">Dialog Entry Type</span>
+      <div class="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
+        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onclick="selectKind('question')">Question</button>
+        <button class="chip" type="button" id="chip-answer" aria-pressed="false" onclick="selectKind('answer')">Answer</button>
+        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onclick="selectKind('comment')">Comment</button>
+      </div>
+    </div>
+    <div id="dlg-qpicker-wrap" style="display:none;">
+      <span class="flabel">Which Question?</span>
+      <div class="qpicker" id="dlg-qpicker" role="radiogroup" aria-label="Which Question this Answer responds to"></div>
+    </div>
+    <div class="fgroup ffloat">
+      <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
+      <label class="flabel" for="dlgtext">Dialog Text</label>
+    </div>
+    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text.</p>
+  </div>
+
+</div></div>
+<script>
+/* Dialog list + Add Dialog modal (2026-08-08) — same demo data and logic as
+   Respond to Request's mockup, so this Request's thread reads identically
+   from both the sender's (this screen) and recipient's (Response Detail)
+   point of view. See Respond to Request for the fuller comment on the
+   open-Question / which-Question-picker logic. */
+var dialogEntries = [
+  { id: 1, kind: 'question', date: '10-01-26', who: 'Mae Baker', body: 'Should I also include George?' },
+  { id: 2, kind: 'answer', date: '10-02-26', who: 'Jason Smith', body: 'Yes', repliesTo: 1 },
+  { id: 3, kind: 'question', date: '10-03-26', who: 'Mae Baker', body: 'Do you have enough time next week to accomplish this request?' },
+  { id: 4, kind: 'question', date: '10-04-26', who: 'Mae Baker', body: 'Should the meeting be in-person or a video call?' }
+];
+var nextDialogId = 5;
+var dlgKind = 'question';
+var dlgSelectedQuestionId = null;
+
+function questionById(id){
+  for (var i = 0; i < dialogEntries.length; i++) if (dialogEntries[i].id === id) return dialogEntries[i];
+  return null;
+}
+function openQuestions(){
+  var answeredIds = {};
+  for (var i = 0; i < dialogEntries.length; i++){
+    var e = dialogEntries[i];
+    if (e.kind === 'answer' && e.repliesTo != null) answeredIds[e.repliesTo] = true;
+  }
+  var open = [];
+  for (var j = 0; j < dialogEntries.length; j++){
+    var q = dialogEntries[j];
+    if (q.kind === 'question' && !answeredIds[q.id]) open.push(q);
+  }
+  return open;
+}
+function truncateText(s){
+  return s.length > 60 ? s.slice(0, 57) + '...' : s;
+}
+function renderDialogList(){
+  var sorted = dialogEntries.slice().sort(function(a, b){ return b.id - a.id; });
+  var html = '';
+  for (var i = 0; i < sorted.length; i++){
+    var e = sorted[i];
+    var kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment';
+    if (e.kind === 'answer'){
+      var q = e.repliesTo != null ? questionById(e.repliesTo) : null;
+      html += '<div class="dlg dlg-answer"><span class="dlgdate">' + e.date + '</span> ' +
+        '<span class="dlgkind">' + kindLabel + '</span> <span class="dlgwho">(' + e.who + ')</span>' +
+        (q ? '<span class="dlgre">Re: ' + truncateText(q.body) + '</span>' : '') +
+        '<span class="dlgbody">' + e.body + '</span></div>';
+    } else {
+      html += '<div class="dlg"><span class="dlgdate">' + e.date + '</span> ' +
+        '<span class="dlgkind">' + kindLabel + '</span> <span class="dlgwho">(' + e.who + ')</span> ' + e.body + '</div>';
+    }
+  }
+  document.getElementById('dlg-list').innerHTML = html;
+}
+function openDialogModal(){
+  dlgKind = 'question';
+  dlgSelectedQuestionId = null;
+  document.getElementById('dlgtext').value = '';
+  document.getElementById('dlg-error').style.display = 'none';
+  selectKind('question');
+  document.getElementById('dlg-scrim').style.display = 'block';
+  document.getElementById('dlg-modal').style.display = 'block';
+}
+function closeDialogModal(){
+  document.getElementById('dlg-scrim').style.display = 'none';
+  document.getElementById('dlg-modal').style.display = 'none';
+}
+function selectKind(kind){
+  var open = openQuestions();
+  if (kind === 'answer' && open.length === 0) return;
+  dlgKind = kind;
+  document.getElementById('chip-question').classList.toggle('selected', kind === 'question');
+  document.getElementById('chip-answer').classList.toggle('selected', kind === 'answer');
+  document.getElementById('chip-comment').classList.toggle('selected', kind === 'comment');
+
+  var answerChip = document.getElementById('chip-answer');
+  answerChip.classList.toggle('is-locked', open.length === 0);
+  answerChip.setAttribute('aria-disabled', open.length === 0 ? 'true' : 'false');
+
+  var wrap = document.getElementById('dlg-qpicker-wrap');
+  if (kind === 'answer' && open.length > 1){
+    dlgSelectedQuestionId = open[open.length - 1].id;
+    renderQuestionPicker(open);
+    wrap.style.display = 'block';
+  } else {
+    dlgSelectedQuestionId = (kind === 'answer' && open.length === 1) ? open[0].id : null;
+    wrap.style.display = 'none';
+  }
+}
+function renderQuestionPicker(open){
+  var html = '';
+  for (var i = 0; i < open.length; i++){
+    var q = open[i];
+    var sel = q.id === dlgSelectedQuestionId;
+    html += '<button type="button" class="lookup-item' + (sel ? ' selected' : '') + '" role="radio" aria-checked="' +
+      (sel ? 'true' : 'false') + '" onclick="pickQuestion(' + q.id + ')">' + truncateText(q.body) + '</button>';
+  }
+  document.getElementById('dlg-qpicker').innerHTML = html;
+}
+function pickQuestion(id){
+  dlgSelectedQuestionId = id;
+  renderQuestionPicker(openQuestions());
+}
+function saveDialogEntry(){
+  var text = document.getElementById('dlgtext').value.trim();
+  if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
+  var entry = { id: nextDialogId++, kind: dlgKind, date: '10-05-26', who: 'Jason Smith', body: text };
+  if (dlgKind === 'answer') entry.repliesTo = dlgSelectedQuestionId;
+  dialogEntries.push(entry);
+  renderDialogList();
+  closeDialogModal();
+}
+
+renderDialogList();
+</script>
+</body></html>

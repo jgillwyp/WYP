@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 — Would You Please — Dialog Detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Dialog Detail (2026-08-08) — READ-ONLY BY DESIGN, not just by omission.
+   Reached by clicking an existing entry in a Dialog panel (Request Detail,
+   Response Detail, and later a Request/ToDo's own Detail view). Built to
+   look "essentially the same" as the Add Dialog modal, per the owner's ask
+   — same Dialog Entry Type chips, same Dialog Text box — but every control
+   here is inert: the `dialog` table has no UPDATE or DELETE policy
+   (migration 004: "append-only, same as `events` — editing or retracting a
+   past Question/Answer/Comment would falsify the thread"). A past Dialog
+   entry can be viewed, never edited, from this screen or any other. Flagging
+   this explicitly rather than silently building an editable form the schema
+   couldn't actually support — if editability is wanted here, that's a
+   schema change (an UPDATE policy, presumably audited/versioned rather than
+   a plain overwrite), not a mockup change, and worth a deliberate decision
+   first.
+   ============================================================================ */
+:root{
+  --brand-blue:#2A5FC8;--blue-pressed:#1E4AA0;
+  --alert-red:#D32F2F;--focus-tint:#EDF2FD;
+  --ink:#1F2933;--ink-soft:#5A6675;--row-tint:#F6F7F9;--rule:#E2E6EC;--pad:14px;
+  --strip:#E5ECF7;--band:#E7E7E7;--input-border:#7E8A9A;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){html,body{background:#eef1f5;}.frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;background:var(--row-tint);}
+
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;background:#fff;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
+
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  border-bottom:1px solid var(--rule);}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* Close is the only button — Primary, not Secondary, same reasoning as
+   Storage Maintenance's Close (2026-08-07 decisions log): .btn-secondary
+   means "available, lower emphasis than a Primary also present," which
+   doesn't apply with no Primary sibling. */
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.form{padding:14px var(--pad) 6px;}
+.fgroup{margin-bottom:14px;}
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
+
+/* Non-modifiable value — label:value text (2026-08-08 rule), reusing
+   Respond to Request's own .metarow/.mlabel/.mval rather than a second
+   component. Supersedes this file's original .dlgmeta single-line combo,
+   which read as one component doing two jobs. */
+.metarow{display:flex;align-items:flex-start;gap:8px;margin-bottom:4px;}
+.mlabel{font-size:13.5px;font-weight:700;color:var(--brand-blue);flex:0 0 auto;min-width:46px;}
+.mval{font-size:13.5px;font-weight:600;color:var(--ink);}
+
+/* Dialog Entry Type — 2026-08-08 rewrite. Owner's own rough mockup showed
+   the value itself as a bold label ("Answer:") with an underline; owner's
+   note asked for "any suggested formatting tweaks — at minimum the
+   underline... would probably be a horizontal rule" as a way of setting the
+   value below the label rather than beside it. Built that way: .dlgtype is
+   the label+value combined (there is exactly one Dialog Entry Type per
+   entry, so there is nothing to distinguish it FROM — no chip row was ever
+   needed here once the display stopped trying to look like the Add Dialog
+   modal's picker). .dlghr is a plain Rule-colored line, not Brand Blue —
+   the emphasis already lives in .dlgtype's own color/weight; a second blue
+   element felt like the rule doing the label's job twice. */
+.dlgtype{font-size:15px;font-weight:800;color:var(--brand-blue);margin-bottom:6px;}
+.dlghr{border:none;border-top:1px solid var(--rule);margin:0 0 10px;}
+
+/* Re: quote — same idea as the Dialog list's .dlgre, but NOT truncated:
+   this screen has the full width and height to show the whole Question,
+   unlike the compact list row. Shown only when the entry is an Answer with
+   a linked Question (migration 006, dialog.replies_to_id). */
+.dlgre{display:block;font-size:12.5px;font-style:italic;color:var(--ink-soft);
+  line-height:1.4;margin:0 0 6px;}
+
+/* Dialog body — plain text, not boxed (2026-08-08 rule); bold, matching the
+   Dialog list's own .dlgbody treatment for an Answer, kept even though the
+   owner's rough reference showed it unbolded, for consistency with how an
+   Answer already reads everywhere else in the app. A Question or Comment
+   entry (no .dlgre above it) renders the same class at normal weight would
+   be the wrong call — see the live-vs-plain distinction handled in markup
+   below, not here, since only Answer gets emphasis elsewhere in the app. */
+.dlgbody{font-size:14px;line-height:1.5;color:var(--ink);}
+.dlgbody.is-answer{font-weight:700;}
+</style></head>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+  </div>
+
+  <div class="band">
+    <span class="glabel">Dialog Detail</span>
+    <span class="bandcluster">
+      <button class="btn" type="button">Close</button>
+    </span>
+  </div>
+
+  <div class="scroll">
+    <div class="form">
+
+      <div class="fgroup">
+        <div class="metarow"><span class="mlabel">Date:</span><span class="mval">10-02-26, Friday</span></div>
+        <div class="metarow"><span class="mlabel">From:</span><span class="mval">Jason Smith</span></div>
+      </div>
+
+      <!-- Dialog Entry Type + Dialog Text, 2026-08-08 rewrite — see the
+           stylesheet comment. One entry has exactly one Kind, so this is a
+           label-as-value ("Answer:") over a horizontal rule, not a chip
+           row. -->
+      <div class="fgroup">
+        <div class="dlgtype">Answer:</div>
+        <hr class="dlghr">
+        <div class="dlgre">Re: Should I also include George?</div>
+        <div class="dlgbody is-answer">Yes</div>
+      </div>
+
+    </div>
+  </div>
+
+</div></div>
+</body></html>
