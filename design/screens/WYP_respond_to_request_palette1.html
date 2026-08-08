@@ -131,6 +131,76 @@ html,body{margin:0;height:100%;background:#fff;}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .gatenote{font-size:12.5px;line-height:1.45;color:var(--ink-soft);}
 
+/* Answer display — "Re: <question>" quote + bolded answer text (2026-08-07,
+   owner's ask). Sits between the meta line (date/kind/who) and the answer
+   body on a .dlg-answer entry only; Question/Comment entries are unchanged,
+   plain inline text. Single-line ellipsis truncation, matching .attach's
+   convention above — not the 2-line/3-char Description rule (CLAUDE.md
+   Design constants), since this is a compact inline quote, not a
+   description preview. Bold chosen over a new text color: Brand Blue
+   already carries several meanings (dates, links, kind labels via
+   .dlgkind's weight) and Alert Red is status-only (§3.1) — bold reuses
+   emphasis language already established rather than adding a fourth color
+   role for body text. */
+.dlgre{display:block;font-size:11px;font-style:italic;color:var(--ink-soft);margin:3px 0 2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dlgbody{font-weight:700;}
+
+/* --- Form field basics (§6.10) — this screen had none until the Add Dialog
+   modal (2026-08-07) needed a Dialog Text box; ported from Create Request's
+   identical rules rather than inventing new ones. --- */
+.fgroup{margin-bottom:12px;}
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
+.ffloat{position:relative;}
+.ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
+  color:var(--ink-soft);pointer-events:none;transform-origin:left top;
+  transition:transform .14s ease,color .14s ease;background:transparent;}
+.ffloat .finput:focus + .flabel,.ffloat .finput:not(:placeholder-shown) + .flabel,
+.ffloat .ftextarea:focus + .flabel,.ffloat .ftextarea:not(:placeholder-shown) + .flabel{
+  transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
+.ffloat .finput:focus + .flabel,.ffloat .ftextarea:focus + .flabel{color:var(--brand-blue);}
+.finput,.ftextarea{font:inherit;font-size:14px;color:var(--ink);background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;padding:20px 10px 6px;}
+.finput:focus,.ftextarea:focus{background:var(--focus-tint);outline:none;
+  border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+.ftextarea{resize:vertical;min-height:84px;line-height:1.4;}
+.ferror{font-size:12px;color:var(--alert-red);margin:4px 0 0;}
+.fgroup.is-invalid .finput,.fgroup.is-invalid .ftextarea{border-color:var(--alert-red);}
+
+/* --- Modal dialog frame (§6.12) + chip row — same values as Create
+   Request/Create ToDo's Add Dialog modal. --- */
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:10;}
+.modal{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);z-index:11;
+  background:#fff;border-radius:11px;padding:16px 18px;width:min(88%,380px);
+  box-shadow:0 8px 28px rgba(20,30,50,.28);}
+.modalacts{display:flex;justify-content:flex-end;gap:8px;}
+.modal .modal-title{font-size:16px;font-weight:800;color:var(--ink);margin:0 0 12px;}
+.modalhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.modalhead .modal-title{margin:0;}
+.modalhead .modalacts{flex:0 0 auto;}
+.chippair{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);border-radius:9px;
+  padding:5px 12px;min-height:30px;}
+.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.chiprow{display:flex;align-items:center;gap:6px;background:var(--strip);border-radius:9px;
+  padding:6px 10px;width:100%;min-height:44px;flex-wrap:wrap;}
+
+/* Which-Question picker (2026-08-07, migration 006 dialog.replies_to_id) —
+   shown only when Answer is selected and more than one Question is still
+   open; a single open Question is linked silently. See globals.css for the
+   fuller comment — same .lookup-item row styling, in-flow rather than a
+   floating dropdown, selection stays marked rather than closing on pick. */
+.qpicker{border:1px solid var(--rule);border-radius:9px;max-height:160px;overflow-y:auto;margin:2px 0 12px;}
+.lookup-item{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;color:var(--ink);
+  background:none;border:none;padding:9px 12px;cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lookup-item + .lookup-item{border-top:1px solid var(--rule);}
+.lookup-item:hover,.lookup-item:focus-visible{background:var(--row-tint);}
+.lookup-item.selected{background:var(--focus-tint);color:var(--brand-blue);font-weight:700;}
+
 /* Promo block — the Free Account Features unit merges the pitch and the action
    so the recipient sees one call, not a banner plus a nearby link. */
 .promo{margin:4px var(--pad) 12px;background:var(--strip);border-radius:12px;padding:13px 14px;}
@@ -234,21 +304,18 @@ html,body{margin:0;height:100%;background:#fff;}
 
     <!-- Stacked action row (§6.26, 2026-08-07): Add Dialog above, full-width
          panel below — was .panelrow, side by side. -->
-    <div class="panelact"><button class="btn" type="button">Add Dialog</button></div>
+    <div class="panelact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
     <div class="panelfull">
       <div class="panel">
         <div class="panelhead">Dialog (Questions, Answers, Comments)</div>
-        <!-- Corrected 2026-08-05: newest first (descending), was ascending.
-             Sorted by date alone here for the mockup, but the real dialog
-             table (§9.5, not yet built) needs to sort by a true timestamp or
-             a sequential id, not date alone — two entries on the same date
-             would otherwise have no defined order relative to each other.
-             Time of day itself isn't meant to be shown or to matter, only
-             that the sort is unambiguous. -->
-        <div class="dlg"><span class="dlgdate">10-04-26</span> <span class="dlgkind">Answer</span>
-          <span class="dlgwho">(Jason Smith)</span> Yes</div>
-        <div class="dlg"><span class="dlgdate">10-02-26</span> <span class="dlgkind">Question</span>
-          <span class="dlgwho">(Mae Baker)</span> Should I also include George?</div>
+        <!-- Corrected 2026-08-05: newest first (descending), was ascending —
+             sorted by id (see migration 004's note on id doubling as the
+             sort key when entries share a date). Populated by
+             renderDialogList() below from the dialogEntries demo array, not
+             static markup, so Add Dialog's effects (a new Answer, the
+             open-Question count that gates the Answer chip) are actually
+             visible in this mockup rather than only described. -->
+        <div id="dlg-list"></div>
       </div>
     </div>
 
@@ -295,6 +362,39 @@ html,body{margin:0;height:100%;background:#fff;}
     <button type="button" id="t-sub" onclick="setTier('sub')">Subscriber</button>
   </div>
 
+  <!-- Add Dialog modal (2026-08-07) — same §6.12 title+actions-same-row
+       variant as Create Request/Create ToDo. Unlike those two, Answer here
+       is dynamic (locked only when no Question is currently open, migration
+       006), and a second-open-question case shows the which-question
+       picker, defaulting to the most recent open Question. -->
+  <div class="scrim" id="dlg-scrim" style="display:none;" onclick="closeDialogModal()"></div>
+  <div class="modal" id="dlg-modal" role="dialog" aria-modal="true" aria-labelledby="adddlg-title" style="display:none;">
+    <div class="modalhead">
+      <p class="modal-title" id="adddlg-title">Add Dialog</p>
+      <div class="modalacts">
+        <button class="btn-secondary" type="button" onclick="closeDialogModal()">Cancel</button>
+        <button class="btn" type="button" onclick="saveDialogEntry()">Save</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="flabel" id="dlgkind-label">Kind</span>
+      <div class="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
+        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onclick="selectKind('question')">Question</button>
+        <button class="chip" type="button" id="chip-answer" aria-pressed="false" onclick="selectKind('answer')">Answer</button>
+        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onclick="selectKind('comment')">Comment</button>
+      </div>
+    </div>
+    <div id="dlg-qpicker-wrap" style="display:none;">
+      <span class="flabel">Which Question?</span>
+      <div class="qpicker" id="dlg-qpicker" role="radiogroup" aria-label="Which Question this Answer responds to"></div>
+    </div>
+    <div class="fgroup ffloat">
+      <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
+      <label class="flabel" for="dlgtext">Dialog Text</label>
+    </div>
+    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text.</p>
+  </div>
+
 </div></div>
 
 <script>
@@ -311,5 +411,135 @@ function setTier(t){
   document.getElementById('t-free').classList.toggle('on', free);
   document.getElementById('t-sub').classList.toggle('on', !free);
 }
+
+/* Add Dialog modal + Dialog list (2026-08-07) — mockup-only demo state.
+   Real data would come from the `dialog` table (migrations 004/006); this
+   plain array stands in for it so the dynamic Answer-locking and
+   which-Question picker are actually demonstrable here, not just described.
+   Seeded with two open Questions (ids 3 and 4) on purpose, so the picker's
+   multi-question branch is the state a reviewer sees by default rather than
+   something only reachable by clicking through several Adds first. */
+var dialogEntries = [
+  { id: 1, kind: 'question', date: '10-01-26', who: 'Mae Baker', body: 'Should I also include George?' },
+  { id: 2, kind: 'answer', date: '10-02-26', who: 'Jason Smith', body: 'Yes', repliesTo: 1 },
+  { id: 3, kind: 'question', date: '10-03-26', who: 'Mae Baker', body: 'Do you have enough time next week to accomplish this request?' },
+  { id: 4, kind: 'question', date: '10-04-26', who: 'Mae Baker', body: 'Should the meeting be in-person or a video call?' }
+];
+var nextDialogId = 5;
+var dlgKind = 'question';
+var dlgSelectedQuestionId = null;
+
+function questionById(id){
+  for (var i = 0; i < dialogEntries.length; i++) if (dialogEntries[i].id === id) return dialogEntries[i];
+  return null;
+}
+
+/* Open = a Question with no Answer entry whose repliesTo points at it.
+   Walks the array in creation order (id ascending), not display order
+   (newest-first) — display order is cosmetic only, per the owner's
+   2026-08-07 note that reordering isn't needed once an Answer carries its
+   own repliesTo link. */
+function openQuestions(){
+  var answeredIds = {};
+  for (var i = 0; i < dialogEntries.length; i++){
+    var e = dialogEntries[i];
+    if (e.kind === 'answer' && e.repliesTo != null) answeredIds[e.repliesTo] = true;
+  }
+  var open = [];
+  for (var j = 0; j < dialogEntries.length; j++){
+    var q = dialogEntries[j];
+    if (q.kind === 'question' && !answeredIds[q.id]) open.push(q);
+  }
+  return open; // already in creation order; last element is most recent
+}
+
+function truncateText(s){
+  return s.length > 60 ? s.slice(0, 57) + '...' : s;
+}
+
+function renderDialogList(){
+  var sorted = dialogEntries.slice().sort(function(a, b){ return b.id - a.id; }); // newest first
+  var html = '';
+  for (var i = 0; i < sorted.length; i++){
+    var e = sorted[i];
+    var kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment';
+    if (e.kind === 'answer'){
+      var q = e.repliesTo != null ? questionById(e.repliesTo) : null;
+      html += '<div class="dlg dlg-answer"><span class="dlgdate">' + e.date + '</span> ' +
+        '<span class="dlgkind">' + kindLabel + '</span> <span class="dlgwho">(' + e.who + ')</span>' +
+        (q ? '<span class="dlgre">Re: ' + truncateText(q.body) + '</span>' : '') +
+        '<span class="dlgbody">' + e.body + '</span></div>';
+    } else {
+      html += '<div class="dlg"><span class="dlgdate">' + e.date + '</span> ' +
+        '<span class="dlgkind">' + kindLabel + '</span> <span class="dlgwho">(' + e.who + ')</span> ' + e.body + '</div>';
+    }
+  }
+  document.getElementById('dlg-list').innerHTML = html;
+}
+
+function openDialogModal(){
+  dlgKind = 'question';
+  dlgSelectedQuestionId = null;
+  document.getElementById('dlgtext').value = '';
+  document.getElementById('dlg-error').style.display = 'none';
+  selectKind('question');
+  document.getElementById('dlg-scrim').style.display = 'block';
+  document.getElementById('dlg-modal').style.display = 'block';
+}
+function closeDialogModal(){
+  document.getElementById('dlg-scrim').style.display = 'none';
+  document.getElementById('dlg-modal').style.display = 'none';
+}
+
+function selectKind(kind){
+  var open = openQuestions();
+  if (kind === 'answer' && open.length === 0) return; // locked, not selectable
+  dlgKind = kind;
+  document.getElementById('chip-question').classList.toggle('selected', kind === 'question');
+  document.getElementById('chip-answer').classList.toggle('selected', kind === 'answer');
+  document.getElementById('chip-comment').classList.toggle('selected', kind === 'comment');
+
+  var answerChip = document.getElementById('chip-answer');
+  answerChip.classList.toggle('is-locked', open.length === 0);
+  answerChip.setAttribute('aria-disabled', open.length === 0 ? 'true' : 'false');
+
+  var wrap = document.getElementById('dlg-qpicker-wrap');
+  if (kind === 'answer' && open.length > 1){
+    // Default to the most recently created open Question (last in the array).
+    dlgSelectedQuestionId = open[open.length - 1].id;
+    renderQuestionPicker(open);
+    wrap.style.display = 'block';
+  } else {
+    dlgSelectedQuestionId = (kind === 'answer' && open.length === 1) ? open[0].id : null;
+    wrap.style.display = 'none';
+  }
+}
+
+function renderQuestionPicker(open){
+  var html = '';
+  for (var i = 0; i < open.length; i++){
+    var q = open[i];
+    var sel = q.id === dlgSelectedQuestionId;
+    html += '<button type="button" class="lookup-item' + (sel ? ' selected' : '') + '" role="radio" aria-checked="' +
+      (sel ? 'true' : 'false') + '" onclick="pickQuestion(' + q.id + ')">' + truncateText(q.body) + '</button>';
+  }
+  document.getElementById('dlg-qpicker').innerHTML = html;
+}
+function pickQuestion(id){
+  dlgSelectedQuestionId = id;
+  renderQuestionPicker(openQuestions());
+}
+
+function saveDialogEntry(){
+  var text = document.getElementById('dlgtext').value.trim();
+  if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
+  var entry = { id: nextDialogId++, kind: dlgKind, date: '10-05-26', who: 'Jason Smith', body: text };
+  if (dlgKind === 'answer') entry.repliesTo = dlgSelectedQuestionId;
+  dialogEntries.push(entry);
+  renderDialogList();
+  closeDialogModal();
+}
+
+renderDialogList();
 </script>
 </body></html>

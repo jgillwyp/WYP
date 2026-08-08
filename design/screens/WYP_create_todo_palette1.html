@@ -256,6 +256,35 @@ html,body{margin:0;height:100%;background:#fff;}
 .ftextarea.ftextarea-desc{min-height:96px;}
 .ftextarea.ftextarea-dialog{min-height:130px;}
 
+/* Modal dialog frame (§6.12) — this mockup never drew one before (Add
+   Category has no modal markup here); needed now for Add Dialog
+   (2026-08-07). Same values as Create Request/Respond to Request. */
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:10;}
+.modal{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);z-index:11;
+  background:#fff;border-radius:11px;padding:16px 18px;width:min(88%,380px);
+  box-shadow:0 8px 28px rgba(20,30,50,.28);}
+.modalacts{display:flex;justify-content:flex-end;gap:8px;}
+.modal .modal-title{font-size:16px;font-weight:800;color:var(--ink);margin:0 0 12px;}
+/* Title + actions same row (Add Dialog specifically) — see globals.css. */
+.modalhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.modalhead .modal-title{margin:0;}
+.modalhead .modalacts{flex:0 0 auto;}
+/* Chip row on a Strip backdrop, no gating note (Add Dialog's Kind picker). */
+.chiprow{display:flex;align-items:center;gap:6px;background:var(--strip);border-radius:9px;
+  padding:6px 10px;width:100%;min-height:44px;flex-wrap:wrap;}
+
+/* Staged Dialog entries (2026-08-06/07) — reuses .attitem/.attname/.attremove's
+   row styling, same as the Attachments panel list; not previously drawn in
+   this mockup since Add Dialog had no staging list shown here before. */
+.dlgstaged{border:1px solid var(--rule);border-radius:9px;background:#fff;margin-top:8px;overflow:hidden;}
+.attitem{display:flex;align-items:center;gap:8px;padding:5px 7px;font-size:13px;color:var(--ink);}
+.attitem + .attitem{border-top:1px solid var(--rule);}
+.attname{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.attremove{flex:0 0 auto;font:inherit;font-size:15px;font-weight:700;line-height:1;
+  color:var(--ink-soft);background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:6px;}
+.attremove:active{background:var(--row-tint);color:var(--alert-red);}
+.attremove:focus-visible{outline:2px solid var(--brand-blue);outline-offset:1px;}
+
 /* Attachments panel (§9.2.2) — identical to Create Request's v1 locked state.
    Full-width under .fieldact's Add Attachment row (2026-08-07); no longer
    paired with the button via .attachrow. */
@@ -338,20 +367,17 @@ html,body{margin:0;height:100%;background:#fff;}
         <label class="flabel" for="desc">ToDo Description</label>
       </div>
 
-      <!-- Dialog — new to Create ToDo, 2026-08-06. Entries composed here are
-           held as client-side draft state, same as every other field on this
-           form, and written to the database together with the ToDo itself
-           when Save is pressed (decisions log, 2026-08-06: one continuous
-           sitting, no staging table). Floating label, matching Description
-           above rather than the fixed-caption Attachments style. Stacked
-           action row (§6.26, 2026-08-07): Add Dialog above, full-width box
-           below — was .frow.top, side by side. -->
+      <!-- Dialog — Add Dialog opens a modal (2026-08-07), replacing the old
+           always-visible inline textarea; matches Create Request's mockup
+           and live component exactly. Entries are held as client-side draft
+           state and written to the database together with the ToDo when
+           Save is pressed (decisions log, 2026-08-06: one continuous
+           sitting, no staging table). Answer stays .chip.is-locked — a ToDo
+           always starts with an empty thread, so there is nothing yet to
+           answer. -->
       <div class="fgroup">
-        <div class="fieldact"><button class="btn" type="button">Add Dialog</button></div>
-        <div class="ffloat">
-          <textarea class="ftextarea ftextarea-dialog opt" id="dlg" maxlength="1000" placeholder=" "></textarea>
-          <label class="flabel" for="dlg">Dialog (Questions, Answers, Comments)</label>
-        </div>
+        <div class="fieldact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
+        <div class="dlgstaged" id="dlg-staged" style="display:none;"></div>
       </div>
 
       <!-- Attachments panel — v1 locked "paid feature" state, identical to
@@ -379,5 +405,67 @@ html,body{margin:0;height:100%;background:#fff;}
   <div class="subbanner" role="button" tabindex="0">See Subscription Features and Other Options</div>
   <div class="adslot" aria-hidden="true"><span class="adbox">AD &#8212; 320&#215;50 RESERVED</span></div>
 
+  <!-- Add Dialog modal (2026-08-07) — see Create Request's identical
+       modal for the fuller comment. Answer is always .chip.is-locked here. -->
+  <div class="scrim" id="dlg-scrim" style="display:none;" onclick="closeDialogModal()"></div>
+  <div class="modal" id="dlg-modal" role="dialog" aria-modal="true" aria-labelledby="adddlg-title" style="display:none;">
+    <div class="modalhead">
+      <p class="modal-title" id="adddlg-title">Add Dialog</p>
+      <div class="modalacts">
+        <button class="btn-secondary" type="button" onclick="closeDialogModal()">Cancel</button>
+        <button class="btn" type="button" onclick="saveDialogEntry()">Save</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="flabel" id="dlgkind-label">Kind</span>
+      <div class="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
+        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onclick="selectKind('question')">Question</button>
+        <button class="chip is-locked" type="button" aria-disabled="true" aria-pressed="false">
+          <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Answer</button>
+        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onclick="selectKind('comment')">Comment</button>
+      </div>
+    </div>
+    <div class="fgroup ffloat">
+      <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
+      <label class="flabel" for="dlgtext">Dialog Text</label>
+    </div>
+    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text.</p>
+  </div>
+
 </div></div>
+<script>
+/* Add Dialog modal demo (2026-08-07) — see Create Request's identical
+   script for the fuller comment. */
+var dlgKind = 'question';
+function openDialogModal(){
+  dlgKind = 'question';
+  selectKind('question');
+  document.getElementById('dlgtext').value = '';
+  document.getElementById('dlg-error').style.display = 'none';
+  document.getElementById('dlg-scrim').style.display = 'block';
+  document.getElementById('dlg-modal').style.display = 'block';
+}
+function closeDialogModal(){
+  document.getElementById('dlg-scrim').style.display = 'none';
+  document.getElementById('dlg-modal').style.display = 'none';
+}
+function selectKind(kind){
+  dlgKind = kind;
+  document.getElementById('chip-question').classList.toggle('selected', kind === 'question');
+  document.getElementById('chip-comment').classList.toggle('selected', kind === 'comment');
+}
+function saveDialogEntry(){
+  var text = document.getElementById('dlgtext').value.trim();
+  if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
+  var list = document.getElementById('dlg-staged');
+  var row = document.createElement('div');
+  row.className = 'attitem';
+  var label = dlgKind === 'question' ? 'Question' : 'Comment';
+  row.innerHTML = '<span class="attname"><b>' + label + ':</b> ' + text.replace(/</g,'&lt;') + '</span>' +
+    '<button class="attremove" type="button" aria-label="Remove this Dialog entry" onclick="this.parentElement.remove()">&times;</button>';
+  list.appendChild(row);
+  list.style.display = 'block';
+  closeDialogModal();
+}
+</script>
 </body></html>

@@ -297,7 +297,7 @@ export default function AddContactForm() {
 
             <div className="fgroup ffloat">
               <textarea
-                className="ftextarea"
+                className="ftextarea opt"
                 id="nt"
                 maxLength={500}
                 placeholder=" "

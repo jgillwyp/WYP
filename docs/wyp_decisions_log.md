@@ -6,6 +6,34 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-07 — Seventh round: Add Dialog modal, dynamic Answer locking, which-Question picker, migration 006
+
+Owner pasted a rough mockup of an "Add Dialog" modal (title + Cancel/Save on one row, a Question/Answer/Comment chip row, a Dialog Text box) meant for Create Request, Create ToDo, and Respond to Request, and later Request Detail. Resolved over several messages into the following.
+
+**Kind availability is per-screen, not one fixed rule.** Asked the owner directly (two-part AskUserQuestion) rather than guess: on Create Request/Create ToDo, all three chips were first said to be "unlocked" — refined immediately after to Answer being *always* locked there specifically, not just unlocked-with-nothing-to-answer, since "the 'answer' could not be the 1st entry, but either a question or a comment could be" and a Request/ToDo's thread is always empty at creation. On Respond to Request (and later Request Detail), Answer is dynamic: locked unless at least one Question in the thread is still open.
+
+**"Open" needed a real definition once more than one Question could be in play.** A single flag ("has the most recent Question been answered") only works for one open Question at a time; with two or three open at once it can't say which is which. Added `dialog.replies_to_id` (migration 006, SQL in `docs/Week2 - SQL history.txt`, not yet run) — nullable, CHECK-constrained to answer-kind rows only, `on delete set null`. A Question now counts as open exactly when no Answer's `replies_to_id` points at it.
+
+**Which-Question picker, scoped exactly as asked**: "it does not make using the app harder for an end-user — however it only needs to be presented if there is more than one question in the dialog. And, if there is more than one question, the last question should default to the selection." Implemented literally — one open Question links silently (no picker, no extra tap); two or more shows `.qpicker` (rows styled with `.lookup-item`, new `.selected` variant since this list stays visible after a pick rather than closing like a lookup dropdown), defaulting to the most recently created open Question. Read "more than one question" as "more than one *open* question" — the only reading that stays consistent with Answer's own locking rule, since a fully-answered Question is never a candidate for a new Answer to point at in the first place; flagged here in case a different reading was meant.
+
+**Display order does not change.** Confirmed with the owner before building anything ("That strategy would keep the 'order of entry' true...") — an Answer still renders wherever it was actually posted in the newest-first list (2026-08-05's sort rule, untouched), not moved next to the Question it answers. The link is informational, not structural.
+
+**Answer entries get a "Re:" quote and a bolded body**, per the owner's own suggestion: "smaller font repetition of the question, as a 'Re: ...' with a different colored/bolded or sized answer text." Built as `.dlgre` (11px italic Ink Soft, single-line ellipsis — matching `.attach`'s filename truncation, not the 2-line/3-char Description rule, since this is a compact inline quote) followed by `.dlgbody` (bold). **Bold chosen over color**: Brand Blue already carries dates, links, and (via `.dlgkind`'s weight) kind labels; Alert Red is status-only from v2.5 (§3.1). Adding a fourth meaning to an existing color risked diluting one of those; bold reuses emphasis language the system already has. Flagging the alternative in case color was actually wanted.
+
+**Modal gained a second header shape.** `.modalhead` — title and Cancel/Save share the top row — sits alongside Add Category's existing title-then-bottom-`.modalacts` layout as a second valid §6.12 variant, not a replacement; used because that's what the owner's own Add Dialog mockup draws. Chosen per modal going forward rather than forcing one shape everywhere.
+
+**Create Request's Dialog field changed shape**, not just gained a modal: the old always-visible inline textarea (Add Dialog appended its text directly, 2026-08-06) is gone. Add Dialog now opens the modal, matching how Add Category already works; a saved entry appears in the `.dlgstaged` list below, now labeled with its Kind (`<b>Question:</b> ...`). `CreateRequestForm.tsx`'s `dialogEntries` changed from `string[]` to `{kind, body}[]`, and the Send handler now writes `kind` explicitly on each insert instead of relying on the table's `default 'comment'`. Create ToDo's mockup got the identical change for consistency, even though it isn't live yet.
+
+**Respond to Request's demo data was rewritten to actually exercise the feature** — two open Questions by default (`"Should I also include George?"`, already answered; `"Do you have enough time next week to accomplish this request?"` — the owner's own example wording, kept verbatim; `"Should the meeting be in-person or a video call?"`) — so a reviewer opening the mockup sees the which-Question picker's multi-question branch immediately rather than only after clicking through several Adds. The whole flow (chip locking, picker, staged Answer, `.dlgre`/`.dlgbody`) is real vanilla-JS state in this mockup, not static markup, since a picker that only exists in a comment isn't demonstrable.
+
+\---
+
+## 2026-08-07 — Sixth round, small: Add Contact's Notes field was missed in the §6.25 sweep
+
+Owner caught one the previous round's audit didn't: Notes (optional) on Add Contact was still plain white — the decisions log's own note from two entries back ("not applied to Add Contact's Notes... left alone rather than changed speculatively") turned out to be the gap, not a considered exception. Given `.opt` is now the established rule for every other optional field on this screen (Phone, country code), there was no remaining reason to leave Notes out. Added `.opt` to the textarea in `AddContactForm.tsx`, both Add Contact mockups, and extended each mockup's local `.opt` rule to cover `.ftextarea` (it previously only listed `.finput`/`.ccode` — `globals.css` already covered `.ftextarea.opt` from Create Request, so only the mockups needed the selector added).
+
+\---
+
 ## 2026-08-07 — Fifth round: rule-consistency sweep — country-code selector Row-Tinted, required-field Ink borders filled in on four more screens, Done Date/Time on Respond to Request, Sign In's Email; Main Screen's search bar kept exempt on purpose
 
 Owner audit against the §6.25 rule (Row Tint = optional/inactive, Ink border = required) turned up places it had been applied halfway — Phone got Row Tint in the last round but the *required* fields on the same screens never got their Ink border, an omission rather than a decision.

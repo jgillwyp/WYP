@@ -26,12 +26,18 @@ import { supabase } from '@/lib/supabaseClient'
  *    if either list grows large.
  *
  * Dialog entries are a third new mechanic (2026-08-06): composed here as
- * plain client-side draft state — an array of strings, nothing fancier —
- * and only written to the `dialog` table (migration 004) once Send succeeds
- * and the new Request has a real id to attach them to. Kind defaults to
- * 'comment' for everything entered at creation time, since no exchange has
- * happened yet to be a Question or Answer to; there's no kind picker in this
- * v1. `who` is a display-name snapshot, not a live join — see migration 004.
+ * client-side draft state and only written to the `dialog` table (migration
+ * 004) once Send succeeds and the new Request has a real id to attach them
+ * to. `who` is a display-name snapshot, not a live join — see migration 004.
+ *
+ * Add Dialog modal (2026-08-07): composing an entry now opens a modal —
+ * Kind chips (Question/Comment; Answer is always .chip.is-locked here, since
+ * a Request or ToDo starts with an empty thread and there is nothing yet to
+ * answer) plus a Dialog Text box — matching the existing Add Category modal
+ * pattern rather than the old always-visible inline textarea. Answer, and
+ * the "which Question" picker that comes with it (migration 006,
+ * replies_to_id), exist only on Respond to Request / Request Detail, where a
+ * thread can already be open — see that mockup's own comment.
  */
 
 type Contact = {
@@ -89,8 +95,14 @@ export default function CreateRequestForm() {
   const [categorySaving, setCategorySaving] = useState(false)
   const [categoryError, setCategoryError] = useState<string | null>(null)
 
-  const [dialogDraft, setDialogDraft] = useState('')
-  const [dialogEntries, setDialogEntries] = useState<string[]>([])
+  // Answer is deliberately absent from this union — see the file-level
+  // comment. Only Question/Comment are ever legal here.
+  type DialogEntry = { kind: 'question' | 'comment'; body: string }
+  const [dialogEntries, setDialogEntries] = useState<DialogEntry[]>([])
+  const [dialogModalOpen, setDialogModalOpen] = useState(false)
+  const [dialogModalKind, setDialogModalKind] = useState<'question' | 'comment'>('question')
+  const [dialogModalBody, setDialogModalBody] = useState('')
+  const [dialogModalError, setDialogModalError] = useState<string | null>(null)
   const [ownerName, setOwnerName] = useState<string | null>(null)
 
   const [contactInvalid, setContactInvalid] = useState(false)
@@ -127,11 +139,21 @@ export default function CreateRequestForm() {
       .then(({ data }) => setOwnerName(data?.display_name ?? null))
   }, [])
 
-  function addDialogEntry() {
-    const body = dialogDraft.trim()
-    if (body === '') return
-    setDialogEntries((entries) => [...entries, body])
-    setDialogDraft('')
+  function openDialogModal() {
+    setDialogModalKind('question')
+    setDialogModalBody('')
+    setDialogModalError(null)
+    setDialogModalOpen(true)
+  }
+
+  function handleDialogModalSave() {
+    const body = dialogModalBody.trim()
+    if (body === '') {
+      setDialogModalError('Enter Dialog Text.')
+      return
+    }
+    setDialogEntries((entries) => [...entries, { kind: dialogModalKind, body }])
+    setDialogModalOpen(false)
   }
 
   function removeDialogEntry(index: number) {
@@ -279,11 +301,12 @@ export default function CreateRequestForm() {
     if (dialogEntries.length > 0) {
       const who = ownerName ?? userData.user.email ?? 'Unknown'
       const { error: dialogError } = await supabase.from('dialog').insert(
-        dialogEntries.map((body) => ({
+        dialogEntries.map((entry) => ({
           request_id: newRequest.id,
           author_user_id: userData.user.id,
           who,
-          body,
+          kind: entry.kind,
+          body: entry.body,
         }))
       )
 
@@ -551,54 +574,38 @@ export default function CreateRequestForm() {
               {descInvalid && <p className="ferror">Enter a Description.</p>}
             </div>
 
-            {/* Dialog — held as client-side draft state, written to the
-                `dialog` table together with the Request on Send (see the
-                file-level comment and migration 004). Stacked action row
-                (§6.26, 2026-08-07): Add Dialog above, full-width box below —
-                was .frow.top, side by side.
-                NOTE: .ffloat must be a div here, not a span — it's no longer
-                a flex child (that .frow removal is exactly what moved it out
-                of the row), so an inline span isn't blockified and the
-                absolutely-positioned label mispositions. Caught 2026-08-07
-                after the restructure shipped; every other .ffloat here still
-                lives inside a .frow, which blockifies its span for free. */}
+            {/* Dialog — Add Dialog opens a modal (2026-08-07, see file-level
+                comment) instead of the old always-visible inline textarea.
+                Entries are held as client-side draft state and written to
+                the `dialog` table together with the Request on Send (see
+                migration 004). Stacked action row (§6.26): button sits alone
+                above the staged-entries list. */}
             <div className="fgroup">
               <div className="fieldact">
-                <button className="btn" type="button" onClick={addDialogEntry}>
+                <button className="btn" type="button" onClick={openDialogModal}>
                   Add Dialog
                 </button>
               </div>
-              <div className="ffloat">
-                <textarea
-                  className={`ftextarea ftextarea-dialog${dialogDraft.trim() === '' ? ' opt' : ''}`}
-                  id="dlg"
-                  maxLength={1000}
-                  placeholder=" "
-                  value={dialogDraft}
-                  onChange={(e) => setDialogDraft(e.target.value)}
-                />
-                <label className="flabel" htmlFor="dlg">
-                  Dialog (Questions, Answers, Comments)
-                </label>
-              </div>
+              {dialogEntries.length > 0 && (
+                <div className="dlgstaged">
+                  {dialogEntries.map((entry, i) => (
+                    <div className="attitem" key={i}>
+                      <span className="attname">
+                        <b>{entry.kind === 'question' ? 'Question' : 'Comment'}:</b> {entry.body}
+                      </span>
+                      <button
+                        className="attremove"
+                        type="button"
+                        aria-label="Remove this Dialog entry"
+                        onClick={() => removeDialogEntry(i)}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            {dialogEntries.length > 0 && (
-              <div className="dlgstaged">
-                {dialogEntries.map((body, i) => (
-                  <div className="attitem" key={i}>
-                    <span className="attname">{body}</span>
-                    <button
-                      className="attremove"
-                      type="button"
-                      aria-label="Remove this Dialog entry"
-                      onClick={() => removeDialogEntry(i)}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {/* Attachments panel — v1 locked "paid feature" state, static
                 markup only, matching AddContactForm's Text-chip treatment.
@@ -692,6 +699,86 @@ export default function CreateRequestForm() {
                   {categorySaving ? 'Saving…' : 'Save'}
                 </button>
               </div>
+            </div>
+          </>
+        )}
+
+        {/* Add Dialog modal (2026-08-07) — title + Cancel/Save on the same
+            top row (.modalhead), a different §6.12 variant than Add
+            Category's title-then-bottom-buttons layout, matching the owner's
+            mockup for this modal specifically. Answer is always
+            .chip.is-locked here — see the file-level comment on why this
+            screen never offers it. */}
+        {dialogModalOpen && (
+          <>
+            <div className="scrim" onClick={() => setDialogModalOpen(false)} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="adddlg-title">
+              <div className="modalhead">
+                <p className="modal-title" id="adddlg-title">
+                  Add Dialog
+                </p>
+                <div className="modalacts">
+                  <button className="btn-secondary" type="button" onClick={() => setDialogModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn" type="button" onClick={handleDialogModalSave}>
+                    Save
+                  </button>
+                </div>
+              </div>
+
+              <div className="fgroup">
+                <span className="flabel" id="dlgkind-label">
+                  Kind
+                </span>
+                <div className="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
+                  <button
+                    className={`chip${dialogModalKind === 'question' ? ' selected' : ''}`}
+                    type="button"
+                    aria-pressed={dialogModalKind === 'question'}
+                    onClick={() => setDialogModalKind('question')}
+                  >
+                    Question
+                  </button>
+                  {/* Locked, not just unselected — a Request/ToDo's thread is
+                      always empty at this point, so there is nothing yet to
+                      answer. See Respond to Request for the dynamic version. */}
+                  <button className="chip is-locked" type="button" aria-disabled="true" aria-pressed={false}>
+                    <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
+                      <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                    </svg>
+                    Answer
+                  </button>
+                  <button
+                    className={`chip${dialogModalKind === 'comment' ? ' selected' : ''}`}
+                    type="button"
+                    aria-pressed={dialogModalKind === 'comment'}
+                    onClick={() => setDialogModalKind('comment')}
+                  >
+                    Comment
+                  </button>
+                </div>
+              </div>
+
+              <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
+                <textarea
+                  className="ftextarea"
+                  id="dlgtext"
+                  maxLength={1000}
+                  placeholder=" "
+                  value={dialogModalBody}
+                  onChange={(e) => {
+                    setDialogModalBody(e.target.value)
+                    if (dialogModalError) setDialogModalError(null)
+                  }}
+                  autoFocus
+                />
+                <label className="flabel" htmlFor="dlgtext">
+                  Dialog Text
+                </label>
+              </div>
+              {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
             </div>
           </>
         )}

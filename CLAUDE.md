@@ -198,18 +198,39 @@ link is built only after the stack is proven on Add Contact.
   optional-but-filled fields, which are also white under §6.25's rule.
 - Create Request's Dialog field (2026-08-06) writes to a `dialog` table —
   **migration 004 has been run** (confirmed by the owner 2026-08-06), so Send
-  succeeds on the Dialog insert step. Only `kind = 'comment'` is ever written;
-  there's no kind picker in this v1, since nothing has been asked yet at
-  creation time for an entry to answer. Create ToDo's own Dialog field
+  succeeds on the Dialog insert step. As of 2026-08-07, Add Dialog opens a
+  modal (§6.27, `design/README.md`) instead of the old always-visible inline
+  textarea — Kind chips Question/Comment (Answer is always `.chip.is-locked`
+  here; a Request/ToDo's thread is always empty at creation, so there is
+  never anything yet to answer), a Dialog Text box, Save appends to the
+  staged list below. `kind` is now written explicitly on insert, not left to
+  the table's `default 'comment'`. Create ToDo's own Dialog field
   (`design/screens/WYP_create_todo_palette1.html`) is mockup-only and not
-  wired to anything yet.
-- Due Time, Category, and Dialog on Create Request (and Category/Dialog on the
-  Create ToDo mockup) carry Row Tint while empty and switch to white once they
-  hold content (§6.25, `.opt` — 2026-08-07). The Attachments panel is
-  permanently Row-Tinted everywhere it appears, since it can never hold real
-  content in the v1 locked state. `.btn-secondary` now rests on Strip
-  (`var(--strip)`), not white, so it doesn't visually join the white
-  required/filled-field group.
+  wired to anything yet, but got the identical modal for consistency.
+- **Add Dialog modal, which-Question picker, and migration 006
+  (`dialog.replies_to_id`) — not yet run.** On Respond to Request (mockup
+  only) and, later, Request Detail, Answer unlocks dynamically — enabled only
+  when a Question in the thread is still open (no Answer pointing at it via
+  `replies_to_id`). Composing an Answer shows a which-Question picker only
+  when more than one Question is open (defaults to the most recent); a single
+  open Question links silently. Display order is unchanged — still
+  newest-first by entry, never re-threaded — but an Answer row now shows a
+  small italic "Re: `<question>`" line (`.dlgre`) and a bolded body
+  (`.dlgbody`). Respond to Request's mockup demonstrates all of this with
+  real (if in-memory) state via inline `<script>`, seeded with two open
+  Questions by default so the multi-question picker branch is visible without
+  clicking through several Adds first. See `design/README.md` §6.27 and the
+  decisions log's 2026-08-07 "Seventh round" entry for the full reasoning,
+  including why Answer can never be a Create Request/ToDo first entry and why
+  the answer body is bolded rather than given a new text color.
+- Due Time and Category on Create Request (and Category on the Create ToDo
+  mockup) carry Row Tint while empty and switch to white once they hold
+  content (§6.25, `.opt` — 2026-08-07); Dialog no longer has an `.opt` state
+  of its own since 2026-08-07 (it's a button + staged list, not a field). The
+  Attachments panel is permanently Row-Tinted everywhere it appears, since it
+  can never hold real content in the v1 locked state. `.btn-secondary` now
+  rests on Strip (`var(--strip)`), not white, so it doesn't visually join the
+  white required/filled-field group.
 - `npm run build` cannot be verified in this sandbox — the SWC native binary
   fails to load here (`Failed to load SWC binary for linux/x64`), unrelated to
   any code change. `npx tsc --noEmit` and `npm run lint` both pass clean; run

@@ -94,8 +94,8 @@ html,body{margin:0;height:100%;background:#fff;}
    channel (the only one that actually works today); the live component
    reads this off sendBy state, so this mockup shows the current resting
    case. */
-.finput.opt,.ccode.opt{background:var(--row-tint);}
-.finput.opt:focus,.ccode.opt:focus{background:var(--focus-tint);}
+.finput.opt,.ftextarea.opt,.ccode.opt{background:var(--row-tint);}
+.finput.opt:focus,.ftextarea.opt:focus,.ccode.opt:focus{background:var(--focus-tint);}
 
 /* Required-field border (2026-08-07) — see Create Request's fuller
    comment/decisions log. Name, Email, and Time Zone are the fields on this
@@ -217,7 +217,7 @@ html,body{margin:0;height:100%;background:#fff;}
         </div>
       </div>
       <div class="fgroup ffloat">
-        <textarea class="ftextarea" id="nt" maxlength="500" placeholder=" "></textarea>
+        <textarea class="ftextarea opt" id="nt" maxlength="500" placeholder=" "></textarea>
         <label class="flabel" for="nt">Notes (optional)</label>
       </div>
     </div>

@@ -248,3 +248,62 @@ commit;
 --   await supabase.from('contacts').insert({ email: 'x@y.com', send_by: 'email', display_name: '  ' })
 --        -> must FAIL: contacts_display_name_not_blank
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 006 — dialog.replies_to_id
+-- Not yet run. Needed for the Add Dialog modal's "which Question" picker
+-- (2026-08-07): an Answer can now point at the specific Question it answers,
+-- rather than only being inferrable by its position in the list.
+--
+-- Nullable, and only ever set when kind = 'answer' — enforced by a CHECK,
+-- not by splitting the table, since every other Dialog concern (RLS, sort,
+-- who) is shared across all three kinds. Self-reference (an entry can't
+-- reply to itself) is also a CHECK. What a CHECK cannot do — confirm the
+-- referenced row is actually kind = 'question', or that it belongs to the
+-- same request_id — is left to the app layer. A trigger could enforce both,
+-- but nothing else in this schema uses a cross-row trigger (touch_updated_at
+-- is row-local), and at personal-append-only-thread scale a wrong link is a
+-- display bug, not a security or integrity hole worth the added moving part.
+-- Flagging the trade-off rather than silently assuming it.
+--
+-- on delete set null (not cascade): if a Question is ever removed by some
+-- future maintenance path, an Answer that pointed to it should keep existing
+-- as a Dialog entry — just lose its "Re:" quote — not vanish with it. Dialog
+-- has no delete policy today (append-only), so this is a forward-looking
+-- default, not a currently-reachable path.
+-- ============================================================================
+
+begin;
+
+alter table public.dialog
+  add column if not exists replies_to_id bigint references public.dialog(id) on delete set null;
+
+alter table public.dialog
+  add constraint dialog_replies_to_only_on_answer
+  check (kind = 'answer' or replies_to_id is null);
+
+alter table public.dialog
+  add constraint dialog_replies_to_not_self
+  check (replies_to_id is null or replies_to_id <> id);
+
+comment on column public.dialog.replies_to_id is
+  'Which Question (dialog.id) this Answer responds to. Null for question/comment rows, and for an answer composed when only one Question was open (no picker shown — see the Add Dialog modal, 2026-08-07). Does not reorder the thread: display stays entry-order (id/created_at); this only drives the "Re: <question>" quote shown on an Answer row and which Questions still count as open.';
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here (same caution as every migration above).
+--
+--   await supabase.from('dialog').insert({
+--     request_id: '<a request id you own>', kind: 'answer', body: 'Yes',
+--     who: 'Jim Gillon', replies_to_id: <id of a question row on that request>
+--   })
+--        -> succeeds
+--   await supabase.from('dialog').insert({ ...same, kind: 'comment' })
+--        -> must FAIL: dialog_replies_to_only_on_answer (replies_to_id set on
+--           a non-answer row)
+--   await supabase.from('dialog').insert({ ...same, replies_to_id: <its own future id> })
+--        -> not practically testable client-side (id isn't known before
+--           insert) — dialog_replies_to_not_self exists as a backstop, not a
+--           reachable app path today
+-- ============================================================================

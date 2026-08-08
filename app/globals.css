@@ -659,6 +659,29 @@ body {
   color: var(--ink-soft);
 }
 
+/* Which-Question picker (Add Dialog modal, 2026-08-07) — shown only when an
+   Answer is being composed and more than one Question in the thread is
+   still open (migration 006, dialog.replies_to_id); a single open Question
+   is linked silently, no picker. Reuses .lookup-item's row styling since
+   both are "pick one text row from a short list," but sits in-flow inside
+   the modal rather than floating over a field (.lookup-results is
+   position:absolute, which this isn't), and the chosen row stays visibly
+   marked (.selected) rather than closing on pick — this list doesn't
+   disappear once a choice is made, the way a lookup dropdown does. */
+.qpicker {
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 2px 0 12px;
+}
+
+.lookup-item.selected {
+  background: var(--focus-tint);
+  color: var(--brand-blue);
+  font-weight: 700;
+}
+
 /* ============================================================================
    DELIVERY-CHANNEL CAPTION (§9.2.2) — shown after a contact is selected.
    ========================================================================= */
@@ -891,6 +914,28 @@ body {
   margin: 0 0 12px;
 }
 
+/* Modal header variant — title and actions on the same top row (Add Dialog,
+   2026-08-07), instead of Add Category's title-then-bottom-.modalacts
+   layout. Both are valid §6.12 variants now: use whichever the owner's
+   mockup for that modal actually draws, rather than forcing one shape.
+   .modal-title's own margin is zeroed here since .modalhead supplies the
+   gap instead. */
+.modalhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.modalhead .modal-title {
+  margin: 0;
+}
+
+.modalhead .modalacts {
+  flex: 0 0 auto;
+}
+
 /* ============================================================================
    CHECKBOX ROW — PROPOSED (§6.20)
    Chips cover either/or choices; a single persistent toggle reads as a checkbox.
@@ -984,6 +1029,24 @@ body {
 .chip:focus-visible {
   outline: 2px solid var(--brand-blue);
   outline-offset: 2px;
+}
+
+/* Chip row on a Strip backdrop, no gating note — a plain-language duplicate
+   of .sendrow's properties (Add Dialog's Kind picker, 2026-08-07), kept as
+   its own class rather than reusing .sendrow directly: that name means
+   "Send Requests by" specifically, and this row has nothing to do with
+   delivery channel. Chips themselves (.chip/.chip.selected/.chip.is-locked)
+   are unchanged — only the backdrop they sit on is shared. */
+.chiprow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--strip);
+  border-radius: 9px;
+  padding: 6px 10px;
+  width: 100%;
+  min-height: 44px;
+  flex-wrap: wrap;
 }
 
 .gatenote {
