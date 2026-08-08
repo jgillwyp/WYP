@@ -729,7 +729,7 @@ export default function CreateRequestForm() {
 
               <div className="fgroup">
                 <span className="flabel" id="dlgkind-label">
-                  Kind
+                  Dialog Entry Type
                 </span>
                 <div className="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
                   <button
