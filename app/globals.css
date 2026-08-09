@@ -165,6 +165,16 @@ body {
   border-top: none;
 }
 
+/* Push a single .btn straight to the right when it sits directly in a .band
+   with no .bandcluster wrapper — the Main Screen's Create Request/Create
+   ToDo buttons (ported from the mockup's own `.band .btn{margin-left:auto;}`,
+   missed in the first CSS port since every other converted band wraps its
+   button(s) in .bandcluster instead). Harmless alongside .bandcluster, which
+   sets the same margin on itself one level up. */
+.band .btn {
+  margin-left: auto;
+}
+
 .bandcluster {
   margin-left: auto;
   display: flex;
@@ -1606,6 +1616,105 @@ body {
 .field::placeholder {
   color: var(--ink-soft);
   opacity: .85;
+}
+
+/* ============================================================================
+   DETAIL SCREENS (§6.28/§6.27 variants) — ported from
+   design/screens/WYP_request_detail_palette1.html for RequestDetailForm.tsx
+   and TodoDetailForm.tsx, 2026-08-09. First live use of the label:value and
+   existing-thread-Dialog patterns that were mockup-only until now.
+   ========================================================================= */
+
+/* Notice band (§9.3, PROPOSED) — Strip background, not .ferror red: this is
+   a heads-up, not an error. Sits directly under the title band, full width. */
+.noticeband {
+  background: var(--strip);
+  padding: 9px var(--pad);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.noticeband b {
+  font-weight: 700;
+}
+
+/* Non-modifiable value — label:value text, never a boxed field (§6.28). */
+.metarow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mlabel {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--brand-blue);
+  flex: 0 0 auto;
+  min-width: 46px;
+}
+
+.mval {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Dialog read panel — an existing thread, not Create Request/ToDo's blank
+   staged list. */
+.panel {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+
+.panelhead {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--brand-blue);
+  margin-bottom: 6px;
+}
+
+.dlg {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  padding: 5px 0;
+}
+
+.dlg + .dlg {
+  border-top: 1px solid var(--rule);
+}
+
+.dlgdate {
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-blue);
+  font-weight: 600;
+}
+
+.dlgkind {
+  font-weight: 700;
+}
+
+.dlgwho {
+  color: var(--ink-soft);
+}
+
+.dlgre {
+  display: block;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-soft);
+  margin: 3px 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dlgbody {
+  font-weight: 700;
 }
 
 /* Received subcard empty state (2026-08-08) — no schema/RLS path exists yet

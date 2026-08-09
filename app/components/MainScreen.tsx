@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -20,14 +20,21 @@ import { supabase } from '@/lib/supabaseClient'
  *   signed-in recipient to see a Request someone else sent them — `requests`
  *   RLS is owner-only (migration 003) and there is no column linking a row to
  *   its recipient's own account. Flagged, not solved, here.
- * - Search bar and the All/Open/Overdue/Done (Sent/Received) and
- *   All/Open/Done (ToDos) filter chips render but do nothing this pass —
- *   the owner's explicit choice ("Stay visual-only for now").
- * - Housekeeping's My Contacts / Your Account rows and the ToDos band's
- *   Create ToDo button are inert placeholders: none of `/contacts` (a list
- *   view), `/account`, or `/todos/new` exist as routes yet (see CLAUDE.md
- *   Known gaps). Log Out is real — it is the one piece that directly serves
- *   the "test the login loop normally" goal this screen was built for.
+ * - Search bar and the All/Open/Overdue/Done (Sent) / All/Open/Done (ToDos)
+ *   filter chips are now functional (2026-08-09) — client-side, over the
+ *   already-fetched Sent/ToDos rows: no re-query per keystroke or chip
+ *   click, since both lists are personal-scale (same reasoning as the
+ *   Recipient/Category lookups elsewhere in the app). Search matches
+ *   description, contact name (Sent), and category name, case-insensitive
+ *   substring. The scope button ("All ▼") stays visual-only — it has never
+ *   had a designed picker (see CLAUDE.md) and search already runs across
+ *   both sections at once, so there's nothing yet for a scope to narrow.
+ *   Received's chips stay decorative — that subcard has no live rows to
+ *   filter.
+ * - Housekeeping's My Contacts / Your Account rows are still inert
+ *   placeholders (see CLAUDE.md Known gaps). Log Out is real — it is the one
+ *   piece that directly serves the "test the login loop normally" goal this
+ *   screen was built for.
  *
  * Icons are inline SVG (currentColor, driven by .iconbtn/.ii's own color),
  * not the mockup's base64 PNGs — matches how every other screen in this app
@@ -51,6 +58,7 @@ type TodoRow = {
   id: string
   description: string
   priority: number | null
+  done_date: string | null
   categories: { name: string } | null
   dialog: { count: number }[] | null
 }
@@ -154,6 +162,10 @@ export default function MainScreen() {
   const [hkTab, setHkTab] = useState<'tasks' | 'videos'>('tasks')
   const [signingOut, setSigningOut] = useState(false)
 
+  const [sentFilter, setSentFilter] = useState<'all' | 'open' | 'overdue' | 'done'>('all')
+  const [todoFilter, setTodoFilter] = useState<'all' | 'open' | 'done'>('open')
+  const [searchText, setSearchText] = useState('')
+
   useEffect(() => {
     let cancelled = false
 
@@ -169,7 +181,7 @@ export default function MainScreen() {
           .order('due_date', { ascending: false, nullsFirst: false }),
         supabase
           .from('requests')
-          .select('id, description, priority, categories(name), dialog(count)')
+          .select('id, description, priority, done_date, categories(name), dialog(count)')
           .is('contact_id', null)
           .order('priority', { ascending: true, nullsFirst: false }),
       ])
@@ -197,6 +209,31 @@ export default function MainScreen() {
     router.replace('/login')
   }
 
+  const query = searchText.trim().toLowerCase()
+
+  const filteredSent = useMemo(() => {
+    return sent.filter((r) => {
+      if (sentFilter !== 'all' && sentStatus(r) !== sentFilter) return false
+      if (query === '') return true
+      return (
+        r.description.toLowerCase().includes(query) ||
+        (r.contacts?.display_name ?? '').toLowerCase().includes(query)
+      )
+    })
+  }, [sent, sentFilter, query])
+
+  const filteredTodos = useMemo(() => {
+    return todos.filter((t) => {
+      const status: 'open' | 'done' = t.done_date ? 'done' : 'open'
+      if (todoFilter !== 'all' && status !== todoFilter) return false
+      if (query === '') return true
+      return (
+        t.description.toLowerCase().includes(query) ||
+        (t.categories?.name ?? '').toLowerCase().includes(query)
+      )
+    })
+  }, [todos, todoFilter, query])
+
   return (
     <div className="frame-none">
       <div className="app">
@@ -220,10 +257,10 @@ export default function MainScreen() {
                 </span>
               </div>
               <div className="chips">
-                <span className="chip sel">All</span>
-                <span className="chip">Open</span>
-                <span className="chip over">Overdue</span>
-                <span className="chip done">Done</span>
+                <button className={`chip${sentFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('all')}>All</button>
+                <button className={`chip${sentFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('open')}>Open</button>
+                <button className={`chip over${sentFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('overdue')}>Overdue</button>
+                <button className={`chip done${sentFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('done')}>Done</button>
               </div>
             </div>
             <div className="subbody">
@@ -239,11 +276,21 @@ export default function MainScreen() {
                 {!loading && !loadError && sent.length === 0 && (
                   <div className="subempty">No Sent Requests yet.</div>
                 )}
-                {!loading && !loadError && sent.map((r) => {
+                {!loading && !loadError && sent.length > 0 && filteredSent.length === 0 && (
+                  <div className="subempty">No Sent Requests match this filter.</div>
+                )}
+                {!loading && !loadError && filteredSent.map((r) => {
                   const status = sentStatus(r)
                   const late = status === 'done' && !!r.due_date && !!r.done_date && r.done_date > r.due_date
                   return (
-                    <div key={r.id} className={`row${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                    <div
+                      key={r.id}
+                      className={`row${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(`/requests/${r.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/requests/${r.id}`) }}
+                    >
                       <div className="r1">
                         <span className="nm">{r.contacts?.display_name ?? '—'}</span>
                         <span className="dt">{formatMDY(r.created_at)}</span>
@@ -296,15 +343,15 @@ export default function MainScreen() {
           {/* ---------------------------------------------------------- ToDos */}
           <div className="band">
             <span className="glabel">ToDos</span>
-            <button className="btn" type="button">Create&nbsp;ToDo</button>
+            <Link className="btn" href="/todos/new">Create&nbsp;ToDo</Link>
           </div>
 
           <div className="subcard">
             <div className="subhead todos-head">
               <div className="chips">
-                <span className="chip">All</span>
-                <span className="chip sel">Open</span>
-                <span className="chip done">Done</span>
+                <button className={`chip${todoFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('all')}>All</button>
+                <button className={`chip${todoFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('open')}>Open</button>
+                <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
               </div>
               <span className="subicons">
                 <span className="iconbtn" role="button" tabIndex={0} aria-label="Expand ToDos"><ExpandIcon /></span>
@@ -322,8 +369,18 @@ export default function MainScreen() {
                 {!loading && !loadError && todos.length === 0 && (
                   <div className="subempty">No ToDos yet.</div>
                 )}
-                {!loading && !loadError && todos.map((t) => (
-                  <div key={t.id} className="row td">
+                {!loading && !loadError && todos.length > 0 && filteredTodos.length === 0 && (
+                  <div className="subempty">No ToDos match this filter.</div>
+                )}
+                {!loading && !loadError && filteredTodos.map((t) => (
+                  <div
+                    key={t.id}
+                    className="row td"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(`/todos/${t.id}`)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/todos/${t.id}`) }}
+                  >
                     <div className="t1">
                       {dialogCount(t.dialog) > 0 && (
                         <span className="ii"><DialogIcon /></span>
@@ -375,7 +432,13 @@ export default function MainScreen() {
             {hkTab === 'tasks' ? (
               <div className="subbody">
                 <div className="hkrows">
-                  <div className="hkrow" role="button" tabIndex={0}>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/contacts')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/contacts') }}
+                  >
                     <span className="hktext">
                       <span className="hktitle">My Contacts</span>
                       <span className="hknote"> — view and edit</span>
@@ -383,7 +446,7 @@ export default function MainScreen() {
                   </div>
                   <div className="hkrow" role="button" tabIndex={0}>
                     <span className="hktext">
-                      <span className="hktitle">Your Account</span>
+                      <span className="hktitle">My Account</span>
                       <span className="hknote"> — view and edit</span>
                     </span>
                   </div>
@@ -421,7 +484,13 @@ export default function MainScreen() {
         {/* Search bar — visual only this pass, see file header comment */}
         <div className="searchbar sb">
           <button className="scope" type="button">All&nbsp;▼</button>
-          <input className="field" type="text" placeholder="Search Would You Please" readOnly />
+          <input
+            className="field"
+            type="text"
+            placeholder="Search Would You Please"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
           <span className="iconbtn" role="button" tabIndex={0} aria-label="Voice search"><VoiceSearchIcon /></span>
           <span className="iconbtn" role="button" tabIndex={0} aria-label="Search"><SearchIcon /></span>
         </div>

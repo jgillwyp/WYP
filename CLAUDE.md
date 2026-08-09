@@ -278,16 +278,13 @@ link is built only after the stack is proven on Add Contact.
   a schema change**: `requests` RLS is owner-only (migration 003) and no
   column links a row to its recipient's own account, so there is currently no
   way for a signed-in user to query "Requests sent to me." The Received
-  subcard renders a `.subempty` explanatory note (§6.29) instead. Search bar
-  and every filter chip are visual-only this pass — confirmed with the owner
-  ("Stay visual-only for now") rather than assumed. Three controls are inert
-  placeholders because they have nowhere to go yet: the ToDos band's Create
-  ToDo button (`/todos/new` doesn't exist — Create ToDo is still
-  Mockup-only), and Housekeeping's My Contacts / Your Account rows (neither a
-  contacts list view nor `/account` exists yet). Log Out is real
-  (`supabase.auth.signOut()`, then redirect to `/login`) — it's what actually
-  makes the sign-in loop testable, which is the whole reason this screen got
-  built now.
+  subcard renders a `.subempty` explanatory note (§6.29) instead. Log Out is
+  real (`supabase.auth.signOut()`, then redirect to `/login`) — it's what
+  actually makes the sign-in loop testable, which is the whole reason this
+  screen got built now. **Superseded by the entry below**: search bar and
+  filter chips are now functional, and Sent/ToDo rows navigate to their
+  Detail screens, so the "visual-only" and "inert placeholder" notes that
+  used to be here no longer apply to those pieces.
 - **Seed script for the Main Screen's demo data** — `docs/Week2 - SQL
   history.txt`, appended 2026-08-08, not yet run. Not a numbered migration
   (nothing in it alters a table); inserts Contacts, Sent Requests, and ToDos
@@ -297,3 +294,53 @@ link is built only after the stack is proven on Add Contact.
   insert is existence-checked first, so re-running the whole block is safe.
   Run it once, in the Supabase SQL editor, to see the live Sent/ToDos sections
   populated.
+- **Create ToDo is now Live** (`app/components/CreateTodoForm.tsx`,
+  `/todos/new`, 2026-08-09) — Main Screen's Create ToDo button now goes
+  somewhere. Same Category lookup / Add Category / Add Dialog modal pattern
+  as Create Request, no Recipient, plus the Priority chip row. **Flagged,
+  not resolved**: the mockup (and this component) has no Due Date field, even
+  though the PRD lists ToDos as having an optional due date and
+  `requests.due_date` is a real nullable column the seed script already
+  populates for ToDos. Worth a decision — add Due Date to the mockup (and
+  ToDo Detail) or leave ToDos due-date-less through the UI.
+- **Request Detail and ToDo Detail are now Live**
+  (`app/components/RequestDetailForm.tsx` / `TodoDetailForm.tsx`,
+  `/requests/[id]` / `/todos/[id]`, 2026-08-09) — Main Screen's Sent and
+  ToDo rows now navigate somewhere instead of doing nothing. Both fetch the
+  existing row, both update it on Save/Send, both show their Dialog panel as
+  the real existing thread (not a staged list) with dynamic Answer
+  unlocking and a which-Question picker. **Hard dependency: both select
+  `dialog.replies_to_id` (migration 006). If migration 006 hasn't been run,
+  the Dialog panel on either screen will error on load.** ToDo Detail
+  gained a Done Date/Time row that wasn't part of the original "byte-for-
+  byte duplicate of Create ToDo" instruction — owner-confirmed via
+  AskUserQuestion once it became clear a live ToDo Detail with no Done
+  fields would leave ToDos permanently uncompletable through the UI.
+- **Contact Detail and My Contacts are now Live**
+  (`app/components/ContactDetailForm.tsx` / `ContactsList.tsx`,
+  `/contacts/[id]` / `/contacts`, 2026-08-09), both new screens. My Contacts
+  lists every contact (name, notify method, and the matching email/phone)
+  and is reached from Main Screen's Housekeeping "My Contacts" row; clicking
+  a row opens Contact Detail, which is Create Contact's fields (Name/Email/
+  Phone/Notes — not the mockup-only Time Zone field, see below) with
+  Save + Close instead of Save + Cancel. Add Contact from My Contacts routes
+  through the existing `/contacts/new`.
+- **Pre-existing gap, now visible on two mockups instead of one**: Add
+  Contact's mockup (and now Contact Detail's) draws a Time Zone field that
+  has never been wired anywhere. `contacts` has no `time_zone` column (no
+  migration has ever added one) and `AddContactForm.tsx` doesn't render the
+  field either — this predates today's work but is worth resolving (add the
+  migration and wire it, or drop the field from both mockups) rather than
+  letting it keep spreading to new screens by copy.
+- **Main Screen's filter chips and search are now functional** (2026-08-09):
+  All/Open/Overdue/Done on Sent and All/Open/Done on ToDos filter the
+  already-fetched rows client-side; search matches description/contact-name/
+  category, case-insensitive substring, across both sections at once. The
+  scope button ("All ▼") stays visual-only — it has never had a designed
+  picker and there's nothing yet for a scope to narrow.
+- **Housekeeping's "Your Account" row is now "My Account"** (2026-08-09,
+  Main Screen mockup + `MainScreen.tsx`) — wording consistency with "My
+  Contacts" ("'Account' seems a bit impersonal for this app," owner's words).
+  Still inert: the actual Account screen is intentionally undesigned,
+  awaiting further product evolution per the owner's explicit instruction —
+  do not design it unprompted.

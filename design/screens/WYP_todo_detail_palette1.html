@@ -6,14 +6,27 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ============================================================================
-   ToDo Detail (2026-08-08) — identical to Create ToDo's mockup in every
-   respect except the screen title (owner's explicit instruction: "the only
-   difference with the Create ToDo screen is the screen title"). Kept as a
-   full duplicate file rather than a shared template, matching how every
-   other screen in this app is its own self-contained mockup (see
-   design/README.md's "Self-contained files" convention) — a future edit to
-   Create ToDo's fields should be mirrored here by hand, the same as any
-   other pair of related mockups in this project.
+   ToDo Detail (2026-08-08) — was identical to Create ToDo's mockup except
+   the screen title (owner's original instruction: "the only difference with
+   the Create ToDo screen is the screen title"). Two deviations added
+   2026-08-09, both because this screen views an EXISTING ToDo rather than
+   drafting a new one, the same reasoning that already shaped Request Detail:
+
+   1. Done Date/Time row added — owner-confirmed (AskUserQuestion, 2026-08-09):
+      without it there was no way to mark a ToDo Done through the UI at all.
+      Same box treatment as Request Detail's, both optional/Row-Tinted while
+      empty.
+   2. Dialog panel now shows the EXISTING thread (read live, dynamic Answer
+      unlocking + which-Question picker) instead of Create ToDo's blank
+      staged list — an existing ToDo can already have Dialog entries, same
+      as an existing Request. Not explicitly asked for alongside the Done
+      fields, but the same "this is a Detail screen, not a Create screen"
+      reasoning applies identically; flagged here rather than silently
+      applied so it's easy to spot in review.
+
+   Kept as a full duplicate file rather than a shared template, matching how
+   every other screen in this app is its own self-contained mockup (see
+   design/README.md's "Self-contained files" convention).
    ============================================================================ */
 
 :root {
@@ -182,6 +195,26 @@ html,body{margin:0;height:100%;background:#fff;}
 .locked .lock{width:20px;height:20px;color:var(--ink-soft);flex:0 0 auto;}
 .locked .lockttl{font-size:12.5px;font-weight:700;color:var(--ink);}
 .locked .locknote{font-size:12px;line-height:1.35;color:var(--ink-soft);}
+
+/* Dialog read panel (2026-08-09) — ported from Request Detail; an existing
+   ToDo shows its real thread, not a blank staged list. */
+.panel{background:#fff;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;}
+.panelhead{font-size:11.5px;font-weight:700;color:var(--brand-blue);margin-bottom:6px;}
+.dlg{font-size:12.5px;line-height:1.5;color:var(--ink);padding:5px 0;}
+.dlg + .dlg{border-top:1px solid var(--rule);}
+.dlgdate{font-variant-numeric:tabular-nums;color:var(--brand-blue);font-weight:600;}
+.dlgkind{font-weight:700;}
+.dlgwho{color:var(--ink-soft);}
+.dlgre{display:block;font-size:11px;font-style:italic;color:var(--ink-soft);margin:3px 0 2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dlgbody{font-weight:700;}
+.qpicker{border:1px solid var(--rule);border-radius:9px;max-height:160px;overflow-y:auto;margin:2px 0 12px;}
+.lookup-item{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;color:var(--ink);
+  background:none;border:none;padding:9px 12px;cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lookup-item + .lookup-item{border-top:1px solid var(--rule);}
+.lookup-item:hover,.lookup-item:focus-visible{background:var(--row-tint);}
+.lookup-item.selected{background:var(--focus-tint);color:var(--brand-blue);font-weight:700;}
 </style></head>
 <body>
 <div class="frame-none"><div class="app">
@@ -224,6 +257,20 @@ html,body{margin:0;height:100%;background:#fff;}
         </div>
       </div>
 
+      <!-- Done row — new 2026-08-09, owner-confirmed. Same box treatment as
+           Request Detail's Done Date/Time: both optional, Row-Tinted while
+           empty (§6.25), so a ToDo has a real "mark complete" path. -->
+      <div class="fgroup frow">
+        <span class="ffloat picker">
+          <input class="finput opt" id="dnd" type="text" inputmode="numeric" placeholder=" ">
+          <label class="flabel" for="dnd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Done Date <span class="subnote">(optional)</span></label>
+        </span>
+        <span class="ffloat picker">
+          <input class="finput opt" id="dnt" type="text" inputmode="numeric" placeholder=" ">
+          <label class="flabel" for="dnt"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/></svg></span>Done Time <span class="subnote">(optional)</span></label>
+        </span>
+      </div>
+
       <div class="fgroup frow">
         <span class="ffloat">
           <input class="finput opt" id="cat" type="text" autocomplete="off" placeholder=" ">
@@ -237,9 +284,16 @@ html,body{margin:0;height:100%;background:#fff;}
         <label class="flabel" for="desc">ToDo Description</label>
       </div>
 
+      <!-- Dialog — shows the EXISTING thread (2026-08-09, see file header
+           comment), same pattern as Request Detail. Add Dialog's Kind
+           picker is dynamic: Answer unlocks only when a Question in the
+           thread is still open (migration 006, dialog.replies_to_id). -->
       <div class="fgroup">
         <div class="fieldact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
-        <div class="dlgstaged" id="dlg-staged" style="display:none;"></div>
+        <div class="panel">
+          <div class="panelhead">Dialog (Questions, Answers, Comments)</div>
+          <div id="dlg-list"></div>
+        </div>
       </div>
 
       <div class="fgroup">
@@ -275,10 +329,13 @@ html,body{margin:0;height:100%;background:#fff;}
       <span class="flabel" id="dlgkind-label">Dialog Entry Type</span>
       <div class="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
         <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onclick="selectKind('question')">Question</button>
-        <button class="chip is-locked" type="button" aria-disabled="true" aria-pressed="false">
-          <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Answer</button>
+        <button class="chip" type="button" id="chip-answer" aria-pressed="false" onclick="selectKind('answer')">Answer</button>
         <button class="chip" type="button" id="chip-comment" aria-pressed="false" onclick="selectKind('comment')">Comment</button>
       </div>
+    </div>
+    <div id="dlg-qpicker-wrap" style="display:none;">
+      <span class="flabel">Which Question?</span>
+      <div class="qpicker" id="dlg-qpicker" role="radiogroup" aria-label="Which Question this Answer responds to"></div>
     </div>
     <div class="fgroup ffloat">
       <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
@@ -289,12 +346,65 @@ html,body{margin:0;height:100%;background:#fff;}
 
 </div></div>
 <script>
+/* Dialog list + Add Dialog modal (2026-08-09) — same demo logic as Request
+   Detail's mockup; see that file for the fuller comment on the open-Question
+   / which-Question-picker rules. Demo data reflects a personal ToDo: a
+   Comment plus two open Questions, so the multi-question picker branch is
+   visible without clicking through several Adds first. */
+var dialogEntries = [
+  { id: 1, kind: 'comment', date: '07-30-26', who: 'Jim Gillon', body: 'Starting on the outline this week.' },
+  { id: 2, kind: 'question', date: '08-01-26', who: 'Jim Gillon', body: 'Should this go through Legal before it’s finalized?' },
+  { id: 3, kind: 'question', date: '08-03-26', who: 'Jim Gillon', body: 'Is the current PRD draft far enough along to share with Legal yet?' }
+];
+var nextDialogId = 4;
 var dlgKind = 'question';
+var dlgSelectedQuestionId = null;
+
+function questionById(id){
+  for (var i = 0; i < dialogEntries.length; i++) if (dialogEntries[i].id === id) return dialogEntries[i];
+  return null;
+}
+function openQuestions(){
+  var answeredIds = {};
+  for (var i = 0; i < dialogEntries.length; i++){
+    var e = dialogEntries[i];
+    if (e.kind === 'answer' && e.repliesTo != null) answeredIds[e.repliesTo] = true;
+  }
+  var open = [];
+  for (var j = 0; j < dialogEntries.length; j++){
+    var q = dialogEntries[j];
+    if (q.kind === 'question' && !answeredIds[q.id]) open.push(q);
+  }
+  return open;
+}
+function truncateText(s){
+  return s.length > 60 ? s.slice(0, 57) + '...' : s;
+}
+function renderDialogList(){
+  var sorted = dialogEntries.slice().sort(function(a, b){ return b.id - a.id; });
+  var html = '';
+  for (var i = 0; i < sorted.length; i++){
+    var e = sorted[i];
+    var kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment';
+    if (e.kind === 'answer'){
+      var q = e.repliesTo != null ? questionById(e.repliesTo) : null;
+      html += '<div class="dlg dlg-answer"><span class="dlgdate">' + e.date + '</span> ' +
+        '<span class="dlgkind">' + kindLabel + '</span> <span class="dlgwho">(' + e.who + ')</span>' +
+        (q ? '<span class="dlgre">Re: ' + truncateText(q.body) + '</span>' : '') +
+        '<span class="dlgbody">' + e.body + '</span></div>';
+    } else {
+      html += '<div class="dlg"><span class="dlgdate">' + e.date + '</span> ' +
+        '<span class="dlgkind">' + kindLabel + '</span> <span class="dlgwho">(' + e.who + ')</span> ' + e.body + '</div>';
+    }
+  }
+  document.getElementById('dlg-list').innerHTML = html;
+}
 function openDialogModal(){
   dlgKind = 'question';
-  selectKind('question');
+  dlgSelectedQuestionId = null;
   document.getElementById('dlgtext').value = '';
   document.getElementById('dlg-error').style.display = 'none';
+  selectKind('question');
   document.getElementById('dlg-scrim').style.display = 'block';
   document.getElementById('dlg-modal').style.display = 'block';
 }
@@ -303,22 +413,51 @@ function closeDialogModal(){
   document.getElementById('dlg-modal').style.display = 'none';
 }
 function selectKind(kind){
+  var open = openQuestions();
+  if (kind === 'answer' && open.length === 0) return;
   dlgKind = kind;
   document.getElementById('chip-question').classList.toggle('selected', kind === 'question');
+  document.getElementById('chip-answer').classList.toggle('selected', kind === 'answer');
   document.getElementById('chip-comment').classList.toggle('selected', kind === 'comment');
+
+  var answerChip = document.getElementById('chip-answer');
+  answerChip.classList.toggle('is-locked', open.length === 0);
+  answerChip.setAttribute('aria-disabled', open.length === 0 ? 'true' : 'false');
+
+  var wrap = document.getElementById('dlg-qpicker-wrap');
+  if (kind === 'answer' && open.length > 1){
+    dlgSelectedQuestionId = open[open.length - 1].id;
+    renderQuestionPicker(open);
+    wrap.style.display = 'block';
+  } else {
+    dlgSelectedQuestionId = (kind === 'answer' && open.length === 1) ? open[0].id : null;
+    wrap.style.display = 'none';
+  }
+}
+function renderQuestionPicker(open){
+  var html = '';
+  for (var i = 0; i < open.length; i++){
+    var q = open[i];
+    var sel = q.id === dlgSelectedQuestionId;
+    html += '<button type="button" class="lookup-item' + (sel ? ' selected' : '') + '" role="radio" aria-checked="' +
+      (sel ? 'true' : 'false') + '" onclick="pickQuestion(' + q.id + ')">' + truncateText(q.body) + '</button>';
+  }
+  document.getElementById('dlg-qpicker').innerHTML = html;
+}
+function pickQuestion(id){
+  dlgSelectedQuestionId = id;
+  renderQuestionPicker(openQuestions());
 }
 function saveDialogEntry(){
   var text = document.getElementById('dlgtext').value.trim();
   if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
-  var list = document.getElementById('dlg-staged');
-  var row = document.createElement('div');
-  row.className = 'attitem';
-  var label = dlgKind === 'question' ? 'Question' : 'Comment';
-  row.innerHTML = '<span class="attname"><b>' + label + ':</b> ' + text.replace(/</g,'&lt;') + '</span>' +
-    '<button class="attremove" type="button" aria-label="Remove this Dialog entry" onclick="this.parentElement.remove()">&times;</button>';
-  list.appendChild(row);
-  list.style.display = 'block';
+  var entry = { id: nextDialogId++, kind: dlgKind, date: '08-09-26', who: 'Jim Gillon', body: text };
+  if (dlgKind === 'answer') entry.repliesTo = dlgSelectedQuestionId;
+  dialogEntries.push(entry);
+  renderDialogList();
   closeDialogModal();
 }
+
+renderDialogList();
 </script>
 </body></html>
