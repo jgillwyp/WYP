@@ -281,7 +281,7 @@ html,body{margin:0;height:100%;background:#fff;}
          September 29," wrapped before the year. Add to Calendar now sits on
          its own row above (.panelact, same pattern as Add Dialog/Add
          Attachment below), so Date/From/Due get the full row width. -->
-    <div class="panelact panelact-top"><button class="btn" type="button">Add to Calendar</button></div>
+    <div class="panelact panelact-top"><button class="btn" type="button" onclick="addToCalendar()">Add to Calendar</button></div>
     <div class="meta">
       <div class="metarow"><span class="mlabel">Date:</span><span class="mval">Tuesday, September 29, 2026</span></div>
       <div class="metarow"><span class="mlabel">From:</span><span class="mval">Jason Smith</span></div>
@@ -427,6 +427,94 @@ function setTier(t){
   b.querySelector('.lockglyph').style.display = free ? '' : 'none';
   document.getElementById('t-free').classList.toggle('on', free);
   document.getElementById('t-sub').classList.toggle('on', !free);
+}
+
+/* Add to Calendar (2026-08-10) — mirrors buildIcsContent/handleAddToCalendar
+   in RequestResponseForm.tsx. Demo data matches this screen's own Date/
+   From/Due/Description text above rather than reading it back out of the
+   DOM. No stored Due Time defaults to 9:00 AM (owner: "we can use 9am as a
+   standard - probably later offer an Account profile for default time of
+   day" — flagged, not built). The "A Would You Please Request from
+   <name>:" opener and "To mark it completed, click:" closer are fixed
+   boilerplate around the Request's own Description — owner: "there will
+   need to be a Would You Please administrative interface where such
+   standard text can be modified... that can just be a 'will be done' item
+   at this point." */
+var ICS_DEFAULT_DUE_TIME = '09:00';
+var ICS_DURATION_MINUTES = 30;
+
+function pad2(n){ return String(n).length < 2 ? '0' + n : String(n); }
+
+function formatIcsUtc(d){
+  return '' + d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate()) +
+    'T' + pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + 'Z';
+}
+
+function formatIcsLocal(d){
+  return '' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+    'T' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+}
+
+function icsEscapeText(s){
+  return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+
+function foldIcsLine(line){
+  var max = 75;
+  if (line.length <= max) return line;
+  var out = line.slice(0, max);
+  var rest = line.slice(max);
+  while (rest.length > 0) {
+    out += '\r\n ' + rest.slice(0, max - 1);
+    rest = rest.slice(max - 1);
+  }
+  return out;
+}
+
+function addToCalendar(){
+  var ownerName = 'Jason Smith';
+  var description = 'Work with attendees to arrange for a building renovation committee ' +
+    'meeting before the end of this month.  Also, please include Bob and Mary Jackson \u2013 ' +
+    'they have some interesting ideas.';
+  var link = window.location.href;
+  var dueDate = '2026-10-19';
+  var dueTime = ICS_DEFAULT_DUE_TIME;
+  var parts = dueDate.split('-').map(Number);
+  var timeParts = dueTime.split(':').map(Number);
+  var start = new Date(parts[0], parts[1] - 1, parts[2], timeParts[0], timeParts[1]);
+  var end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000);
+
+  var summary = 'Would You Please: ' + (description.length > 60 ? description.slice(0, 57) + '...' : description);
+  var body = 'A Would You Please Request from ' + ownerName + ': ' + description +
+    ' To mark it completed, click: ' + link;
+
+  var lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Would You Please//Request Response//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    'UID:request-demo@wouldyouplease.com',
+    'DTSTAMP:' + formatIcsUtc(new Date()),
+    'DTSTART:' + formatIcsLocal(start),
+    'DTEND:' + formatIcsLocal(end),
+    'SUMMARY:' + icsEscapeText(summary),
+    'DESCRIPTION:' + icsEscapeText(body),
+    'URL:' + link,
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+  var content = lines.map(foldIcsLine).join('\r\n') + '\r\n';
+
+  var blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'would-you-please-request.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /* Add Dialog modal + Dialog list (2026-08-07) — mockup-only demo state.

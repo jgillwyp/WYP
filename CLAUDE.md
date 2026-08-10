@@ -532,3 +532,19 @@ link is built only after the stack is proven on Add Contact.
   intentionally undesigned, so nothing ever writes `profiles.display_name`.
   One-time SQL fix (not a migration) recorded in `docs/Week3 - SQL
   history.txt`.
+- **Add to Calendar is now real** (`RequestResponseForm.tsx`, 2026-08-10) —
+  `handleAddToCalendar()`/`buildIcsContent()` generate an RFC 5545 `.ics`
+  entirely client-side (no new migration or endpoint — every field it needs
+  is already loaded by `get_request_by_token`) and trigger a `Blob`
+  download. Two pieces are deliberately hardcoded and flagged as "will be
+  done" rather than built: the description's boilerplate wrapper text ("A
+  Would You Please Request from `<name>`:" / "To mark it completed,
+  click:") has no admin surface yet to edit it from, and a Request with no
+  Due Time defaults to 9:00 AM (`ICS_DEFAULT_DUE_TIME`) rather than a real
+  per-account default — `profiles` has no such column, and Account is still
+  intentionally undesigned (see the `display_name` gap above). Ported into
+  `WYP_respond_to_request_palette1.html`'s and `WYP_response_detail_palette1.html`'s
+  own demo JS. Response Detail itself stays mockup-only — the owner
+  confirmed via AskUserQuestion that porting the feature into the mockup's
+  demo, not building the screen live, was the intent; going live would
+  reopen the deferred "Received Requests have no live data path" gap.

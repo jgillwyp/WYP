@@ -216,7 +216,7 @@ html,body{margin:0;height:100%;background:#fff;}
          phone. Same fix ported here for the signed-in-subscriber variant —
          Add to Calendar on its own row above (.panelact, same pattern as Add
          Dialog/Add Attachment below), Date/From/Due at full row width. -->
-    <div class="panelact"><button class="btn" type="button">Add to Calendar</button></div>
+    <div class="panelact"><button class="btn" type="button" onclick="addToCalendar()">Add to Calendar</button></div>
     <div class="meta">
       <div class="metarow"><span class="mlabel">Date:</span><span class="mval">Tuesday, September 29, 2026</span></div>
       <div class="metarow"><span class="mlabel">From:</span><span class="mval">Jason Smith</span></div>
@@ -326,6 +326,88 @@ function setTier(t){
   b.querySelector('.lockglyph').style.display = free ? '' : 'none';
   document.getElementById('t-free').classList.toggle('on', free);
   document.getElementById('t-sub').classList.toggle('on', !free);
+}
+
+/* Add to Calendar (2026-08-10) — ported from Request Response's mockup,
+   which mirrors buildIcsContent/handleAddToCalendar in
+   RequestResponseForm.tsx; see that mockup's own comment for the field
+   mapping and the boilerplate-text/default-due-time flags. Demo data
+   matches this screen's own Date/From/Due/Description text above. */
+var ICS_DEFAULT_DUE_TIME = '09:00';
+var ICS_DURATION_MINUTES = 30;
+
+function pad2(n){ return String(n).length < 2 ? '0' + n : String(n); }
+
+function formatIcsUtc(d){
+  return '' + d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate()) +
+    'T' + pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + 'Z';
+}
+
+function formatIcsLocal(d){
+  return '' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+    'T' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+}
+
+function icsEscapeText(s){
+  return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+
+function foldIcsLine(line){
+  var max = 75;
+  if (line.length <= max) return line;
+  var out = line.slice(0, max);
+  var rest = line.slice(max);
+  while (rest.length > 0) {
+    out += '\r\n ' + rest.slice(0, max - 1);
+    rest = rest.slice(max - 1);
+  }
+  return out;
+}
+
+function addToCalendar(){
+  var ownerName = 'Jason Smith';
+  var description = 'Work with attendees to arrange for a building renovation committee ' +
+    'meeting before the end of this month.  Also, please include Bob and Mary Jackson \u2013 ' +
+    'they have some interesting ideas.';
+  var link = window.location.href;
+  var dueDate = '2026-10-19';
+  var dueTime = ICS_DEFAULT_DUE_TIME;
+  var parts = dueDate.split('-').map(Number);
+  var timeParts = dueTime.split(':').map(Number);
+  var start = new Date(parts[0], parts[1] - 1, parts[2], timeParts[0], timeParts[1]);
+  var end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000);
+
+  var summary = 'Would You Please: ' + (description.length > 60 ? description.slice(0, 57) + '...' : description);
+  var body = 'A Would You Please Request from ' + ownerName + ': ' + description +
+    ' To mark it completed, click: ' + link;
+
+  var lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Would You Please//Response Detail//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    'UID:request-demo@wouldyouplease.com',
+    'DTSTAMP:' + formatIcsUtc(new Date()),
+    'DTSTART:' + formatIcsLocal(start),
+    'DTEND:' + formatIcsLocal(end),
+    'SUMMARY:' + icsEscapeText(summary),
+    'DESCRIPTION:' + icsEscapeText(body),
+    'URL:' + link,
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+  var content = lines.map(foldIcsLine).join('\r\n') + '\r\n';
+
+  var blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'would-you-please-request.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /* Same demo Dialog data as Request Detail (2026-08-08) — one Request, same

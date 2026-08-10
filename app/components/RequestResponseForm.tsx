@@ -122,6 +122,106 @@ function todayISODate(): string {
   return `${y}-${m}-${day}`
 }
 
+// Owner's ask, 2026-08-10: "Add to Calendar" downloads a real .ics for the
+// Request's Due Date/Time, generated entirely client-side — every field it
+// needs (Description, owner name, Due Date/Time, and the response link,
+// which is just this page's own URL) is already loaded, so there's no
+// server round trip to add.
+//
+// No stored Due Time defaults to 9:00 AM. Owner: "we can use 9am as a
+// standard - probably later offer an Account profile for default time of
+// day" — flagged, not built; profiles has no such column or UI yet.
+const ICS_DEFAULT_DUE_TIME = '09:00'
+const ICS_DURATION_MINUTES = 30
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+// DTSTAMP is always UTC per RFC 5545.
+function formatIcsUtc(d: Date): string {
+  return (
+    `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}` +
+    `T${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}${pad2(d.getUTCSeconds())}Z`
+  )
+}
+
+// DTSTART/DTEND use "floating" local time (no trailing Z, no TZID) — the
+// Request has no stored time zone of its own, so the calendar app importing
+// the file interprets the time in whatever zone the recipient is actually
+// in, which is the closest match to "9am, wherever you are" without a real
+// TZID to offer.
+function formatIcsLocal(d: Date): string {
+  return (
+    `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}` +
+    `T${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`
+  )
+}
+
+// RFC 5545 §3.3.11 TEXT escaping — backslash first, so the escapes just
+// added for the other characters don't get re-escaped.
+function icsEscapeText(s: string): string {
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n')
+}
+
+// RFC 5545 §3.1 line folding — content lines over 75 octets are split with
+// a CRLF followed by a single leading space, which un-folding parsers strip
+// back out. Approximated on UTF-16 length rather than true octet count,
+// which matches for the plain-ASCII text every field here is built from.
+function foldIcsLine(line: string): string {
+  const max = 75
+  if (line.length <= max) return line
+  let out = line.slice(0, max)
+  let rest = line.slice(max)
+  while (rest.length > 0) {
+    out += `\r\n ${rest.slice(0, max - 1)}`
+    rest = rest.slice(max - 1)
+  }
+  return out
+}
+
+// Owner's ask, 2026-08-10: the bolded text in his mockup is the Request's
+// own Description, verbatim; everything else — the "A Would You Please
+// Request from <name>:" opener and the "To mark it completed, click:"
+// closer — is fixed boilerplate around it. Hardcoded here for now:
+// "there will need to be a Would You Please administrative interface where
+// such standard text can be modified... that can just be a 'will be done'
+// item at this point" — flagged, not built; no admin surface or schema for
+// editable boilerplate strings exists yet anywhere in the app.
+function buildIcsDescription(ownerName: string, description: string, link: string): string {
+  return `A Would You Please Request from ${ownerName}: ${description} To mark it completed, click: ${link}`
+}
+
+function buildIcsContent(payload: ResponsePayload, link: string): string {
+  const ownerName = payload.owner_name ?? 'Would You Please'
+  const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
+  const [hh, mm] = (payload.due_time ?? ICS_DEFAULT_DUE_TIME).split(':').map(Number)
+  const start = new Date(y, m - 1, d, hh, mm)
+  const end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000)
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Would You Please//Request Response//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:request-${payload.id}@wouldyouplease.com`,
+    `DTSTAMP:${formatIcsUtc(new Date())}`,
+    `DTSTART:${formatIcsLocal(start)}`,
+    `DTEND:${formatIcsLocal(end)}`,
+    `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
+    `DESCRIPTION:${icsEscapeText(buildIcsDescription(ownerName, payload.description, link))}`,
+    `URL:${link}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ]
+  return lines.map(foldIcsLine).join('\r\n') + '\r\n'
+}
+
 export default function RequestResponseForm() {
   const params = useParams<{ token: string }>()
   const token = params.token
@@ -319,6 +419,25 @@ export default function RequestResponseForm() {
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  // Owner's ask, 2026-08-10 — see buildIcsContent above for the field
+  // mapping and the boilerplate-text flag. The link is just this page's own
+  // URL (the /r/[token] the recipient is already looking at), so there's
+  // nothing to fetch — the whole file is built and downloaded locally.
+  function handleAddToCalendar() {
+    if (!data) return
+    const link = window.location.href
+    const content = buildIcsContent(data, link)
+    const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'would-you-please-request.ics'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   // Discards in-progress edits back to the last successfully loaded/saved
   // values. Not router.back() — every other Detail screen's Cancel returns
   // to the Main Screen history entry it was reached from, but an anonymous
@@ -407,10 +526,10 @@ export default function RequestResponseForm() {
                 already solves. Costs one extra row of vertical space, same
                 trade-off §6.26 already made. */}
             <div className="panelact panelact-top">
-              {/* Add to Calendar is present, matching the mockup, but
-                  deliberately inert — .ics generation is out of scope for
-                  this batch (Days 2-3 covers response read/write only). */}
-              <button className="btn" type="button" aria-disabled="true">
+              {/* Was deliberately inert (Days 2-3 covered response
+                  read/write only); .ics generation built 2026-08-10 — see
+                  buildIcsContent/handleAddToCalendar above. */}
+              <button className="btn" type="button" onClick={handleAddToCalendar}>
                 Add to Calendar
               </button>
             </div>

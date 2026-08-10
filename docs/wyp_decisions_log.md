@@ -6,6 +6,22 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Add to Calendar: real .ics generation, client-side
+
+Owner posted a mockup of what the calendar entry's own description text should read like: *"A Would You Please Request from Jonathan Jackson: **Create and send the Sacramento district sales projection report...** To mark it completed, click: <link>"* — bolded text is the Request's own Description, the rest is fixed wrapper text around it. Confirmed: *"The bolded text is the Request Description, the 'click on link..' text would be a standard prefix to the link."*
+
+**Built entirely client-side**, on click of the previously-inert Add to Calendar button on Request Response. Every field the file needs — Description, owner name, Due Date/Time, and the response link (this page's own URL) — is already loaded by `get_request_by_token`, so there's no new migration or endpoint; `buildIcsContent()` assembles a standard RFC 5545 VCALENDAR/VEVENT block (proper TEXT escaping, 75-octet line folding, `DTSTAMP` in UTC, `DTSTART`/`DTEND` as floating local time since the Request has no stored time zone of its own) and `handleAddToCalendar()` triggers the download via a `Blob` + temporary `<a download>`, no server round trip. Considered and rejected building this server-side (a new endpoint reformatting data already in the page's own state buys nothing) and as a live "webcal://" subscription feed (materially bigger — needs a stable public URL and its own token story, and doesn't match the single-button/single-download shape already established) — see the earlier design-proposal exchange for the fuller reasoning.
+
+**No stored Due Time defaults to 9:00 AM.** Owner: *"If there is no time, we can use 9am as a standard — probably later offer an Account profile for default time of day."* `ICS_DEFAULT_DUE_TIME` is a top-level constant for now; per-account default time is flagged, not built — `profiles` has no such column, and Account itself is still intentionally undesigned (see CLAUDE.md Known gaps).
+
+**Boilerplate text is hardcoded, flagged for a future admin surface.** Owner: *"There will need to be a Would You Please administrative interface where such standard text can be modified. That can just be a 'will be done' item at this point."* The "A Would You Please Request from `<name>`:" opener and "To mark it completed, click:" closer live in `buildIcsDescription()` as a plain template literal — no admin UI, no schema for editable boilerplate strings, anywhere in the app yet.
+
+**Scope, clarified via AskUserQuestion**: the owner's ask to also build this "into the Response Detail" was ambiguous between porting the feature into that screen's mockup demo (matching how every other live fix has been ported into mockups this session) and building Response Detail out as an actual live route — the latter would reopen the explicitly-deferred "Received Requests have no live data path" gap (owner-only RLS, no column linking a row to its recipient). Owner picked the mockup-only port. Applied to `RequestResponseForm.tsx` (live), `WYP_respond_to_request_palette1.html`, and `WYP_response_detail_palette1.html` (demo data matching each mockup's own visible Date/From/Due/Description text, not read back out of the DOM).
+
+`npx tsc --noEmit` and `npx eslint` on `RequestResponseForm.tsx` pass clean; both mockups' `<script>` blocks pass `node --check`.
+
+\---
+
 ## 2026-08-10 — Request Response: Add to Calendar top spacing; promo block trimmed and reordered
 
 Two small follow-ups from the owner after the word-wrap fix above.
