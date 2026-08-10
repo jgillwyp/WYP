@@ -6,6 +6,20 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Request Response: Add to Calendar moved above Date/From/Due to fix Android word-wrap
+
+Owner, testing live on a narrow Android phone: *"The date presentation on the Request Response causes more word-wraps than desired... 'Date: Monday, August 10, [wrap] 2026'... There is a lot of visually-unused space under the Add to Calendar button and to the right of both the From and the Due text values."* He proposed two options: (1) shorten the date string to an mdy-plus-weekday format and keep the side-by-side layout, vertically centering the button with the three rows, or (2) move Add to Calendar to its own row above, matching the Add Dialog/Add Attachment pattern already on this screen, with date formatting untouched — flagging a concern that this would push Done Date/Done Time further down, resolved (his own suggestion) by scrolling Done Date into view when the Done button is clicked.
+
+Recommended and shipped option 2. Root cause of the wrap was the side-by-side layout squeezing the Date/From/Due column to make room for the button, not the date format itself — freeing that column to full width removes the constraint directly. Checked whether the current verbose weekday format ("Monday, August 10, 2026") was safe to change in isolation before ruling out option 1: it's the identical format used in the Request Detail, ToDo Detail, Response Detail, and Dialog Detail mockups' own label:value date displays, so reformatting it here alone would put this screen out of step with its siblings for a problem the layout change already solves on its own — a legitimate idea, but a separate, larger decision than fixing this wrap.
+
+Add to Calendar now sits in its own `.panelact` row above `.meta` (reusing the row already used for Add Dialog/Add Attachment on this screen, rather than a new component) — `.metatop`/`.metacol` (the side-by-side wrapper) removed from `globals.css` and both mockups. `handleQuickDone()` now scrolls the Done Date field into view (`scrollIntoView({ behavior: 'smooth', block: 'center' })`) after filling it, addressing the push-down concern the owner flagged and pre-approved a fix for.
+
+Owner confirmed the same change should apply to Response Detail's mockup (the signed-in-subscriber variant of this screen, not live) for consistency — applied there too, alongside `RequestResponseForm.tsx` and `WYP_respond_to_request_palette1.html`.
+
+`npx tsc --noEmit` and `npx eslint` on the changed component pass clean.
+
+\---
+
 ## 2026-08-10 — Add Dialog: clicking a locked chip is now a true no-op
 
 Owner, testing the fix above: *"The change works, unless a non-available chip is clicked... if I click the 'not-available' Answer chip, the dialog text displays the full-sized placeholder text and there is no focus. A preferred response to clicking a non-available chip would be none - which would then not deselect the last selected chip."*

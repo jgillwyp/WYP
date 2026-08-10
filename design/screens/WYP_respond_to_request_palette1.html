@@ -75,9 +75,9 @@ html,body{margin:0;height:100%;background:#fff;}
 .metarow{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;}
 .mlabel{font-size:13.5px;font-weight:700;color:var(--brand-blue);flex:0 0 auto;min-width:46px;}
 .mval{font-size:13.5px;font-weight:600;color:var(--ink);}
-.metatop{display:flex;align-items:flex-start;gap:10px;}
-.metatop .metacol{flex:1 1 auto;min-width:0;}
-.metatop .btn{margin-top:2px;}
+/* .metatop/.metacol removed 2026-08-10 — Add to Calendar moved to its own
+   .panelact row above .meta instead of sharing a row with Date/From/Due;
+   see the comment above the .meta markup below. */
 
 /* Description */
 .seclabel{font-size:13.5px;font-weight:700;color:var(--brand-blue);margin:10px 0 3px;padding:0 var(--pad);}
@@ -266,15 +266,17 @@ html,body{margin:0;height:100%;background:#fff;}
 
   <div class="scroll">
 
+    <!-- Owner-reported, 2026-08-10, testing the live conversion of this
+         screen on a narrow Android phone: pairing Date/From/Due with Add to
+         Calendar beside them squeezed the column enough that "Tuesday,
+         September 29," wrapped before the year. Add to Calendar now sits on
+         its own row above (.panelact, same pattern as Add Dialog/Add
+         Attachment below), so Date/From/Due get the full row width. -->
+    <div class="panelact"><button class="btn" type="button">Add to Calendar</button></div>
     <div class="meta">
-      <div class="metatop">
-        <div class="metacol">
-          <div class="metarow"><span class="mlabel">Date:</span><span class="mval">Tuesday, September 29, 2026</span></div>
-          <div class="metarow"><span class="mlabel">From:</span><span class="mval">Jason Smith</span></div>
-          <div class="metarow"><span class="mlabel">Due:</span><span class="mval">Monday, October 19, 2026&nbsp; 9:00 AM</span></div>
-        </div>
-        <button class="btn" type="button">Add to Calendar</button>
-      </div>
+      <div class="metarow"><span class="mlabel">Date:</span><span class="mval">Tuesday, September 29, 2026</span></div>
+      <div class="metarow"><span class="mlabel">From:</span><span class="mval">Jason Smith</span></div>
+      <div class="metarow"><span class="mlabel">Due:</span><span class="mval">Monday, October 19, 2026&nbsp; 9:00 AM</span></div>
     </div>
 
     <div class="seclabel">Request Description</div>

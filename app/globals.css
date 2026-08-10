@@ -1751,20 +1751,12 @@ body {
   background: var(--row-tint);
 }
 
-.metatop {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.metatop .metacol {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.metatop .btn {
-  margin-top: 2px;
-}
+/* .metatop/.metacol (Date/From/Due sharing a row with Add to Calendar,
+   side by side) removed 2026-08-10 — owner-reported word-wrap on a narrow
+   Android phone ("Monday, August 10," wrapping before the year). Add to
+   Calendar now sits on its own row above .meta, reusing .panelact (already
+   defined below for Add Dialog/Add Attachment on this same screen), so
+   Date/From/Due get the full row width instead of a squeezed column. */
 
 .seclabel {
   font-size: 13.5px;

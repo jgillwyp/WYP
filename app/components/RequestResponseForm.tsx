@@ -144,6 +144,7 @@ export default function RequestResponseForm() {
   const [dialogSelectedQuestionId, setDialogSelectedQuestionId] = useState<number | null>(null)
   const [dialogSaving, setDialogSaving] = useState(false)
   const dialogTextRef = useRef<HTMLTextAreaElement>(null)
+  const doneDateRef = useRef<HTMLInputElement>(null)
 
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
@@ -309,8 +310,13 @@ export default function RequestResponseForm() {
   // Done Date only — Done Time stays untouched, same "optional refinement,
   // not required" role it has everywhere else in the app. Purely a local
   // field fill; Send is still the actual write (set_response_done_by_token).
+  // Owner's own flagged concern, 2026-08-10, resolved as he suggested: moving
+  // Add to Calendar above the Date/From/Due block (below) pushes Done
+  // Date/Done Time further down the screen, so scroll the just-filled Done
+  // Date field into view rather than leaving it stranded below the fold.
   function handleQuickDone() {
     setDoneDate(todayISODate())
+    doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   // Discards in-progress edits back to the last successfully loaded/saved
@@ -386,25 +392,37 @@ export default function RequestResponseForm() {
         <div className="scroll">
           <form id="request-response-form" onSubmit={handleSend} noValidate>
 
+            {/* Owner-reported, 2026-08-10, testing live on a narrow Android
+                phone: pairing the Date/From/Due column with Add to Calendar
+                beside it squeezed the column enough that "Monday, August 10,"
+                wrapped before the year, and left unused space under the
+                button and to the right of From/Due. Moved the button to its
+                own row above (.panelact, the same pattern already used for
+                Add Dialog/Add Attachment on this screen) so Date/From/Due get
+                the full row width instead — chosen over reformatting the date
+                string itself, which is the identical verbose weekday format
+                used across Request Detail/ToDo Detail/Response Detail/Dialog
+                Detail's own label:value date displays and would go out of
+                step with those screens for a problem this layout change
+                already solves. Costs one extra row of vertical space, same
+                trade-off §6.26 already made. */}
+            <div className="panelact">
+              {/* Add to Calendar is present, matching the mockup, but
+                  deliberately inert — .ics generation is out of scope for
+                  this batch (Days 2-3 covers response read/write only). */}
+              <button className="btn" type="button" aria-disabled="true">
+                Add to Calendar
+              </button>
+            </div>
             <div className="meta">
-              <div className="metatop">
-                <div className="metacol">
-                  <div className="metarow"><span className="mlabel">Date:</span><span className="mval">{formatLongDateTime(data.created_at)}</span></div>
-                  <div className="metarow"><span className="mlabel">From:</span><span className="mval">{data.owner_name ?? '—'}</span></div>
-                  <div className="metarow">
-                    <span className="mlabel">Due:</span>
-                    <span className="mval">
-                      {data.due_date ? formatLongDate(data.due_date) : '—'}
-                      {data.due_time && <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>}
-                    </span>
-                  </div>
-                </div>
-                {/* Add to Calendar is present, matching the mockup, but
-                    deliberately inert — .ics generation is out of scope for
-                    this batch (Days 2-3 covers response read/write only). */}
-                <button className="btn" type="button" aria-disabled="true">
-                  Add to Calendar
-                </button>
+              <div className="metarow"><span className="mlabel">Date:</span><span className="mval">{formatLongDateTime(data.created_at)}</span></div>
+              <div className="metarow"><span className="mlabel">From:</span><span className="mval">{data.owner_name ?? '—'}</span></div>
+              <div className="metarow">
+                <span className="mlabel">Due:</span>
+                <span className="mval">
+                  {data.due_date ? formatLongDate(data.due_date) : '—'}
+                  {data.due_time && <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>}
+                </span>
               </div>
             </div>
 
@@ -457,6 +475,7 @@ export default function RequestResponseForm() {
             <div className="fgroup frow" style={{ padding: '0 var(--pad)' }}>
               <span className="ffloat picker native">
                 <input
+                  ref={doneDateRef}
                   className={`finput${doneDate.trim() === '' ? ' opt' : ''}`}
                   id="dnd"
                   type="date"
