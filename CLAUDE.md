@@ -471,16 +471,64 @@ link is built only after the stack is proven on Add Contact.
   function is owner-only (`auth.uid()` checked against the Request's
   `owner_id`) and the raw token is returned exactly once, never stored
   anywhere; only its salted hash is persisted.
-- **Migration 010 — fixes a real bug in `add_dialog_by_token`, DRAFTED, not
-  yet run** (`docs/Week3 - SQL history.txt`, 2026-08-10). Owner-reported: an
-  Add Dialog Question on `/r/[token]` failed with `column "subject_id" is of
-  type uuid but expression is of type bigint`. Migration 009's
-  `add_dialog_by_token` logged its `events` row using the new dialog
-  entry's own `bigint` id as `subject_id`, which has been `uuid`-typed since
-  migration 002 — a real bug, not a data issue; the other two migration
-  009 functions both happened to log with the Request's own `uuid` already,
-  so this path had never actually run before the owner's test. Fix: log
-  with `subject_id = v_request_id` (the Request's own uuid, same pattern as
-  the other functions and as `subject_type = 'link'`'s existing precedent),
-  moving the dialog entry's own id into `detail->>'dialog_id'` instead. Add
-  Dialog on `/r/[token]` will keep failing until this migration is run.
+- **Migration 010 — fixes a real bug in `add_dialog_by_token`, confirmed run
+  by the owner 2026-08-10** (`docs/Week3 - SQL history.txt`, drafted
+  2026-08-10). Owner-reported: an Add Dialog Question on `/r/[token]` failed
+  with `column "subject_id" is of type uuid but expression is of type
+  bigint`. Migration 009's `add_dialog_by_token` logged its `events` row
+  using the new dialog entry's own `bigint` id as `subject_id`, which has
+  been `uuid`-typed since migration 002 — a real bug, not a data issue; the
+  other two migration 009 functions both happened to log with the Request's
+  own `uuid` already, so this path had never actually run before the
+  owner's test. Fix: log with `subject_id = v_request_id` (the Request's
+  own uuid, same pattern as the other functions and as `subject_type =
+  'link'`'s existing precedent), moving the dialog entry's own id into
+  `detail->>'dialog_id'` instead.
+- **Which-Question picker: show who asked, default to Answer, show for any
+  open Question** (2026-08-10, `RequestResponseForm.tsx`,
+  `RequestDetailForm.tsx`, `TodoDetailForm.tsx`, and their three mockups).
+  Owner testing Request Response live found three related gaps: (1) picker
+  rows didn't say who asked each Question — added, using `.dlgwho`'s
+  existing `(name)` convention (first shipped as a bold `Name:` prefix,
+  corrected same day per the owner's direct follow-up for consistency with
+  the main Dialog list). (2) Add Dialog always defaulted to the Question
+  chip even when every existing entry was itself an unanswered Question —
+  now defaults to Answer whenever one is open. (3) The picker only rendered
+  for more than one open Question, so answering the last remaining one
+  linked it silently with no visual confirmation — **supersedes the
+  2026-08-07 scoping decision** ("it only needs to be presented if there is
+  more than one question"); now shows for any open Question. See the
+  decisions log's two 2026-08-10 entries for full reasoning.
+- **Migration 011 — adds `owner_tier` to `get_request_by_token`, DRAFTED,
+  not yet run** (`docs/Week3 - SQL history.txt`, 2026-08-10). Lets Request
+  Response gate its Attachments segment by the issuer's tier rather than
+  always showing it. Not a privacy concern the way `category_name` was
+  (migration 009) — tier is exactly what this screen's own free/subscriber
+  upsell is already about.
+- **Request Response: Attachments gated by issuer tier; new quick-Done
+  band** (2026-08-10, `RequestResponseForm.tsx`). Owner: showing a locked,
+  non-actionable Attachments segment for every Request was pointless friction
+  when the issuer is free-tier (the Free Account Features block already
+  covers that pitch); gated on `owner_tier === 'subscriber'` (migration
+  011). **Even when shown, Add Attachment stays inert** — real attachment
+  storage/upload doesn't exist anywhere in this app yet, on any screen, so
+  the copy changed from "A subscription feature" (wrong once the issuer
+  already is one) to a plain "No attachments yet," rather than presenting a
+  button that would do nothing if clicked. Separately, added a **quick-Done
+  band** (§6.31 PROPOSED, `.donerow`/`.donenote`) above the Done Date/Done
+  Time row — a "Done" button that fills Done Date with today only (Done
+  Time untouched); the band's text and the button's disabled state both
+  react purely to whether Done Date currently holds a value, regardless of
+  whether that happened via the button or manual entry — the owner's own
+  proposed resolution to an ambiguity he raised, implemented as suggested.
+  **Neither change has been ported into the mockup yet** — flagged in
+  `design/README.md`, not silently skipped.
+- **`profiles.display_name` has no live path to a value — now visibly
+  affecting real usage, not just Time Zone's old fallback chain.**
+  Owner-observed: Request Response's `From:` row showed "—", and Dialog
+  entries composed by the signed-in owner showed a raw email address
+  instead of a name. Same root cause as the Time Zone gap already noted
+  above — Create Free Account isn't wired into the live app and Account is
+  intentionally undesigned, so nothing ever writes `profiles.display_name`.
+  One-time SQL fix (not a migration) recorded in `docs/Week3 - SQL
+  history.txt`.

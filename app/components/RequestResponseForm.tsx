@@ -59,6 +59,7 @@ type ResponsePayload = {
   done_date: string | null
   done_time: string | null
   owner_name: string | null
+  owner_tier: 'free' | 'subscriber' | null
   contact_name: string | null
   dialog: DialogEntry[]
 }
@@ -108,6 +109,17 @@ function formatTime12h(value: string | null): string {
   h = h % 12
   if (h === 0) h = 12
   return `${h}:${mStr} ${ampm}`
+}
+
+// Local calendar date as "YYYY-MM-DD", matching the native date input's own
+// value format — built from Y/M/D components (not toISOString(), which is
+// UTC and can land on the wrong day near midnight in most US time zones).
+function todayISODate(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export default function RequestResponseForm() {
@@ -281,6 +293,16 @@ export default function RequestResponseForm() {
     setSendConfirmed(true)
   }
 
+  // Owner's ask (2026-08-10): mark a Request Done in as few keystrokes as
+  // possible, without forcing Done/Add Dialog/Add Attachment into a
+  // mutually-exclusive choice (a recipient may want more than one). Sets
+  // Done Date only — Done Time stays untouched, same "optional refinement,
+  // not required" role it has everywhere else in the app. Purely a local
+  // field fill; Send is still the actual write (set_response_done_by_token).
+  function handleQuickDone() {
+    setDoneDate(todayISODate())
+  }
+
   // Discards in-progress edits back to the last successfully loaded/saved
   // values. Not router.back() — every other Detail screen's Cancel returns
   // to the Main Screen history entry it was reached from, but an anonymous
@@ -388,6 +410,35 @@ export default function RequestResponseForm() {
                 question). Reuses Request Detail's exact
                 .fgroup.frow + .ffloat.picker.native editable markup instead,
                 already proven there. */}
+            {/* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — owner's ask:
+                mark a Request Done in as few keystrokes as possible. Not a
+                Done/Add-Dialog/Add-Attachment chip picker (rejected: those
+                aren't mutually exclusive — a recipient may want more than
+                one). Not an auto-filled Done Date on page load either
+                (rejected: forces anyone who only wants to add Dialog to
+                first clear it). Purely reactive to whether Done Date already
+                holds a value, however it got there — clicking Done here, or
+                typing directly into the field below both land in the same
+                state, so there's no separate "did they click Done" flag to
+                get out of sync. */}
+            <div className="donerow">
+              <span className="donenote">
+                {doneDate.trim() === '' ? (
+                  <><b>Note:</b> For a quick response, click Done and Send.</>
+                ) : (
+                  'This Request is now marked as Done, just click Send.'
+                )}
+              </span>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleQuickDone}
+                disabled={doneDate.trim() !== ''}
+              >
+                Done
+              </button>
+            </div>
+
             {/* This screen has no shared .form wrapper (matching the mockup's
                 own flat, per-block-padded .scroll children) — pad this one
                 editable row directly with --pad, same as every sibling block
@@ -472,30 +523,50 @@ export default function RequestResponseForm() {
               </div>
             </div>
 
-            <div className="panelact">
-              <button className="btn is-locked" type="button" aria-disabled="true">
-                <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                Add Attachment
-              </button>
-            </div>
-            <div className="panelfull">
-              <div className="attachpanel">
-                <span className="plabel">Attachments</span>
-                <div className="locked">
-                  <svg className="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
-                    <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                  <span className="lockttl">A subscription feature</span>
-                  <span className="locknote">
-                    Attaching files is available on Requests sent by subscribers.
-                  </span>
+            {/* Owner's ask (2026-08-10): don't show a locked, non-usable
+                Attachments segment when the Request's issuer is a free
+                user — a free-tier promo hits the recipient elsewhere on
+                this screen already (the Free Account Features block below),
+                and this panel offers no path to act on it either way.
+                Reads owner_tier (migration 011) rather than assuming.
+                For a subscriber-issued Request, the segment stays visible —
+                but real attachment storage/upload doesn't exist anywhere in
+                this app yet (still deferred per CLAUDE.md's Scope
+                discipline, true on every screen including the issuer's own
+                Request Detail), so the copy is changed to a plain "not
+                built yet" note rather than the free-tier upsell wording,
+                which would be wrong once the issuer already IS a
+                subscriber. Add Attachment stays locked either way, since
+                there's genuinely nothing behind it yet — flagged rather
+                than faked as usable. */}
+            {data.owner_tier === 'subscriber' && (
+              <>
+                <div className="panelact">
+                  <button className="btn is-locked" type="button" aria-disabled="true">
+                    <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
+                      <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                    </svg>
+                    Add Attachment
+                  </button>
                 </div>
-              </div>
-            </div>
+                <div className="panelfull">
+                  <div className="attachpanel">
+                    <span className="plabel">Attachments</span>
+                    <div className="locked">
+                      <svg className="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
+                        <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
+                      </svg>
+                      <span className="lockttl">No attachments yet</span>
+                      <span className="locknote">
+                        Attachment upload isn&rsquo;t available in this preview yet.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="promo">
               <div className="promo-kicker">Free Account Features</div>
@@ -592,7 +663,7 @@ export default function RequestResponseForm() {
                         aria-checked={dialogSelectedQuestionId === q.id}
                         onClick={() => setDialogSelectedQuestionId(q.id)}
                       >
-                        <span className="qpicker-who">{q.who}:</span> {truncate(q.body)}
+                        <span className="dlgwho">({q.who})</span> {truncate(q.body)}
                       </button>
                     ))}
                   </div>

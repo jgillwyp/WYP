@@ -496,10 +496,8 @@ commit;
 
 -- ============================================================================
 -- WYP migration 010 — fixes add_dialog_by_token's events insert
--- DRAFTED 2026-08-10 — NOT YET RUN. Run in the Supabase SQL editor, then
--- change the line above to "Run <date>" and update CLAUDE.md / decisions log
--- from "drafted" to "confirmed run by the owner", same as every earlier
--- migration in this project.
+-- CONFIRMED RUN by the owner 2026-08-10 — "Migration 010 was run. The bug
+-- is fixed."
 --
 -- BUG, owner-reported: adding a Dialog Question through /r/[token] failed
 -- with `column "subject_id" is of type uuid but expression is of type
@@ -596,4 +594,108 @@ commit;
 --        -- read this Request's events (migration 008's read policy), not
 --        -- the SQL editor — subject_id is this Request's own id, and
 --        -- detail->>'dialog_id' is the new dialog row's actual id
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 011 — adds owner_tier to get_request_by_token
+-- DRAFTED 2026-08-10 — NOT YET RUN. Run in the Supabase SQL editor, then
+-- change the line above to "Run <date>" and update CLAUDE.md / decisions log
+-- from "drafted" to "confirmed run by the owner", same as every earlier
+-- migration in this project.
+--
+-- Owner: Request Response shouldn't show the locked Attachments segment for
+-- every Request — only when the issuer (owner) is a subscriber. Rights on a
+-- Request already come from the issuer, read live off profiles.tier (see
+-- CLAUDE.md's Entitlements section) — this just exposes that same value to
+-- the one screen that needs it to decide what to render. Not a privacy
+-- concern the way category_name was (migration 009's correction): tier is
+-- what the whole free/subscriber upsell on this screen is already about, not
+-- private sender data.
+-- ----------------------------------------------------------------------------
+
+begin;
+
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         p.display_name as owner_name, p.tier as owner_tier, ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+    -- Still no join to categories, and no category_name in the payload —
+    -- see migration 009's correction note above; unaffected by this change.
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here.
+--
+--   await supabase.rpc('get_request_by_token', { p_token: token })
+--        -> payload now also has owner_tier ('free' or 'subscriber')
+-- ============================================================================
+-- ============================================================================
+-- Data note, not a migration — the owner asked "is From: blank intentional?"
+-- while testing. Root cause: profiles.display_name has no live path to a
+-- value today. The only screen that would ever collect it, Create Free
+-- Account, isn't wired into the live app (login/sign-up has no separate
+-- first-run step — see CLAUDE.md's Known gaps), and Account is intentionally
+-- undesigned. Same root cause also explains Dialog entries composed by the
+-- signed-in owner (RequestDetailForm.tsx/TodoDetailForm.tsx) showing a raw
+-- email address as `who` instead of a name — that code's own fallback chain
+-- is `ownerName ?? userData.user.email ?? 'Unknown'`, and ownerName is null
+-- for the same reason. One-time fix, not a migration (no schema change):
+--
+--   update public.profiles set display_name = 'Jim Gillon'
+--     where id = (select id from auth.users where email = 'jimgillon@gmail.com');
 -- ============================================================================

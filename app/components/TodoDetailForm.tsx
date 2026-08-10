@@ -759,7 +759,7 @@ export default function TodoDetailForm() {
                         aria-checked={dialogSelectedQuestionId === q.id}
                         onClick={() => setDialogSelectedQuestionId(q.id)}
                       >
-                        <span className="qpicker-who">{q.who}:</span> {truncate(q.body)}
+                        <span className="dlgwho">({q.who})</span> {truncate(q.body)}
                       </button>
                     ))}
                   </div>

@@ -686,13 +686,14 @@ body {
   margin: 2px 0 12px;
 }
 
-/* Who asked each Question, inside a .qpicker row (owner-reported, 2026-08-10:
-   "a person may choose to answer their own question so only showing
-   questions by the other party would not be appropriate" — so this is who
-   asked, shown for every open Question, not filtered to "the other party"). */
-.qpicker-who {
-  font-weight: 700;
-}
+/* Who asked each Question, inside a .qpicker row (owner-reported,
+   2026-08-10: "a person may choose to answer their own question so only
+   showing questions by the other party would not be appropriate" — so this
+   is who asked, shown for every open Question, not filtered to "the other
+   party"). Reuses .dlgwho verbatim — parenthesized, Ink-Soft, not bold —
+   rather than a bespoke bold-colon treatment: the owner's own follow-up
+   preferred matching the main Dialog list's existing "(name)" convention
+   over introducing a second way of labeling who said something. */
 
 .lookup-item.selected {
   background: var(--focus-tint);
@@ -1885,4 +1886,28 @@ body {
   width: 100%;
   font-size: 13.5px;
   padding: 11px 14px;
+}
+
+/* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — Request Response's
+   one-click "mark as Done" shortcut, sitting between the grabber divider
+   and the editable Done Date/Done Time row. Strip band + inline .btn,
+   the same shape as .linkband, but a distinct class: .linkband's own name
+   is specific to the Response Link feature, and this is functionally
+   unrelated (a form-field shortcut, not a fetch-then-display action). */
+.donerow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px var(--pad) 14px;
+  background: var(--strip);
+  border-radius: 12px;
+  padding: 11px 13px;
+}
+
+.donenote {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
 }
