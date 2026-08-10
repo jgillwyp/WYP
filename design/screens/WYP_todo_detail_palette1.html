@@ -209,6 +209,7 @@ html,body{margin:0;height:100%;background:#fff;}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dlgbody{font-weight:700;}
 .qpicker{border:1px solid var(--rule);border-radius:9px;max-height:160px;overflow-y:auto;margin:2px 0 12px;}
+.qpicker-who{font-weight:700;}
 .lookup-item{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;color:var(--ink);
   background:none;border:none;padding:9px 12px;cursor:pointer;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -399,12 +400,22 @@ function renderDialogList(){
   }
   document.getElementById('dlg-list').innerHTML = html;
 }
+// Owner-reported, 2026-08-10, on the live conversion of this screen — ported
+// back here for consistency: (1) opening Add Dialog defaulted to the
+// Question chip even when every existing entry was an unanswered Question;
+// now defaults to Answer whenever one is open. (2) The which-Question picker
+// only showed itself for more than one open Question, so answering the last
+// remaining open Question linked it silently with no visual confirmation of
+// which one — relaxed to show for any open Question (>0). (3) Each picker
+// row now shows who asked, not just the question text — "a person may
+// choose to answer their own question so only showing questions by the
+// other party would not be appropriate."
 function openDialogModal(){
   dlgKind = 'question';
   dlgSelectedQuestionId = null;
   document.getElementById('dlgtext').value = '';
   document.getElementById('dlg-error').style.display = 'none';
-  selectKind('question');
+  selectKind(openQuestions().length > 0 ? 'answer' : 'question');
   document.getElementById('dlg-scrim').style.display = 'block';
   document.getElementById('dlg-modal').style.display = 'block';
 }
@@ -425,12 +436,12 @@ function selectKind(kind){
   answerChip.setAttribute('aria-disabled', open.length === 0 ? 'true' : 'false');
 
   var wrap = document.getElementById('dlg-qpicker-wrap');
-  if (kind === 'answer' && open.length > 1){
+  if (kind === 'answer' && open.length > 0){
     dlgSelectedQuestionId = open[open.length - 1].id;
     renderQuestionPicker(open);
     wrap.style.display = 'block';
   } else {
-    dlgSelectedQuestionId = (kind === 'answer' && open.length === 1) ? open[0].id : null;
+    dlgSelectedQuestionId = null;
     wrap.style.display = 'none';
   }
 }
@@ -440,7 +451,8 @@ function renderQuestionPicker(open){
     var q = open[i];
     var sel = q.id === dlgSelectedQuestionId;
     html += '<button type="button" class="lookup-item' + (sel ? ' selected' : '') + '" role="radio" aria-checked="' +
-      (sel ? 'true' : 'false') + '" onclick="pickQuestion(' + q.id + ')">' + truncateText(q.body) + '</button>';
+      (sel ? 'true' : 'false') + '" onclick="pickQuestion(' + q.id + ')"><span class="qpicker-who">' +
+      q.who + ':</span> ' + truncateText(q.body) + '</button>';
   }
   document.getElementById('dlg-qpicker').innerHTML = html;
 }

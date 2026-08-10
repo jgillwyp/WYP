@@ -192,10 +192,17 @@ export default function RequestResponseForm() {
     return dialogList.find((e) => e.id === id)
   }
 
+  // Owner-reported (2026-08-10): opening Add Dialog always defaulted to the
+  // Question chip, even when every existing entry was itself an unanswered
+  // Question — "it seems more appropriate to show the Answer chip as
+  // selected if there are any questions in the dialog which have not been
+  // answered yet." selectKind('answer') already knows how to pick the right
+  // Question (or show the picker for more than one); this just changes
+  // which chip starts selected.
   function openDialogModal() {
     setDialogModalBody('')
     setDialogModalError(null)
-    selectKind('question')
+    selectKind(openQuestions.length > 0 ? 'answer' : 'question')
     setDialogModalOpen(true)
   }
 
@@ -565,7 +572,14 @@ export default function RequestResponseForm() {
                 </div>
               </div>
 
-              {dialogModalKind === 'answer' && openQuestions.length > 1 && (
+              {/* Owner-reported (2026-08-10): after answering one of two
+                  open Questions, reopening Add Dialog and picking Answer
+                  showed nothing — the remaining single open Question was
+                  linked silently, with no visual confirmation of which one.
+                  Originally scoped (2026-08-07) to show only when more than
+                  one Question was open; relaxed to any open Question (>0),
+                  so composing an Answer always confirms what it's answering. */}
+              {dialogModalKind === 'answer' && openQuestions.length > 0 && (
                 <div>
                   <span className="flabel">Which Question?</span>
                   <div className="qpicker" role="radiogroup" aria-label="Which Question this Answer responds to">
@@ -578,7 +592,7 @@ export default function RequestResponseForm() {
                         aria-checked={dialogSelectedQuestionId === q.id}
                         onClick={() => setDialogSelectedQuestionId(q.id)}
                       >
-                        {truncate(q.body)}
+                        <span className="qpicker-who">{q.who}:</span> {truncate(q.body)}
                       </button>
                     ))}
                   </div>

@@ -6,6 +6,22 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Which-Question picker: show who asked, default to Answer, and show even for a single open Question
+
+Owner, first message: *"On the Request Response Add Dialog with two questions... 1) the two questions are shown but it would be helpful to show who asked the question [a person may choose to answer their own question so only showing questions by the other party would not be appropriate], 2) the default response for the chip in this instance is Question even though the only prior dialog entries are questions [it seems more appropriate to show the Answer chip as selected if there are any questions in the dialog which have not been answered yet]."*
+
+Owner, follow-up: *"when I answered one of the two questions and subsequently selected the Answer chip, the remaining unanswered question was not shown."*
+
+Three related fixes to the Add Dialog modal's Kind-selection and which-Question-picker logic, applied identically everywhere the pattern exists — `RequestResponseForm.tsx`, `RequestDetailForm.tsx`, `TodoDetailForm.tsx`, and their three source mockups (kept in sync per the project's standing convention):
+
+1. **Each picker row now shows who asked**, not just the question text (`.qpicker-who`, bold, prefixed before the truncated body). Deliberately not filtered to "the other party" — the owner's own point was that a person can answer their own Question, so the asker's identity is informational, not a filter.
+2. **Add Dialog now defaults to the Answer chip whenever at least one Question is open**, instead of always starting on Question. `openDialogModal()` now calls `selectKind(openQuestions.length > 0 ? 'answer' : 'question')` — reuses the existing default-question-selection logic inside `selectKind('answer')` unchanged, just changes which chip starts selected.
+3. **The which-Question picker itself now renders for any open Question, not only for more than one.** This reverses the 2026-08-07 scoping decision recorded in `design/README.md`'s §6.27 entry ("it only needs to be presented if there is more than one question") — the owner's second message is direct field evidence that "links silently, no picker" left no visual confirmation of what a lone remaining Question even was once the picker disappeared. Superseded, not silently overwritten: the original entry stays on record, this entry is the correction. The underlying single-Question auto-select logic (`dlgSelectedQuestionId = open[open.length - 1].id`) needed no change — only the render condition (`openQuestions.length > 1` → `> 0`) did.
+
+`npx tsc --noEmit` and `npx eslint` on the three changed components both pass clean.
+
+\---
+
 ## 2026-08-10 — Migration 010 drafted: fixes `add_dialog_by_token`'s events insert (bug found by the owner testing Day 4's link)
 
 Owner: *"I tried to add a Dialog Question to a Request Response and saw an error"* — screenshot showed `column "subject_id" is of type uuid but expression is of type bigint`.

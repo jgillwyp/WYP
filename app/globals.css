@@ -686,6 +686,14 @@ body {
   margin: 2px 0 12px;
 }
 
+/* Who asked each Question, inside a .qpicker row (owner-reported, 2026-08-10:
+   "a person may choose to answer their own question so only showing
+   questions by the other party would not be appropriate" — so this is who
+   asked, shown for every open Question, not filtered to "the other party"). */
+.qpicker-who {
+  font-weight: 700;
+}
+
 .lookup-item.selected {
   background: var(--focus-tint);
   color: var(--brand-blue);
