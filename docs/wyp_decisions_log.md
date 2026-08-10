@@ -6,6 +6,20 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Request Response: Add to Calendar top spacing; promo block trimmed and reordered
+
+Two small follow-ups from the owner after the word-wrap fix above.
+
+**Add to Calendar top spacing.** *"Please add a matching amount of vertical space above the Add to Calendar button as there is below the button. It looks a bit crowded/adjacent to the screen title row."* Add to Calendar's `.panelact` row is the first thing in `.scroll` on this screen, so it had no preceding sibling to supply a natural gap above it, unlike every other `.panelact` on the screen (which follows a `.grabber` or `.panel`) — it kept its usual 6px `margin-bottom` but had nothing matching above. Added a new `.panelact-top` modifier (`margin-top: 6px`) scoped to just this one row, rather than changing `.panelact` itself everywhere it's used.
+
+**Promo block.** *"Please drop the 'Free Account Features' text line, accordingly shorten the vertical size of the 'sales pitch' area, move the 'Create your own Free Account' [button] above the 'The simple way to ask...' sentence. The Free Account Features is not needed because the button says Free Account, and having the sentence precede the button incorrectly implies it should be read before clicking the button."* Removed `.promo-kicker` entirely (CSS rule and markup) rather than just hiding it — it was purely redundant with the button's own label. Reordered to heading → button → sentence; `.promo-h`'s margin dropped its now-unneeded top offset (it's the first child now) and `.promo-p`'s margin flipped from bottom-only to top-only, since it's the last child now and `.promo`'s own bottom padding supplies the box's trailing space. Net effect is exactly what was asked: one fewer line, and the button no longer sits behind a sentence that reads like a precondition.
+
+Applied to `RequestResponseForm.tsx`, `globals.css`, and `WYP_respond_to_request_palette1.html` (the promo block doesn't exist on Response Detail's mockup — signed-in users don't see the free-account pitch, per the existing screen-map note — so nothing to port there for that piece; the Add to Calendar top-spacing fix is scoped to Request Response only, since that's the screen the owner tested and reported on).
+
+`npx tsc --noEmit` and `npx eslint` on the changed component pass clean.
+
+\---
+
 ## 2026-08-10 — Request Response: Add to Calendar moved above Date/From/Due to fix Android word-wrap
 
 Owner, testing live on a narrow Android phone: *"The date presentation on the Request Response causes more word-wraps than desired... 'Date: Monday, August 10, [wrap] 2026'... There is a lot of visually-unused space under the Add to Calendar button and to the right of both the From and the Due text values."* He proposed two options: (1) shorten the date string to an mdy-plus-weekday format and keep the side-by-side layout, vertically centering the button with the three rows, or (2) move Add to Calendar to its own row above, matching the Add Dialog/Add Attachment pattern already on this screen, with date formatting untouched — flagging a concern that this would push Done Date/Done Time further down, resolved (his own suggestion) by scrolling Done Date into view when the Done button is clicked.

@@ -406,7 +406,7 @@ export default function RequestResponseForm() {
                 step with those screens for a problem this layout change
                 already solves. Costs one extra row of vertical space, same
                 trade-off §6.26 already made. */}
-            <div className="panelact">
+            <div className="panelact panelact-top">
               {/* Add to Calendar is present, matching the mockup, but
                   deliberately inert — .ics generation is out of scope for
                   this batch (Days 2-3 covers response read/write only). */}
@@ -597,13 +597,19 @@ export default function RequestResponseForm() {
               </>
             )}
 
+            {/* Owner-reported, 2026-08-10: dropped the "Free Account
+                Features" kicker line — the button's own label already says
+                "Free Account", so it was redundant, and removing it
+                shortens this block by a line. Also moved the button above
+                the descriptive sentence: with the sentence first, it read
+                as something to read before clicking, which isn't the
+                intent. */}
             <div className="promo">
-              <div className="promo-kicker">Free Account Features</div>
               <div className="promo-h">Send it, Track it, Get it Done</div>
-              <p className="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
               <Link href="/login" className="btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
                 Create your own Free Account
               </Link>
+              <p className="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
             </div>
 
             {sendError && (

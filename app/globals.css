@@ -1793,19 +1793,17 @@ body {
   padding: 13px 14px;
 }
 
-.promo-kicker {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: 0.01em;
-}
+/* .promo-kicker ("Free Account Features") removed 2026-08-10 — owner: the
+   button below already says "Free Account", so the kicker was redundant;
+   dropping it also shortens this block by a line, which was part of the
+   ask. */
 
 .promo-h {
   font-size: 19px;
   font-weight: 800;
   color: var(--brand-blue);
   letter-spacing: -0.01em;
-  margin: 3px 0 4px;
+  margin: 0 0 8px;
 }
 
 /* Done Date/Done Time are NOT reproduced as the mockup's boxed .duo/
@@ -1830,6 +1828,17 @@ body {
   margin-bottom: 6px;
 }
 
+/* Owner-reported, 2026-08-10: Request Response's Add to Calendar row is the
+   very first thing in .scroll (no preceding sibling to supply a natural
+   gap, unlike every other .panelact on this screen, which follows a
+   .grabber or .panel), so it sat flush against the band above it while
+   still keeping its usual 6px margin-bottom — read as crowded against the
+   title row. Adds a matching 6px above, scoped to this one instance rather
+   than every .panelact everywhere. */
+.panelact-top {
+  margin-top: 6px;
+}
+
 .panelact .btn,
 .panelact .btn-secondary,
 .panelact .is-locked {
@@ -1842,11 +1851,16 @@ body {
   padding: 0 var(--pad) 12px;
 }
 
+/* Owner reordered 2026-08-10: this sentence now follows the button rather
+   than preceding it (a sentence before the button read as something to
+   read first, which wasn't the intent) — margin flips from bottom-only to
+   top-only accordingly; .promo's own bottom padding supplies the box's
+   trailing space now that this is the last child. */
 .promo-p {
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--ink);
-  margin: 0 0 11px;
+  margin: 8px 0 0;
 }
 
 /* Response Link band (§6.30, PROPOSED, Week 3 Day 4, 2026-08-10) — Request

@@ -103,6 +103,10 @@ html,body{margin:0;height:100%;background:#fff;}
    mockups' fuller comment). .panelact carries the row's own padding since
    this screen has no .form/.fgroup wrapper to supply it. */
 .panelact{display:flex;justify-content:flex-end;padding:0 var(--pad);margin-bottom:6px;}
+/* Add to Calendar has no preceding sibling in .scroll to supply a natural
+   gap, unlike this screen's other .panelact rows — matches its own 6px
+   margin-bottom with an equal margin-top so it doesn't crowd the band. */
+.panelact-top{margin-top:6px;}
 .panelact .btn,.panelact .btn-secondary,.panelact .is-locked{
   font-size:12.5px;border-radius:11px;padding:9px 14px;}
 .panelfull{padding:0 var(--pad) 12px;}
@@ -204,9 +208,14 @@ html,body{margin:0;height:100%;background:#fff;}
 /* Promo block — the Free Account Features unit merges the pitch and the action
    so the recipient sees one call, not a banner plus a nearby link. */
 .promo{margin:4px var(--pad) 12px;background:var(--strip);border-radius:12px;padding:13px 14px;}
-.promo-kicker{font-size:11.5px;font-weight:700;color:var(--ink);letter-spacing:.01em;}
-.promo-h{font-size:19px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;margin:3px 0 4px;}
-.promo-p{font-size:12.5px;line-height:1.45;color:var(--ink);margin:0 0 11px;}
+/* .promo-kicker ("Free Account Features") removed 2026-08-10 — owner: the
+   button below already says "Free Account", so it was redundant, and
+   dropping it shortens this block by a line. */
+.promo-h{font-size:19px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;margin:0 0 8px;}
+/* Sentence now follows the button, not precedes it (owner: preceding it
+   read as something to read before clicking) — margin flipped from
+   bottom-only to top-only. */
+.promo-p{font-size:12.5px;line-height:1.45;color:var(--ink);margin:8px 0 0;}
 .promo .btn{width:100%;font-size:13.5px;padding:11px 14px;}
 
 /* Banner + ad slot (§6.14) */
@@ -272,7 +281,7 @@ html,body{margin:0;height:100%;background:#fff;}
          September 29," wrapped before the year. Add to Calendar now sits on
          its own row above (.panelact, same pattern as Add Dialog/Add
          Attachment below), so Date/From/Due get the full row width. -->
-    <div class="panelact"><button class="btn" type="button">Add to Calendar</button></div>
+    <div class="panelact panelact-top"><button class="btn" type="button">Add to Calendar</button></div>
     <div class="meta">
       <div class="metarow"><span class="mlabel">Date:</span><span class="mval">Tuesday, September 29, 2026</span></div>
       <div class="metarow"><span class="mlabel">From:</span><span class="mval">Jason Smith</span></div>
@@ -354,10 +363,9 @@ html,body{margin:0;height:100%;background:#fff;}
 
     <!-- Pitch and action as one unit (was a banner plus a separate link). -->
     <div class="promo">
-      <div class="promo-kicker">Free Account Features</div>
       <div class="promo-h">Send it, Track it, Get it Done</div>
-      <p class="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
       <button class="btn" type="button">Create your own Free Account</button>
+      <p class="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
     </div>
 
   </div>
