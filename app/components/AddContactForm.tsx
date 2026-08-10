@@ -109,12 +109,17 @@ export default function AddContactForm() {
       return
     }
 
-    // No list view yet (Week 1 Days 4-5, step 4) — back to the main screen.
-    router.push('/')
+    // Returns to the Contacts list, not the main screen (2026-08-09) — the
+    // only route that currently links to /contacts/new is that list's own
+    // Add Contact button, so Save should land back where the person came
+    // from. Revisit if a second entry point (e.g. Create Request's
+    // no-contact interception, §6.24, not yet built) starts reaching this
+    // screen — that path will want its own return destination.
+    router.push('/contacts')
   }
 
   function handleCancel() {
-    router.push('/')
+    router.push('/contacts')
   }
 
   return (

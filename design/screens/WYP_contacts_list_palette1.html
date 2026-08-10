@@ -1,19 +1,27 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Palette 1 — Would You Please — My Contacts</title>
+<title>Palette 1 — Would You Please — Contacts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ============================================================================
-   My Contacts (2026-08-09) — new screen, reached from the Main Screen's
-   Housekeeping "My Contacts" row. Owner's spec, verbatim: "should show the
-   name, notify method and related value (email or phone) - and upon click
-   open up a Contact Details screen for editing (and should have a Close
-   button)." Row language reuses .hkrow/.hktitle/.hknote — same "navigational
-   row: bold Brand-Blue title, em-dash, regular Ink description" pattern
-   already established for Housekeeping's own rows (§6.23), rather than
-   inventing a new list style for what is structurally the same kind of row.
+   Contacts (2026-08-09, retitled from "My Contacts" same day) — new screen,
+   reached from the Main Screen's Housekeeping "Contacts" row. Owner's spec,
+   verbatim: "should show the name, notify method and related value (email
+   or phone) - and upon click open up a Contact Details screen for editing
+   (and should have a Close button)." Row language reuses
+   .hkrow/.hktitle/.hknote — same "navigational row: bold Brand-Blue title,
+   em-dash, regular Ink description" pattern already established for
+   Housekeeping's own rows (§6.23), rather than inventing a new list style
+   for what is structurally the same kind of row.
+
+   Retitled "My Contacts" -> "Contacts" the same day the Close button was
+   added: owner's call was that the title+Close combination would wrap on
+   Android, and — separately — that a navigation destination's title should
+   repeat exactly what its Housekeeping row was named when selected. Both
+   point the same direction, so the Housekeeping row is "Contacts" too
+   (MainScreen.tsx / this file's sibling mockup), not "My Contacts".
    ============================================================================ */
 
 :root{
@@ -41,12 +49,19 @@ html,body{margin:0;height:100%;background:#fff;}
   margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
 .hdr + .band{margin-top:0;border-top:none;}
 .glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
 
 .btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
   text-align:center;cursor:pointer;background:var(--brand-blue);
-  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;margin-left:auto;}
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
 .btn:active{background:var(--blue-pressed);}
 .btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 
 /* Navigational row (§6.23) — same visual language as Housekeeping's rows. */
 .hkrows{margin-top:3px;}
@@ -75,8 +90,11 @@ html,body{margin:0;height:100%;background:#fff;}
   </div>
 
   <div class="band">
-    <span class="glabel">My Contacts</span>
-    <button class="btn" type="button">Add&nbsp;Contact</button>
+    <span class="glabel">Contacts</span>
+    <span class="bandcluster">
+      <button class="btn" type="button">Add&nbsp;Contact</button>
+      <button class="btn-secondary" type="button">Close</button>
+    </span>
   </div>
 
   <div class="scroll">

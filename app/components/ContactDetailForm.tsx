@@ -115,11 +115,15 @@ export default function ContactDetailForm() {
       return
     }
 
-    router.push('/contacts')
+    // router.back(), not push('/contacts') — this screen is only ever
+    // reached by clicking a row on the Contacts list, so back() restores
+    // that list's scroll position instead of landing at its top. Same
+    // reasoning as RequestDetailForm.tsx / TodoDetailForm.tsx.
+    router.back()
   }
 
   function handleClose() {
-    router.push('/contacts')
+    router.back()
   }
 
   if (loading) {

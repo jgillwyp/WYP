@@ -343,4 +343,53 @@ link is built only after the stack is proven on Add Contact.
   Contacts" ("'Account' seems a bit impersonal for this app," owner's words).
   Still inert: the actual Account screen is intentionally undesigned,
   awaiting further product evolution per the owner's explicit instruction —
-  do not design it unprompted.
+  do not design it unprompted. **Superseded same day, see below** — both
+  Housekeeping rows dropped "My" entirely a few hours later.
+- **My Contacts retitled "Contacts"; gained a Close button** (2026-08-09,
+  same day as the row above) — the owner's ask was a Close button next to
+  Add Contact; adding it would wrap "My Contacts" on Android, and separately
+  the owner's rule is that a Housekeeping row's label must repeat its
+  destination screen's own title exactly once selected. Both point the same
+  direction, so the Housekeeping row (and "My Account" alongside it, for
+  consistency) also dropped "My": **"Contacts"** and **"Account"** are the
+  final wording, in `WYP_main_screen_palette1.html`, `MainScreen.tsx`,
+  `WYP_contacts_list_palette1.html`, and `ContactsList.tsx`. "Account" is
+  still inert — the screen itself remains undesigned. The list's band is now
+  `.bandcluster`-wrapped (Add Contact + Close) rather than a single
+  right-margined `.btn`.
+- **Add Contact returns to the Contacts list, not the Main Screen**
+  (`AddContactForm.tsx`, 2026-08-09) — both Save and Cancel now call
+  `router.back()`. The only route that currently links to `/contacts/new`
+  is the Contacts list's own Add Contact button, so this returns to wherever
+  the person actually came from and restores that screen's scroll position.
+  Revisit if a second entry point (e.g. Create Request's no-contact
+  interception, §6.24, not yet built) starts reaching this screen — that
+  path will want its own return destination, not a blanket `back()`.
+- **Request Detail, ToDo Detail, and Contact Detail all use `router.back()`
+  instead of `router.push('/...')`** (2026-08-09) — owner-reported: "When I
+  edited a ToDo I was returned to the top of the main screen instead of to
+  where I have edited the ToDo." Each of these screens is only ever reached
+  by clicking a row on its parent list (Main Screen's Sent/ToDo rows, or the
+  Contacts list), so `back()` returns to that exact history entry and Next
+  restores its scroll position automatically — no Cache Components/Activity
+  needed (that Next 16 feature is opt-in, off in this app; see
+  `next.config.ts`), and in fact not wanted here: the parent screen still
+  fully remounts and refetches on the way back, which is what makes the
+  just-edited row show its new data rather than a stale cached one. The
+  trade-off: Main Screen's filter-chip and search selections reset to their
+  defaults on the way back too, since they're plain `useState` and the
+  component does remount — only scroll position is preserved. **Chip state
+  fixed same day, see below; search box trade-off still stands.**
+- **Main Screen's filter chips now survive the round trip too**
+  (2026-08-09 — "It would be appropriate to return to the same chip state on
+  the main screen") — Sent filter, ToDos filter, and Housekeeping's
+  Tasks/How-to Videos tab are persisted to `sessionStorage`
+  (`wyp.mainSentFilter` / `wyp.mainTodoFilter` / `wyp.mainHkTab`), read back
+  via lazy `useState` initializers on mount. `sessionStorage`, not
+  `localStorage` (`supabaseClient.ts`'s `REMEMBER_KEY` pattern uses the
+  latter for "Keep me signed in," a durable account setting; this is a
+  within-session view preference, fine to reset once the tab closes).
+  **Scoped to the chips only — the search text box is deliberately not
+  persisted**, matching the owner's own wording ("chip state"); flagged as a
+  scoping call rather than a confirmed instruction, easy to extend if it
+  turns out to matter.

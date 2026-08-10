@@ -342,11 +342,18 @@ export default function RequestDetailForm() {
       return
     }
 
-    router.push('/')
+    // router.back(), not push('/') — this screen is only ever reached by
+    // clicking a Sent row on the Main Screen, so back() returns to that
+    // exact history entry. Next restores its scroll position automatically
+    // on back navigation; push('/') would instead mount a fresh Main Screen
+    // at the top. The Main Screen still remounts and refetches either way
+    // (no Cache Components/Activity in this app yet — see CLAUDE.md), so the
+    // edited due date/done date/etc. show correctly, not stale.
+    router.back()
   }
 
   function handleCancel() {
-    router.push('/')
+    router.back()
   }
 
   if (loading) {

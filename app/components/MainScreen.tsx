@@ -31,10 +31,25 @@ import { supabase } from '@/lib/supabaseClient'
  *   both sections at once, so there's nothing yet for a scope to narrow.
  *   Received's chips stay decorative — that subcard has no live rows to
  *   filter.
- * - Housekeeping's My Contacts / Your Account rows are still inert
- *   placeholders (see CLAUDE.md Known gaps). Log Out is real — it is the one
- *   piece that directly serves the "test the login loop normally" goal this
- *   screen was built for.
+ * - Chip state survives a trip to a Detail screen and back (2026-08-09 —
+ *   "It would be appropriate to return to the same chip state on the main
+ *   screen"). This screen fully remounts on router.back() (no Cache
+ *   Components/Activity in this app — see CLAUDE.md), so plain useState alone
+ *   lost these on every round trip. Persisted to sessionStorage, not
+ *   localStorage: a within-session view preference, not a durable account
+ *   setting like "Keep me signed in" (supabaseClient.ts's REMEMBER_KEY) — it's
+ *   fine for it to reset when the tab actually closes. Scoped to the chips
+ *   themselves (Sent filter, ToDos filter, Housekeeping's Tasks/How-to Videos
+ *   tab), matching the owner's own wording — the search text box is a
+ *   separate control and is NOT persisted (flagged as a scoping call, not
+ *   confirmed with the owner; easy to add if it turns out to matter).
+ * - Housekeeping's "Contacts" row (renamed from "My Contacts" 2026-08-09 —
+ *   a nav row's label must repeat the destination screen's own title
+ *   exactly, owner's rule) navigates to /contacts. "Account" (renamed from
+ *   "My Account" the same day, same rule) stays inert — that screen is
+ *   intentionally undesigned pending further product evolution. Log Out is
+ *   real — it is the one piece that directly serves the "test the login
+ *   loop normally" goal this screen was built for.
  *
  * Icons are inline SVG (currentColor, driven by .iconbtn/.ii's own color),
  * not the mockup's base64 PNGs — matches how every other screen in this app
@@ -87,6 +102,28 @@ function sentStatus(r: SentRow): 'open' | 'overdue' | 'done' {
 
 function dialogCount(dialog: { count: number }[] | null): number {
   return dialog?.[0]?.count ?? 0
+}
+
+// Chip-state persistence (2026-08-09) — "It would be appropriate to return
+// to the same chip state on the main screen." Main Screen fully remounts on
+// router.back() (no Cache Components/Activity in this app — see CLAUDE.md),
+// so plain useState alone loses these on every trip to a Detail screen and
+// back. sessionStorage, not localStorage: this is a within-session view
+// preference, not a durable account setting like "Keep me signed in"
+// (supabaseClient.ts's REMEMBER_KEY) — it's fine, even arguably correct, for
+// it to reset the next time the tab is actually closed and reopened. Scoped
+// to filter chips specifically (Sent, ToDos, Housekeeping's Tasks/How-to
+// Videos tab), matching the owner's own wording ("chip state") — the search
+// text box is a separate control and stays session-only/unpersisted unless
+// asked.
+const SENT_FILTER_KEY = 'wyp.mainSentFilter'
+const TODO_FILTER_KEY = 'wyp.mainTodoFilter'
+const HK_TAB_KEY = 'wyp.mainHkTab'
+
+function readStoredChip<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  if (typeof window === 'undefined') return fallback
+  const v = window.sessionStorage.getItem(key)
+  return v !== null && (allowed as readonly string[]).includes(v) ? (v as T) : fallback
 }
 
 function DialogIcon() {
@@ -159,12 +196,30 @@ export default function MainScreen() {
   const [todos, setTodos] = useState<TodoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [hkTab, setHkTab] = useState<'tasks' | 'videos'>('tasks')
+  const [hkTab, setHkTab] = useState<'tasks' | 'videos'>(() =>
+    readStoredChip(HK_TAB_KEY, ['tasks', 'videos'] as const, 'tasks')
+  )
   const [signingOut, setSigningOut] = useState(false)
 
-  const [sentFilter, setSentFilter] = useState<'all' | 'open' | 'overdue' | 'done'>('all')
-  const [todoFilter, setTodoFilter] = useState<'all' | 'open' | 'done'>('open')
+  const [sentFilter, setSentFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
+    readStoredChip(SENT_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'all')
+  )
+  const [todoFilter, setTodoFilter] = useState<'all' | 'open' | 'done'>(() =>
+    readStoredChip(TODO_FILTER_KEY, ['all', 'open', 'done'] as const, 'open')
+  )
   const [searchText, setSearchText] = useState('')
+
+  useEffect(() => {
+    window.sessionStorage.setItem(SENT_FILTER_KEY, sentFilter)
+  }, [sentFilter])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(TODO_FILTER_KEY, todoFilter)
+  }, [todoFilter])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(HK_TAB_KEY, hkTab)
+  }, [hkTab])
 
   useEffect(() => {
     let cancelled = false
@@ -440,13 +495,13 @@ export default function MainScreen() {
                     onKeyDown={(e) => { if (e.key === 'Enter') router.push('/contacts') }}
                   >
                     <span className="hktext">
-                      <span className="hktitle">My Contacts</span>
+                      <span className="hktitle">Contacts</span>
                       <span className="hknote"> — view and edit</span>
                     </span>
                   </div>
                   <div className="hkrow" role="button" tabIndex={0}>
                     <span className="hktext">
-                      <span className="hktitle">My Account</span>
+                      <span className="hktitle">Account</span>
                       <span className="hknote"> — view and edit</span>
                     </span>
                   </div>

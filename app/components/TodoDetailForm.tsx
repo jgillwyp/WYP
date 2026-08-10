@@ -333,11 +333,15 @@ export default function TodoDetailForm() {
       return
     }
 
-    router.push('/')
+    // router.back(), not push('/') — see RequestDetailForm.tsx's identical
+    // comment. This screen is only ever reached by clicking a ToDo row on
+    // the Main Screen, so back() restores that screen's scroll position
+    // instead of landing at the top.
+    router.back()
   }
 
   function handleCancel() {
-    router.push('/')
+    router.back()
   }
 
   if (loading) {

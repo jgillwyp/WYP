@@ -8,13 +8,19 @@ import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 
 /**
- * My Contacts (2026-08-09) — converted from
- * design/screens/WYP_contacts_list_palette1.html. Owner's spec: "should show
- * the name, notify method and related value (email or phone) - and upon
- * click open up a Contact Details screen for editing." RLS ("contacts:
- * owners select own", migration 002) already scopes this to the signed-in
- * owner. Sorted alphabetically by display_name — matches every other
- * lookup/list in the app except Housekeeping's own Log Out entry.
+ * Contacts (2026-08-09, retitled from "My Contacts" same day) — converted
+ * from design/screens/WYP_contacts_list_palette1.html. Owner's spec: "should
+ * show the name, notify method and related value (email or phone) - and
+ * upon click open up a Contact Details screen for editing (and should have
+ * a Close button)." RLS ("contacts: owners select own", migration 002)
+ * already scopes this to the signed-in owner. Sorted alphabetically by
+ * display_name — matches every other lookup/list in the app except
+ * Housekeeping's own Log Out entry.
+ *
+ * Retitled the same day the Close button was added — title+Close would
+ * wrap on Android, and separately, the owner's rule is that a navigation
+ * destination's title should repeat exactly what its Housekeeping row was
+ * named when selected (that row is "Contacts" too, see MainScreen.tsx).
  */
 
 type Contact = {
@@ -60,8 +66,13 @@ export default function ContactsList() {
         <WypHeader />
 
         <div className="band">
-          <span className="glabel">My Contacts</span>
-          <Link className="btn" href="/contacts/new">Add&nbsp;Contact</Link>
+          <span className="glabel">Contacts</span>
+          <span className="bandcluster">
+            <Link className="btn" href="/contacts/new">Add&nbsp;Contact</Link>
+            <button className="btn-secondary" type="button" onClick={() => router.push('/')}>
+              Close
+            </button>
+          </span>
         </div>
 
         <div className="scroll">
