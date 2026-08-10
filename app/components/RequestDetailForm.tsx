@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
@@ -100,6 +100,7 @@ export default function RequestDetailForm() {
   const [dialogModalError, setDialogModalError] = useState<string | null>(null)
   const [dialogSelectedQuestionId, setDialogSelectedQuestionId] = useState<number | null>(null)
   const [dialogSaving, setDialogSaving] = useState(false)
+  const dialogTextRef = useRef<HTMLTextAreaElement>(null)
 
   const [descInvalid, setDescInvalid] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -235,6 +236,15 @@ export default function RequestDetailForm() {
     } else {
       setDialogSelectedQuestionId(null)
     }
+    // Owner-reported (2026-08-10): the default chip on open gets focus in
+    // Dialog Text (the textarea's own `autoFocus`), but clicking a
+    // different chip afterward didn't move focus there too — `autoFocus`
+    // only fires on mount, not on every re-render. This call is a no-op
+    // during openDialogModal's own selectKind call (the textarea hasn't
+    // mounted yet at that point, so the ref is still null and `autoFocus`
+    // handles that case as before); it only does something on a later,
+    // in-modal chip click, which is exactly the case that needed it.
+    dialogTextRef.current?.focus()
   }
 
   async function handleDialogModalSave() {
@@ -880,6 +890,7 @@ export default function RequestDetailForm() {
 
               <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
                 <textarea
+                  ref={dialogTextRef}
                   className="ftextarea"
                   id="dlgtext"
                   maxLength={1000}

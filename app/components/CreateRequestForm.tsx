@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
@@ -103,6 +103,7 @@ export default function CreateRequestForm() {
   const [dialogModalKind, setDialogModalKind] = useState<'question' | 'comment'>('question')
   const [dialogModalBody, setDialogModalBody] = useState('')
   const [dialogModalError, setDialogModalError] = useState<string | null>(null)
+  const dialogTextRef = useRef<HTMLTextAreaElement>(null)
   const [ownerName, setOwnerName] = useState<string | null>(null)
 
   const [contactInvalid, setContactInvalid] = useState(false)
@@ -144,6 +145,19 @@ export default function CreateRequestForm() {
     setDialogModalBody('')
     setDialogModalError(null)
     setDialogModalOpen(true)
+  }
+
+  // Owner-reported (2026-08-10, on Request Response's Add Dialog, same
+  // pattern here): the default chip on open gets focus in Dialog Text (the
+  // textarea's own `autoFocus`), but clicking a different chip afterward
+  // didn't move focus there too — `autoFocus` only fires on mount, not on
+  // every re-render. This call is a no-op while the modal is still opening
+  // (the textarea hasn't mounted yet, so the ref is null and `autoFocus`
+  // handles that case as before); it only does something on a later,
+  // in-modal chip click, which is exactly the case that needed it.
+  function selectDialogKind(kind: 'question' | 'comment') {
+    setDialogModalKind(kind)
+    dialogTextRef.current?.focus()
   }
 
   function handleDialogModalSave() {
@@ -736,7 +750,7 @@ export default function CreateRequestForm() {
                     className={`chip${dialogModalKind === 'question' ? ' selected' : ''}`}
                     type="button"
                     aria-pressed={dialogModalKind === 'question'}
-                    onClick={() => setDialogModalKind('question')}
+                    onClick={() => selectDialogKind('question')}
                   >
                     Question
                   </button>
@@ -754,7 +768,7 @@ export default function CreateRequestForm() {
                     className={`chip${dialogModalKind === 'comment' ? ' selected' : ''}`}
                     type="button"
                     aria-pressed={dialogModalKind === 'comment'}
-                    onClick={() => setDialogModalKind('comment')}
+                    onClick={() => selectDialogKind('comment')}
                   >
                     Comment
                   </button>
@@ -763,6 +777,7 @@ export default function CreateRequestForm() {
 
               <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
                 <textarea
+                  ref={dialogTextRef}
                   className="ftextarea"
                   id="dlgtext"
                   maxLength={1000}

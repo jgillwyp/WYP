@@ -6,6 +6,16 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Add Dialog: focus returns to Dialog Text on every chip click, not just the default
+
+Owner: *"When another chip is clicked in the Add Dialog dialog, the same focus to the Dialog Text box is needed for UI consistency and is not provided."*
+
+Root cause: the textarea's `autoFocus` attribute only fires once, on mount — it doesn't refire on a later re-render, so switching chips after the modal was already open left focus wherever it last was (typically the clicked chip itself), with the placeholder-sized empty textarea visible but unfocused. Fixed everywhere the Add Dialog modal exists — `RequestResponseForm.tsx`, `RequestDetailForm.tsx`, `TodoDetailForm.tsx`, `CreateRequestForm.tsx`, `CreateTodoForm.tsx`, and all five mockups — by adding an explicit `.focus()` call to each screen's kind-selection function (`selectKind`, or `selectDialogKind` where none existed yet, in the two Create screens' React components, whose chip `onClick`s previously called `setDialogModalKind` directly). The call is a safe no-op the first time it runs — during `openDialogModal`, before the textarea has mounted (React) or the modal is shown (mockups) — so the existing `autoFocus`/`value=''` initial-open behavior is unaffected; it only does something on a genuine later chip click, which is exactly the case that needed it.
+
+`npx tsc --noEmit` and `npx eslint` on all five changed components pass clean.
+
+\---
+
 ## 2026-08-10 — Request Response: quick-Done band, tier-gated Attachments, "(name)" consistency in the which-Question picker; display_name data gap diagnosed
 
 Owner's message covered several things at once, testing the live Request Response screen:

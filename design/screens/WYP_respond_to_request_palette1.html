@@ -539,6 +539,13 @@ function selectKind(kind){
     dlgSelectedQuestionId = null;
     wrap.style.display = 'none';
   }
+  // Owner-reported, 2026-08-10: the default chip on open gets focus in
+  // Dialog Text (the textarea's own autofocus attribute), but clicking a
+  // different chip afterward didn't move focus there too. This call is a
+  // no-op the first time selectKind runs (during openDialogModal, before
+  // the modal is shown) since the textarea isn't focusable while hidden;
+  // it only does something on a later, in-modal chip click.
+  document.getElementById('dlgtext').focus();
 }
 
 function renderQuestionPicker(open){

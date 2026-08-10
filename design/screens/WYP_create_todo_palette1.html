@@ -453,6 +453,12 @@ function selectKind(kind){
   dlgKind = kind;
   document.getElementById('chip-question').classList.toggle('selected', kind === 'question');
   document.getElementById('chip-comment').classList.toggle('selected', kind === 'comment');
+  // Owner-reported, 2026-08-10 (found on Request Response, same pattern
+  // here): the default chip on open gets focus in Dialog Text (autofocus),
+  // but clicking a different chip afterward didn't move focus there too.
+  // No-op the first time selectKind runs (during openDialogModal, before
+  // the modal is shown); only does something on a later, in-modal click.
+  document.getElementById('dlgtext').focus();
 }
 function saveDialogEntry(){
   var text = document.getElementById('dlgtext').value.trim();
