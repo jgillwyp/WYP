@@ -270,6 +270,21 @@ html,body{margin:0;height:100%;background:#fff;}
 .modal{cursor:pointer;}
 .modal p{margin:0 0 10px;font-size:13.5px;line-height:1.45;color:var(--ink);}
 .modal p:last-child{margin-bottom:0;}
+
+/* Lookup results list (§6.24, PROPOSED) — ported verbatim from
+   globals.css/components.css, same as Add Contact and Create Free Account's
+   own mockups, for the same working Time Zone pull-down (Week 3, migration
+   007). This screen has no live React component of its own — it's the
+   §9.9.5 no-contact interception dialog, not yet built (CLAUDE.md) — so the
+   demo JS below only shows intended behavior. */
+.lookup-results{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;
+  background:#fff;border:1px solid var(--rule);border-radius:9px;
+  box-shadow:0 4px 14px rgba(20,30,50,.14);max-height:220px;overflow-y:auto;}
+.lookup-item{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;
+  color:var(--ink);background:none;border:none;padding:9px 12px;cursor:pointer;}
+.lookup-item+.lookup-item{border-top:1px solid var(--rule);}
+.lookup-item:hover,.lookup-item:focus-visible{background:var(--row-tint);}
+.lookup-empty{padding:9px 12px;font-size:12.5px;color:var(--ink-soft);}
 </style></head>
 <body>
 <div class="frame-none"><div class="app">
@@ -320,9 +335,10 @@ html,body{margin:0;height:100%;background:#fff;}
            on Add Contact's initial render; the field stays editable so the
            owner can correct it when they know the contact is elsewhere.
            See decisions log. -->
-      <div class="fgroup ffloat picker">
+      <div class="fgroup ffloat picker" style="position:relative;">
         <input class="finput req" id="tz" type="text" autocomplete="off" placeholder=" ">
         <label class="flabel" for="tz"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span>Time Zone</label>
+        <div class="lookup-results" id="tzResults" role="listbox" hidden></div>
       </div>
       <div class="fgroup">
         <span class="flabel" id="sendby-label">Send Requests by</span>
@@ -357,4 +373,55 @@ html,body{margin:0;height:100%;background:#fff;}
     <p>After you click Save, you&rsquo;ll be returned to Create Request.</p>
   </div>
 </div></div>
+
+<!-- Demo state only, same precedent as Create Free Account's own Time Zone
+     script. No default value is set here (unlike Create Free Account's
+     browser-detected default) — this is the CONTACT's time zone, not the
+     signed-in user's, and this static mockup has no profiles.time_zone to
+     read; the live AddContactForm.tsx defaults it from there instead. -->
+<script>
+(function () {
+  var input = document.getElementById('tz');
+  var results = document.getElementById('tzResults');
+  if (!input || !results) return;
+
+  function allZones() {
+    try { return Intl.supportedValuesOf('timeZone').slice().sort(); }
+    catch (e) { return ['UTC', 'America/Chicago', 'America/New_York', 'America/Los_Angeles', 'Europe/London']; }
+  }
+
+  var zones = allZones();
+
+  function render() {
+    var q = input.value.trim().toLowerCase();
+    var matches = q === '' ? zones : zones.filter(function (z) {
+      return z.toLowerCase().indexOf(q) !== -1;
+    });
+    results.innerHTML = '';
+    if (matches.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'lookup-empty';
+      empty.textContent = 'No matching Time Zone.';
+      results.appendChild(empty);
+    } else {
+      matches.forEach(function (z) {
+        var item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'lookup-item';
+        item.setAttribute('role', 'option');
+        item.textContent = z;
+        item.addEventListener('mousedown', function () {
+          input.value = z;
+          results.hidden = true;
+        });
+        results.appendChild(item);
+      });
+    }
+  }
+
+  input.addEventListener('input', function () { render(); results.hidden = false; });
+  input.addEventListener('focus', function () { render(); results.hidden = false; });
+  input.addEventListener('blur', function () { setTimeout(function () { results.hidden = true; }, 120); });
+})();
+</script>
 </body></html>

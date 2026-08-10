@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 
 /**
  * Add Contact (§9.x) — converted by hand from
@@ -20,15 +21,38 @@ import { supabase } from '@/lib/supabaseClient'
  * screen — so "update state" and "the screen is now correct" are the same
  * action. See docs/Week1_Add_Contact_React_Conversion.md for the full
  * walkthrough.
+ *
+ * Time Zone (Week 3, migration 007): a required §6.16 lookup field, same
+ * shape as Category elsewhere — a text input filtered against a known list,
+ * with a `selectedTimeZone` guard so Save can't succeed on typed text that
+ * doesn't match a real zone. The list itself is every IANA zone name
+ * (app/src/lib/timeZones.ts), always well over the app's "browsable on
+ * focus" threshold, so this field is always type-to-search, never browse-all.
+ * Defaults on mount to the owner's own profiles.time_zone if set, else the
+ * browser's detected zone — and if it had to fall back to the browser, that
+ * value is also written back to profiles.time_zone. That write-back is a
+ * deliberate decision, not an accident: profiles.time_zone has nowhere else
+ * to come from yet (Create Free Account and Account aren't part of the live
+ * sign-in flow — see CLAUDE.md), so without it the owner's own zone would
+ * never settle into a stored value at all. See decisions log if this should
+ * be reconsidered once a real Account screen exists.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// Same rule as Create Request's Recipient/Category lookups (design/README.md
+// §6.24): show the whole list on focus only while it's short enough to be
+// useful un-filtered. Time Zone's list (400+) is always over this, so the
+// field is always type-to-search — kept as a named constant rather than a
+// magic number anyway, for the same reason CreateRequestForm.tsx does.
+const LOOKUP_BROWSE_THRESHOLD = 12
 
 type ContactFormState = {
   name: string
   email: string
   phone: string
   notes: string
+  timeZone: string
 }
 
 const initialState: ContactFormState = {
@@ -36,6 +60,7 @@ const initialState: ContactFormState = {
   email: '',
   phone: '',
   notes: '',
+  timeZone: '',
 }
 
 export default function AddContactForm() {
@@ -55,18 +80,72 @@ export default function AddContactForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [timeZones] = useState<string[]>(() => getAllTimeZones())
+  const [selectedTimeZone, setSelectedTimeZone] = useState<string | null>(null)
+  const [showTimeZoneResults, setShowTimeZoneResults] = useState(false)
+  const [timeZoneInvalid, setTimeZoneInvalid] = useState(false)
+
+  // Default Time Zone on mount — see the file-header comment for the
+  // profiles.time_zone / browser-detection / write-back reasoning.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDefaultTimeZone() {
+      const { data } = await supabase.from('profiles').select('time_zone').single()
+      if (cancelled) return
+
+      if (data?.time_zone) {
+        setForm((f) => ({ ...f, timeZone: data.time_zone as string }))
+        setSelectedTimeZone(data.time_zone as string)
+        return
+      }
+
+      const browserZone = detectBrowserTimeZone()
+      setForm((f) => ({ ...f, timeZone: browserZone }))
+      setSelectedTimeZone(browserZone)
+
+      const { data: userData } = await supabase.auth.getUser()
+      if (!cancelled && userData.user) {
+        await supabase.from('profiles').update({ time_zone: browserZone }).eq('id', userData.user.id)
+      }
+    }
+
+    loadDefaultTimeZone()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   function set<K extends keyof ContactFormState>(key: K, value: ContactFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  const timeZoneQueryEmpty = form.timeZone.trim() === ''
+  const timeZonesBrowsable = timeZones.length < LOOKUP_BROWSE_THRESHOLD
+
+  const filteredTimeZones = timeZoneQueryEmpty
+    ? (timeZonesBrowsable ? timeZones : [])
+    : timeZones.filter((z) => z.toLowerCase().includes(form.timeZone.trim().toLowerCase()))
+
+  const showTimeZoneDropdown = !timeZoneQueryEmpty || timeZonesBrowsable
+
+  function selectTimeZone(z: string) {
+    setSelectedTimeZone(z)
+    set('timeZone', z)
+    setShowTimeZoneResults(false)
+    setTimeZoneInvalid(false)
   }
 
   function validate(): boolean {
     const hasName = form.name.trim() !== ''
     const hasEmail = EMAIL_RE.test(form.email.trim())
+    const hasTimeZone = selectedTimeZone !== null
 
     setNameInvalid(!hasName)
     setEmailInvalid(!hasEmail)
+    setTimeZoneInvalid(!hasTimeZone)
 
-    return hasName && hasEmail
+    return hasName && hasEmail && hasTimeZone
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -100,6 +179,7 @@ export default function AddContactForm() {
       phone: form.phone.trim() || null,
       send_by: sendBy,
       notes: form.notes.trim() || null,
+      time_zone: selectedTimeZone,
     })
 
     setSaving(false)
@@ -239,6 +319,63 @@ export default function AddContactForm() {
                     Phone
                   </label>
                 </span>
+              </div>
+            </div>
+
+            <div className="fgroup">
+              <div className="frow" style={{ position: 'relative' }}>
+                <span className="ffloat">
+                  <input
+                    className="finput req"
+                    id="tz"
+                    type="text"
+                    autoComplete="off"
+                    placeholder=" "
+                    value={form.timeZone}
+                    onChange={(e) => {
+                      set('timeZone', e.target.value)
+                      if (selectedTimeZone && e.target.value !== selectedTimeZone) {
+                        setSelectedTimeZone(null)
+                      }
+                      setShowTimeZoneResults(true)
+                    }}
+                    onFocus={() => setShowTimeZoneResults(true)}
+                    onBlur={() => setTimeout(() => setShowTimeZoneResults(false), 120)}
+                  />
+                  <label className="flabel" htmlFor="tz">
+                    <span className="lglyph" aria-hidden="true">
+                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
+                        <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
+                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
+                      </svg>
+                    </span>
+                    Time Zone
+                  </label>
+                  {timeZoneInvalid && <p className="ferror">Select a Time Zone.</p>}
+                </span>
+
+                {showTimeZoneResults && showTimeZoneDropdown && (
+                  <div className="lookup-results" role="listbox">
+                    {filteredTimeZones.length === 0 ? (
+                      <div className="lookup-empty">No matching Time Zone.</div>
+                    ) : (
+                      filteredTimeZones.map((z) => (
+                        <button
+                          key={z}
+                          type="button"
+                          className="lookup-item"
+                          role="option"
+                          aria-selected={selectedTimeZone === z}
+                          onMouseDown={() => selectTimeZone(z)}
+                        >
+                          {z}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -208,8 +208,9 @@ link is built only after the stack is proven on Add Contact.
   (`design/screens/WYP_create_todo_palette1.html`) is mockup-only and not
   wired to anything yet, but got the identical modal for consistency.
 - **Add Dialog modal, which-Question picker, and migration 006
-  (`dialog.replies_to_id`) — not yet run.** On Respond to Request (mockup
-  only) and, later, Request Detail, Answer unlocks dynamically — enabled only
+  (`dialog.replies_to_id`) — run, confirmed by the owner 2026-08-09.** On
+  Respond to Request (mockup only) and, later, Request Detail, Answer unlocks
+  dynamically — enabled only
   when a Question in the thread is still open (no Answer pointing at it via
   `replies_to_id`). Composing an Answer shows a which-Question picker only
   when more than one Question is open (defaults to the most recent); a single
@@ -309,9 +310,9 @@ link is built only after the stack is proven on Add Contact.
   ToDo rows now navigate somewhere instead of doing nothing. Both fetch the
   existing row, both update it on Save/Send, both show their Dialog panel as
   the real existing thread (not a staged list) with dynamic Answer
-  unlocking and a which-Question picker. **Hard dependency: both select
-  `dialog.replies_to_id` (migration 006). If migration 006 hasn't been run,
-  the Dialog panel on either screen will error on load.** ToDo Detail
+  unlocking and a which-Question picker. Both select `dialog.replies_to_id`
+  (migration 006, confirmed run by the owner 2026-08-09) — the earlier
+  "hard dependency, unconfirmed" flag on this is resolved. ToDo Detail
   gained a Done Date/Time row that wasn't part of the original "byte-for-
   byte duplicate of Create ToDo" instruction — owner-confirmed via
   AskUserQuestion once it became clear a live ToDo Detail with no Done
@@ -322,16 +323,31 @@ link is built only after the stack is proven on Add Contact.
   lists every contact (name, notify method, and the matching email/phone)
   and is reached from Main Screen's Housekeeping "My Contacts" row; clicking
   a row opens Contact Detail, which is Create Contact's fields (Name/Email/
-  Phone/Notes — not the mockup-only Time Zone field, see below) with
-  Save + Close instead of Save + Cancel. Add Contact from My Contacts routes
-  through the existing `/contacts/new`.
-- **Pre-existing gap, now visible on two mockups instead of one**: Add
-  Contact's mockup (and now Contact Detail's) draws a Time Zone field that
-  has never been wired anywhere. `contacts` has no `time_zone` column (no
-  migration has ever added one) and `AddContactForm.tsx` doesn't render the
-  field either — this predates today's work but is worth resolving (add the
-  migration and wire it, or drop the field from both mockups) rather than
-  letting it keep spreading to new screens by copy.
+  Phone/Notes/Time Zone) with Save + Close instead of Save + Cancel. Add
+  Contact from My Contacts routes through the existing `/contacts/new`.
+- **Time Zone gap closed (2026-08-09, migration 007 — DRAFTED, not yet run;
+  see `docs/Week3 - SQL history.txt`).** `profiles.time_zone` and
+  `contacts.time_zone` are real columns now (once the migration is run), and
+  the Time Zone field on Add Contact and Contact Detail is a working required
+  §6.16 lookup (`app/src/lib/timeZones.ts`, every IANA zone name via
+  `Intl.supportedValuesOf('timeZone')`), not a decorative mockup field. It
+  defaults to the contact's own stored zone if editing one that has it, else
+  the owner's own `profiles.time_zone`, else the browser's detected zone —
+  and if it had to fall all the way to browser detection, that value is also
+  written back to `profiles.time_zone` (a deliberate side effect, not an
+  accident — see the next bullet for why). Create Free Account's and the
+  no-contact-dialog's own Time Zone fields got the matching demo-JS pull-down
+  for consistency, even though neither has a live React component yet.
+- **Flag: `profiles.time_zone` still has no path to a value from the actual
+  live sign-in flow.** Create Free Account is mockup-only, and `/login`
+  explicitly serves both sign-in and first-time account creation with no
+  separate signup step ("there is no separate sign-up," shown to the user on
+  that screen) — so Create Free Account is never reached in the live app as
+  it stands today. Until either Create Free Account is converted and wired
+  into a real first-run step, or the Account screen (explicitly deferred, see
+  the entry above) is built, `profiles.time_zone` only ever gets a value via
+  Add Contact/Contact Detail's browser-detected fallback described above, not
+  from a screen actually about the user's own profile.
 - **Main Screen's filter chips and search are now functional** (2026-08-09):
   All/Open/Overdue/Done on Sent and All/Open/Done on ToDos filter the
   already-fetched rows client-side; search matches description/contact-name/

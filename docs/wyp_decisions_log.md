@@ -6,6 +6,45 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-09 — PRD v12.8: §9.5 Archive Requests and ToDos added to the Future Features Roadmap
+
+Owner: *"This should be added to a list of things yet to do: A capability not discussed yet... the ability to 'remove' completed Requests and ToDos from the list of items shown in the main screen, but keep them available when Searches are done..."* — followed by a fairly complete first-pass design (Archive screen, select-by-type-and-prior-to-date, pre-checked list, Detail-screen editability affecting eligibility, Archive Now / Remove Archive Status chips, and the schema need).
+
+**Landed in the PRD, not a new backlog file.** §9 "Future Features Roadmap" already exists for exactly this purpose ("defined for future phases... not in scope... but architecturally considered to avoid rework") and already holds four sibling entries (§9.1–§9.4) in the same short-paragraph format. Adding §9.5 there uses the mechanism the project already has rather than starting a second, competing list.
+
+**Marked "Not yet phased"** rather than guessing Phase 2 (the label most of §9.1–§9.3 carry) — nothing here was discussed against the phased roadmap in §10, so assigning a phase would be inventing a scope decision, not recording one.
+
+**Version bumped to v12.8** — title page, both footers, and a new Schedule A revision-history line. TOC on page 1 still shows the pre-edit page numbers/entries (a cached field — Word regenerates it on Update Field / F9, not something worth hand-editing in the XML). `docs/WouldYouPlease_PRD_v12_7.docx` deleted (via the file-delete permission flow) now that v12.8 replaces it, matching the project's one-file-per-version convention; v12.7 was already committed to git, so nothing was lost. **The Project's own "Canonical sources" list still says v12.7 — that line lives in Claude.ai Project settings, not a repo file, so it needs updating by hand along with re-uploading the new docx to project knowledge**, per the Maintenance rule.
+
+\---
+
+## 2026-08-09 — Time Zone: migration 007 drafted, wired into Add Contact/Contact Detail, mockups upgraded
+
+Closes the Week 2 open item flagged earlier the same day: *"`profiles.time_zone` and `contacts.time_zone` columns need to be added to their respective tables. `AddContactForm.tsx`/`ContactDetailForm.tsx` should render the Time Zone field (which is shown as required) with all available Time Zone names as a pull-down option, but default the selection to the time zone of the User (`profiles.time_zone`)."*
+
+**Migration 007 (drafted, not yet run)** — `docs/Week3 - SQL history.txt`. Both columns nullable, no DB-level constraint: matches Category's existing precedent (§2.3's "must be selected from the list" rule is client-side, not a check constraint), and there's no data to backfill from the way `contacts.display_name` had (migration 005).
+
+**Time Zone list**: `app/src/lib/timeZones.ts`, backed by `Intl.supportedValuesOf('timeZone')` — every IANA zone name, displayed and stored as the raw id ("America/Chicago"), not a friendly label. No standard-library mapping to a friendly label exists without hand-maintaining one for 400+ entries, and raw ids are what the mockup's own pre-existing comments already pointed at (`profiles.time_zone` / `contacts.time_zone`). This does diverge from the Create Free Account mockup's old decorative value ("Central Time (Chicago)") — flagged in that file's own comment, not silently changed.
+
+**Field wired as a required §6.16 lookup**, same shape as Category — filtered text input with a `selectedTimeZone` guard, not a native `<select>`, for visual consistency with the Recipient/Category lookups already in the app. Always type-to-search (the list is far past the 12-item "browsable on focus" threshold used elsewhere).
+
+**Defaulting chain, and the write-back decision.** Add Contact: the owner's own `profiles.time_zone` if set, else the browser's detected zone. Contact Detail: the contact's *own* stored zone takes priority (it may already have one from a previous Save); if not, same fallback chain as Add Contact. In both cases, if the chain had to fall all the way to browser detection, that value is also written back to `profiles.time_zone` — a decision made and flagged, not silently added: `profiles.time_zone` has no other live path to a value right now (see below), so without this write-back it would never settle into a stored value at all. Revisit if this feels like the wrong screen to own that side effect once a real Account screen exists.
+
+**Create Free Account and the no-contact-dialog mockups got the matching demo-JS pull-down** for consistency, even though neither is a live React component. Flagged plainly, not silently discovered later: **Create Free Account is not reachable in the live app.** `/login` handles both sign-in and first-time account creation with no separate signup step — its own copy tells the user as much — so `/account/new` has no wiring path today. This means `profiles.time_zone` currently only ever gets a value via Add Contact/Contact Detail's fallback-and-write-back, never from a screen actually about the user's own profile, until Create Free Account is converted and wired into a real first-run step or the (explicitly deferred) Account screen is built.
+
+\---
+
+## 2026-08-09 — Migration 006 confirmed run; Week 3 plan scoped and two design questions settled
+
+**Migration 006 (`dialog.replies_to_id`) confirmed run by the owner.** This closes out the one unverified risk flagged repeatedly across Request Detail, ToDo Detail, and CLAUDE.md's Known gaps — both screens' Dialog panels were a hard, unconfirmed dependency on it. Language updated in CLAUDE.md and `design/README.md` from "hard dependency, not yet run" to confirmed.
+
+**Week 3 recommendation: the secure recipient link (`/r/[token]`)**, on the grounds that CLAUDE.md's own Scope discipline already gated it on "the stack proven on Add Contact" — now true several times over — and the Database section already describes the intended shape in prose. Full plan in `docs/WYP_Week3_Plan.md`. Two of that plan's open questions were settled the same day it was written:
+
+- **No name collected from the recipient before responding.** Owner: *"the response needs to be as frictionless as possible."* The anonymous responder's Dialog `who` will show the Request's own Contact name (already known server-side) rather than asking the visitor anything.
+- **Token storage stays the simple shape — columns on `requests`, not a separate `request_links` table** — after talking through when a separate table would actually earn its keep: link *history* (a UI showing every link ever issued for a Request) or distinguishing, in the access log, which specific link-version a given open used. Neither is a stated requirement anywhere in the PRD, and an old, regenerated token already fails verification on its own (its hash no longer matches), which is the security property that actually matters. Revisit only if a link-history feature gets asked for later.
+
+\---
+
 ## 2026-08-09 — Sixth round: Main Screen chip state persists across the round trip
 
 Owner, following directly from the scroll-position fix above: *"It would be appropriate to return to the same chip state on the main screen."* This was the trade-off already flagged (not yet solved) in the Fifth round entry below — `router.back()` restores scroll position, but Main Screen still remounts, so its filter-chip `useState` was resetting to defaults on every trip to a Detail screen and back.

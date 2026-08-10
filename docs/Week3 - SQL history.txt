@@ -1,0 +1,41 @@
+-- ============================================================================
+-- WYP migration 007 — profiles.time_zone, contacts.time_zone
+-- DRAFTED 2026-08-09 — NOT YET RUN. Run in the Supabase SQL editor, then
+-- change the line above to "Run <date>" and update CLAUDE.md / decisions log
+-- from "drafted" to "confirmed run by the owner", same as every earlier
+-- migration in this project.
+--
+-- Nullable, no DB-level constraint on either column: the app enforces "must
+-- be selected from the IANA time zone list" client-side, not the database —
+-- same shape as Category, which has no DB-level enum either (§2.3's rule
+-- that a Category must come from the list or Add Category is a client-side
+-- rule, not a check constraint). No backfill: unlike contacts.display_name
+-- (migration 005), there's no existing data to derive a value from — every
+-- current contacts/profiles row simply starts NULL and gets a value the next
+-- time its own screen is opened (client-side default: the row's own value if
+-- already set, else the owner's profiles.time_zone, else the browser's
+-- detected zone — see AddContactForm.tsx / ContactDetailForm.tsx).
+-- ============================================================================
+
+begin;
+
+alter table public.profiles add column if not exists time_zone text;
+alter table public.contacts add column if not exists time_zone text;
+
+comment on column public.profiles.time_zone is
+  'IANA zone name (e.g. America/Chicago) — see app/src/lib/timeZones.ts. Set from Add Contact/Contact Detail''s browser-detected fallback until Create Free Account or Account is live and sets it directly. Anchors PRD §2.7 Overdue evaluation once that''s wired.';
+comment on column public.contacts.time_zone is
+  'IANA zone name for this Contact, not the signed-in owner. Defaults from the owner''s own profiles.time_zone (or the browser''s detected zone if that isn''t set yet) on Add Contact''s initial render; editable per-contact from there.';
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here — same caution as every earlier migration:
+-- this connection is superuser and auth.uid() is null, so an RLS-dependent
+-- check here "succeeds" without proving anything.
+--
+--   await supabase.from('contacts').select('time_zone').limit(1)
+--   await supabase.from('profiles').select('time_zone').single()
+--   await supabase.from('profiles').update({ time_zone: 'America/Chicago' })
+--        .eq('id', <own id>)   -> succeeds only for the signed-in owner's own row
+-- ============================================================================
