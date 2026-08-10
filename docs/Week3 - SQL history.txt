@@ -43,10 +43,7 @@ commit;
 -- ============================================================================
 -- WYP migration 008 — secure recipient link: token columns, events read
 -- policy, issue/revoke/read functions
--- DRAFTED 2026-08-09 — NOT YET RUN. Run in the Supabase SQL editor, then
--- change the line above to "Run <date>" and update CLAUDE.md / decisions log
--- from "drafted" to "confirmed run by the owner", same as every earlier
--- migration in this project.
+-- CONFIRMED RUN by the owner 2026-08-10.
 --
 -- NUMBERING NOTE: WYP_Week3_Plan.md's "Day 1" section originally called this
 -- "migration 007" — written before the Time Zone work above claimed that
@@ -285,12 +282,7 @@ commit;
 -- ============================================================================
 -- WYP migration 009 — corrects get_request_by_token (migration 008), adds the
 -- response write path: set_response_done_by_token, add_dialog_by_token
--- DRAFTED 2026-08-09 — NOT YET RUN. Migration 008 is also still not yet run;
--- if you run these in order (008 then 009) in the same session, that's fine
--- — 009's `create or replace function public.get_request_by_token` simply
--- becomes the version that's ever actually created. Run in the Supabase SQL
--- editor, then change the line above to "Run <date>" and update CLAUDE.md /
--- decisions log, same as every earlier migration.
+-- CONFIRMED RUN by the owner 2026-08-10, alongside migration 008.
 --
 -- CORRECTION to get_request_by_token: migration 008's draft selected and
 -- returned `category_name`. That's wrong — PRD §2.3 is explicit that
@@ -500,4 +492,108 @@ commit;
 --        { p_token: token, p_kind: 'comment', p_body: 'test', p_replies_to_id: null })
 --        -> succeeds; returned `who` matches the Request's own Contact name,
 --           not anything the client sent (the client never sends a who)
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 010 — fixes add_dialog_by_token's events insert
+-- DRAFTED 2026-08-10 — NOT YET RUN. Run in the Supabase SQL editor, then
+-- change the line above to "Run <date>" and update CLAUDE.md / decisions log
+-- from "drafted" to "confirmed run by the owner", same as every earlier
+-- migration in this project.
+--
+-- BUG, owner-reported: adding a Dialog Question through /r/[token] failed
+-- with `column "subject_id" is of type uuid but expression is of type
+-- bigint`. Migration 009's add_dialog_by_token logged its events row as
+-- ('dialog', v_new_id, ...) — v_new_id is the new dialog row's own id,
+-- which is bigint (dialog.id is a plain identity column, the same type
+-- dialog.replies_to_id already points at). events.subject_id is uuid
+-- (migration 002) and always has been; no bigint value can ever be cast
+-- into it. This path was never exercised before now — get_request_by_token
+-- and set_response_done_by_token both already log with the Request's own
+-- uuid as subject_id, so neither ever hit this.
+--
+-- FIX: log with subject_id = v_request_id (uuid), same pattern as the other
+-- two functions in this file, including the precedent already set by
+-- subject_type = 'link' (whose "subject" is conceptually the link, but
+-- subject_id is still the Request's uuid — there's no separate link-row id
+-- to point to either). The new dialog entry's own id moves into `detail`
+-- instead, where it's preserved for anyone auditing the log later, without
+-- needing a uuid.
+-- ----------------------------------------------------------------------------
+
+begin;
+
+create or replace function public.add_dialog_by_token(
+  p_token text,
+  p_kind text,
+  p_body text,
+  p_replies_to_id bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_request_id uuid;
+  v_revoked timestamptz;
+  v_expires timestamptz;
+  v_who text;
+  v_new_id bigint;
+  v_created_at timestamptz;
+begin
+  select r.id, r.link_revoked_at, r.link_expires_at, ct.display_name
+    into v_request_id, v_revoked, v_expires, v_who
+    from public.requests r
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = digest(p_token, 'sha256');
+
+  if v_request_id is null or v_revoked is not null or v_expires < now() then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  if p_kind not in ('question', 'answer', 'comment') then
+    raise exception 'Invalid Dialog entry type.';
+  end if;
+
+  if trim(coalesce(p_body, '')) = '' then
+    raise exception 'Enter Dialog Text.';
+  end if;
+
+  v_who := coalesce(v_who, 'Recipient'); -- defensive only; a Request reachable
+                                          -- by /r/[token] always has a Contact
+
+  insert into public.dialog (request_id, kind, body, who, replies_to_id)
+    values (
+      v_request_id, p_kind, p_body, v_who,
+      case when p_kind = 'answer' then p_replies_to_id else null end
+    )
+    returning id, created_at into v_new_id, v_created_at;
+
+  -- FIXED (migration 010): subject_id is the Request's own uuid, not the
+  -- new dialog row's bigint id — events.subject_id cannot hold a bigint.
+  -- The dialog id is still recorded, inside detail.
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'dialog', v_request_id, v_request_id, 'created_by_recipient',
+      jsonb_build_object('kind', p_kind, 'dialog_id', v_new_id)
+    );
+
+  return jsonb_build_object('id', v_new_id, 'created_at', v_created_at, 'who', v_who);
+end;
+$$;
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here.
+--
+--   await supabase.rpc('add_dialog_by_token',
+--        { p_token: token, p_kind: 'question', p_body: 'test', p_replies_to_id: null })
+--        -> succeeds (previously failed with the uuid/bigint type error)
+--   select * from events where subject_type = 'dialog' order by at desc limit 1;
+--        -- run as a client with an authenticated owner session that can
+--        -- read this Request's events (migration 008's read policy), not
+--        -- the SQL editor — subject_id is this Request's own id, and
+--        -- detail->>'dialog_id' is the new dialog row's actual id
 -- ============================================================================

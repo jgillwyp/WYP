@@ -416,8 +416,9 @@ link is built only after the stack is proven on Add Contact.
   persisted**, matching the owner's own wording ("chip state"); flagged as a
   scoping call rather than a confirmed instruction, easy to extend if it
   turns out to matter.
-- **Migration 008 — secure recipient link token infrastructure, DRAFTED, not
-  yet run** (`docs/Week3 - SQL history.txt`, 2026-08-09). `requests` gains
+- **Migration 008 — secure recipient link token infrastructure, confirmed
+  run by the owner 2026-08-10** (`docs/Week3 - SQL history.txt`, drafted
+  2026-08-09). `requests` gains
   `link_token_hash`/`link_expires_at`/`link_revoked_at`; `events` finally
   gets the read policy migration 002 deferred (plus the table-level `GRANT`
   that policy alone doesn't supply, since migration 002 revoked all client
@@ -463,12 +464,23 @@ link is built only after the stack is proven on Add Contact.
   Day 4) — a "Get Response Link" button under the existing notice band,
   calling `issue_request_link` and showing the resulting `/r/[token]` URL
   with Copy/Regenerate (`.linkband`/`.linkval`, §6.30 PROPOSED, not drawn in
-  any mockup). **Not yet testable**: migrations 008 and 009 are both still
-  DRAFTED, not run (`docs/Week3 - SQL history.txt`) — `issue_request_link`
-  doesn't exist in the live database until 008 runs. Even once it does, no
-  one but the signed-in owner can ever produce a real token: the function is
-  owner-only (`auth.uid()` checked against the Request's `owner_id`) and the
-  raw token is returned exactly once, never stored anywhere — only its
-  salted hash is persisted. Get a real testing link by: running migrations
-  008 and 009 in Supabase, then opening any existing Sent Request
-  (`/requests/[id]`) and clicking "Get Response Link."
+  any mockup). **Migrations 008 and 009 confirmed run by the owner
+  2026-08-10** — the feature is now actually testable: open any existing
+  Sent Request (`/requests/[id]`) and click "Get Response Link." No one but
+  the signed-in owner can ever produce a real token, by design — the
+  function is owner-only (`auth.uid()` checked against the Request's
+  `owner_id`) and the raw token is returned exactly once, never stored
+  anywhere; only its salted hash is persisted.
+- **Migration 010 — fixes a real bug in `add_dialog_by_token`, DRAFTED, not
+  yet run** (`docs/Week3 - SQL history.txt`, 2026-08-10). Owner-reported: an
+  Add Dialog Question on `/r/[token]` failed with `column "subject_id" is of
+  type uuid but expression is of type bigint`. Migration 009's
+  `add_dialog_by_token` logged its `events` row using the new dialog
+  entry's own `bigint` id as `subject_id`, which has been `uuid`-typed since
+  migration 002 — a real bug, not a data issue; the other two migration
+  009 functions both happened to log with the Request's own `uuid` already,
+  so this path had never actually run before the owner's test. Fix: log
+  with `subject_id = v_request_id` (the Request's own uuid, same pattern as
+  the other functions and as `subject_type = 'link'`'s existing precedent),
+  moving the dialog entry's own id into `detail->>'dialog_id'` instead. Add
+  Dialog on `/r/[token]` will keep failing until this migration is run.

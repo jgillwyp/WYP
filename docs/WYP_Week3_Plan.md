@@ -43,9 +43,7 @@ Built: `app/components/RequestResponseForm.tsx`, `app/r/[token]/page.tsx`. The s
 
 Real email delivery is explicitly deferred (SPF/DKIM/DMARC is called out by name in Scope discipline), so Week 3's version of "send" is a copy-link affordance rather than an actual email — added to Request Detail, directly under the existing notice band about recipient notification: a "Get Response Link" button that calls `issue_request_link`, then shows the resulting `/r/[token]` URL with Copy and Regenerate. This is enough to test the full loop end to end — create a Request, get a link, open it as a "different person" in a private window, respond, see it reflected back on Request Detail — without needing SMTP this week.
 
-**Hard dependency, not yet satisfied**: migrations 008 and 009 are both still DRAFTED, not run. `issue_request_link` doesn't exist in the live database until 008 runs, so "Get Response Link" will fail until then. Run both (`docs/Week3 - SQL history.txt`) before testing.
-
-**Why I can't just generate a link myself.** `issue_request_link` is owner-only — it checks the caller's `auth.uid()` against the Request's `owner_id`, so it only works inside your own authenticated browser session. The raw token is also returned exactly once and never stored anywhere (only its salted hash is persisted, by design — see CLAUDE.md's Database section), so there's no way to fetch an already-issued one after the fact either. A real test link can only come from you clicking the button.
+**Migrations 008 and 009 confirmed run by the owner, 2026-08-10.** The feature is live end to end: open any existing Sent Request (`/requests/[id]`) and click "Get Response Link" to get a real, working `/r/[token]` URL. `issue_request_link` is owner-only and its raw token is never stored anywhere — only its salted hash — so a link can only ever come from that button, not from a query or migration.
 
 ### Day 5 / stretch
 

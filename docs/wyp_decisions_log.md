@@ -6,6 +6,24 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Migration 010 drafted: fixes `add_dialog_by_token`'s events insert (bug found by the owner testing Day 4's link)
+
+Owner: *"I tried to add a Dialog Question to a Request Response and saw an error"* — screenshot showed `column "subject_id" is of type uuid but expression is of type bigint`.
+
+Real bug in migration 009, not a data issue: `add_dialog_by_token` logged its `events` row as `('dialog', v_new_id, ...)`, using the new Dialog entry's own id as `subject_id` — but `dialog.id` is a plain `bigint` identity column (the same type `dialog.replies_to_id` already points at) and `events.subject_id` has been `uuid` since migration 002. No bigint value can be cast into it; the insert was always going to fail the first time this path actually ran. `get_request_by_token` and `set_response_done_by_token` both happened to log with the Request's own `uuid` as `subject_id` already, so neither ever exercised this bug — Add Dialog on `/r/[token]` was the first call to actually hit it, which is exactly what the owner's testing found.
+
+**Fix (migration 010, drafted, not yet run)**: log with `subject_id = v_request_id` instead, matching the pattern the other two functions already use (and the precedent `subject_type = 'link'` already set — its "subject" is conceptually the link, but `subject_id` is still the Request's own uuid, since there's no separate link-row id to point to either). The new dialog entry's own id moves into `detail->>'dialog_id'` instead, preserved for later auditing without needing a uuid.
+
+\---
+
+## 2026-08-10 — Migrations 008 and 009 confirmed run
+
+Owner: *"Migrations 008 and 009 have been run."*
+
+Marked confirmed in `docs/Week3 - SQL history.txt`, `CLAUDE.md`, and `WYP_Week3_Plan.md`. The full recipient-link loop is now live and testable end to end: Request Detail's "Get Response Link" issues a real token, `/r/[token]` reads and responds through it. Migration 007 (Time Zone) is unaffected by this confirmation and stays flagged DRAFTED, not yet run — the owner's message named 008/009 specifically, and nothing here implies 007 was included.
+
+\---
+
 ## 2026-08-10 — Response Link band added to Request Detail (Week 3, Day 4)
 
 Owner: *"Please provide the testing link as described in: Day 4 — Surface the link somewhere a sender can reach it."*
