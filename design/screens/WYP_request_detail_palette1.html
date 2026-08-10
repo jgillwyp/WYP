@@ -357,7 +357,7 @@ html,body{margin:0;height:100%;background:#fff;}
       </div>
     </div>
     <div id="dlg-qpicker-wrap" style="display:none;">
-      <span class="flabel">Which Question?</span>
+      <span class="flabel">Which Question?<span class="subnote" id="dlg-qpicker-note"></span></span>
       <div class="qpicker" id="dlg-qpicker" role="radiogroup" aria-label="Which Question this Answer responds to"></div>
     </div>
     <div class="fgroup ffloat">
@@ -462,6 +462,12 @@ function selectKind(kind){
   if (kind === 'answer' && open.length > 0){
     dlgSelectedQuestionId = open[open.length - 1].id;
     renderQuestionPicker(open);
+    // Owner-reported, 2026-08-10: with exactly one open Question, its row
+    // already renders .selected — the identical treatment a multi-row
+    // picker uses for "the one you've clicked" — so this note only appears
+    // in that single-question case, where it's true and disambiguating.
+    document.getElementById('dlg-qpicker-note').textContent =
+      open.length === 1 ? ' (The only question is selected below.)' : '';
     wrap.style.display = 'block';
   } else {
     dlgSelectedQuestionId = null;

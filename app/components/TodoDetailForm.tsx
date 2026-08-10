@@ -745,10 +745,20 @@ export default function TodoDetailForm() {
                   silently, with no visual confirmation of which one.
                   Originally scoped (2026-08-07) to show only when more than
                   one Question was open; relaxed to any open Question (>0),
-                  so composing an Answer always confirms what it's answering. */}
+                  so composing an Answer always confirms what it's answering.
+                  Follow-up (same day, same source): a single open Question's
+                  row already renders .selected, the identical treatment a
+                  multi-row picker uses for "the one you've clicked" — so the
+                  .subnote below only appears in the single-question case,
+                  where it's true and disambiguating. */}
               {dialogModalKind === 'answer' && openQuestions.length > 0 && (
                 <div>
-                  <span className="flabel">Which Question?</span>
+                  <span className="flabel">
+                    Which Question?
+                    {openQuestions.length === 1 && (
+                      <span className="subnote"> (The only question is selected below.)</span>
+                    )}
+                  </span>
                   <div className="qpicker" role="radiogroup" aria-label="Which Question this Answer responds to">
                     {openQuestions.map((q) => (
                       <button

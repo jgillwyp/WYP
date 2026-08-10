@@ -649,10 +649,23 @@ export default function RequestResponseForm() {
                   linked silently, with no visual confirmation of which one.
                   Originally scoped (2026-08-07) to show only when more than
                   one Question was open; relaxed to any open Question (>0),
-                  so composing an Answer always confirms what it's answering. */}
+                  so composing an Answer always confirms what it's answering.
+                  Follow-up (same day): with exactly one open Question, its
+                  row already renders .selected — but that's the identical
+                  visual treatment a multi-row picker uses for "the one
+                  you've clicked," so a person could read it as needing a
+                  click. The .subnote "(The only question is selected
+                  below.)" only appears in the single-question case, where
+                  it's true and disambiguating; it would be redundant noise
+                  once there's an actual choice to make. */}
               {dialogModalKind === 'answer' && openQuestions.length > 0 && (
                 <div>
-                  <span className="flabel">Which Question?</span>
+                  <span className="flabel">
+                    Which Question?
+                    {openQuestions.length === 1 && (
+                      <span className="subnote"> (The only question is selected below.)</span>
+                    )}
+                  </span>
                   <div className="qpicker" role="radiogroup" aria-label="Which Question this Answer responds to">
                     {openQuestions.map((q) => (
                       <button
