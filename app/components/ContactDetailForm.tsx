@@ -17,16 +17,14 @@ import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
  *
  * Time Zone (Week 3, migration 007): same required §6.16 lookup as
  * AddContactForm.tsx — see that file's header comment for the full
- * reasoning. The one difference here: this contact may already have its own
- * `time_zone` from a previous Save, which takes priority over the
- * profiles.time_zone / browser-detection fallback chain used when adding a
- * new one.
+ * reasoning, including the browse-on-focus fix (2026-08-09) via
+ * `timeZoneBrowsing`. The one difference here: this contact may already
+ * have its own `time_zone` from a previous Save, which takes priority over
+ * the profiles.time_zone / browser-detection fallback chain used when
+ * adding a new one.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-// Same constant/reasoning as AddContactForm.tsx.
-const LOOKUP_BROWSE_THRESHOLD = 12
 
 type ContactFormState = {
   name: string
@@ -56,6 +54,7 @@ export default function ContactDetailForm() {
   const [selectedTimeZone, setSelectedTimeZone] = useState<string | null>(null)
   const [showTimeZoneResults, setShowTimeZoneResults] = useState(false)
   const [timeZoneInvalid, setTimeZoneInvalid] = useState(false)
+  const [timeZoneBrowsing, setTimeZoneBrowsing] = useState(false)
 
   useEffect(() => {
     if (!contactId) return
@@ -131,13 +130,10 @@ export default function ContactDetailForm() {
   }
 
   const timeZoneQueryEmpty = form.timeZone.trim() === ''
-  const timeZonesBrowsable = timeZones.length < LOOKUP_BROWSE_THRESHOLD
 
-  const filteredTimeZones = timeZoneQueryEmpty
-    ? (timeZonesBrowsable ? timeZones : [])
+  const filteredTimeZones = timeZoneBrowsing || timeZoneQueryEmpty
+    ? timeZones
     : timeZones.filter((z) => z.toLowerCase().includes(form.timeZone.trim().toLowerCase()))
-
-  const showTimeZoneDropdown = !timeZoneQueryEmpty || timeZonesBrowsable
 
   function selectTimeZone(z: string) {
     setSelectedTimeZone(z)
@@ -317,9 +313,14 @@ export default function ContactDetailForm() {
                       if (selectedTimeZone && e.target.value !== selectedTimeZone) {
                         setSelectedTimeZone(null)
                       }
+                      setTimeZoneBrowsing(false)
                       setShowTimeZoneResults(true)
                     }}
-                    onFocus={() => setShowTimeZoneResults(true)}
+                    onFocus={(e) => {
+                      e.target.select()
+                      setTimeZoneBrowsing(true)
+                      setShowTimeZoneResults(true)
+                    }}
                     onBlur={() => setTimeout(() => setShowTimeZoneResults(false), 120)}
                   />
                   <label className="flabel" htmlFor="tz">
@@ -336,7 +337,7 @@ export default function ContactDetailForm() {
                   {timeZoneInvalid && <p className="ferror">Select a Time Zone.</p>}
                 </span>
 
-                {showTimeZoneResults && showTimeZoneDropdown && (
+                {showTimeZoneResults && (
                   <div className="lookup-results" role="listbox">
                     {filteredTimeZones.length === 0 ? (
                       <div className="lookup-empty">No matching Time Zone.</div>

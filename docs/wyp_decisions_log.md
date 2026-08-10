@@ -6,6 +6,66 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Response Link band added to Request Detail (Week 3, Day 4)
+
+Owner: *"Please provide the testing link as described in: Day 4 — Surface the link somewhere a sender can reach it."*
+
+Added a "Get Response Link" button to `RequestDetailForm.tsx`, directly under the existing recipient-notification notice band — calls `issue_request_link` (migration 008), then shows the resulting `/r/[token]` URL with Copy and Regenerate. New PROPOSED component, §6.30 (`.linkband`/`.linkval`) — Day 4 was scoped in the plan as "surface the link somewhere," with no mockup drawn for it, so this was built plain against the existing Strip/`.btn-secondary` vocabulary rather than left unbuilt for want of a design pass.
+
+**Could not hand the owner an actual working link directly, and said so rather than fabricating one.** Two independent reasons: (1) migrations 008 and 009 are both still DRAFTED, not run — `issue_request_link` doesn't exist in the live database yet, so the button will error until the owner runs both. (2) Even once run, `issue_request_link` is owner-only (`auth.uid()` checked against the Request's `owner_id`) and its raw token is returned exactly once, never persisted anywhere — by design, only the salted hash is stored. There is no query, migration, or admin path that could produce a real token from outside the owner's own authenticated browser session; the button has to actually be clicked by the owner. Told the owner this plainly, with the two-step path to get one (run 008/009, then click Get Response Link on an existing Sent Request).
+
+`npx tsc --noEmit` and `npm run lint` both pass clean.
+
+\---
+
+## 2026-08-10 — Request Response converted to live `/r/[token]` (Week 3, Days 2–3); migration 009 drafted
+
+Owner: *"The Week3 plan for days 2-3 'Convert Request Response... is for the Respond to Request screen as accessed by the anon end-user recipient of the Request. This same screen (or a version of it) should also be presented to a free or paid subscriber when they click on an item in the Requests Received list on the main screen. The screen design is 'completed', please work on the anon access as described in the plan."*
+
+Built `app/components/RequestResponseForm.tsx` and `app/r/[token]/page.tsx` — the one route in the app with no `RequireAuth` wrapper, since this is the anonymous recipient's own entry point. The signed-in-subscriber reuse of this screen (clicking a Received row) is explicitly not built now — Received itself is still non-functional (no schema/RLS path exists for a signed-in user to query "Requests sent to me"), so there's nothing yet to click through to it from. Noted for whenever Received gets its own schema pass.
+
+**Migration 009 drafted, catching a real bug in my own migration 008 draft before it was ever run**: writing this screen's data-loading code surfaced that `get_request_by_token` (migration 008) selected and returned `category_name` — a direct violation of PRD §2.3, which states plainly that Category is a sender-side-only organizing label never shown to the recipient, "not on... the Respond to Request screen, the recipient's Detailed Item view, the non-registered web response view..." Fixed via `create or replace function` rather than silently editing migration 008's already-drafted text: migration 009 removes the `categories` join/field entirely and adds `owner_name`/`created_at` (needed for the meta block's Date:/From: rows, which migration 008 hadn't included either). Two new functions in the same migration: `set_response_done_by_token` (writes Done Date/Done Time) and `add_dialog_by_token` (writes a Dialog entry, `who` resolved server-side from the Request's own Contact — no name collection, matching the plan's already-settled "frictionless" decision). Both anon+authenticated callable, same hash/expiry/revocation-check and generic-error pattern as migration 008.
+
+**Two deliberate divergences from the mockup, both flagged in code comments and in `design/README.md`:**
+- Done Date/Done Time render as real editable pickers (Request Detail's `.fgroup.frow`+`.ffloat.picker.native` markup), not the mockup's boxed `.duo`/`.fieldval` static-text preview. The mockup's own `.panel.req` comment already flagged its border rule as unresolved ("should be conditional on Done Date equaling Due Date and a Due Time being part of the Request... not permanent") — rather than inventing that comparison now, both fields are treated as ordinary optional `.opt` fields, matching how Request Detail already treats the same two fields. `.panel.req` was not carried into the live screen; the mockup file itself is unchanged.
+- Add Dialog's Save calls `add_dialog_by_token` and appends the RPC's returned `{id, created_at, who}` straight into local state, rather than re-running `get_request_by_token` — a re-fetch would log a second, semantically wrong `'viewed'` event for what was actually a write.
+
+**Send/Cancel don't behave like every other Detail screen's.** Send shows an inline `.noticeband` confirmation ("Response saved.") instead of navigating anywhere, and Cancel resets the two editable fields to their last-saved values instead of calling `router.back()` — both because an anonymous visitor arriving from a mailed/texted link typically has no prior in-app history entry to return to, unlike every other screen's Cancel/Close, which is only ever reached by clicking a row on its own parent list.
+
+CSS: `.meta`/`.metatop`/`.metacol`/`.seclabel`/`.respdesc`/`.grabber`/`.promo`* ported into `globals.css` in an earlier pass this session; `.panelact`/`.panelfull` (the stacked Add Dialog/Add Attachment action row, already named in the mockup and in the §6.26 spec entry) added this batch. `.duo`/`.fieldhead`/`.fieldval` were **not** ported — they belong to the static-text display this screen no longer uses live, and stay mockup-only.
+
+`npx tsc --noEmit` and `npm run lint` both pass clean.
+
+\---
+
+## 2026-08-09 — Migration 008 drafted: secure recipient link token infrastructure (Week 3, Day 1)
+
+Owner: *"Please work on the Day 1 — Migration 007: token infrastructure for the Week3 plan."*
+
+**Renumbered 007 → 008.** The plan's Day 1 heading was written before the Time Zone work claimed migration 007 later the same day. Corrected in `WYP_Week3_Plan.md` and drafted under the right number in `docs/Week3 - SQL history.txt`, rather than either colliding with Time Zone or silently renumbering Time Zone instead (Time Zone was drafted first, chronologically, and already referenced as 007 in CLAUDE.md/decisions log — leaving it alone was the smaller change).
+
+**Implemented exactly the shape already agreed**: three columns on `requests` (not a separate `request_links` table — see the "Settled" section of the Week 3 plan), `events`' missing read policy, and `issue_request_link`/`get_request_by_token` as `SECURITY DEFINER` functions following CLAUDE.md's Database section pattern (hashed token, generic failure message, multi-use logged via `events` rather than consumed).
+
+**One addition beyond the plan: `revoke_request_link`.** The plan named two functions; a third followed from a gap noticed while writing the first two — `link_revoked_at` is a column `get_request_by_token` already checks, but nothing anywhere would ever set it without this. Added rather than left as a column with no path to a value. Day 4's actual UI can still decide later whether to expose a Revoke control to the owner; this only makes the capability exist.
+
+**events grant, not just the policy.** Migration 002 fully revoked table-level privileges on `events` from every client role ("Supabase grants table privileges to anon/authenticated by default, so this must be explicit"). An RLS policy alone doesn't undo that — added `grant select on events to authenticated` alongside the new policy, or the policy would have been silently inert.
+
+**30-day link expiry — flagged, not discovered.** Nothing in the PRD specifies a lifetime for this link (distinct from the 1-hour sign-in magic link). Chose 30 days because Dialog "continues over days or weeks" (CLAUDE.md's own wording) and a Request's Due Date is usually inside that window — a reasonable default, not a requirement anyone stated. Called out in both the migration's own header comment and `WYP_Week3_Plan.md` for confirmation before running.
+
+**Scope held at Day 1.** No screen was touched — `get_request_by_token`/`issue_request_link` have no caller yet. `/r/[token]` (Days 2–3) and the Request Detail "get a link" affordance (Day 4) are still ahead, along with `submit_request_response`, which needs the response screen's actual fields decided first rather than being guessed at now.
+
+\---
+
+## 2026-08-09 — Time Zone browse-on-focus bug fixed
+
+Owner: *"The time zones on Add Contact and Contact Detail are correctly selecting my time zone. However, if I wanted to change it for a contact, there are no other values shown in the pull-down except the selected one."*
+
+Root cause: the field always arrives pre-filled with a real, non-empty value (the defaulted zone), unlike Category — the field this pattern was copied from — which always starts blank. The dropdown's filter, "show everything only when the query is empty," never saw an empty query in practice, so focusing the field filtered the full zone list against the already-selected zone's own name and showed only that one match.
+
+Fixed the same way in all three affected places — `AddContactForm.tsx`, `ContactDetailForm.tsx`, and the Create Free Account mockup's demo script (the no-contact-dialog mockup was unaffected; its field starts genuinely blank) — with a `browsing` flag: true from focus (regardless of what's currently in the box) until the user types a character, at which point it drops and normal substring filtering takes over. Also select the field's text on focus, so the first keystroke replaces the prefilled value instead of appending to it and immediately filtering to nothing.
+
+\---
+
 ## 2026-08-09 — PRD v12.8: §9.5 Archive Requests and ToDos added to the Future Features Roadmap
 
 Owner: *"This should be added to a list of things yet to do: A capability not discussed yet... the ability to 'remove' completed Requests and ToDos from the list of items shown in the main screen, but keep them available when Searches are done..."* — followed by a fairly complete first-pass design (Archive screen, select-by-type-and-prior-to-date, pre-checked list, Detail-screen editability affecting eligibility, Archive Now / Remove Archive Status chips, and the schema need).

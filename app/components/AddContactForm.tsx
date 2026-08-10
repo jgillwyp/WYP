@@ -26,26 +26,29 @@ import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
  * shape as Category elsewhere — a text input filtered against a known list,
  * with a `selectedTimeZone` guard so Save can't succeed on typed text that
  * doesn't match a real zone. The list itself is every IANA zone name
- * (app/src/lib/timeZones.ts), always well over the app's "browsable on
- * focus" threshold, so this field is always type-to-search, never browse-all.
- * Defaults on mount to the owner's own profiles.time_zone if set, else the
- * browser's detected zone — and if it had to fall back to the browser, that
- * value is also written back to profiles.time_zone. That write-back is a
- * deliberate decision, not an accident: profiles.time_zone has nowhere else
- * to come from yet (Create Free Account and Account aren't part of the live
- * sign-in flow — see CLAUDE.md), so without it the owner's own zone would
- * never settle into a stored value at all. See decisions log if this should
- * be reconsidered once a real Account screen exists.
+ * (app/src/lib/timeZones.ts). Defaults on mount to the owner's own
+ * profiles.time_zone if set, else the browser's detected zone — and if it
+ * had to fall back to the browser, that value is also written back to
+ * profiles.time_zone. That write-back is a deliberate decision, not an
+ * accident: profiles.time_zone has nowhere else to come from yet (Create
+ * Free Account and Account aren't part of the live sign-in flow — see
+ * CLAUDE.md), so without it the owner's own zone would never settle into a
+ * stored value at all. See decisions log if this should be reconsidered
+ * once a real Account screen exists.
+ *
+ * Browse-on-focus bug (2026-08-09, owner-reported): because this field
+ * always arrives pre-filled with a real, non-empty value (unlike Category,
+ * which starts blank), the original filter — "show all zones only when the
+ * query is empty" — meant focusing the field filtered the dropdown against
+ * the already-selected zone's own name, so only that one zone ever showed.
+ * Fixed with a `timeZoneBrowsing` flag: focus always shows the complete
+ * list regardless of what's currently in the box, and the flag drops the
+ * moment the user types a character, at which point filtering takes over
+ * from what they've typed. The text is also selected on focus so the first
+ * keystroke replaces the prefilled value rather than appending to it.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-// Same rule as Create Request's Recipient/Category lookups (design/README.md
-// §6.24): show the whole list on focus only while it's short enough to be
-// useful un-filtered. Time Zone's list (400+) is always over this, so the
-// field is always type-to-search — kept as a named constant rather than a
-// magic number anyway, for the same reason CreateRequestForm.tsx does.
-const LOOKUP_BROWSE_THRESHOLD = 12
 
 type ContactFormState = {
   name: string
@@ -84,6 +87,9 @@ export default function AddContactForm() {
   const [selectedTimeZone, setSelectedTimeZone] = useState<string | null>(null)
   const [showTimeZoneResults, setShowTimeZoneResults] = useState(false)
   const [timeZoneInvalid, setTimeZoneInvalid] = useState(false)
+  // True from focus until the user types a character — see file-header
+  // comment. Focus always browses the full list; typing switches to filtering.
+  const [timeZoneBrowsing, setTimeZoneBrowsing] = useState(false)
 
   // Default Time Zone on mount — see the file-header comment for the
   // profiles.time_zone / browser-detection / write-back reasoning.
@@ -121,13 +127,10 @@ export default function AddContactForm() {
   }
 
   const timeZoneQueryEmpty = form.timeZone.trim() === ''
-  const timeZonesBrowsable = timeZones.length < LOOKUP_BROWSE_THRESHOLD
 
-  const filteredTimeZones = timeZoneQueryEmpty
-    ? (timeZonesBrowsable ? timeZones : [])
+  const filteredTimeZones = timeZoneBrowsing || timeZoneQueryEmpty
+    ? timeZones
     : timeZones.filter((z) => z.toLowerCase().includes(form.timeZone.trim().toLowerCase()))
-
-  const showTimeZoneDropdown = !timeZoneQueryEmpty || timeZonesBrowsable
 
   function selectTimeZone(z: string) {
     setSelectedTimeZone(z)
@@ -337,9 +340,14 @@ export default function AddContactForm() {
                       if (selectedTimeZone && e.target.value !== selectedTimeZone) {
                         setSelectedTimeZone(null)
                       }
+                      setTimeZoneBrowsing(false)
                       setShowTimeZoneResults(true)
                     }}
-                    onFocus={() => setShowTimeZoneResults(true)}
+                    onFocus={(e) => {
+                      e.target.select()
+                      setTimeZoneBrowsing(true)
+                      setShowTimeZoneResults(true)
+                    }}
                     onBlur={() => setTimeout(() => setShowTimeZoneResults(false), 120)}
                   />
                   <label className="flabel" htmlFor="tz">
@@ -356,7 +364,7 @@ export default function AddContactForm() {
                   {timeZoneInvalid && <p className="ferror">Select a Time Zone.</p>}
                 </span>
 
-                {showTimeZoneResults && showTimeZoneDropdown && (
+                {showTimeZoneResults && (
                   <div className="lookup-results" role="listbox">
                     {filteredTimeZones.length === 0 ? (
                       <div className="lookup-empty">No matching Time Zone.</div>

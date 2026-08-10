@@ -268,9 +268,17 @@ html,body{margin:0;height:100%;background:#fff;}
   var zones = allZones();
   input.value = browserZone(); // first value profiles.time_zone will ever get
 
+  // Browse-on-focus bug fix (2026-08-09, owner-reported against the live
+  // AddContactForm.tsx/ContactDetailForm.tsx, same defect here): the field
+  // starts pre-filled with a real value, so filtering on focus against
+  // whatever's already in the box showed only that one zone. `browsing`
+  // mirrors those files' `timeZoneBrowsing` state — true from focus until a
+  // keystroke narrows it.
+  var browsing = false;
+
   function render() {
     var q = input.value.trim().toLowerCase();
-    var matches = q === '' ? zones : zones.filter(function (z) {
+    var matches = (browsing || q === '') ? zones : zones.filter(function (z) {
       return z.toLowerCase().indexOf(q) !== -1;
     });
     results.innerHTML = '';
@@ -295,8 +303,8 @@ html,body{margin:0;height:100%;background:#fff;}
     }
   }
 
-  input.addEventListener('input', function () { render(); results.hidden = false; });
-  input.addEventListener('focus', function () { render(); results.hidden = false; });
+  input.addEventListener('input', function () { browsing = false; render(); results.hidden = false; });
+  input.addEventListener('focus', function () { input.select(); browsing = true; render(); results.hidden = false; });
   input.addEventListener('blur', function () { setTimeout(function () { results.hidden = true; }, 120); });
 })();
 </script>

@@ -338,6 +338,13 @@ link is built only after the stack is proven on Add Contact.
   accident — see the next bullet for why). Create Free Account's and the
   no-contact-dialog's own Time Zone fields got the matching demo-JS pull-down
   for consistency, even though neither has a live React component yet.
+  **Browse-on-focus bug fixed same day** (owner-reported: "there are no
+  other values shown in the pull-down except the selected one") — the field
+  always starts pre-filled, so the old "show everything only when the query
+  is empty" rule never triggered; a `timeZoneBrowsing` flag now shows the
+  full list on focus regardless of the current value, dropping to normal
+  filtering the moment the user types. Fixed in `AddContactForm.tsx`,
+  `ContactDetailForm.tsx`, and Create Free Account's demo script.
 - **Flag: `profiles.time_zone` still has no path to a value from the actual
   live sign-in flow.** Create Free Account is mockup-only, and `/login`
   explicitly serves both sign-in and first-time account creation with no
@@ -409,3 +416,59 @@ link is built only after the stack is proven on Add Contact.
   persisted**, matching the owner's own wording ("chip state"); flagged as a
   scoping call rather than a confirmed instruction, easy to extend if it
   turns out to matter.
+- **Migration 008 — secure recipient link token infrastructure, DRAFTED, not
+  yet run** (`docs/Week3 - SQL history.txt`, 2026-08-09). `requests` gains
+  `link_token_hash`/`link_expires_at`/`link_revoked_at`; `events` finally
+  gets the read policy migration 002 deferred (plus the table-level `GRANT`
+  that policy alone doesn't supply, since migration 002 revoked all client
+  privileges on it). Three `SECURITY DEFINER` functions: `issue_request_link`
+  and `revoke_request_link` (owner-only), and `get_request_by_token` (anon +
+  authenticated) — the pattern the Database section above already described
+  in prose, now actually written: hashed token, generic error for every
+  failure, multi-use and logged rather than consumed. `revoke_request_link`
+  is one function more than `WYP_Week3_Plan.md`'s Day 1 originally scoped,
+  added so `link_revoked_at` isn't a column with no way to ever get a value.
+  **Flagged for confirmation, not assumed**: the 30-day link expiry has no
+  source in the PRD — see the migration's own header comment for the
+  reasoning behind that specific number.
+- **`/r/[token]` is now Live** (`app/components/RequestResponseForm.tsx`,
+  `app/r/[token]/page.tsx`, 2026-08-10, Week 3 Days 2–3) — **superseding the
+  "no screen reads or writes yet" note above.** No `RequireAuth`: this is the
+  one route in the app an anonymous, unauthenticated visitor reaches. All
+  data access goes through migration 008/009's `SECURITY DEFINER` functions,
+  never a raw table query. **Migration 009, drafted the same day**, corrects
+  a real bug in migration 008's `get_request_by_token` — an early draft
+  selected and returned `category_name`, violating PRD §2.3 (Category is
+  sender-side-only, never shown to the recipient); caught before migration
+  008 was ever run, fixed via `create or replace function` rather than
+  editing 008's already-presented text. Migration 009 also adds
+  `set_response_done_by_token` and `add_dialog_by_token` — the two write
+  functions the plan had originally sketched as one, `submit_request_response`
+  (see `WYP_Week3_Plan.md`'s Days 2–3 section for the naming correction).
+  **Diverges from the mockup, both flagged**: Done Date/Done Time are real
+  `.fgroup.frow`+`.ffloat.picker.native` editable pickers (Request Detail's
+  pattern), not the mockup's boxed `.duo`/`.fieldval` static-text preview,
+  and drop `.panel.req` entirely — the mockup's own comment already flagged
+  that border rule as unresolved; both fields are ordinary optional `.opt`
+  fields instead. Add to Calendar is present but inert (`.ics` generation is
+  out of scope this batch). Send shows an inline `.noticeband` confirmation
+  rather than navigating anywhere; Cancel resets the two editable fields to
+  their last-saved values rather than `router.back()` — an anonymous visitor
+  has no prior in-app history entry to return to, unlike every other
+  Detail-type screen's Cancel/Close. **Still unbuilt**: the
+  signed-in-subscriber reuse of this same screen from a Received row (raised
+  by the owner alongside this task, explicitly deferred — Received has no
+  live data path yet, see the Main Screen entry above).
+- **Request Detail's Response Link band is now Live** (2026-08-10, Week 3
+  Day 4) — a "Get Response Link" button under the existing notice band,
+  calling `issue_request_link` and showing the resulting `/r/[token]` URL
+  with Copy/Regenerate (`.linkband`/`.linkval`, §6.30 PROPOSED, not drawn in
+  any mockup). **Not yet testable**: migrations 008 and 009 are both still
+  DRAFTED, not run (`docs/Week3 - SQL history.txt`) — `issue_request_link`
+  doesn't exist in the live database until 008 runs. Even once it does, no
+  one but the signed-in owner can ever produce a real token: the function is
+  owner-only (`auth.uid()` checked against the Request's `owner_id`) and the
+  raw token is returned exactly once, never stored anywhere — only its
+  salted hash is persisted. Get a real testing link by: running migrations
+  008 and 009 in Supabase, then opening any existing Sent Request
+  (`/requests/[id]`) and clicking "Get Response Link."

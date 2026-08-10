@@ -39,3 +39,465 @@ commit;
 --   await supabase.from('profiles').update({ time_zone: 'America/Chicago' })
 --        .eq('id', <own id>)   -> succeeds only for the signed-in owner's own row
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 008 — secure recipient link: token columns, events read
+-- policy, issue/revoke/read functions
+-- DRAFTED 2026-08-09 — NOT YET RUN. Run in the Supabase SQL editor, then
+-- change the line above to "Run <date>" and update CLAUDE.md / decisions log
+-- from "drafted" to "confirmed run by the owner", same as every earlier
+-- migration in this project.
+--
+-- NUMBERING NOTE: WYP_Week3_Plan.md's "Day 1" section originally called this
+-- "migration 007" — written before the Time Zone work above claimed that
+-- number the same day. This is migration 008; the plan doc has been
+-- corrected to match.
+--
+-- Implements the pattern CLAUDE.md's Database section already describes in
+-- prose: digest(token,'sha256') stored, never the raw token; expiry and
+-- revocation enforced inside SECURITY DEFINER functions, not by an anon RLS
+-- policy (a client-supplied WHERE clause is not a permission check); the
+-- same generic error for every failure (expired, revoked, or simply wrong —
+-- a bad guess shouldn't be distinguishable from an expired one); the token
+-- is a durable, multi-use capability — recorded as an `events` row on every
+-- access, never consumed.
+--
+-- Token storage is three columns on `requests`, not a separate table — see
+-- WYP_Week3_Plan.md's "Settled" section for why (no product need for link
+-- *history*; regenerating already invalidates the old hash on its own,
+-- which is the security property that actually matters).
+--
+-- `events` has had no read policy since migration 002 explicitly deferred
+-- it ("`requests` does not exist until migration 003"). Added now, scoped to
+-- the owner of the request each event belongs to — table privileges were
+-- fully revoked from every client role in migration 002, so both the GRANT
+-- and the RLS policy are needed; either alone still denies everything.
+--
+-- Three functions, one more than WYP_Week3_Plan.md's Day 1 originally
+-- listed: `issue_request_link` and `get_request_by_token` were the planned
+-- two; `revoke_request_link` is a small addition made here rather than left
+-- for later, since `link_revoked_at` has no other way to ever get a value —
+-- an unused column would be dead weight from day one. Day 4's actual UI can
+-- decide later whether to expose a Revoke control; the capability existing
+-- doesn't force that decision now.
+--
+-- `link_expires_at` is set to 30 days from issue/regenerate. Not specified
+-- anywhere in the PRD or prior decisions — chosen, not discovered, because
+-- Dialog on a Request "continues over days or weeks" (CLAUDE.md's own
+-- wording) and a Request's own Due Date is often within that window.
+-- Flagged for owner confirmation, not assumed settled.
+-- ============================================================================
+
+begin;
+
+-- pgcrypto for digest()/gen_random_bytes() — Supabase projects normally
+-- ship this pre-enabled in the extensions schema; declared here anyway so
+-- this migration is self-contained rather than assuming prior state.
+create extension if not exists pgcrypto with schema extensions;
+
+alter table public.requests add column if not exists link_token_hash bytea;
+alter table public.requests add column if not exists link_expires_at timestamptz;
+alter table public.requests add column if not exists link_revoked_at timestamptz;
+
+-- Partial index: most rows will never have a link. Also the lookup path
+-- get_request_by_token uses to find a request from a hash.
+create unique index if not exists requests_link_token_hash_idx
+  on public.requests (link_token_hash)
+  where link_token_hash is not null;
+
+comment on column public.requests.link_token_hash is
+  'digest(token, ''sha256'') — the raw token is never stored, only returned once by issue_request_link(). Multi-use capability, not consumed on read (PRD/CLAUDE.md: request links are multi-use).';
+comment on column public.requests.link_expires_at is
+  'Set by issue_request_link(); 30 days from issue/regenerate — see this migration''s header comment for why that number and not another.';
+comment on column public.requests.link_revoked_at is
+  'Set by revoke_request_link(); checked by get_request_by_token() alongside expiry. Null = not revoked.';
+
+-- ----------------------------------------------------------------------------
+-- events: add the read policy migration 002 deferred, now that requests
+-- exists. Table grants were revoked entirely in migration 002 — both the
+-- GRANT and the policy below are required; either alone denies everything.
+-- ----------------------------------------------------------------------------
+grant select on public.events to authenticated;
+
+create policy "events: owners select their requests' events"
+  on public.events for select to authenticated
+  using (
+    request_id in (select id from public.requests where owner_id = auth.uid())
+  );
+
+-- ----------------------------------------------------------------------------
+-- issue_request_link — owner-only. Generates a fresh token, stores only its
+-- hash, (re)sets a 30-day expiry, clears any prior revocation, and returns
+-- the raw token exactly once. Regenerating silently invalidates whatever
+-- token existed before, since the old hash is overwritten.
+-- ----------------------------------------------------------------------------
+create or replace function public.issue_request_link(p_request_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_token text;
+begin
+  select owner_id into v_owner from public.requests where id = p_request_id;
+
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  update public.requests
+    set link_token_hash = digest(v_token, 'sha256'),
+        link_expires_at = now() + interval '30 days',
+        link_revoked_at = null
+    where id = p_request_id;
+
+  insert into public.events (actor_user, subject_type, subject_id, request_id, action, detail)
+    values (auth.uid(), 'link', p_request_id, p_request_id, 'issued', '{}'::jsonb);
+
+  return v_token;
+end;
+$$;
+
+revoke all on function public.issue_request_link(uuid) from public;
+grant execute on function public.issue_request_link(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- revoke_request_link — owner-only. Sets link_revoked_at; get_request_by_token
+-- checks it on every read. Does not clear link_token_hash, so the events
+-- trail from issue through revoke stays attributable to one link generation
+-- rather than looking like the link never existed.
+-- ----------------------------------------------------------------------------
+create or replace function public.revoke_request_link(p_request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+begin
+  select owner_id into v_owner from public.requests where id = p_request_id;
+
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'Not found.';
+  end if;
+
+  update public.requests set link_revoked_at = now() where id = p_request_id;
+
+  insert into public.events (actor_user, subject_type, subject_id, request_id, action, detail)
+    values (auth.uid(), 'link', p_request_id, p_request_id, 'revoked', '{}'::jsonb);
+end;
+$$;
+
+revoke all on function public.revoke_request_link(uuid) from public;
+grant execute on function public.revoke_request_link(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_request_by_token — the anonymous read path. Same generic error for
+-- every failure (not found, expired, revoked) so a bad guess can't be told
+-- apart from an expired link. Every successful read is logged as its own
+-- events row rather than consuming the token (durable capability, not a
+-- one-time code). Returns a single jsonb payload — the Request's own fields
+-- plus its Contact/Category names and full Dialog thread — so the eventual
+-- /r/[token] screen (Days 2-3, not built yet) needs one RPC call, not several.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.due_date, r.due_time, r.done_date, r.done_time,
+         c.name as category_name, ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.categories c on c.id = r.category_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'category_name', v_request.category_name,
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here — same caution as every earlier migration.
+--
+--   const token = await supabase.rpc('issue_request_link', { p_request_id })
+--        -> succeeds only when called as the owning user; check events for
+--           an 'issued' row afterward
+--   await supabase.rpc('get_request_by_token', { p_token: token })
+--        -> works from an anon client with no session at all; check events
+--           for a 'viewed' row afterward
+--   await supabase.rpc('get_request_by_token', { p_token: 'not-a-real-token' })
+--        -> same generic error as an expired/revoked token, not a different one
+--   await supabase.rpc('revoke_request_link', { p_request_id })
+--        -> then re-run get_request_by_token with the same token -> now fails
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 009 — corrects get_request_by_token (migration 008), adds the
+-- response write path: set_response_done_by_token, add_dialog_by_token
+-- DRAFTED 2026-08-09 — NOT YET RUN. Migration 008 is also still not yet run;
+-- if you run these in order (008 then 009) in the same session, that's fine
+-- — 009's `create or replace function public.get_request_by_token` simply
+-- becomes the version that's ever actually created. Run in the Supabase SQL
+-- editor, then change the line above to "Run <date>" and update CLAUDE.md /
+-- decisions log, same as every earlier migration.
+--
+-- CORRECTION to get_request_by_token: migration 008's draft selected and
+-- returned `category_name`. That's wrong — PRD §2.3 is explicit that
+-- Category is sender-private and must never reach the recipient, "not on
+-- Received rows, the Respond to Request screen, the recipient's Detailed
+-- Item view, the non-registered web response view, or the Request
+-- notification email and .ics attachment." Caught while building the
+-- screen that actually consumes this function's output, before 008 was
+-- ever run — recorded as a correction here rather than silently rewriting
+-- 008's file text, so the mistake and the fix both stay on the record.
+-- Also adds `created_at` (for the response screen's "Date:" meta row) and
+-- `owner_name` (its "From:" row, via a join to profiles — wasn't needed
+-- until there was a screen to render it).
+-- ----------------------------------------------------------------------------
+
+begin;
+
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         p.display_name as owner_name, ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+    -- No join to categories, and no category_name in the payload below —
+    -- see the correction note above.
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'owner_name', v_request.owner_name,
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_by_token — the recipient's Send action. Updates only
+-- Done Date/Done Time; nothing else on the Request is recipient-editable
+-- (Description, Due Date, Category all stay sender-owned). Both parameters
+-- are nullable — Done Date/Time are optional on a Request, same as
+-- everywhere else in the app; a recipient can Send having only added a
+-- Dialog Comment, with nothing marked Done yet.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_by_token(
+  p_token text,
+  p_done_date date,
+  p_done_time time
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_request_id uuid;
+  v_revoked timestamptz;
+  v_expires timestamptz;
+begin
+  select id, link_revoked_at, link_expires_at
+    into v_request_id, v_revoked, v_expires
+    from public.requests
+    where link_token_hash = digest(p_token, 'sha256');
+
+  if v_request_id is null or v_revoked is not null or v_expires < now() then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date, done_time = p_done_time
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'response_done_updated',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time)
+    );
+end;
+$$;
+
+revoke all on function public.set_response_done_by_token(text, date, time) from public;
+grant execute on function public.set_response_done_by_token(text, date, time) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- add_dialog_by_token — the recipient's Add Dialog Save. `who` is taken from
+-- the Request's own Contact record server-side, never supplied by the
+-- client — matches the owner's "as frictionless as possible" decision (no
+-- name collection) and means a spoofed `who` isn't even possible through
+-- this path. `author_user_id` stays null (nothing to attribute to a real
+-- app account). Returns the new entry so the client can append it to the
+-- thread locally instead of re-running get_request_by_token, which would
+-- log an extra 'viewed' event for what's really an add, not a read.
+-- ----------------------------------------------------------------------------
+create or replace function public.add_dialog_by_token(
+  p_token text,
+  p_kind text,
+  p_body text,
+  p_replies_to_id bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_request_id uuid;
+  v_revoked timestamptz;
+  v_expires timestamptz;
+  v_who text;
+  v_new_id bigint;
+  v_created_at timestamptz;
+begin
+  select r.id, r.link_revoked_at, r.link_expires_at, ct.display_name
+    into v_request_id, v_revoked, v_expires, v_who
+    from public.requests r
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = digest(p_token, 'sha256');
+
+  if v_request_id is null or v_revoked is not null or v_expires < now() then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  if p_kind not in ('question', 'answer', 'comment') then
+    raise exception 'Invalid Dialog entry type.';
+  end if;
+
+  if trim(coalesce(p_body, '')) = '' then
+    raise exception 'Enter Dialog Text.';
+  end if;
+
+  v_who := coalesce(v_who, 'Recipient'); -- defensive only; a Request reachable
+                                          -- by /r/[token] always has a Contact
+
+  insert into public.dialog (request_id, kind, body, who, replies_to_id)
+    values (
+      v_request_id, p_kind, p_body, v_who,
+      case when p_kind = 'answer' then p_replies_to_id else null end
+    )
+    returning id, created_at into v_new_id, v_created_at;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('dialog', v_new_id, v_request_id, 'created_by_recipient', jsonb_build_object('kind', p_kind));
+
+  return jsonb_build_object('id', v_new_id, 'created_at', v_created_at, 'who', v_who);
+end;
+$$;
+
+revoke all on function public.add_dialog_by_token(text, text, text, bigint) from public;
+grant execute on function public.add_dialog_by_token(text, text, text, bigint) to anon, authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here.
+--
+--   await supabase.rpc('get_request_by_token', { p_token: token })
+--        -> payload has owner_name and created_at, and NO category_name key
+--           at all (confirm the key is genuinely absent, not just null)
+--   await supabase.rpc('set_response_done_by_token',
+--        { p_token: token, p_done_date: '2026-08-20', p_done_time: null })
+--        -> succeeds with no session; re-fetch shows the new done_date
+--   await supabase.rpc('add_dialog_by_token',
+--        { p_token: token, p_kind: 'comment', p_body: 'test', p_replies_to_id: null })
+--        -> succeeds; returned `who` matches the Request's own Contact name,
+--           not anything the client sent (the client never sends a who)
+-- ============================================================================
