@@ -351,9 +351,9 @@ html,body{margin:0;height:100%;background:#fff;}
     <div class="fgroup">
       <span class="flabel" id="dlgkind-label">Dialog Entry Type</span>
       <div class="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
-        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onclick="selectKind('question')">Question</button>
-        <button class="chip" type="button" id="chip-answer" aria-pressed="false" onclick="selectKind('answer')">Answer</button>
-        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onclick="selectKind('comment')">Comment</button>
+        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onmousedown="event.preventDefault()" onclick="selectKind('question')">Question</button>
+        <button class="chip" type="button" id="chip-answer" aria-pressed="false" onmousedown="event.preventDefault()" onclick="selectKind('answer')">Answer</button>
+        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onmousedown="event.preventDefault()" onclick="selectKind('comment')">Comment</button>
       </div>
     </div>
     <div id="dlg-qpicker-wrap" style="display:none;">

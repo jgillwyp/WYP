@@ -487,10 +487,10 @@ html,body{margin:0;height:100%;background:#fff;}
     <div class="fgroup">
       <span class="flabel" id="dlgkind-label">Dialog Entry Type</span>
       <div class="chiprow" role="radiogroup" aria-labelledby="dlgkind-label">
-        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onclick="selectKind('question')">Question</button>
-        <button class="chip is-locked" type="button" aria-disabled="true" aria-pressed="false">
+        <button class="chip selected" type="button" id="chip-question" aria-pressed="true" onmousedown="event.preventDefault()" onclick="selectKind('question')">Question</button>
+        <button class="chip is-locked" type="button" aria-disabled="true" aria-pressed="false" onmousedown="event.preventDefault()">
           <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Answer</button>
-        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onclick="selectKind('comment')">Comment</button>
+        <button class="chip" type="button" id="chip-comment" aria-pressed="false" onmousedown="event.preventDefault()" onclick="selectKind('comment')">Comment</button>
       </div>
     </div>
     <div class="fgroup ffloat">

@@ -750,6 +750,7 @@ export default function CreateRequestForm() {
                     className={`chip${dialogModalKind === 'question' ? ' selected' : ''}`}
                     type="button"
                     aria-pressed={dialogModalKind === 'question'}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => selectDialogKind('question')}
                   >
                     Question
@@ -757,7 +758,7 @@ export default function CreateRequestForm() {
                   {/* Locked, not just unselected — a Request/ToDo's thread is
                       always empty at this point, so there is nothing yet to
                       answer. See Respond to Request for the dynamic version. */}
-                  <button className="chip is-locked" type="button" aria-disabled="true" aria-pressed={false}>
+                  <button className="chip is-locked" type="button" aria-disabled="true" aria-pressed={false} onMouseDown={(e) => e.preventDefault()}>
                     <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
                       <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
@@ -768,6 +769,7 @@ export default function CreateRequestForm() {
                     className={`chip${dialogModalKind === 'comment' ? ' selected' : ''}`}
                     type="button"
                     aria-pressed={dialogModalKind === 'comment'}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => selectDialogKind('comment')}
                   >
                     Comment

@@ -826,6 +826,7 @@ export default function RequestDetailForm() {
                     className={`chip${dialogModalKind === 'question' ? ' selected' : ''}`}
                     type="button"
                     aria-pressed={dialogModalKind === 'question'}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => selectKind('question')}
                   >
                     Question
@@ -835,6 +836,7 @@ export default function RequestDetailForm() {
                     type="button"
                     aria-pressed={dialogModalKind === 'answer'}
                     aria-disabled={openQuestions.length === 0}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => selectKind('answer')}
                   >
                     Answer
@@ -843,6 +845,7 @@ export default function RequestDetailForm() {
                     className={`chip${dialogModalKind === 'comment' ? ' selected' : ''}`}
                     type="button"
                     aria-pressed={dialogModalKind === 'comment'}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => selectKind('comment')}
                   >
                     Comment

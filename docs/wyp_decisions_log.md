@@ -6,6 +6,20 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Add Dialog: clicking a locked chip is now a true no-op
+
+Owner, testing the fix above: *"The change works, unless a non-available chip is clicked... if I click the 'not-available' Answer chip, the dialog text displays the full-sized placeholder text and there is no focus. A preferred response to clicking a non-available chip would be none - which would then not deselect the last selected chip."*
+
+Root cause was different from what the symptom suggested: `selectKind('answer')`'s existing early-return guard (`if (kind === 'answer' && openQuestions.length === 0) return`) already prevented any state change or the newly-added `.focus()` call from running for the locked chip — so nothing in the fix above was wrong. But clicking *any* real, focusable `<button>` — including one carrying `aria-disabled="true"` rather than the native `disabled` attribute — still triggers the browser's own default click-to-focus behavior, which blurs whatever was previously focused (the Dialog Text textarea) before the `onClick` handler ever runs. `aria-disabled` over `disabled` is deliberate app-wide (§6.22, so screen readers still reach the explanation), so the chip stays a real, natively-focusable element; the guard inside `selectKind` was never going to be able to prevent that native side effect from the outside.
+
+Fixed at the source: added `onMouseDown={(e) => e.preventDefault()}` (mockups: `onmousedown="event.preventDefault()"`) to every Kind chip button, locked or not, in every Add Dialog modal. Preventing the default action of `mousedown` — not `click` — stops the browser from shifting focus onto the button at all, so a click on any chip, available or locked, never moves focus away from wherever it already was; the `click` event (and each chip's own `onClick`) still fires normally afterward, since `preventDefault` on `mousedown` only cancels the browser's default focus-shift, not event propagation. This also makes the explicit `.focus()` calls added in the entry above redundant for the two always-available chips (focus never leaves in the first place now) — left in place rather than removed, since focusing an already-focused element is a harmless no-op and the calls still matter for restoring focus after a genuine kind change.
+
+Applied to all five live components with an Add Dialog modal (`RequestResponseForm.tsx`, `RequestDetailForm.tsx`, `TodoDetailForm.tsx`, `CreateRequestForm.tsx`, `CreateTodoForm.tsx`) and all five mockups, including the two Create screens' permanently-locked Answer chip (no dynamic unlocking logic, but the identical native-focus-steal problem applies to any real button regardless of whether it has an `onClick` at all).
+
+`npx tsc --noEmit` and `npx eslint` on all five changed components pass clean.
+
+\---
+
 ## 2026-08-10 — Add Dialog: focus returns to Dialog Text on every chip click, not just the default
 
 Owner: *"When another chip is clicked in the Add Dialog dialog, the same focus to the Dialog Text box is needed for UI consistency and is not provided."*
