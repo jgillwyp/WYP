@@ -716,3 +716,39 @@ link is built only after the stack is proven on Add Contact.
   changes needed for either fix, same reasoning as `openPicker`: none of the
   affected screens have real `type="date"`/`type="time"` inputs in their
   static HTML. See the decisions log's 2026-08-11 entry.
+- **Main Screen To/From column-gap tightened; Add Contact's return path
+  from Create Request fixed (2026-08-11).** Two more owner-reported items.
+  (1) A long contact first name ("Maximillan") truncated to "Maximilla…" in
+  the To/From column on a phone. Not a font problem — `.dt`/`.due`/`.dn`
+  already use Inter, proportional, same as everywhere else; no monospace
+  declaration existed to remove. The real constraint was `.r1`/`.colbar.sr`'s
+  `grid-template-columns: 1fr 58px 58px 58px` spending 48px across three
+  16px gaps. Cut `column-gap` to `10px` in both (they have to move
+  together, since the header row's labels sit directly above the data
+  columns) — CSS Grid hands the freed 18px straight to the name column's
+  `1fr` track. The 58px date-column widths themselves are untouched;
+  "MM-DD-YY" already fits them tightly at 11px. (2) Add Contact, opened
+  from Create Request's own Add Contact button, always returned to the
+  Contacts list rather than back to the Request with the new contact
+  selected — a gap `AddContactForm.tsx`'s own 2026-08-09 comment had
+  already flagged as coming ("revisit if a second entry point... starts
+  reaching this screen"). Fixed with a `?from=create-request` query param
+  on Create Request's Add Contact link: `AddContactForm.tsx` now redirects
+  Save to `/requests/new?newContactId=<id>` in that case (the insert
+  gained a `.select('id').single()` to produce that id) and Cancel to
+  `/requests/new` empty-handed, instead of `/contacts` either way.
+  `CreateRequestForm.tsx`'s mount effect selects the matching contact once
+  its own contacts fetch resolves, then `router.replace('/requests/new')`
+  strips the query string. Read via `window.location.search`, not
+  `useSearchParams()` — every read happens inside a click handler or a
+  mount effect, already client-side only, so the hook's Suspense-boundary
+  requirement had nothing to protect against here and would only have
+  forced an unrelated change to the page shell. **Not fixed**: every other
+  field on Create Request (Due Date, Description, staged Dialog, Category)
+  is still lost on this round trip — the full fix is the real §6.24/§9.9.5
+  in-place interception dialog, still not built; this change only corrects
+  the return destination and restores the one field (Recipient) the
+  complaint was actually about. Neither fix touches any mockup — Create
+  Request's own Add Contact button has no interactive JS to update, and
+  Main Screen's gap values were ported into `WYP_main_screen_palette1.html`
+  directly. See the decisions log's 2026-08-11 entry.

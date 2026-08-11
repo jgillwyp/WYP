@@ -1488,9 +1488,13 @@ body {
   column-gap: 6px;
 }
 
+/* column-gap tightened 16px -> 10px, 2026-08-11 (see the matching .r1
+   comment below) — must stay in lockstep with .r1's own grid-template-
+   columns/column-gap, since this header row's labels (To/From, Date, Due,
+   Done) sit directly above .r1's data columns and need to line up. */
 .colbar.sr {
   grid-template-columns: 1fr 58px 58px 58px;
-  column-gap: 16px;
+  column-gap: 10px;
 }
 
 .colbar.td {
@@ -1533,10 +1537,24 @@ body {
   background: var(--row-tint);
 }
 
+/* column-gap tightened 16px -> 10px, 2026-08-11 — owner-reported: on a
+   phone, a long contact first name (tested with "Maximillan") truncated to
+   "Maximilla..." in the To/From column. The date columns themselves
+   (Date/Due/Done, each a fixed 58px) already fit their "MM-DD-YY" content
+   tightly — Inter's digits render at a consistent width by default (no
+   font-family change needed, contrary to the owner's own working guess
+   that a monospace font was in play for vertical alignment; it never was).
+   The real lever was column-gap: three 16px gaps between four grid tracks
+   reserved 48px purely for spacing. Cutting each gap to 10px hands the
+   freed 18px straight to the name column's own 1fr track (CSS Grid
+   distributes freed space to fr tracks automatically) — about two more
+   characters of name, matching the owner's own estimate, without the three
+   numeric columns reading as run-together (10px between two-line-height
+   numerals is still a clear gap, just tighter than 16px). */
 .r1 {
   display: grid;
   grid-template-columns: 1fr 58px 58px 58px;
-  column-gap: 16px;
+  column-gap: 10px;
   align-items: baseline;
 }
 

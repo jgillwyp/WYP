@@ -174,35 +174,56 @@ export default function AddContactForm() {
 
     // first_name/last_name are not written here (2026-08-07 decision,
     // migration 005) — the columns stay in the table for possible later use,
-    // but this app writes only display_name going forward.
-    const { error: insertError } = await supabase.from('contacts').insert({
-      owner_id: userData.user.id,
-      display_name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim() || null,
-      send_by: sendBy,
-      notes: form.notes.trim() || null,
-      time_zone: selectedTimeZone,
-    })
+    // but this app writes only display_name going forward. .select().single()
+    // added 2026-08-11 (was a bare insert before) — the create-request return
+    // path below needs the new row's own id to select it back there.
+    const { data: inserted, error: insertError } = await supabase
+      .from('contacts')
+      .insert({
+        owner_id: userData.user.id,
+        display_name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+        send_by: sendBy,
+        notes: form.notes.trim() || null,
+        time_zone: selectedTimeZone,
+      })
+      .select('id')
+      .single()
 
     setSaving(false)
 
-    if (insertError) {
-      setError(insertError.message)
+    if (insertError || !inserted) {
+      setError(insertError?.message ?? 'Could not save the contact.')
       return
     }
 
-    // Returns to the Contacts list, not the main screen (2026-08-09) — the
-    // only route that currently links to /contacts/new is that list's own
-    // Add Contact button, so Save should land back where the person came
-    // from. Revisit if a second entry point (e.g. Create Request's
-    // no-contact interception, §6.24, not yet built) starts reaching this
-    // screen — that path will want its own return destination.
-    router.push('/contacts')
+    // Return destination depends on where this screen was opened from
+    // (2026-08-11) — this file's own comment used to flag Create Request's
+    // no-contact interception (§6.24, still not built) as the next entry
+    // point that would need its own destination; that entry point arrived
+    // first, via the plain "Add Contact" button, not the not-yet-built
+    // dialog. ?from=create-request (set by CreateRequestForm.tsx's Add
+    // Contact button) means Save should land back on Create Request with
+    // the new contact selected, not on the Contacts list. Read via
+    // window.location.search, not useSearchParams() — this runs inside an
+    // event handler, already client-side only, so there's no SSR/Suspense
+    // concern to avoid by using the hook instead.
+    const from = new URLSearchParams(window.location.search).get('from')
+    if (from === 'create-request') {
+      router.push(`/requests/new?newContactId=${inserted.id}`)
+    } else {
+      router.push('/contacts')
+    }
   }
 
   function handleCancel() {
-    router.push('/contacts')
+    // Same origin-aware return as Save above, minus the new-contact id —
+    // Cancel means nothing was added, so Create Request has nothing new to
+    // select, but the owner should still land back there, not on the
+    // Contacts list they never asked to see.
+    const from = new URLSearchParams(window.location.search).get('from')
+    router.push(from === 'create-request' ? '/requests/new' : '/contacts')
   }
 
   return (

@@ -139,6 +139,19 @@ export default function CreateRequestForm() {
   // both to owner_id = auth.uid() (migration 002 / 003) — no client-side
   // "is this mine" filter is added on top of that.
   useEffect(() => {
+    // Returning from Add Contact (2026-08-11) — owner-reported: saving a
+    // contact from here used to always land back on the Contacts list, not
+    // this screen, and never selected the contact just added. AddContactForm.tsx
+    // now redirects here with ?newContactId=<id> when it was opened from this
+    // screen's own Add Contact button (?from=create-request, see below); once
+    // the contacts list has loaded, find that id and select it, then strip
+    // the query string via router.replace so a refresh or back-navigation
+    // doesn't re-select it. Read via window.location.search inside this
+    // effect (not the useSearchParams() hook) specifically to avoid the
+    // Suspense-boundary requirement that hook imposes on the page — this
+    // effect only ever runs client-side after mount, so window is safe here.
+    const newContactId = new URLSearchParams(window.location.search).get('newContactId')
+
     // Alphabetical, not creation order (owner's rule, 2026-08-07) — applies
     // to every pull-down/lookup list in the app except the Housekeeping task
     // list's Log Out entry.
@@ -146,7 +159,15 @@ export default function CreateRequestForm() {
       .from('contacts')
       .select('id, display_name, send_by')
       .order('display_name')
-      .then(({ data }) => setContacts(data ?? []))
+      .then(({ data }) => {
+        const list = data ?? []
+        setContacts(list)
+        if (newContactId) {
+          const created = list.find((c) => c.id === newContactId)
+          if (created) selectContact(created)
+          router.replace('/requests/new')
+        }
+      })
 
     supabase
       .from('categories')
@@ -161,6 +182,11 @@ export default function CreateRequestForm() {
       .select('display_name')
       .single()
       .then(({ data }) => setOwnerName(data?.display_name ?? null))
+    // router is stable across renders (Next's useRouter()) and this effect
+    // must run once on mount only, same as every other "load once" effect
+    // in this file — same pattern TodoDetailForm.tsx already uses for its
+    // own mount-only effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function openDialogModal() {
@@ -465,9 +491,14 @@ export default function CreateRequestForm() {
                 </span>
                 {/* No in-place "no contact found" interception (§9.9.5) yet —
                     that dialog is designed but not converted (design/README.md).
-                    Add Contact just navigates away; anything typed here is
-                    lost, which is a known limitation until that flow exists. */}
-                <button className="btn" type="button" onClick={() => router.push('/contacts/new')}>
+                    Add Contact still navigates away, and every other field
+                    typed on this screen is still lost, which remains a known
+                    limitation until that flow exists — but 2026-08-11, the
+                    round trip itself was fixed: ?from=create-request tells
+                    AddContactForm.tsx to send the owner back here (with the
+                    new contact selected) on Save, or back here empty-handed
+                    on Cancel, instead of always landing on the Contacts list. */}
+                <button className="btn" type="button" onClick={() => router.push('/contacts/new?from=create-request')}>
                   Add Contact
                 </button>
 
