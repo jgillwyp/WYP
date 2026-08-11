@@ -538,6 +538,56 @@ body {
   color: var(--ink);
 }
 
+/* Clear button (§6.33 PROPOSED), 2026-08-11 — owner-reported: Due/Done Time
+   have no way to clear a value once set, unlike Due/Done Date, which do (a
+   platform affordance — some browsers show a native clear "x" on a
+   populated type=date but not on type=time; Time can't be relied on to have
+   one). Hand-typing isn't a supported way to fill these fields either (see
+   openPicker's own comment), so there was no way at all to empty a Time
+   field again short of it staying set forever. A small in-app "×", styled
+   like .attremove's existing plain-text-button treatment, appears only once
+   the field holds a value and sits after .flabel in markup — never between
+   .finput and .flabel, which would break the load-bearing input+label
+   adjacent-sibling selector the floating label depends on (see CLAUDE.md).
+   Absolutely positioned at the field's right edge (the calendar/clock glyph
+   already owns the left edge, inside .flabel), so it visually overlaps
+   wherever a desktop browser draws its own native calendar icon — an
+   acceptable tradeoff since openPicker already makes a click anywhere in
+   the field open the picker, so nothing is lost by covering that icon.
+   Time-only: Date fields keep relying on their existing native behavior,
+   unchanged. */
+.fclear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.fclear:active {
+  background: var(--row-tint);
+  color: var(--alert-red);
+}
+
+.fclear:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 1px;
+}
+
 /* ============================================================================
    FIELD ROW (§6.16) — two or more fields plus a button on one line.
    ========================================================================= */
@@ -547,8 +597,28 @@ body {
   align-items: center;
 }
 
+/* flex-basis: 0% (not auto), 2026-08-11 — owner-reported: on Request
+   Detail/ToDo Detail (existing rows, one field pre-filled from the loaded
+   record), Due Date rendered wider than Done Date and squeezed the second
+   field's label text off the right edge on a phone; Create Request/Create
+   ToDo (both fields start empty) scaled the same row evenly. Root cause:
+   with flex-basis:auto, a flex item's hypothetical size falls back to its
+   content's own intrinsic width when its child (.finput, width:100%) can't
+   resolve a percentage against an as-yet-undetermined flex-basis — and a
+   native type=date/type=time control's rendered intrinsic width can depend
+   on whether it currently holds a value (most visibly on mobile, where the
+   OS picker draws the actual formatted date/time as inline content). Two
+   fields with different fill states then get unequal shares of the row.
+   flex-basis:0% removes content from the equation entirely: both fields
+   grow from a zero base by equal flex-grow, so they end up the same width
+   regardless of which one currently holds a value. Every .frow with two
+   .ffloat children (Due Date/Due Time, Done Date/Done Time, Due Date/Done
+   Date) is exactly the set of rows this was already meant to keep equal;
+   .frow rows with a single .ffloat beside a .btn (Recipient, Category) are
+   unaffected, since that lone growable item already claims all the leftover
+   space either way. */
 .frow .ffloat {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-width: 0;
 }
 

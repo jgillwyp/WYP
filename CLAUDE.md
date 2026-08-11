@@ -684,3 +684,35 @@ link is built only after the stack is proven on Add Contact.
   `<input>` for them at all, only static `.fieldval` text), so `showPicker()`
   has nothing to attach to in the mockups. See the decisions log's 2026-08-11
   entry.
+- **Due/Done Date-Time row width imbalance; Clear affordance for Time
+  fields (§6.33, 2026-08-11).** Two more owner-reported bugs. (1) On Request
+  Detail/ToDo Detail, Due Date rendered wider than the field beside it and
+  squeezed its label text off the edge on a phone; Create Request/Create
+  ToDo's identical rows scaled evenly. Root cause: `.frow .ffloat` was
+  `flex: 1 1 auto` — with a percentage-width `.finput` child, the flex-basis
+  falls back to the input's own intrinsic content width when it can't
+  resolve the percentage, and a native `type="date"`/`type="time"` control's
+  intrinsic width can vary with whether it holds a value (most visibly on
+  mobile). Request/ToDo Detail load an existing record with one field
+  typically pre-filled and the other still empty; Create Request/Create ToDo
+  start every field empty, so both sides match and the imbalance never
+  showed. Fixed by changing `.frow .ffloat` to `flex: 1 1 0%` — a zero basis
+  makes both fields grow equally regardless of content, the standard fix for
+  equal-width flex columns. One CSS rule in `app/globals.css`, fixes every
+  two-`.ffloat` `.frow` in the app at once (Due Date/Due Time, Done
+  Date/Done Time, Due Date/Done Date across all six affected screens); rows
+  with a single `.ffloat` beside a `.btn` (Recipient, Category) are
+  unaffected. (2) Due/Done Time fields had no way to clear a set value,
+  unlike Due/Done Date, which do (a platform affordance some browsers give
+  `type="date"` but not `type="time"` — not something WYP controls). New
+  component `.fclear` (§6.33 PROPOSED): a small "×" styled like the existing
+  `.attremove`, shown only once the field holds a value, positioned after
+  `.flabel` in markup (never between `.finput` and `.flabel`, which would
+  break the load-bearing floating-label adjacent-sibling selector). Wired to
+  every Due Time/Done Time field: `CreateRequestForm.tsx`,
+  `RequestDetailForm.tsx` (both), `RequestResponseForm.tsx`,
+  `ResponseDetailForm.tsx` — 5 fields, 4 files. Date fields untouched by
+  design — the owner's own report frames Date as already working. No mockup
+  changes needed for either fix, same reasoning as `openPicker`: none of the
+  affected screens have real `type="date"`/`type="time"` inputs in their
+  static HTML. See the decisions log's 2026-08-11 entry.

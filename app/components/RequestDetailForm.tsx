@@ -582,6 +582,19 @@ export default function RequestDetailForm() {
                   </span>
                   Due Time <span className="subnote">(optional)</span>
                 </label>
+                {form.dueTime.trim() !== '' && (
+                  <button
+                    type="button"
+                    className="fclear"
+                    aria-label="Clear Due Time"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      set('dueTime', '')
+                    }}
+                  >
+                    &times;
+                  </button>
+                )}
               </span>
             </div>
 
@@ -631,6 +644,19 @@ export default function RequestDetailForm() {
                   </span>
                   Done Time <span className="subnote">(optional)</span>
                 </label>
+                {form.doneTime.trim() !== '' && (
+                  <button
+                    type="button"
+                    className="fclear"
+                    aria-label="Clear Done Time"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      set('doneTime', '')
+                    }}
+                  >
+                    &times;
+                  </button>
+                )}
               </span>
             </div>
 

@@ -552,6 +552,19 @@ export default function CreateRequestForm() {
                   </span>
                   Due Time <span className="subnote">(optional)</span>
                 </label>
+                {form.dueTime.trim() !== '' && (
+                  <button
+                    type="button"
+                    className="fclear"
+                    aria-label="Clear Due Time"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      set('dueTime', '')
+                    }}
+                  >
+                    &times;
+                  </button>
+                )}
               </span>
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}

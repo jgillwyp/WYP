@@ -497,6 +497,19 @@ export default function ResponseDetailForm() {
                   </span>
                   Done Time <span className="subnote">(optional)</span>
                 </label>
+                {doneTime.trim() !== '' && (
+                  <button
+                    type="button"
+                    className="fclear"
+                    aria-label="Clear Done Time"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDoneTime('')
+                    }}
+                  >
+                    &times;
+                  </button>
+                )}
               </span>
             </div>
 

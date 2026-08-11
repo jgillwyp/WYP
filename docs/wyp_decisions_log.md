@@ -6,6 +6,26 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-11 — Due/Done Date-Time row width imbalance; Clear affordance for Time fields (§6.33)
+
+Two more owner-reported bugs, found continuing to test the live app on his phone.
+
+**Due Date rendered wider than the field beside it, squeezing the second field's label text off the edge — on Request Detail and ToDo Detail specifically, not Create Request or Create ToDo.** Owner: "the Create ToDo scales down horizontally for the Due Date and Done Date fields which display as the same size. But the ToDo Detail screen shows a longer Due Date which results in the Done Date placeholder text bleeding out on the right side of that field." He later confirmed this wasn't a stale-screen artifact and still reproduces.
+
+Root cause: `.frow .ffloat` was `flex: 1 1 auto`. With flex-basis:auto, a flex item's hypothetical size falls back to its own content's intrinsic width whenever its child can't resolve a definite size against it — and `.finput` is `width: 100%`, a percentage, which can't resolve until the flex-basis itself is known, so the browser falls back to the input's own intrinsic content width. For a native `type="date"`/`type="time"` control, that intrinsic width isn't fixed the way a plain text input's is — it can depend on whether the field currently holds a value, most visibly on mobile, where the OS picker draws the actual formatted date/time as inline content. Request Detail and ToDo Detail load an *existing* record, so Due Date typically arrives pre-filled while its row-mate (Due Time, or Done Date) is still empty — different content, different intrinsic width, unequal flex-grow shares. Create Request and Create ToDo start every field empty, so both sides of the row have identical (zero) content and split evenly — which is exactly why the bug never showed up there.
+
+**Fix**: `.frow .ffloat`'s flex-basis changed from `auto` to `0%` in `app/globals.css`. With a zero basis, both fields grow from nothing by equal flex-grow, so they always end up the same width regardless of which one happens to hold a value — content is removed from the sizing calculation entirely. This is the standard fix for "N equal-width flex columns regardless of content." Checked every `.frow` with two `.ffloat` children in the app (Due Date/Due Time, Done Date/Done Time, Due Date/Done Date — Create Request, Request Detail, Request Response, Response Detail, Create ToDo, ToDo Detail) — that's exactly the set of rows this was already meant to keep visually even, so one CSS rule fixes all of them at once. `.frow` rows with a single `.ffloat` beside a `.btn` (Recipient, Category lookups) are unaffected, since that lone growable item already claims all the leftover space either way.
+
+**Due/Done Time fields had no way to clear a set value; Due/Done Date fields did.** Owner: "The Due and Done Time fields do not currently have a way to Clear the value once it is set - as is needed and as is available for the Due and Done Date fields." Some browsers show a native clear "×" on a populated `type="date"` field but not reliably on `type="time"` — a platform inconsistency, not something WYP controls, and since hand-typing into these fields was never a supported input method either (see `openPicker`'s own reasoning), a Time field that got set had no way back to empty at all.
+
+**New component, §6.33 PROPOSED**: `.fclear` — a small "×" button, styled like the existing `.attremove` (plain text button, Ink-Soft, Alert-Red on press), absolutely positioned at the field's right edge. Rendered only once the field holds a value. Placed in markup *after* `.flabel`, never between `.finput` and `.flabel` — CLAUDE.md flags that ordering as load-bearing for the floating-label adjacent-sibling selector, and inserting a button there would have silently broken it. Wired to every Due Time/Done Time field: `CreateRequestForm.tsx` (Due Time), `RequestDetailForm.tsx` (Due Time, Done Time), `RequestResponseForm.tsx` (Done Time), `ResponseDetailForm.tsx` (Done Time) — 5 fields, 4 files. Date fields were left untouched; the owner's own report frames Date as already working, and duplicating a redundant clear control there would be pure churn.
+
+**Accepted tradeoff, not fixed**: on desktop, `.fclear`'s absolute position at the field's right edge visually overlaps wherever the browser draws its own native calendar/clock icon inside the input box. Left as-is — `openPicker` (2026-08-11, same day) already makes a click anywhere in the field open the picker, so nothing is functionally lost by the icon being partly covered.
+
+**Mockups needed no change**, same reasoning as `openPicker`: none of the affected screens use real `type="date"`/`type="time"` inputs in their static HTML (styled `type="text"` fields, or no `<input>` at all on Request Response/Response Detail), so there's no native picker whose width varies by content, and no native field to attach a clear button to.
+
+\---
+
 ## 2026-08-11 — ToDo Detail's missing quick-Done band; date/time fields click-anywhere-opens-picker on desktop
 
 Two bugs the owner found testing the live app on his phone and on Windows.
