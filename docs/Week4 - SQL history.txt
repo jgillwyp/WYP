@@ -289,3 +289,52 @@ commit;
 --   session email should appear in that same session's get_received_requests
 --   -> confirms the owner's "I would not exclude it" decision actually holds
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 013 — grant UPDATE(time_zone) on profiles to authenticated
+-- DRAFTED 2026-08-11 — NOT YET RUN. Run in the Supabase SQL editor, then
+-- change the line above to "Run <date>" and update CLAUDE.md / decisions log
+-- from "drafted" to "confirmed run by the owner", same as every earlier
+-- migration in this project.
+--
+-- Bug found investigating Create Free Account (owner asked to build it,
+-- 2026-08-11 — see decisions log). Week 1's original profiles setup revoked
+-- table-wide UPDATE and replaced it with an explicit column list:
+--
+--   revoke update on public.profiles from authenticated;
+--   grant  update (display_name, first_name, last_name, phone, notify_by)
+--     on public.profiles to authenticated;
+--
+-- profiles.time_zone didn't exist yet — it was added later, in migration 007
+-- (Week 3) — so it was never in that list, and nothing since has added it.
+-- A column-specific GRANT is a snapshot at the moment it runs; ALTER TABLE
+-- ADD COLUMN does not retroactively extend an already-issued column grant.
+-- The result: every client-side write to profiles.time_zone has been failing
+-- with a permission error since migration 007, silently, because neither
+-- AddContactForm.tsx's nor ContactDetailForm.tsx's browser-detected fallback
+-- write-back (`supabase.from('profiles').update({ time_zone: browserZone })`)
+-- checks the returned error. SELECT was unaffected — profiles' table-wide
+-- SELECT grant (set up before the column-specific UPDATE carve-out, per
+-- Supabase's default public-schema privileges) covers new columns
+-- automatically, which is why reading time_zone back has always worked and
+-- masked the write-side bug. Create Free Account's own Save would have hit
+-- the identical wall, which is what surfaced this.
+-- ============================================================================
+
+begin;
+
+grant update (time_zone) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here — same caution as every earlier migration:
+-- this connection is superuser and auth.uid() is null, so an RLS/grant check
+-- here "succeeds" without proving anything.
+--
+--   await supabase.from('profiles').update({ time_zone: 'America/Chicago' })
+--        .eq('id', <own id>)
+--        -> should now succeed (no error) for the signed-in owner's own row;
+--           before this migration it returned a permission-denied error that
+--           calling code never surfaced
+-- ============================================================================

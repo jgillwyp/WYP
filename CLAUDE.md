@@ -354,16 +354,46 @@ link is built only after the stack is proven on Add Contact.
   full list on focus regardless of the current value, dropping to normal
   filtering the moment the user types. Fixed in `AddContactForm.tsx`,
   `ContactDetailForm.tsx`, and Create Free Account's demo script.
-- **Flag: `profiles.time_zone` still has no path to a value from the actual
-  live sign-in flow.** Create Free Account is mockup-only, and `/login`
-  explicitly serves both sign-in and first-time account creation with no
-  separate signup step ("there is no separate sign-up," shown to the user on
-  that screen) — so Create Free Account is never reached in the live app as
-  it stands today. Until either Create Free Account is converted and wired
-  into a real first-run step, or the Account screen (explicitly deferred, see
-  the entry above) is built, `profiles.time_zone` only ever gets a value via
-  Add Contact/Contact Detail's browser-detected fallback described above, not
-  from a screen actually about the user's own profile.
+- **Create Free Account is now live and wired as the mandatory first-run
+  step (2026-08-11, `app/components/CreateFreeAccountForm.tsx`,
+  `/account/new`) — superseding every earlier "no live path" flag on
+  `profiles.display_name`/`profiles.time_zone` below and above.** Owner
+  asked to build it for limited testing. `app/auth/callback/page.tsx` now
+  checks `profiles.display_name` after a successful sign-in and routes to
+  `/account/new` when it's null, exactly the behavior the original Week 1
+  schema comment on that column already described as the plan. Not a
+  sign-up screen — Email is read-only from the session, and the account/
+  stub `profiles` row (via `handle_new_user`) already exist by the time this
+  screen is reached; no conflict with the magic-link-only Auth section.
+  **Depends on migration 013** (grant `UPDATE(time_zone)` on `profiles` to
+  `authenticated`, drafted in `docs/Week4 - SQL history.txt`, not yet run) —
+  a real bug found while scoping this screen: the Week 1 column-specific
+  UPDATE grant predates `time_zone` (added later, migration 007) and was
+  never extended to include it, so every write to `profiles.time_zone` —
+  including Add Contact/Contact Detail's own browser-detected fallback
+  write-back — has been silently failing since migration 007 (SELECT was
+  unaffected, which is what masked it). Until the owner runs migration 013,
+  Save on Create Free Account will surface a permission error on that one
+  field. See decisions log for the full write-up.
+- **PRD §7.3 "Notification Email Templates" (2026-08-11, `docs/
+  WouldYouPlease_PRD_v12_9.docx`) — spec only, nothing built.** Owner gave
+  literal to:/from:/subject:/body: templates for an Initial Request email and
+  a day-before Reminder email, wanting to test the Request process further.
+  No mail infrastructure exists yet to send either — no Resend/SMTP package,
+  no `RESEND_API_KEY`, no scheduled job — so, offered a choice, the owner
+  scoped this batch to documentation only. See the decisions log for the full
+  write-up, including three flagged-and-resolved conflicts with existing PRD
+  content (From address deliverability, keeping the .ics attachment rather
+  than a link-only alternative, leaving the Push "approaching due date" row
+  unchanged) and a new "Tight-window rule" (a Request due in under 24 hours
+  gets no Reminder email; the sender is advised at Send time instead, and the
+  Initial Request email's own wording drops the reminder promise) — 24 hours
+  is a proposed default, unconfirmed. Priority/sequencing for actually
+  building this (Resend integration, send-on-create, the reminder's
+  scheduled job, the Send-time advisory UI) has not been discussed. **The
+  Create Free Account dependency this entry originally flagged is resolved**
+  — see the entry above; `profiles.display_name` now has a live path once
+  migration 013 is run.
 - **Main Screen's filter chips and search are now functional** (2026-08-09):
   All/Open/Overdue/Done on Sent and All/Open/Done on ToDos filter the
   already-fetched rows client-side; search matches description/contact-name/
