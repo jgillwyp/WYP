@@ -62,6 +62,37 @@ function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 3) + '...' : s
 }
 
+// Local calendar date as "YYYY-MM-DD", matching the native date input's own
+// value format — mirrors CreateTodoForm.tsx's identical helper.
+function todayISODate(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Desktop browsers only open a date/time input's native picker when the
+// calendar/clock icon itself is clicked — unlike mobile, where tapping
+// anywhere in the field does. Hand-typing a value isn't a supported way to
+// fill these fields (§6.16's label-affordance glyph signals "focus opens a
+// picker," not "type here"), so a click anywhere in the field should open
+// the picker on desktop too, not just the icon. Owner-reported 2026-08-11.
+// showPicker() needs a user gesture and isn't implemented pre-16.4 Safari —
+// feature-detected and swallowed; the icon still works as a fallback either
+// way. Duplicated per component (short helper, same convention as
+// todayISODate/formatMDY) rather than extracted to a shared lib file.
+function openPicker(e: React.MouseEvent<HTMLInputElement>) {
+  const el = e.currentTarget
+  if (typeof el.showPicker === 'function') {
+    try {
+      el.showPicker()
+    } catch {
+      // ignore — calendar/clock icon still opens it
+    }
+  }
+}
+
 export default function TodoDetailForm() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
@@ -103,8 +134,21 @@ export default function TodoDetailForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const doneDateRef = useRef<HTMLInputElement>(null)
+
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  // Quick-Done band (§6.31) — added 2026-08-11, matching CreateTodoForm.tsx's
+  // identical handleQuickDone: this screen never got the band ported over
+  // when Create ToDo gained it 2026-08-10 (that batch was scoped to Create
+  // ToDo only), a real gap the owner caught testing the live screen. Fills
+  // Done Date with today only — no Done Time to leave untouched, ToDos
+  // don't have one.
+  function handleQuickDone() {
+    set('doneDate', todayISODate())
+    doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   async function loadDialog() {
@@ -463,6 +507,29 @@ export default function TodoDetailForm() {
               </div>
             </div>
 
+            {/* Quick-Done band (§6.31, added here 2026-08-11) — same
+                "donerow"/"donenote" pattern as Create ToDo and Request
+                Response, purely reactive to whether Done Date already holds
+                a value, however it got there. Owner's own wording, verbatim,
+                matching Create ToDo's. */}
+            <div className="donerow">
+              <span className="donenote">
+                {form.doneDate.trim() === '' ? (
+                  <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
+                ) : (
+                  'This ToDo is now marked as Done, just click Save.'
+                )}
+              </span>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleQuickDone}
+                disabled={form.doneDate.trim() !== ''}
+              >
+                Done
+              </button>
+            </div>
+
             {/* Due Date + Done Date, combined into one row 2026-08-10 (owner's
                 own rough draft) — both optional (.opt, grey while empty,
                 white once filled, same §6.25 rule as every other optional
@@ -477,6 +544,7 @@ export default function TodoDetailForm() {
                   type="date"
                   value={form.dueDate}
                   onChange={(e) => set('dueDate', e.target.value)}
+                  onClick={openPicker}
                 />
                 <label className="flabel" htmlFor="dd">
                   <span className="lglyph" aria-hidden="true">
@@ -497,11 +565,13 @@ export default function TodoDetailForm() {
               </span>
               <span className="ffloat picker native">
                 <input
+                  ref={doneDateRef}
                   className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
                   id="dnd"
                   type="date"
                   value={form.doneDate}
                   onChange={(e) => set('doneDate', e.target.value)}
+                  onClick={openPicker}
                 />
                 <label className="flabel" htmlFor="dnd">
                   <span className="lglyph" aria-hidden="true">

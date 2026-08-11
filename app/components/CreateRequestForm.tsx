@@ -77,6 +77,27 @@ const CATEGORY_CAP = 20
 // design/README.md's proposed-components table.
 const LOOKUP_BROWSE_THRESHOLD = 12
 
+// Desktop browsers only open a date/time input's native picker when the
+// calendar/clock icon itself is clicked — unlike mobile, where tapping
+// anywhere in the field does. Hand-typing a value isn't a supported way to
+// fill these fields (§6.16's label-affordance glyph signals "focus opens a
+// picker," not "type here"), so a click anywhere in the field should open
+// the picker on desktop too, not just the icon. Owner-reported 2026-08-11.
+// showPicker() needs a user gesture and isn't implemented pre-16.4 Safari —
+// feature-detected and swallowed; the icon still works as a fallback either
+// way. Duplicated per component (short helper, same convention as
+// todayISODate/formatMDY) rather than extracted to a shared lib file.
+function openPicker(e: React.MouseEvent<HTMLInputElement>) {
+  const el = e.currentTarget
+  if (typeof el.showPicker === 'function') {
+    try {
+      el.showPicker()
+    } catch {
+      // ignore — calendar/clock icon still opens it
+    }
+  }
+}
+
 export default function CreateRequestForm() {
   const router = useRouter()
 
@@ -493,6 +514,7 @@ export default function CreateRequestForm() {
                     set('dueDate', e.target.value)
                     if (dueDateInvalid) setDueDateInvalid(false)
                   }}
+                  onClick={openPicker}
                 />
                 <label className="flabel" htmlFor="dd">
                   <span className="lglyph" aria-hidden="true">
@@ -518,6 +540,7 @@ export default function CreateRequestForm() {
                   type="time"
                   value={form.dueTime}
                   onChange={(e) => set('dueTime', e.target.value)}
+                  onClick={openPicker}
                 />
                 <label className="flabel" htmlFor="dt">
                   <span className="lglyph" aria-hidden="true">

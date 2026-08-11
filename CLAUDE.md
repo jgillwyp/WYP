@@ -657,3 +657,30 @@ link is built only after the stack is proven on Add Contact.
   their empty state is documented in a comment rather than built as
   unreachable toggle JS. See `design/README.md` §6.32 and the decisions log's
   2026-08-11 entry.
+- **ToDo Detail's missing quick-Done band; date/time click-anywhere-opens-
+  picker on desktop (2026-08-11).** Two owner-reported bugs testing the live
+  app. (1) `TodoDetailForm.tsx` never got the §6.31 quick-Done band Create
+  ToDo gained 2026-08-10 — that batch was scoped to Create ToDo only, unlike
+  Response Detail, which did get Request Response's quick-Done band carried
+  over the same day it went live. Fixed by porting `todayISODate`/
+  `handleQuickDone`/`doneDateRef`/the `.donerow` JSX in verbatim; not yet
+  ported into the ToDo Detail mockup (same as Response Detail's own still-
+  unported band). (2) On desktop, clicking a `type="date"`/`type="time"`
+  input only opened its native picker via the calendar/clock icon — the rest
+  of the field did nothing, unlike mobile, where tapping anywhere opens it.
+  Since hand-typing a date or time was never a supported input method here
+  (§6.16's label-affordance glyph means "focus opens a picker," not "type
+  here"), a click anywhere in the field should open the picker on desktop
+  too. Fixed with a small `openPicker` handler (`el.showPicker()`, feature-
+  detected and try/caught — pre-16.4 Safari has no `showPicker()`) wired to
+  `onClick` on all 14 native date/time `.finput`s across `CreateRequestForm.tsx`,
+  `RequestDetailForm.tsx`, `RequestResponseForm.tsx`, `ResponseDetailForm.tsx`,
+  `CreateTodoForm.tsx`, and `TodoDetailForm.tsx` — duplicated per component,
+  not extracted to a shared lib file, matching the `todayISODate`/`formatMDY`
+  convention for short stateless helpers. No mockup changes needed: none of
+  the six Dialog/Attachments-batch screens use real `type="date"`/`type="time"`
+  inputs (Create Request/Request Detail/Create ToDo/ToDo Detail render these
+  as CSS-styled `type="text"`; Request Response/Response Detail have no
+  `<input>` for them at all, only static `.fieldval` text), so `showPicker()`
+  has nothing to attach to in the mockups. See the decisions log's 2026-08-11
+  entry.
