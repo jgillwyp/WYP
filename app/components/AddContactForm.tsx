@@ -373,7 +373,7 @@ export default function AddContactForm() {
                         <button
                           key={z}
                           type="button"
-                          className="lookup-item"
+                          className={`lookup-item${selectedTimeZone === z ? ' selected' : ''}`}
                           role="option"
                           aria-selected={selectedTimeZone === z}
                           onMouseDown={() => selectTimeZone(z)}

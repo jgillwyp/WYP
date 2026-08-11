@@ -85,10 +85,12 @@ export default function CreateRequestForm() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
   const [showContactResults, setShowContactResults] = useState(false)
+  const [contactBrowsing, setContactBrowsing] = useState(false)
 
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
+  const [categoryBrowsing, setCategoryBrowsing] = useState(false)
 
   const [addCategoryOpen, setAddCategoryOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -185,11 +187,23 @@ export default function CreateRequestForm() {
   const contactQueryEmpty = form.recipientName.trim() === ''
   const contactsBrowsable = contacts.length < LOOKUP_BROWSE_THRESHOLD
 
-  const filteredContacts = contactQueryEmpty
-    ? (contactsBrowsable ? contacts : [])
-    : contacts.filter((c) =>
-        c.display_name.toLowerCase().includes(form.recipientName.trim().toLowerCase())
-      )
+  // Owner-reported, 2026-08-10: clicking a field that already holds an exact
+  // match (e.g. after selecting a Recipient) re-filtered the dropdown down
+  // to that one match instead of showing the whole list to pick from again
+  // or choose something else — "technically correct... but if they're
+  // clicking on the value, they want to be able to select a different
+  // value." `contactBrowsing` (same pattern as Time Zone's own
+  // browse-on-focus fix, 2026-08-09) shows the full list, unfiltered and
+  // regardless of size, from focus until the first keystroke — at which
+  // point normal substring filtering (and, for a large list, the
+  // empty-query size gate) takes back over.
+  const filteredContacts = contactBrowsing
+    ? contacts
+    : contactQueryEmpty
+      ? (contactsBrowsable ? contacts : [])
+      : contacts.filter((c) =>
+          c.display_name.toLowerCase().includes(form.recipientName.trim().toLowerCase())
+        )
 
   // Show the dropdown on focus when there's something to browse (query empty
   // but the list is short enough to just list) or once the user has typed
@@ -200,9 +214,12 @@ export default function CreateRequestForm() {
   const categoryQueryEmpty = form.categoryName.trim() === ''
   const categoriesBrowsable = categories.length < LOOKUP_BROWSE_THRESHOLD
 
-  const filteredCategories = categoryQueryEmpty
-    ? (categoriesBrowsable ? categories : [])
-    : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
+  // Same fix as Recipient above.
+  const filteredCategories = categoryBrowsing
+    ? categories
+    : categoryQueryEmpty
+      ? (categoriesBrowsable ? categories : [])
+      : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
 
   const showCategoryDropdown = !categoryQueryEmpty || categoriesBrowsable
 
@@ -402,10 +419,15 @@ export default function CreateRequestForm() {
                     onChange={(e) => {
                       set('recipientName', e.target.value)
                       setSelectedContact(null)
+                      setContactBrowsing(false)
                       setShowContactResults(true)
                       if (contactInvalid) setContactInvalid(false)
                     }}
-                    onFocus={() => setShowContactResults(true)}
+                    onFocus={(e) => {
+                      e.target.select()
+                      setContactBrowsing(true)
+                      setShowContactResults(true)
+                    }}
                     onBlur={() => setTimeout(() => setShowContactResults(false), 120)}
                   />
                   <label className="flabel" htmlFor="rn">
@@ -439,7 +461,7 @@ export default function CreateRequestForm() {
                         <button
                           key={c.id}
                           type="button"
-                          className="lookup-item"
+                          className={`lookup-item${selectedContact?.id === c.id ? ' selected' : ''}`}
                           role="option"
                           aria-selected={selectedContact?.id === c.id}
                           onMouseDown={() => selectContact(c)}
@@ -527,9 +549,14 @@ export default function CreateRequestForm() {
                       if (selectedCategory && e.target.value !== selectedCategory.name) {
                         setSelectedCategory(null)
                       }
+                      setCategoryBrowsing(false)
                       setShowCategoryResults(true)
                     }}
-                    onFocus={() => setShowCategoryResults(true)}
+                    onFocus={(e) => {
+                      e.target.select()
+                      setCategoryBrowsing(true)
+                      setShowCategoryResults(true)
+                    }}
                     onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
                   />
                   <label className="flabel" htmlFor="cat">
@@ -559,7 +586,7 @@ export default function CreateRequestForm() {
                         <button
                           key={c.id}
                           type="button"
-                          className="lookup-item"
+                          className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
                           role="option"
                           aria-selected={selectedCategory?.id === c.id}
                           onMouseDown={() => selectCategory(c)}

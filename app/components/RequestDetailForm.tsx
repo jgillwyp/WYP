@@ -85,6 +85,7 @@ export default function RequestDetailForm() {
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
+  const [categoryBrowsing, setCategoryBrowsing] = useState(false)
 
   const [addCategoryOpen, setAddCategoryOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -288,9 +289,16 @@ export default function RequestDetailForm() {
 
   const categoryQueryEmpty = form.categoryName.trim() === ''
   const categoriesBrowsable = categories.length < LOOKUP_BROWSE_THRESHOLD
-  const filteredCategories = categoryQueryEmpty
-    ? (categoriesBrowsable ? categories : [])
-    : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
+  // Owner-reported, 2026-08-10, on Create Request's identical lookup —
+  // ported here: clicking a field with an exact match re-filtered to that
+  // one match instead of showing the whole list. categoryBrowsing (same
+  // pattern as Time Zone's browse-on-focus fix) shows the full list from
+  // focus until the first keystroke.
+  const filteredCategories = categoryBrowsing
+    ? categories
+    : categoryQueryEmpty
+      ? (categoriesBrowsable ? categories : [])
+      : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
   const showCategoryDropdown = !categoryQueryEmpty || categoriesBrowsable
 
   function selectCategory(c: Category) {
@@ -616,9 +624,14 @@ export default function RequestDetailForm() {
                       if (selectedCategory && e.target.value !== selectedCategory.name) {
                         setSelectedCategory(null)
                       }
+                      setCategoryBrowsing(false)
                       setShowCategoryResults(true)
                     }}
-                    onFocus={() => setShowCategoryResults(true)}
+                    onFocus={(e) => {
+                      e.target.select()
+                      setCategoryBrowsing(true)
+                      setShowCategoryResults(true)
+                    }}
                     onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
                   />
                   <label className="flabel" htmlFor="cat">
@@ -648,7 +661,7 @@ export default function RequestDetailForm() {
                         <button
                           key={c.id}
                           type="button"
-                          className="lookup-item"
+                          className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
                           role="option"
                           aria-selected={selectedCategory?.id === c.id}
                           onMouseDown={() => selectCategory(c)}

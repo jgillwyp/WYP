@@ -349,6 +349,18 @@ html,body{margin:0;height:100%;background:#fff;}
         </div>
       </div>
 
+      <!-- Quick-Done band (§6.31, 2026-08-10) — owner's own rough draft,
+           mirroring Request Response's .donerow/.donenote (not yet ported
+           into Request Response's own mockup — see design/README.md). Sets
+           Done Date only; a ToDo has no Done Time to leave untouched. Wired
+           with real demo JS (quickDone(), below) since the Due Date/Done
+           Date fields it targets already exist on this screen for it to
+           visibly fill. -->
+      <div class="donerow">
+        <span class="donenote" id="donenote"><b>Note:</b> To quickly complete this ToDo, click Done and Save.</span>
+        <button class="btn" type="button" id="done-btn" onclick="quickDone()">Done</button>
+      </div>
+
       <!-- Due Date + Done Date, combined into one row 2026-08-10 (owner's own
            rough draft) — both optional (.opt), since a ToDo's own Due Date
            and Done Date are both optional per the PRD's core-objects table;
@@ -453,6 +465,27 @@ html,body{margin:0;height:100%;background:#fff;}
 
 </div></div>
 <script>
+/* Quick-Done band demo (2026-08-10) — owner's own rough draft. Fills Done
+   Date with today (mm/dd/yyyy, matching this app's date-field display
+   convention elsewhere, e.g. Request Detail's demo Due Date "10/19/2026")
+   and flips the band's own note/button to their "already done" state.
+   Removing "opt" reveals the field as filled (white, not Row-Tinted) via
+   the existing empty-vs-filled CSS rule; the label floats on its own via
+   the same placeholder=" " + :placeholder-shown mechanism already used
+   everywhere else, no extra JS needed for that part. */
+function quickDone(){
+  var dnd = document.getElementById('dnd');
+  var d = new Date();
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  dnd.value = mm + '/' + dd + '/' + d.getFullYear();
+  dnd.classList.remove('opt');
+  document.getElementById('donenote').textContent = 'This ToDo is now marked as Done, just click Save.';
+  var btn = document.getElementById('done-btn');
+  btn.disabled = true;
+  dnd.scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+
 /* Add Dialog modal demo (2026-08-07) — see Create Request's identical
    script for the fuller comment. */
 var dlgKind = 'question';

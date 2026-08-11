@@ -291,8 +291,9 @@ html,body{margin:0;height:100%;background:#fff;}
       matches.forEach(function (z) {
         var item = document.createElement('button');
         item.type = 'button';
-        item.className = 'lookup-item';
+        item.className = 'lookup-item' + (z === input.value ? ' selected' : '');
         item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', z === input.value ? 'true' : 'false');
         item.textContent = z;
         item.addEventListener('mousedown', function () {
           input.value = z;

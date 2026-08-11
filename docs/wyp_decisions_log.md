@@ -6,6 +6,40 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — Create ToDo gets its own quick-Done band
+
+Owner, with a pasted rough draft of Create ToDo's own top layout: *"I realized that we can save the end-user a keystroke for completing a ToDo by adding a Done button and message similar to the Request Response... The wording with the active button could be 'Note: To quickly complete this ToDo, click Done and Save.' and the inactive Done button could have the text 'This ToDo is now marked as Done, just click Save.'"*
+
+Mirrors Request Response's `.donerow`/`.donenote` pattern (§6.31) exactly: a Strip-background band with a "Done" button that fills Done Date with today, purely reactive to whether Done Date already holds a value however it got there (clicking Done, or typing directly into the field) — no separate "was Done clicked" flag to drift out of sync. Sets Done Date only; unlike Request Response, there's no Done Time to leave untouched, since ToDos don't have one (removed from ToDo Detail the same day as an earlier fix). Owner's exact wording used verbatim for both states.
+
+Added to `CreateTodoForm.tsx` (`handleQuickDone()`, `doneDateRef` for the scroll-into-view behavior, same as Request Response's) and to `WYP_create_todo_palette1.html`'s own demo JS (`quickDone()`) — worth noting this mockup got real interactive JS for the feature even though Request Response's own mockup never did (flagged as not-yet-ported in an earlier entry): Create ToDo's Due Date/Done Date fields already exist as visible targets on this screen for the demo to fill, and the owner's rough draft was drawn specifically against this screen.
+
+`npx tsc --noEmit` passes clean; the mockup's `<script>` block passes `node --check`.
+
+\---
+
+## 2026-08-10 — Type-ahead lookups: exact-match click now shows the full list, not just the match
+
+Owner, from live testing: *"When a value from the list is selected and filled-in to the field, a subsequent click on the field shows a pull-down with just that value. That is technically correct, but is not providing what the end-user needs at that point... My recommendation is to add a rule to how pull-down type-ahead lists are presented. If the in-field value is an exact match for a pull-down value, then when clicked — instead of showing just that value in a pull-down list, show all values in the pull-down list (preferably with the exact match displayed as selected)..."*
+
+Root cause: every lookup's filtering logic ran a plain substring match against whatever the field currently held, with no distinction between "just focused, about to type" and "already has a value." An exact match filtered the dropdown down to exactly one row, so reopening a filled field gave the user nothing to pick from except what was already there.
+
+Generalized the `timeZoneBrowsing` pattern (first built 2026-08-09 for Time Zone's own browse-on-focus bug) to every other lookup in the app: a `xBrowsing` flag set `true` on focus (alongside `e.target.select()`) and `false` on the first keystroke, which forces the filtered list to show everything, unfiltered, until the user actually types. Applied to:
+
+- **Category** — `CreateRequestForm.tsx`, `CreateTodoForm.tsx`, `TodoDetailForm.tsx`, `RequestDetailForm.tsx`
+- **Contact/Recipient** — `CreateRequestForm.tsx`
+- **Time Zone** — already had the `browsing` flag from the earlier fix; only missing the visual highlight (below)
+
+The `LOOKUP_BROWSE_THRESHOLD` size gate (currently 12) is unchanged and still governs the *empty*-field case only — showing everything on focus of an already-filled field is a different scenario from dumping a large list on an empty one, and Time Zone's own ~400-entry list has been showing in full on focus since 2026-08-09 without issue (the `.lookup-results` panel already scrolls).
+
+Also added the **visual "selected" highlight** the owner asked for (*"preferably with the exact match displayed as selected"*) — reused the pre-existing `.lookup-item.selected` CSS class (originally built for the which-Question picker) rather than adding a new one, applied via a conditional className to the currently-matching row in every lookup above, plus Time Zone's own dropdown in `AddContactForm.tsx` and `ContactDetailForm.tsx`, which had the browsing fix already but never got the visual treatment.
+
+**Mockup scope, checked file-by-file rather than assumed:** Create Request, Create ToDo, Request Detail, and ToDo Detail's mockups have no interactive Category/Recipient lookup JS at all — those fields are static demo markup with no `onfocus`/`oninput` handlers — so none of the four needed any change for this fix. Time Zone lookup JS (the only lookup with real mockup JS) exists in two files, both updated with the same exact-match `.selected` treatment: `WYP_create_free_account_palette1.html` and `WYP_add_contact_no_contact_dialog_palette1.html`. `WYP_add_contact_palette1_floating.html`'s Time Zone field has no `<script>` behind it at all (confirmed — the file has zero `<script>` tags), and `WYP_contact_detail_palette1.html`'s Time Zone field is explicitly flagged in its own file header as carried over for visual consistency only, never wired — neither needed a change.
+
+`npx tsc --noEmit` and `npx eslint` pass clean on all six changed components; both changed mockups' `<script>` blocks pass `node --check`.
+
+\---
+
 ## 2026-08-10 — ToDo Due Date/Done Date: one combined row, Done Time dropped, Create ToDo gets Done Date
 
 Owner, reviewing the just-added Due Date field with a pasted rough draft: *"The ToDos do not need Done Time. The ToDo Detail and Create ToDo should both show the Due Date and Done Date as optional with grey backgrounds since they are optional. I pasted-in a rough draft of the top of the screen layout. The reason a Create ToDo should allow a Done Date is to allow completed ToDos to be entered if desired."*

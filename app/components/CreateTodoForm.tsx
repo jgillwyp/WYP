@@ -30,6 +30,14 @@ import { supabase } from '@/lib/supabaseClient'
  * Time" — unlike a Request's Done Date/Time pair, which keeps its Time
  * field; ToDo Detail's own Done Time was removed the same day for the same
  * reason.
+ *
+ * Quick-Done band added 2026-08-10 (owner's own rough draft, pasted in) —
+ * mirrors Request Response's `.donerow`/`.donenote` (§6.31): a "Done" button
+ * that fills Done Date with today, purely reactive to whether Done Date
+ * already holds a value however it got there. Owner's own wording, used
+ * verbatim: active "Note: To quickly complete this ToDo, click Done and
+ * Save." / inactive "This ToDo is now marked as Done, just click Save." Sets
+ * Done Date only — there's no Done Time on a ToDo to touch.
  */
 
 type Category = {
@@ -56,6 +64,18 @@ const initialState: TodoFormState = {
 const CATEGORY_CAP = 20
 const LOOKUP_BROWSE_THRESHOLD = 12
 
+// Local calendar date as "YYYY-MM-DD", matching the native date input's own
+// value format — built from Y/M/D components (not toISOString(), which is
+// UTC and can land on the wrong day near midnight in most US time zones).
+// Mirrors RequestResponseForm.tsx's identical helper.
+function todayISODate(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export default function CreateTodoForm() {
   const router = useRouter()
 
@@ -64,6 +84,7 @@ export default function CreateTodoForm() {
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
+  const [categoryBrowsing, setCategoryBrowsing] = useState(false)
 
   const [addCategoryOpen, setAddCategoryOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -82,6 +103,8 @@ export default function CreateTodoForm() {
   const [descInvalid, setDescInvalid] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const doneDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     supabase
@@ -139,12 +162,28 @@ export default function CreateTodoForm() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  // Quick-Done band (2026-08-10) — same pattern as Request Response's
+  // handleQuickDone: fills Done Date with today only, purely a local field
+  // fill (Save is still the actual write). No Done Time to leave untouched
+  // here — ToDos don't have one.
+  function handleQuickDone() {
+    set('doneDate', todayISODate())
+    doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   const categoryQueryEmpty = form.categoryName.trim() === ''
   const categoriesBrowsable = categories.length < LOOKUP_BROWSE_THRESHOLD
 
-  const filteredCategories = categoryQueryEmpty
-    ? (categoriesBrowsable ? categories : [])
-    : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
+  // Owner-reported, 2026-08-10, on Create Request's identical lookup —
+  // ported here: clicking a field with an exact match re-filtered to that
+  // one match instead of showing the whole list. categoryBrowsing (same
+  // pattern as Time Zone's browse-on-focus fix) shows the full list from
+  // focus until the first keystroke.
+  const filteredCategories = categoryBrowsing
+    ? categories
+    : categoryQueryEmpty
+      ? (categoriesBrowsable ? categories : [])
+      : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
 
   const showCategoryDropdown = !categoryQueryEmpty || categoriesBrowsable
 
@@ -336,6 +375,30 @@ export default function CreateTodoForm() {
               </div>
             </div>
 
+            {/* Quick-Done band (§6.31, 2026-08-10) — same "donerow"/"donenote"
+                pattern as Request Response, purely reactive to whether Done
+                Date already holds a value, however it got there (clicking
+                Done here or typing directly into the field below both land
+                in the same state — no separate "did they click Done" flag).
+                Owner's own wording, verbatim. */}
+            <div className="donerow">
+              <span className="donenote">
+                {form.doneDate.trim() === '' ? (
+                  <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
+                ) : (
+                  'This ToDo is now marked as Done, just click Save.'
+                )}
+              </span>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleQuickDone}
+                disabled={form.doneDate.trim() !== ''}
+              >
+                Done
+              </button>
+            </div>
+
             {/* Due Date + Done Date, combined into one row (owner's own rough
                 draft) — both optional, so no .req border and no
                 submit-blocking validation; same .opt Row-Tint-while-empty
@@ -371,6 +434,7 @@ export default function CreateTodoForm() {
               </span>
               <span className="ffloat picker native">
                 <input
+                  ref={doneDateRef}
                   className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
                   id="dnd"
                   type="date"
@@ -412,9 +476,14 @@ export default function CreateTodoForm() {
                       if (selectedCategory && e.target.value !== selectedCategory.name) {
                         setSelectedCategory(null)
                       }
+                      setCategoryBrowsing(false)
                       setShowCategoryResults(true)
                     }}
-                    onFocus={() => setShowCategoryResults(true)}
+                    onFocus={(e) => {
+                      e.target.select()
+                      setCategoryBrowsing(true)
+                      setShowCategoryResults(true)
+                    }}
                     onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
                   />
                   <label className="flabel" htmlFor="cat">
@@ -444,7 +513,7 @@ export default function CreateTodoForm() {
                         <button
                           key={c.id}
                           type="button"
-                          className="lookup-item"
+                          className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
                           role="option"
                           aria-selected={selectedCategory?.id === c.id}
                           onMouseDown={() => selectCategory(c)}

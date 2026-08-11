@@ -566,3 +566,37 @@ link is built only after the stack is proven on Add Contact.
   validation now refocuses Dialog Text (same gap as the chip-switch focus
   fix, different trigger) and reads "Enter Dialog Text or Cancel." instead
   of "Enter Dialog Text." everywhere it appears.
+- **Type-ahead lookups: exact-match click now shows the full list, not just
+  the match** (2026-08-10). Owner-reported: clicking a filled lookup field
+  re-filtered to the one row already in it, so picking a different value
+  required erasing the field first. Fixed by generalizing Time Zone's
+  existing `browsing`-on-focus flag (2026-08-09) to Category
+  (`CreateRequestForm.tsx`, `CreateTodoForm.tsx`, `TodoDetailForm.tsx`,
+  `RequestDetailForm.tsx`) and Contact/Recipient (`CreateRequestForm.tsx`):
+  focus shows the full list regardless of the field's current content, any
+  keystroke narrows it as before. Also added the `.lookup-item.selected`
+  visual highlight the owner asked for ("preferably with the exact match
+  displayed as selected") everywhere a lookup dropdown renders, including
+  Time Zone's own (`AddContactForm.tsx`, `ContactDetailForm.tsx`), which had
+  the browsing fix already but no visual highlight. The `LOOKUP_BROWSE_THRESHOLD`
+  gate is unchanged and still governs only the empty-field case. **Mockup
+  scope checked file-by-file**: Create Request/Create ToDo/Request
+  Detail/ToDo Detail's mockups have no interactive Category/Recipient JS at
+  all (static demo fields), so none needed changes; of the two mockups with
+  real Time Zone lookup JS, both (`WYP_create_free_account_palette1.html`,
+  `WYP_add_contact_no_contact_dialog_palette1.html`) got the `.selected`
+  treatment — `WYP_add_contact_palette1_floating.html` has no `<script>` at
+  all, and `WYP_contact_detail_palette1.html`'s Time Zone field is flagged
+  in its own header comment as never wired. See decisions log for full
+  reasoning.
+- **Create ToDo gets its own quick-Done band** (2026-08-10,
+  `CreateTodoForm.tsx`, `WYP_create_todo_palette1.html`). Owner, with a
+  pasted rough draft: "we can save the end-user a keystroke for completing
+  a ToDo by adding a Done button and message similar to the Request
+  Response." Mirrors Request Response's `.donerow`/`.donenote` (§6.31)
+  exactly — fills Done Date with today, no Done Time to touch (ToDos don't
+  have one). Owner's exact wording used verbatim for both states. Notably
+  ported into this mockup's own demo JS (`quickDone()`), even though
+  Request Response's own mockup still hasn't gotten the feature (flagged
+  above) — Create ToDo's Due Date/Done Date fields already exist as visible
+  targets for the demo to fill.
