@@ -307,7 +307,13 @@ link is built only after the stack is proven on Add Contact.
   handles `null` correctly. Also added to ToDo Detail beyond the literal
   ask, so a Due Date set at creation isn't a dead end once saved. Ported to
   both mockups (`WYP_create_todo_palette1.html`,
-  `WYP_todo_detail_palette1.html`).
+  `WYP_todo_detail_palette1.html`). **Extended same day, owner's own rough
+  draft**: Due Date and Done Date combined into one side-by-side row on
+  both screens, Done Time removed from ToDo Detail entirely ("the ToDos do
+  not need Done Time" — unlike a Request's Done Date/Time pair, which keeps
+  its Time field; `requests.done_time` stays in the schema, ToDo screens
+  just stop touching it), and Done Date added to Create ToDo ("to allow
+  completed ToDos to be entered if desired").
 - **Request Detail and ToDo Detail are now Live**
   (`app/components/RequestDetailForm.tsx` / `TodoDetailForm.tsx`,
   `/requests/[id]` / `/todos/[id]`, 2026-08-09) — Main Screen's Sent and

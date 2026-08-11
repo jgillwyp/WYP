@@ -349,16 +349,22 @@ html,body{margin:0;height:100%;background:#fff;}
         </div>
       </div>
 
-      <!-- Due Date, added 2026-08-10 to close out Week 3's last open item —
-           optional (.opt, not Create Request's required .req border) since a
-           ToDo's own Due Date is optional per the PRD's core-objects table;
-           requests.due_date is already a plain nullable date column, so
-           "not entered" already means NULL with no workaround needed. No
-           Due Time here — the owner's ask was specifically the Date. -->
+      <!-- Due Date + Done Date, combined into one row 2026-08-10 (owner's own
+           rough draft) — both optional (.opt), since a ToDo's own Due Date
+           and Done Date are both optional per the PRD's core-objects table;
+           requests.due_date/done_date are already plain nullable date
+           columns, so "not entered" already means NULL with no workaround
+           needed. No Done Time — "the ToDos do not need Done Time." Done
+           Date's purpose here: "the reason a Create ToDo should allow a
+           Done Date is to allow completed ToDos to be entered if desired." -->
       <div class="fgroup frow">
         <span class="ffloat picker">
           <input class="finput opt" id="dd" type="text" inputmode="numeric" placeholder=" ">
           <label class="flabel" for="dd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Due Date <span class="subnote">(optional)</span></label>
+        </span>
+        <span class="ffloat picker">
+          <input class="finput opt" id="dnd" type="text" inputmode="numeric" placeholder=" ">
+          <label class="flabel" for="dnd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Done Date <span class="subnote">(optional)</span></label>
         </span>
       </div>
 

@@ -257,27 +257,19 @@ html,body{margin:0;height:100%;background:#fff;}
         </div>
       </div>
 
-      <!-- Due Date, added 2026-08-10 alongside Create ToDo's own new field —
-           a ToDo Due Date set at creation needs somewhere to stay visible
-           and editable afterward. Optional (.opt), matching Create ToDo. -->
+      <!-- Due Date + Done Date, combined into one row 2026-08-10 (owner's own
+           rough draft) — both optional (.opt, grey while empty, white once
+           filled, same §6.25 rule as every other optional field). No Done
+           Time — "the ToDos do not need Done Time," unlike a Request's Done
+           Date/Time pair, which keeps its Time field. -->
       <div class="fgroup frow">
         <span class="ffloat picker">
           <input class="finput opt" id="dd" type="text" inputmode="numeric" placeholder=" ">
           <label class="flabel" for="dd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Due Date <span class="subnote">(optional)</span></label>
         </span>
-      </div>
-
-      <!-- Done row — new 2026-08-09, owner-confirmed. Same box treatment as
-           Request Detail's Done Date/Time: both optional, Row-Tinted while
-           empty (§6.25), so a ToDo has a real "mark complete" path. -->
-      <div class="fgroup frow">
         <span class="ffloat picker">
           <input class="finput opt" id="dnd" type="text" inputmode="numeric" placeholder=" ">
           <label class="flabel" for="dnd"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Done Date <span class="subnote">(optional)</span></label>
-        </span>
-        <span class="ffloat picker">
-          <input class="finput opt" id="dnt" type="text" inputmode="numeric" placeholder=" ">
-          <label class="flabel" for="dnt"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/></svg></span>Done Time <span class="subnote">(optional)</span></label>
         </span>
       </div>
 

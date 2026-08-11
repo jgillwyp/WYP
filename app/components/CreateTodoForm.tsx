@@ -22,6 +22,14 @@ import { supabase } from '@/lib/supabaseClient'
  * needed for "no due date" to mean exactly that in the database. Uses the
  * same `.opt` Row-Tint-while-empty treatment as Done Date elsewhere, not the
  * Ink-bordered `.req` styling Create Request's own (required) Due Date uses.
+ *
+ * Done Date added the same day, alongside Due Date — owner: "the reason a
+ * Create ToDo should allow a Done Date is to allow completed ToDos to be
+ * entered if desired." Both fields sit in one combined row (owner's own
+ * rough draft), both `.opt`. No Done Time — "the ToDos do not need Done
+ * Time" — unlike a Request's Done Date/Time pair, which keeps its Time
+ * field; ToDo Detail's own Done Time was removed the same day for the same
+ * reason.
  */
 
 type Category = {
@@ -32,6 +40,7 @@ type Category = {
 type TodoFormState = {
   priority: 1 | 2 | 3
   dueDate: string
+  doneDate: string
   categoryName: string
   description: string
 }
@@ -39,6 +48,7 @@ type TodoFormState = {
 const initialState: TodoFormState = {
   priority: 1,
   dueDate: '',
+  doneDate: '',
   categoryName: '',
   description: '',
 }
@@ -218,6 +228,7 @@ export default function CreateTodoForm() {
         description: form.description.trim(),
         priority: form.priority,
         due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+        done_date: form.doneDate.trim() === '' ? null : form.doneDate,
       })
       .select('id')
       .single()
@@ -325,11 +336,13 @@ export default function CreateTodoForm() {
               </div>
             </div>
 
-            {/* Due Date — optional, unlike Create Request's required Due
-                Date, so no .req border and no submit-blocking validation;
-                same .opt Row-Tint-while-empty treatment as Done Date
-                elsewhere. No Due Time here — the mockup's ToDo has never
-                drawn one, and the owner's ask was specifically the Date. */}
+            {/* Due Date + Done Date, combined into one row (owner's own rough
+                draft) — both optional, so no .req border and no
+                submit-blocking validation; same .opt Row-Tint-while-empty
+                treatment as everywhere else. No Done Time — owner: "the
+                ToDos do not need Done Time." Done Date's purpose here:
+                "the reason a Create ToDo should allow a Done Date is to
+                allow completed ToDos to be entered if desired." */}
             <div className="fgroup frow">
               <span className="ffloat picker native">
                 <input
@@ -354,6 +367,31 @@ export default function CreateTodoForm() {
                     </svg>
                   </span>
                   Due Date <span className="subnote">(optional)</span>
+                </label>
+              </span>
+              <span className="ffloat picker native">
+                <input
+                  className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
+                  id="dnd"
+                  type="date"
+                  value={form.doneDate}
+                  onChange={(e) => set('doneDate', e.target.value)}
+                />
+                <label className="flabel" htmlFor="dnd">
+                  <span className="lglyph" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                    </svg>
+                  </span>
+                  Done Date <span className="subnote">(optional)</span>
                 </label>
               </span>
             </div>

@@ -6,6 +6,21 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-10 — ToDo Due Date/Done Date: one combined row, Done Time dropped, Create ToDo gets Done Date
+
+Owner, reviewing the just-added Due Date field with a pasted rough draft: *"The ToDos do not need Done Time. The ToDo Detail and Create ToDo should both show the Due Date and Done Date as optional with grey backgrounds since they are optional. I pasted-in a rough draft of the top of the screen layout. The reason a Create ToDo should allow a Done Date is to allow completed ToDos to be entered if desired."*
+
+Checked before applying the grey-background note, since it could have read either as restating the app's existing rule or as a new one: asked whether Due Date/Done Date should use the standard §6.25 convention (grey while empty, white once filled — same as Due Time, Category, everywhere else) or stay grey permanently regardless of content. Owner picked the existing convention, so no new exception to §6.25 was introduced — just applied consistently to the newly-combined row.
+
+Three changes, all owner-directed:
+1. **Done Time removed from ToDo Detail.** ToDos never get a Done Time field anywhere, unlike a Request's Done Date/Time pair, which keeps its Time field — `requests.done_time` stays in the schema (shared with Requests) but ToDo screens stop reading, writing, or displaying it.
+2. **Due Date and Done Date combined into one side-by-side row**, matching the owner's own pasted draft, on both Create ToDo and ToDo Detail — replacing Due Date's own row plus (on ToDo Detail) the old Done Date/Done Time row.
+3. **Done Date added to Create ToDo** (optional, `.opt`, no time) — *"to allow completed ToDos to be entered if desired."* Written as `null` when empty, same pattern as Due Date.
+
+Applied to `CreateTodoForm.tsx`, `TodoDetailForm.tsx`, `WYP_create_todo_palette1.html`, `WYP_todo_detail_palette1.html`. `npx tsc --noEmit` and `npx eslint` on both components pass clean; both mockups' `<script>` blocks pass `node --check` (neither script referenced the removed Done Time field).
+
+\---
+
 ## 2026-08-10 — Three small fixes from live testing, and Week 3's last open item closed out
 
 **`.ics` "From Would You Please".** Owner, testing live: *"The message body starts with 'A Would You Please Request from Would You Please.' I see that the underlying Request does not have a From value — which once the app is fully implemented could not happen."* Correctly diagnosed as a test-data gap (`profiles.display_name` still unpopulated for the test account that issued this particular Request), not a real bug — but the fallback that produced it was worth tightening anyway: `buildIcsDescription()` now omits the "from `<name>`:" clause entirely when `owner_name` is null, instead of falling back to the app's own name and producing a sentence that reads as nonsensical regardless of whose data is missing. Ported into both mockups' `addToCalendar()` for consistency, even though their own demo `ownerName` is always set.

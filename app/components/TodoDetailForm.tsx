@@ -45,7 +45,6 @@ type TodoFormState = {
   priority: 1 | 2 | 3
   dueDate: string
   doneDate: string
-  doneTime: string
   categoryName: string
   description: string
 }
@@ -75,7 +74,6 @@ export default function TodoDetailForm() {
     priority: 1,
     dueDate: '',
     doneDate: '',
-    doneTime: '',
     categoryName: '',
     description: '',
   })
@@ -128,7 +126,7 @@ export default function TodoDetailForm() {
       const [todoRes, catRes, ownerRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, done_time, category_id, categories(name)')
+          .select('id, description, priority, due_date, done_date, category_id, categories(name)')
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -148,7 +146,6 @@ export default function TodoDetailForm() {
         priority: number | null
         due_date: string | null
         done_date: string | null
-        done_time: string | null
         category_id: string | null
         categories: { name: string } | null
       }
@@ -158,7 +155,6 @@ export default function TodoDetailForm() {
         priority: (row.priority as 1 | 2 | 3) ?? 1,
         dueDate: row.due_date ?? '',
         doneDate: row.done_date ?? '',
-        doneTime: row.done_time ?? '',
         categoryName: row.categories?.name ?? '',
         description: row.description ?? '',
       })
@@ -347,7 +343,6 @@ export default function TodoDetailForm() {
         priority: form.priority,
         due_date: form.dueDate.trim() === '' ? null : form.dueDate,
         done_date: form.doneDate.trim() === '' ? null : form.doneDate,
-        done_time: form.doneTime.trim() === '' ? null : form.doneTime,
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
       })
@@ -460,10 +455,12 @@ export default function TodoDetailForm() {
               </div>
             </div>
 
-            {/* Due Date, added 2026-08-10 alongside Create ToDo's own new
-                field — a ToDo Due Date set at creation needs somewhere to
-                stay visible and editable afterward, same as every other
-                field here. Optional (.opt), matching Create ToDo. */}
+            {/* Due Date + Done Date, combined into one row 2026-08-10 (owner's
+                own rough draft) — both optional (.opt, grey while empty,
+                white once filled, same §6.25 rule as every other optional
+                field), side by side rather than each on its own row. No
+                Done Time — "the ToDos do not need Done Time," unlike a
+                Request's Done Date/Time pair, which keeps its Time field. */}
             <div className="fgroup frow">
               <span className="ffloat picker native">
                 <input
@@ -490,9 +487,6 @@ export default function TodoDetailForm() {
                   Due Date <span className="subnote">(optional)</span>
                 </label>
               </span>
-            </div>
-
-            <div className="fgroup frow">
               <span className="ffloat picker native">
                 <input
                   className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
@@ -516,25 +510,6 @@ export default function TodoDetailForm() {
                     </svg>
                   </span>
                   Done Date <span className="subnote">(optional)</span>
-                </label>
-              </span>
-              <span className="ffloat picker native">
-                <input
-                  className={`finput${form.doneTime.trim() === '' ? ' opt' : ''}`}
-                  id="dnt"
-                  type="time"
-                  value={form.doneTime}
-                  onChange={(e) => set('doneTime', e.target.value)}
-                />
-                <label className="flabel" htmlFor="dnt">
-                  <span className="lglyph" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                    </svg>
-                  </span>
-                  Done Time <span className="subnote">(optional)</span>
                 </label>
               </span>
             </div>
