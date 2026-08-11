@@ -623,15 +623,19 @@ link is built only after the stack is proven on Add Contact.
   moved to `app/src/lib/ics.ts` so this new screen could reuse
   `RequestResponseForm.tsx`'s existing logic verbatim rather than duplicate
   it. See decisions log and `docs/WYP_Week4_Plan.md` for full reasoning.
-- **Main Screen column-header sorting — not yet built.** Owner, clarifying
-  scope: "Main screen sorting was referring to the various column headings
-  and the ascending and descending sort options with the yellow background
-  for the selected column title." Today only Due (Sent/Received) and
-  Priority (ToDos) render as the `.pill` (`--sort` yellow token) indicating
-  the current sort column, and it's a static default (Due descending /
-  Priority ascending), not a clickable, direction-toggling control — every
-  other `.colbar` header (To/From, Date, Done; Category — Description) is
-  plain text. Priority 2 in `docs/WYP_Week4_Plan.md`, after Received.
+- **Main Screen column-header sorting is now live (2026-08-11,
+  `MainScreen.tsx`).** Every `.colbar` header (To/From, Date, Due, Done on
+  Sent/Received; Priority, Category — Description on ToDos) is a real
+  `<button>` — click to sort by that column in its own default direction,
+  click again to reverse. The active column renders the `.pill` (`--sort`
+  yellow token) with its label plus a ▲/▼ arrow; previously only Due
+  (Sent/Received) and Priority (ToDos) ever showed the pill, and it was a
+  static default, not interactive. Sort state persists per-section to
+  `sessionStorage`, same pattern as the filter chips (2026-08-09). `aria-sort`
+  isn't valid on a plain `<button>` (implicit `role="button"`, not
+  `columnheader`) — used `aria-label` instead. See decisions log,
+  2026-08-11, for the full write-up. Mockup unchanged (static `<span>`s, no
+  click handlers).
 - **Simplified empty-state Dialog/Attachments row (§6.32, 2026-08-11).**
   Owner, with a pasted-in reference mockup: Create Request, Request Detail,
   Request Response, Response Detail, Create ToDo, and ToDo Detail each showed
@@ -752,3 +756,14 @@ link is built only after the stack is proven on Add Contact.
   Request's own Add Contact button has no interactive JS to update, and
   Main Screen's gap values were ported into `WYP_main_screen_palette1.html`
   directly. See the decisions log's 2026-08-11 entry.
+- **Done-band wording after Send (2026-08-11).** Request Response and
+  Response Detail's quick-Done band already had two reactive states (empty
+  Done Date, or filled-but-not-sent); owner asked for a third once Send
+  actually succeeds, since the only existing confirmation was the
+  `.noticeband` banner at the top of the screen, not anything next to the
+  Done button itself. Added, reactive to the same `sendConfirmed` state that
+  already drives the banner: "This Request is now marked as Done and has
+  been Sent." Applied to both `RequestResponseForm.tsx` and
+  `ResponseDetailForm.tsx` — identical donerow, identical fix. No mockup
+  change: the quick-Done band has never been ported into either screen's
+  static HTML.

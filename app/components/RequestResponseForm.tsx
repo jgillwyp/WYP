@@ -489,8 +489,17 @@ export default function RequestResponseForm() {
                 get out of sync. */}
             <div className="donerow">
               <span className="donenote">
+                {/* Third state added 2026-08-11 — owner: once Send succeeds,
+                    the wording next to the Done button itself should say so
+                    too, not just the .noticeband confirmation at the top of
+                    the screen. Reactive to sendConfirmed the same way the
+                    other two states are reactive to doneDate — no separate
+                    flag, so it can't drift out of sync with what actually
+                    happened. */}
                 {doneDate.trim() === '' ? (
                   <><b>Note:</b> For a quick response, click Done and Send.</>
+                ) : sendConfirmed ? (
+                  'This Request is now marked as Done and has been Sent.'
                 ) : (
                   'This Request is now marked as Done, just click Send.'
                 )}

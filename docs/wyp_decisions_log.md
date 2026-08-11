@@ -6,6 +6,30 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-11 — Main Screen column-header sorting
+
+Owner: "Please work on the column heading sorting for the three sections of the Main screen" — the last of three items in the same message, and a callback to much earlier scoping ("the various column headings and the ascending and descending sort options with the yellow background for the selected column title"). Until now only Due (Sent/Received) and Priority (ToDos) ever rendered inside the `.pill` yellow-background treatment, and it was a static default — not a clickable, direction-toggling control. To/From, Date, Done on Sent/Received, and Category — Description on ToDos were plain text with no sort behavior at all.
+
+**Recommendation, implemented**: every `.colbar` cell is now a real `<button>`. Clicking an inactive column makes it the active sort (in that column's own sensible default direction — descending for Date/Due/Done, matching the existing Due-descending default; ascending for To/From, Category, Priority); clicking the already-active column reverses direction. The active column shows the existing `.pill` component with its label plus a ▲/▼ arrow — no new visual language, just extending the treatment Due/Priority already had to every column and making it live. Sort state persists per-section to `sessionStorage` (`wyp.mainSentSort` / `wyp.mainReceivedSort` / `wyp.mainTodoSort`) as a single `"key:dir"` string, read back via a lazy `useState` initializer — the same pattern and the same storage tier (session, not `localStorage`) already established 2026-08-09 for the filter chips, for the same reason: a within-session view preference, not a durable account setting. Nulls (empty Due Date, empty Category, etc.) always sort last regardless of direction, via a shared `compareNullable` wrapper, rather than drifting to the front on descending sorts the way a naive comparator would.
+
+Sorting is client-side, over the already-fetched `filteredSent`/`filteredReceived`/`filteredTodos` arrays via `useMemo` — the same "fetch once, filter/sort/search client-side" precedent this file (`MainScreen.tsx`) already used for the filter chips and search box, appropriate at the personal/tens-of-rows scale this app targets. A generic `toggleSort(state, key, defaultDirTable)` helper and nulls-last comparators (`compareStrings`, `compareNumbers`) are shared across all three sections' handlers, even though the three sections' underlying row shapes differ, to avoid three copies of the same toggle/compare logic.
+
+**Alternative rejected**: giving each column a fixed, single sort direction (no toggle) — simpler, but throws away half of what the owner explicitly asked for ("ascending and descending sort options"), and breaks the existing Due/Priority precedent, which already implied direction was meaningful even before it was interactive.
+
+**Accessibility fix along the way**: the first pass set `aria-sort` directly on each `<button>`, which is only valid on an element with `role="columnheader"`/`role="rowheader"` (or a native `<th>`) — flagged by `eslint`'s `jsx-a11y/role-supports-aria-props` rule, since a `<button>`'s implicit role is `"button"`. Rebuilding these cells as a real `<table>`/grid-role structure just to host `aria-sort` correctly was judged out of scope for a CSS-Grid-based row layout that isn't a table anywhere else in the app. Used `aria-label` instead (e.g. "Sort by Due, currently sorted descending") — conveys the same state to assistive tech without the role mismatch, consistent with this codebase's existing use of `aria-label` for interactive-element context (e.g. `.fclear`'s "Clear Due Time").
+
+**Mockup unchanged**: `WYP_main_screen_palette1.html`'s `.colbar` cells are static `<span>`s with no click handlers (confirmed by inspection) — same situation as several other recent Main Screen features (filter chips, search) that only ever went live, per the screen-map's existing "static demo" scoping for this mockup. Not ported.
+
+**Open question, not yet raised by the owner**: whether a future multi-column sort (e.g. Priority then Due) is wanted. Not built — nothing in the request implied it, and the single-column model matches every comparable pattern already in this app.
+
+\---
+
+## 2026-08-11 — Done-band wording after Send (Request Response, Response Detail)
+
+Owner, after successfully testing a self-sent Request end to end: once Send succeeds, the explanatory text next to the Done button itself should confirm that too, not just the `.noticeband` confirmation banner at the top of the screen. The donerow already had two reactive states — empty Done Date ("For a quick response, click Done and Send.") and filled-but-not-yet-sent ("This Request is now marked as Done, just click Send.") — both purely reactive to whether Done Date holds a value. Added a third: once `sendConfirmed` is also true, the text becomes "This Request is now marked as Done and has been Sent." Same reactive pattern as the other two states — no new flag, so it can't drift out of sync with what actually happened (there's already exactly one source of truth for "did Send succeed," the existing `sendConfirmed` state driving the `.noticeband`). Applied to both `RequestResponseForm.tsx` and `ResponseDetailForm.tsx` — identical `donerow` markup, identical `sendConfirmed` state, same fix in both. Neither mockup needed changes — the quick-Done band itself has never been ported into either screen's static HTML (already flagged in `design/README.md`), so there was no third state to add there.
+
+\---
+
 ## 2026-08-11 — Main Screen To/From column width; Add Contact's return path from Create Request
 
 Two more owner-reported items, testing the live app on his phone.

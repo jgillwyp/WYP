@@ -144,6 +144,129 @@ function dialogCount(dialog: { count: number }[] | null): number {
   return dialog?.[0]?.count ?? 0
 }
 
+// Column-header sorting (2026-08-11) — owner: "Main screen sorting was
+// referring to the various column headings and the ascending and
+// descending sort options with the yellow background for the selected
+// column title." Before this, only Due (Sent/Received) and Priority
+// (ToDos) ever rendered as the yellow .pill, and it was a fixed default —
+// not a live, clickable, direction-toggling control; every other .colbar
+// header (To/From, Date, Done; Category — Description) was plain text.
+// Client-side, over the already-fetched/filtered rows — same reasoning as
+// the filter chips and search: these lists are personal-scale, so a
+// re-query per click isn't worth the complexity.
+type SortDir = 'asc' | 'desc'
+type ReqSortKey = 'name' | 'date' | 'due' | 'done'
+type TodoSortKey = 'priority' | 'category'
+
+// Each column's own sensible starting direction the first time it's
+// clicked — matching the defaults this screen already had (Due descending,
+// Priority ascending) rather than forcing every column to start ascending.
+// A second click on the already-active column reverses direction instead
+// of re-consulting this table.
+const REQ_SORT_DEFAULT_DIR: Record<ReqSortKey, SortDir> = {
+  name: 'asc',
+  date: 'desc',
+  due: 'desc',
+  done: 'desc',
+}
+
+const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
+  priority: 'asc',
+  category: 'asc',
+}
+
+function toggleSort<K extends string>(
+  current: { key: K; dir: SortDir },
+  key: K,
+  defaults: Record<K, SortDir>
+): { key: K; dir: SortDir } {
+  if (current.key === key) {
+    return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+  }
+  return { key, dir: defaults[key] }
+}
+
+// Nulls always sort last, regardless of direction — an empty Due/Done/
+// Category shouldn't jump to the top of an ascending sort just because
+// null compares "less than" a real value. Applied uniformly to every
+// column, including Date, even though created_at is never actually null in
+// practice.
+function compareNullable<T>(a: T | null, b: T | null, dir: SortDir, cmp: (a: T, b: T) => number): number {
+  if (a === null && b === null) return 0
+  if (a === null) return 1
+  if (b === null) return -1
+  const result = cmp(a, b)
+  return dir === 'asc' ? result : -result
+}
+
+function compareStrings(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+}
+
+function compareNumbers(a: number, b: number): number {
+  return a - b
+}
+
+// Sort state persistence mirrors the existing chip-state pattern below
+// (readStoredChip/sessionStorage) — a within-session view preference, not a
+// scoping call confirmed with the owner but a direct extension of the
+// precedent he already set for filter chips and the Housekeeping tab.
+// Stored as "key:dir" in one string rather than two separate keys.
+function readStoredSort<K extends string>(
+  storageKey: string,
+  allowedKeys: readonly K[],
+  fallback: { key: K; dir: SortDir }
+): { key: K; dir: SortDir } {
+  if (typeof window === 'undefined') return fallback
+  const raw = window.sessionStorage.getItem(storageKey)
+  if (!raw) return fallback
+  const [k, d] = raw.split(':')
+  if ((allowedKeys as readonly string[]).includes(k) && (d === 'asc' || d === 'desc')) {
+    return { key: k as K, dir: d as SortDir }
+  }
+  return fallback
+}
+
+function writeStoredSort(storageKey: string, sort: { key: string; dir: SortDir }) {
+  window.sessionStorage.setItem(storageKey, `${sort.key}:${sort.dir}`)
+}
+
+// One column-header cell — renders as plain text at rest, or the existing
+// yellow .pill plus a direction arrow when it's the active sort column.
+// className carries the cell's own existing alignment rule (.c-nm/.c-dt/
+// .c-due/.c-dn/.c-pri/.c-cat) unchanged; only the element itself (span ->
+// button) and the pill/arrow are new.
+function ColSort({
+  className,
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  className: string
+  label: string
+  active: boolean
+  dir: SortDir
+  onClick: () => void
+}) {
+  // aria-sort is only valid on elements with role="columnheader"/"rowheader"
+  // (or a native <th>) per jsx-a11y/role-supports-aria-props — this is a
+  // plain <button> (implicit role="button"), so the sort state is conveyed
+  // via aria-label instead. The visible ▲/▼ inside .pill already carries
+  // the same information sighted users get.
+  const stateLabel = active ? `, currently sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={onClick}
+      aria-label={`Sort by ${label}${stateLabel}`}
+    >
+      {active ? <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span> : label}
+    </button>
+  )
+}
+
 // Chip-state persistence (2026-08-09) — "It would be appropriate to return
 // to the same chip state on the main screen." Main Screen fully remounts on
 // router.back() (no Cache Components/Activity in this app — see CLAUDE.md),
@@ -160,6 +283,9 @@ const SENT_FILTER_KEY = 'wyp.mainSentFilter'
 const RECEIVED_FILTER_KEY = 'wyp.mainReceivedFilter'
 const TODO_FILTER_KEY = 'wyp.mainTodoFilter'
 const HK_TAB_KEY = 'wyp.mainHkTab'
+const SENT_SORT_KEY = 'wyp.mainSentSort'
+const RECEIVED_SORT_KEY = 'wyp.mainReceivedSort'
+const TODO_SORT_KEY = 'wyp.mainTodoSort'
 
 function readStoredChip<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -254,6 +380,16 @@ export default function MainScreen() {
   )
   const [searchText, setSearchText] = useState('')
 
+  const [sentSort, setSentSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
+    readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
+  )
+  const [receivedSort, setReceivedSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
+    readStoredSort(RECEIVED_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
+  )
+  const [todoSort, setTodoSort] = useState<{ key: TodoSortKey; dir: SortDir }>(() =>
+    readStoredSort(TODO_SORT_KEY, ['priority', 'category'] as const, { key: 'priority', dir: 'asc' })
+  )
+
   useEffect(() => {
     window.sessionStorage.setItem(SENT_FILTER_KEY, sentFilter)
   }, [sentFilter])
@@ -269,6 +405,18 @@ export default function MainScreen() {
   useEffect(() => {
     window.sessionStorage.setItem(HK_TAB_KEY, hkTab)
   }, [hkTab])
+
+  useEffect(() => {
+    writeStoredSort(SENT_SORT_KEY, sentSort)
+  }, [sentSort])
+
+  useEffect(() => {
+    writeStoredSort(RECEIVED_SORT_KEY, receivedSort)
+  }, [receivedSort])
+
+  useEffect(() => {
+    writeStoredSort(TODO_SORT_KEY, todoSort)
+  }, [todoSort])
 
   useEffect(() => {
     let cancelled = false
@@ -359,6 +507,67 @@ export default function MainScreen() {
     })
   }, [todos, todoFilter, query])
 
+  // Sorted on top of the already-filtered rows — filtering and sorting are
+  // independent concerns (which rows show vs. what order they show in), so
+  // this stays a second pass rather than folding sort comparisons into the
+  // filter predicates above.
+  const sortedSent = useMemo(() => {
+    const list = [...filteredSent]
+    list.sort((a, b) => {
+      switch (sentSort.key) {
+        case 'name':
+          return compareNullable(a.contacts?.display_name ?? null, b.contacts?.display_name ?? null, sentSort.dir, compareStrings)
+        case 'date':
+          return compareNullable(a.created_at, b.created_at, sentSort.dir, compareStrings)
+        case 'due':
+          return compareNullable(a.due_date, b.due_date, sentSort.dir, compareStrings)
+        case 'done':
+          return compareNullable(a.done_date, b.done_date, sentSort.dir, compareStrings)
+      }
+    })
+    return list
+  }, [filteredSent, sentSort])
+
+  const sortedReceived = useMemo(() => {
+    const list = [...filteredReceived]
+    list.sort((a, b) => {
+      switch (receivedSort.key) {
+        case 'name':
+          return compareNullable(a.owner_name, b.owner_name, receivedSort.dir, compareStrings)
+        case 'date':
+          return compareNullable(a.created_at, b.created_at, receivedSort.dir, compareStrings)
+        case 'due':
+          return compareNullable(a.due_date, b.due_date, receivedSort.dir, compareStrings)
+        case 'done':
+          return compareNullable(a.done_date, b.done_date, receivedSort.dir, compareStrings)
+      }
+    })
+    return list
+  }, [filteredReceived, receivedSort])
+
+  const sortedTodos = useMemo(() => {
+    const list = [...filteredTodos]
+    list.sort((a, b) => {
+      if (todoSort.key === 'priority') {
+        return compareNullable(a.priority, b.priority, todoSort.dir, compareNumbers)
+      }
+      return compareNullable(a.categories?.name ?? null, b.categories?.name ?? null, todoSort.dir, compareStrings)
+    })
+    return list
+  }, [filteredTodos, todoSort])
+
+  function sortSent(key: ReqSortKey) {
+    setSentSort((s) => toggleSort(s, key, REQ_SORT_DEFAULT_DIR))
+  }
+
+  function sortReceived(key: ReqSortKey) {
+    setReceivedSort((s) => toggleSort(s, key, REQ_SORT_DEFAULT_DIR))
+  }
+
+  function sortTodos(key: TodoSortKey) {
+    setTodoSort((s) => toggleSort(s, key, TODO_SORT_DEFAULT_DIR))
+  }
+
   return (
     <div className="frame-none">
       <div className="app">
@@ -390,10 +599,10 @@ export default function MainScreen() {
             </div>
             <div className="subbody">
               <div className="colbar sr">
-                <span className="c-nm">To</span>
-                <span className="c-dt">Date</span>
-                <span className="c-due"><span className="pill">Due&nbsp;▼</span></span>
-                <span className="c-dn">Done</span>
+                <ColSort className="c-nm" label="To" active={sentSort.key === 'name'} dir={sentSort.dir} onClick={() => sortSent('name')} />
+                <ColSort className="c-dt" label="Date" active={sentSort.key === 'date'} dir={sentSort.dir} onClick={() => sortSent('date')} />
+                <ColSort className="c-due" label="Due" active={sentSort.key === 'due'} dir={sentSort.dir} onClick={() => sortSent('due')} />
+                <ColSort className="c-dn" label="Done" active={sentSort.key === 'done'} dir={sentSort.dir} onClick={() => sortSent('done')} />
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
@@ -404,7 +613,7 @@ export default function MainScreen() {
                 {!loading && !loadError && sent.length > 0 && filteredSent.length === 0 && (
                   <div className="subempty">No Sent Requests match this filter.</div>
                 )}
-                {!loading && !loadError && filteredSent.map((r) => {
+                {!loading && !loadError && sortedSent.map((r) => {
                   const status = sentStatus(r)
                   const late = status === 'done' && !!r.due_date && !!r.done_date && r.done_date > r.due_date
                   return (
@@ -459,10 +668,10 @@ export default function MainScreen() {
             </div>
             <div className="subbody">
               <div className="colbar sr">
-                <span className="c-nm">From</span>
-                <span className="c-dt">Date</span>
-                <span className="c-due"><span className="pill">Due&nbsp;▼</span></span>
-                <span className="c-dn">Done</span>
+                <ColSort className="c-nm" label="From" active={receivedSort.key === 'name'} dir={receivedSort.dir} onClick={() => sortReceived('name')} />
+                <ColSort className="c-dt" label="Date" active={receivedSort.key === 'date'} dir={receivedSort.dir} onClick={() => sortReceived('date')} />
+                <ColSort className="c-due" label="Due" active={receivedSort.key === 'due'} dir={receivedSort.dir} onClick={() => sortReceived('due')} />
+                <ColSort className="c-dn" label="Done" active={receivedSort.key === 'done'} dir={receivedSort.dir} onClick={() => sortReceived('done')} />
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
@@ -473,7 +682,7 @@ export default function MainScreen() {
                 {!loading && !loadError && received.length > 0 && filteredReceived.length === 0 && (
                   <div className="subempty">No Received Requests match this filter.</div>
                 )}
-                {!loading && !loadError && filteredReceived.map((r) => {
+                {!loading && !loadError && sortedReceived.map((r) => {
                   const status = receivedStatus(r)
                   const late = status === 'done' && !!r.due_date && !!r.done_date && r.done_date > r.due_date
                   return (
@@ -524,8 +733,8 @@ export default function MainScreen() {
             </div>
             <div className="subbody">
               <div className="colbar td">
-                <span className="c-pri"><span className="pill">Priority&nbsp;▼</span></span>
-                <span className="c-cat">Category — Description</span>
+                <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
+                <ColSort className="c-cat" label="Category — Description" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
@@ -536,7 +745,7 @@ export default function MainScreen() {
                 {!loading && !loadError && todos.length > 0 && filteredTodos.length === 0 && (
                   <div className="subempty">No ToDos match this filter.</div>
                 )}
-                {!loading && !loadError && filteredTodos.map((t) => (
+                {!loading && !loadError && sortedTodos.map((t) => (
                   <div
                     key={t.id}
                     className="row td"

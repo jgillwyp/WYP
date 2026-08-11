@@ -434,8 +434,13 @@ export default function ResponseDetailForm() {
 
             <div className="donerow">
               <span className="donenote">
+                {/* Third state added 2026-08-11 — see RequestResponseForm.tsx's
+                    identical comment; this screen mirrors that one's donerow
+                    verbatim. */}
                 {doneDate.trim() === '' ? (
                   <><b>Note:</b> For a quick response, click Done and Send.</>
+                ) : sendConfirmed ? (
+                  'This Request is now marked as Done and has been Sent.'
                 ) : (
                   'This Request is now marked as Done, just click Send.'
                 )}
