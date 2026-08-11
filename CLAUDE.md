@@ -298,12 +298,16 @@ link is built only after the stack is proven on Add Contact.
 - **Create ToDo is now Live** (`app/components/CreateTodoForm.tsx`,
   `/todos/new`, 2026-08-09) — Main Screen's Create ToDo button now goes
   somewhere. Same Category lookup / Add Category / Add Dialog modal pattern
-  as Create Request, no Recipient, plus the Priority chip row. **Flagged,
-  not resolved**: the mockup (and this component) has no Due Date field, even
-  though the PRD lists ToDos as having an optional due date and
-  `requests.due_date` is a real nullable column the seed script already
-  populates for ToDos. Worth a decision — add Due Date to the mockup (and
-  ToDo Detail) or leave ToDos due-date-less through the UI.
+  as Create Request, no Recipient, plus the Priority chip row. **Due Date
+  gap closed 2026-08-10** — closing out Week 3's last open item. Optional
+  (`.opt`, not Create Request's required `.req` border), written as `null`
+  when empty; `requests.due_date` was already a plain nullable column (no
+  `not null`), so no schema change or sentinel-date workaround was needed —
+  every screen already reading it (Main Screen, Request Detail) already
+  handles `null` correctly. Also added to ToDo Detail beyond the literal
+  ask, so a Due Date set at creation isn't a dead end once saved. Ported to
+  both mockups (`WYP_create_todo_palette1.html`,
+  `WYP_todo_detail_palette1.html`).
 - **Request Detail and ToDo Detail are now Live**
   (`app/components/RequestDetailForm.tsx` / `TodoDetailForm.tsx`,
   `/requests/[id]` / `/todos/[id]`, 2026-08-09) — Main Screen's Sent and
@@ -548,3 +552,11 @@ link is built only after the stack is proven on Add Contact.
   confirmed via AskUserQuestion that porting the feature into the mockup's
   demo, not building the screen live, was the intent; going live would
   reopen the deferred "Received Requests have no live data path" gap.
+  **Two small fixes same day, from live testing**: the "from `<name>`:"
+  clause is now omitted entirely when `owner_name` is null, rather than
+  falling back to the app's own name ("A Would You Please Request from
+  Would You Please" — a test-data artifact, not reproducible once
+  `profiles.display_name` has a real value); and Add Dialog's empty-body
+  validation now refocuses Dialog Text (same gap as the chip-switch focus
+  fix, different trigger) and reads "Enter Dialog Text or Cancel." instead
+  of "Enter Dialog Text." everywhere it appears.

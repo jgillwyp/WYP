@@ -311,7 +311,7 @@ html,body{margin:0;height:100%;background:#fff;}
       <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
       <label class="flabel" for="dlgtext">Dialog Text</label>
     </div>
-    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text.</p>
+    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text or Cancel.</p>
   </div>
 
 </div></div>
@@ -378,8 +378,14 @@ function addToCalendar(){
   var end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000);
 
   var summary = 'Would You Please: ' + (description.length > 60 ? description.slice(0, 57) + '...' : description);
-  var body = 'A Would You Please Request from ' + ownerName + ': ' + description +
-    ' To mark it completed, click: ' + link;
+  /* Owner-reported, 2026-08-10: with no owner name at all, "A Would You
+     Please Request from Would You Please" read wrong — omit the "from
+     <name>" clause when unknown instead of falling back to the app's own
+     name. Mirrored here even though this mockup's own ownerName is always
+     set, to keep this function a faithful copy of buildIcsDescription in
+     RequestResponseForm.tsx. */
+  var from = ownerName ? 'A Would You Please Request from ' + ownerName + ': ' : 'A Would You Please Request: ';
+  var body = from + description + ' To mark it completed, click: ' + link;
 
   var lines = [
     'BEGIN:VCALENDAR',
@@ -512,7 +518,11 @@ function pickQuestion(id){
 }
 function saveDialogEntry(){
   var text = document.getElementById('dlgtext').value.trim();
-  if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
+  if (text === '') {
+    document.getElementById('dlg-error').style.display = 'block';
+    document.getElementById('dlgtext').focus();
+    return;
+  }
   var entry = { id: nextDialogId++, kind: dlgKind, date: '10-05-26', who: 'Jason Smith', body: text };
   if (dlgKind === 'answer') entry.repliesTo = dlgSelectedQuestionId;
   dialogEntries.push(entry);

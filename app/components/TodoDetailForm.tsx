@@ -43,6 +43,7 @@ type DialogEntry = {
 
 type TodoFormState = {
   priority: 1 | 2 | 3
+  dueDate: string
   doneDate: string
   doneTime: string
   categoryName: string
@@ -72,6 +73,7 @@ export default function TodoDetailForm() {
 
   const [form, setForm] = useState<TodoFormState>({
     priority: 1,
+    dueDate: '',
     doneDate: '',
     doneTime: '',
     categoryName: '',
@@ -126,7 +128,7 @@ export default function TodoDetailForm() {
       const [todoRes, catRes, ownerRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, priority, done_date, done_time, category_id, categories(name)')
+          .select('id, description, priority, due_date, done_date, done_time, category_id, categories(name)')
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -144,6 +146,7 @@ export default function TodoDetailForm() {
       type Row = {
         description: string
         priority: number | null
+        due_date: string | null
         done_date: string | null
         done_time: string | null
         category_id: string | null
@@ -153,6 +156,7 @@ export default function TodoDetailForm() {
 
       setForm({
         priority: (row.priority as 1 | 2 | 3) ?? 1,
+        dueDate: row.due_date ?? '',
         doneDate: row.done_date ?? '',
         doneTime: row.done_time ?? '',
         categoryName: row.categories?.name ?? '',
@@ -231,7 +235,11 @@ export default function TodoDetailForm() {
   async function handleDialogModalSave() {
     const body = dialogModalBody.trim()
     if (body === '') {
-      setDialogModalError('Enter Dialog Text.')
+      // Owner-reported, 2026-08-10: same focus-management gap as the
+      // chip-switch fix, on this different trigger (Save with an empty
+      // body rather than a chip click).
+      setDialogModalError('Enter Dialog Text or Cancel.')
+      dialogTextRef.current?.focus()
       return
     }
 
@@ -337,6 +345,7 @@ export default function TodoDetailForm() {
       .from('requests')
       .update({
         priority: form.priority,
+        due_date: form.dueDate.trim() === '' ? null : form.dueDate,
         done_date: form.doneDate.trim() === '' ? null : form.doneDate,
         done_time: form.doneTime.trim() === '' ? null : form.doneTime,
         category_id: selectedCategory?.id ?? null,
@@ -449,6 +458,38 @@ export default function TodoDetailForm() {
                   LATER
                 </button>
               </div>
+            </div>
+
+            {/* Due Date, added 2026-08-10 alongside Create ToDo's own new
+                field — a ToDo Due Date set at creation needs somewhere to
+                stay visible and editable afterward, same as every other
+                field here. Optional (.opt), matching Create ToDo. */}
+            <div className="fgroup frow">
+              <span className="ffloat picker native">
+                <input
+                  className={`finput${form.dueDate.trim() === '' ? ' opt' : ''}`}
+                  id="dd"
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) => set('dueDate', e.target.value)}
+                />
+                <label className="flabel" htmlFor="dd">
+                  <span className="lglyph" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                    </svg>
+                  </span>
+                  Due Date <span className="subnote">(optional)</span>
+                </label>
+              </span>
             </div>
 
             <div className="fgroup frow">

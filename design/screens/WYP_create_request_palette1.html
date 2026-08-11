@@ -497,7 +497,7 @@ html,body{margin:0;height:100%;background:#fff;}
       <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
       <label class="flabel" for="dlgtext">Dialog Text</label>
     </div>
-    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text.</p>
+    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text or Cancel.</p>
   </div>
 
 </div></div>
@@ -532,7 +532,11 @@ function selectKind(kind){
 }
 function saveDialogEntry(){
   var text = document.getElementById('dlgtext').value.trim();
-  if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
+  if (text === '') {
+    document.getElementById('dlg-error').style.display = 'block';
+    document.getElementById('dlgtext').focus();
+    return;
+  }
   var list = document.getElementById('dlg-staged');
   var row = document.createElement('div');
   row.className = 'attitem';

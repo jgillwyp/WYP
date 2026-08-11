@@ -13,13 +13,15 @@ import { supabase } from '@/lib/supabaseClient'
  * with staged entries written on Save) minus what a ToDo doesn't have —
  * Recipient — plus what only a ToDo has: the Priority chip row.
  *
- * FLAGGED, not silently resolved: the mockup has no Due Date field, even
- * though the PRD's core-objects table lists ToDos as having an optional due
- * date and `requests.due_date` is a real, nullable column the seed script
- * already populates for ToDos. This component matches the approved mockup as
- * it stands — no Due Date input — rather than inventing a field the mockup
- * doesn't draw. Worth a decision: add Due Date to this mockup (and ToDo
- * Detail) or leave ToDos due-date-less through the UI.
+ * Due Date added 2026-08-10, closing out Week 3's last open item — optional,
+ * unlike a Request's required Due Date: `requests.due_date` is already a
+ * plain nullable `date` column (no `not null`, confirmed in
+ * `docs/Week2 - SQL history.txt`), and every screen that reads it already
+ * handles a null value correctly (Main Screen's sort/format, Request
+ * Detail/ToDo Detail's own display) — no sentinel value or SQL workaround
+ * needed for "no due date" to mean exactly that in the database. Uses the
+ * same `.opt` Row-Tint-while-empty treatment as Done Date elsewhere, not the
+ * Ink-bordered `.req` styling Create Request's own (required) Due Date uses.
  */
 
 type Category = {
@@ -29,12 +31,14 @@ type Category = {
 
 type TodoFormState = {
   priority: 1 | 2 | 3
+  dueDate: string
   categoryName: string
   description: string
 }
 
 const initialState: TodoFormState = {
   priority: 1,
+  dueDate: '',
   categoryName: '',
   description: '',
 }
@@ -106,7 +110,11 @@ export default function CreateTodoForm() {
   function handleDialogModalSave() {
     const body = dialogModalBody.trim()
     if (body === '') {
-      setDialogModalError('Enter Dialog Text.')
+      // Owner-reported, 2026-08-10: same focus-management gap as the
+      // chip-switch fix, on this different trigger (Save with an empty
+      // body rather than a chip click).
+      setDialogModalError('Enter Dialog Text or Cancel.')
+      dialogTextRef.current?.focus()
       return
     }
     setDialogEntries((entries) => [...entries, { kind: dialogModalKind, body }])
@@ -209,6 +217,7 @@ export default function CreateTodoForm() {
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
         priority: form.priority,
+        due_date: form.dueDate.trim() === '' ? null : form.dueDate,
       })
       .select('id')
       .single()
@@ -314,6 +323,39 @@ export default function CreateTodoForm() {
                   LATER
                 </button>
               </div>
+            </div>
+
+            {/* Due Date — optional, unlike Create Request's required Due
+                Date, so no .req border and no submit-blocking validation;
+                same .opt Row-Tint-while-empty treatment as Done Date
+                elsewhere. No Due Time here — the mockup's ToDo has never
+                drawn one, and the owner's ask was specifically the Date. */}
+            <div className="fgroup frow">
+              <span className="ffloat picker native">
+                <input
+                  className={`finput${form.dueDate.trim() === '' ? ' opt' : ''}`}
+                  id="dd"
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) => set('dueDate', e.target.value)}
+                />
+                <label className="flabel" htmlFor="dd">
+                  <span className="lglyph" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                    </svg>
+                  </span>
+                  Due Date <span className="subnote">(optional)</span>
+                </label>
+              </span>
             </div>
 
             {/* Category row */}

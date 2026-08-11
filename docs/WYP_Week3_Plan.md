@@ -45,9 +45,9 @@ Real email delivery is explicitly deferred (SPF/DKIM/DMARC is called out by name
 
 **Migrations 008 and 009 confirmed run by the owner, 2026-08-10.** The feature is live end to end: open any existing Sent Request (`/requests/[id]`) and click "Get Response Link" to get a real, working `/r/[token]` URL. `issue_request_link` is owner-only and its raw token is never stored anywhere — only its salted hash — so a link can only ever come from that button, not from a query or migration.
 
-### Day 5 / stretch
+### Day 5 / stretch — **DONE, 2026-08-10**
 
-Time Zone is done (see above), so this is down to one small, already-open item: add the missing Due Date field to Create ToDo, flagged since it went live, so ToDos match the PRD's core-objects table instead of the mockup's current omission.
+Time Zone is done (see above), so this was down to one small, already-open item: add the missing Due Date field to Create ToDo, flagged since it went live, so ToDos match the PRD's core-objects table instead of the mockup's current omission. Added as a real, optional field — `requests.due_date` was already a plain nullable column, so no schema change or sentinel-value workaround was needed. Also added to ToDo Detail beyond the literal ask, so a Due Date set at creation isn't a dead end once saved. See the decisions log's 2026-08-10 entry for the full reasoning. **Week 3 is now fully closed.**
 
 ---
 

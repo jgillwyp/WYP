@@ -192,12 +192,20 @@ function foldIcsLine(line: string): string {
 // such standard text can be modified... that can just be a 'will be done'
 // item at this point" — flagged, not built; no admin surface or schema for
 // editable boilerplate strings exists yet anywhere in the app.
-function buildIcsDescription(ownerName: string, description: string, link: string): string {
-  return `A Would You Please Request from ${ownerName}: ${description} To mark it completed, click: ${link}`
+// Owner-reported, 2026-08-10: with no owner_name (a test-data gap that
+// "once the app is fully implemented could not happen" — see
+// profiles.display_name in CLAUDE.md's Known gaps), the old fallback of
+// 'Would You Please' produced "A Would You Please Request from Would You
+// Please". Omit the "from <name>" clause entirely instead when the name is
+// unknown, rather than papering over it with a value that reads as
+// nonsensical — matches the on-screen From: row's own '—' treatment in
+// spirit, without literally printing an em dash into a sentence.
+function buildIcsDescription(ownerName: string | null, description: string, link: string): string {
+  const from = ownerName ? `A Would You Please Request from ${ownerName}: ` : 'A Would You Please Request: '
+  return `${from}${description} To mark it completed, click: ${link}`
 }
 
 function buildIcsContent(payload: ResponsePayload, link: string): string {
-  const ownerName = payload.owner_name ?? 'Would You Please'
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
   const [hh, mm] = (payload.due_time ?? ICS_DEFAULT_DUE_TIME).split(':').map(Number)
   const start = new Date(y, m - 1, d, hh, mm)
@@ -214,7 +222,7 @@ function buildIcsContent(payload: ResponsePayload, link: string): string {
     `DTSTART:${formatIcsLocal(start)}`,
     `DTEND:${formatIcsLocal(end)}`,
     `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
-    `DESCRIPTION:${icsEscapeText(buildIcsDescription(ownerName, payload.description, link))}`,
+    `DESCRIPTION:${icsEscapeText(buildIcsDescription(payload.owner_name, payload.description, link))}`,
     `URL:${link}`,
     'END:VEVENT',
     'END:VCALENDAR',
@@ -344,7 +352,13 @@ export default function RequestResponseForm() {
   async function handleDialogModalSave() {
     const body = dialogModalBody.trim()
     if (body === '') {
-      setDialogModalError('Enter Dialog Text.')
+      // Owner-reported, 2026-08-10: after this error, the Dialog Text field
+      // showed its full-size placeholder with no focus rather than the
+      // usual floated-label/focused state — same underlying focus-
+      // management gap as the chip-switch fix above, just on a different
+      // trigger (Save-with-empty-body instead of a chip click).
+      setDialogModalError('Enter Dialog Text or Cancel.')
+      dialogTextRef.current?.focus()
       return
     }
 

@@ -163,7 +163,11 @@ export default function CreateRequestForm() {
   function handleDialogModalSave() {
     const body = dialogModalBody.trim()
     if (body === '') {
-      setDialogModalError('Enter Dialog Text.')
+      // Owner-reported, 2026-08-10: same focus-management gap as the
+      // chip-switch fix, on this different trigger (Save with an empty
+      // body rather than a chip click).
+      setDialogModalError('Enter Dialog Text or Cancel.')
+      dialogTextRef.current?.focus()
       return
     }
     setDialogEntries((entries) => [...entries, { kind: dialogModalKind, body }])

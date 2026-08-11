@@ -364,7 +364,7 @@ html,body{margin:0;height:100%;background:#fff;}
       <textarea class="ftextarea" id="dlgtext" maxlength="1000" placeholder=" " oninput="document.getElementById('dlg-error').style.display='none'"></textarea>
       <label class="flabel" for="dlgtext">Dialog Text</label>
     </div>
-    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text.</p>
+    <p class="ferror" id="dlg-error" style="display:none;margin-top:-8px;">Enter Dialog Text or Cancel.</p>
   </div>
 
 </div></div>
@@ -497,7 +497,11 @@ function pickQuestion(id){
 }
 function saveDialogEntry(){
   var text = document.getElementById('dlgtext').value.trim();
-  if (text === '') { document.getElementById('dlg-error').style.display = 'block'; return; }
+  if (text === '') {
+    document.getElementById('dlg-error').style.display = 'block';
+    document.getElementById('dlgtext').focus();
+    return;
+  }
   var entry = { id: nextDialogId++, kind: dlgKind, date: '10-05-26', who: 'Jason Smith', body: text };
   if (dlgKind === 'answer') entry.repliesTo = dlgSelectedQuestionId;
   dialogEntries.push(entry);
