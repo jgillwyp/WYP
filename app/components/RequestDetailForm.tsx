@@ -695,41 +695,58 @@ export default function RequestDetailForm() {
 
             {/* Dialog — existing thread, read live from the database. Add
                 Dialog writes immediately (not staged for Send) since this
-                Request already exists. */}
+                Request already exists. Simplified empty-state row (§6.32,
+                2026-08-11): with no entries, a single .frow — .actlabel +
+                Add Dialog — replaces the old always-shown .panel with its
+                "No Dialog entries yet." placeholder text. */}
             <div className="fgroup">
-              <div className="fieldact">
-                <button className="btn" type="button" onClick={openDialogModal}>
-                  Add Dialog
-                </button>
-              </div>
-              <div className="panel">
-                <div className="panelhead">Dialog (Questions, Answers, Comments)</div>
-                {sortedDialog.length === 0 && (
-                  <div className="dlg" style={{ color: 'var(--ink-soft)' }}>No Dialog entries yet.</div>
-                )}
-                {sortedDialog.map((e) => {
-                  const kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment'
-                  const q = e.kind === 'answer' && e.replies_to_id != null ? questionById(e.replies_to_id) : null
-                  return (
-                    <div className="dlg" key={e.id}>
-                      <span className="dlgdate">{formatMDY(e.created_at)}</span>{' '}
-                      <span className="dlgkind">{kindLabel}</span> <span className="dlgwho">({e.who})</span>
-                      {e.kind === 'answer' ? (
-                        <>
-                          {q && <span className="dlgre">Re: {truncate(q.body)}</span>}
-                          <span className="dlgbody">{e.body}</span>
-                        </>
-                      ) : (
-                        <> {e.body}</>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+              {sortedDialog.length === 0 ? (
+                <div className="frow">
+                  <span className="actlabel">Questions, Answers, Comments</span>
+                  <button className="btn" type="button" onClick={openDialogModal}>
+                    Add Dialog
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="fieldact">
+                    <button className="btn" type="button" onClick={openDialogModal}>
+                      Add Dialog
+                    </button>
+                  </div>
+                  <div className="panel">
+                    <div className="panelhead">Dialog (Questions, Answers, Comments)</div>
+                    {sortedDialog.map((e) => {
+                      const kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment'
+                      const q = e.kind === 'answer' && e.replies_to_id != null ? questionById(e.replies_to_id) : null
+                      return (
+                        <div className="dlg" key={e.id}>
+                          <span className="dlgdate">{formatMDY(e.created_at)}</span>{' '}
+                          <span className="dlgkind">{kindLabel}</span> <span className="dlgwho">({e.who})</span>
+                          {e.kind === 'answer' ? (
+                            <>
+                              {q && <span className="dlgre">Re: {truncate(q.body)}</span>}
+                              <span className="dlgbody">{e.body}</span>
+                            </>
+                          ) : (
+                            <> {e.body}</>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
+            {/* Attachments — v1 locked "paid feature" state. Simplified
+                empty-state row (§6.32, 2026-08-11), replacing the old
+                always-shown .fieldact+.attachpanel: attachment storage
+                doesn't exist anywhere in the app yet, so there's no
+                populated state to revert to. */}
             <div className="fgroup">
-              <div className="fieldact">
+              <div className="frow">
+                <span className="actlabel locked">Subscription feature</span>
                 <button className="btn is-locked" type="button" aria-disabled="true">
                   <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
@@ -737,19 +754,6 @@ export default function RequestDetailForm() {
                   </svg>
                   Add Attachment
                 </button>
-              </div>
-              <div className="attachpanel">
-                <span className="plabel">Attachments</span>
-                <div className="locked">
-                  <svg className="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
-                    <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                  <span className="lockttl">A subscription feature</span>
-                  <span className="locknote">
-                    Attach files to your Requests with a subscription &mdash; see the banner below.
-                  </span>
-                </div>
               </div>
             </div>
 

@@ -623,41 +623,57 @@ export default function CreateRequestForm() {
                 comment) instead of the old always-visible inline textarea.
                 Entries are held as client-side draft state and written to
                 the `dialog` table together with the Request on Send (see
-                migration 004). Stacked action row (§6.26): button sits alone
-                above the staged-entries list. */}
+                migration 004). Simplified empty-state row (§6.32,
+                2026-08-11): with nothing staged yet, a single .frow —
+                .actlabel + Add Dialog — replaces the old bare-button
+                .fieldact. Once an entry is staged, reverts to the stacked
+                action row (§6.26): button alone above the list. */}
             <div className="fgroup">
-              <div className="fieldact">
-                <button className="btn" type="button" onClick={openDialogModal}>
-                  Add Dialog
-                </button>
-              </div>
-              {dialogEntries.length > 0 && (
-                <div className="dlgstaged">
-                  {dialogEntries.map((entry, i) => (
-                    <div className="attitem" key={i}>
-                      <span className="attname">
-                        <b>{entry.kind === 'question' ? 'Question' : 'Comment'}:</b> {entry.body}
-                      </span>
-                      <button
-                        className="attremove"
-                        type="button"
-                        aria-label="Remove this Dialog entry"
-                        onClick={() => removeDialogEntry(i)}
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  ))}
+              {dialogEntries.length === 0 ? (
+                <div className="frow">
+                  <span className="actlabel">Questions, Answers, Comments</span>
+                  <button className="btn" type="button" onClick={openDialogModal}>
+                    Add Dialog
+                  </button>
                 </div>
+              ) : (
+                <>
+                  <div className="fieldact">
+                    <button className="btn" type="button" onClick={openDialogModal}>
+                      Add Dialog
+                    </button>
+                  </div>
+                  <div className="dlgstaged">
+                    {dialogEntries.map((entry, i) => (
+                      <div className="attitem" key={i}>
+                        <span className="attname">
+                          <b>{entry.kind === 'question' ? 'Question' : 'Comment'}:</b> {entry.body}
+                        </span>
+                        <button
+                          className="attremove"
+                          type="button"
+                          aria-label="Remove this Dialog entry"
+                          onClick={() => removeDialogEntry(i)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
-            {/* Attachments panel — v1 locked "paid feature" state, static
-                markup only, matching AddContactForm's Text-chip treatment.
-                Stacked action row (§6.26, 2026-08-07): Add Attachment above,
-                full-width panel below — was .attachrow. */}
+            {/* Attachments — v1 locked "paid feature" state. Simplified
+                empty-state row (§6.32, 2026-08-11), replacing the old
+                always-shown .fieldact+.attachpanel: attachment storage
+                doesn't exist anywhere in the app yet, so there's no code
+                path to a populated state to revert to — unlike Dialog,
+                this stays the compact row unconditionally until that's
+                built. */}
             <div className="fgroup">
-              <div className="fieldact">
+              <div className="frow">
+                <span className="actlabel locked">Subscription feature</span>
                 <button className="btn is-locked" type="button" aria-disabled="true">
                   <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
@@ -665,19 +681,6 @@ export default function CreateRequestForm() {
                   </svg>
                   Add Attachment
                 </button>
-              </div>
-              <div className="attachpanel">
-                <span className="plabel">Attachments</span>
-                <div className="locked">
-                  <svg className="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
-                    <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                  <span className="lockttl">A subscription feature</span>
-                  <span className="locknote">
-                    Attach files to your Requests with a subscription &mdash; see the banner below.
-                  </span>
-                </div>
               </div>
             </div>
 

@@ -16,21 +16,32 @@ import { supabase } from '@/lib/supabaseClient'
  * Scope for this pass, confirmed with the owner via two rounds of questions:
  * - Sent and ToDos are LIVE — real `requests` rows, default sort pills
  *   working (Due ▼ descending for Sent, Priority ▼ ascending for ToDos).
- * - Received stays a placeholder. No schema/RLS path exists yet for a
- *   signed-in recipient to see a Request someone else sent them — `requests`
- *   RLS is owner-only (migration 003) and there is no column linking a row to
- *   its recipient's own account. Flagged, not solved, here.
- * - Search bar and the All/Open/Overdue/Done (Sent) / All/Open/Done (ToDos)
- *   filter chips are now functional (2026-08-09) — client-side, over the
- *   already-fetched Sent/ToDos rows: no re-query per keystroke or chip
- *   click, since both lists are personal-scale (same reasoning as the
- *   Recipient/Category lookups elsewhere in the app). Search matches
- *   description, contact name (Sent), and category name, case-insensitive
- *   substring. The scope button ("All ▼") stays visual-only — it has never
- *   had a designed picker (see CLAUDE.md) and search already runs across
- *   both sections at once, so there's nothing yet for a scope to narrow.
- *   Received's chips stay decorative — that subcard has no live rows to
- *   filter.
+ * - **Received is now LIVE too (migration 012, 2026-08-11)** — superseding
+ *   the placeholder note that used to be here. There's still no column
+ *   linking a `requests` row to its recipient's own account, so this isn't a
+ *   plain owner-scoped RLS select the way Sent/ToDos are; instead,
+ *   `get_received_requests()` matches the signed-in caller's own session
+ *   email against the sending Contact's email, server-side, and returns only
+ *   the columns a recipient is entitled to see (no Category — PRD §2.3,
+ *   enforced inside the function itself). Design proposed and confirmed with
+ *   the owner 2026-08-11 — see decisions log and `WYP_Week4_Plan.md` for the
+ *   full reasoning, including why this needed functions rather than an RLS
+ *   policy. Self-sent Requests (a Contact whose email is the sender's own)
+ *   are deliberately NOT excluded — owner: "I can imagine circumstances
+ *   where a person might choose to send themselves requests instead of using
+ *   ToDos." Received rows route to `/requests/[id]/respond` (Response
+ *   Detail), not `/requests/[id]` (Request Detail) — that's the sender's own
+ *   edit screen.
+ * - Search bar and the All/Open/Overdue/Done (Sent, Received) / All/Open/Done
+ *   (ToDos) filter chips are all functional (2026-08-09, extended to Received
+ *   2026-08-11) — client-side, over the already-fetched rows: no re-query per
+ *   keystroke or chip click, since these lists are personal-scale (same
+ *   reasoning as the Recipient/Category lookups elsewhere in the app).
+ *   Search matches description plus contact name (Sent) / owner name
+ *   (Received) / category name (ToDos), case-insensitive substring. The
+ *   scope button ("All ▼") stays visual-only — it has never had a designed
+ *   picker (see CLAUDE.md) and search already runs across all three sections
+ *   at once, so there's nothing yet for a scope to narrow.
  * - Chip state survives a trip to a Detail screen and back (2026-08-09 —
  *   "It would be appropriate to return to the same chip state on the main
  *   screen"). This screen fully remounts on router.back() (no Cache
@@ -39,10 +50,11 @@ import { supabase } from '@/lib/supabaseClient'
  *   localStorage: a within-session view preference, not a durable account
  *   setting like "Keep me signed in" (supabaseClient.ts's REMEMBER_KEY) — it's
  *   fine for it to reset when the tab actually closes. Scoped to the chips
- *   themselves (Sent filter, ToDos filter, Housekeeping's Tasks/How-to Videos
- *   tab), matching the owner's own wording — the search text box is a
- *   separate control and is NOT persisted (flagged as a scoping call, not
- *   confirmed with the owner; easy to add if it turns out to matter).
+ *   themselves (Sent filter, Received filter, ToDos filter, Housekeeping's
+ *   Tasks/How-to Videos tab), matching the owner's own wording — the search
+ *   text box is a separate control and is NOT persisted (flagged as a scoping
+ *   call, not confirmed with the owner; easy to add if it turns out to
+ *   matter).
  * - Housekeeping's "Contacts" row (renamed from "My Contacts" 2026-08-09 —
  *   a nav row's label must repeat the destination screen's own title
  *   exactly, owner's rule) navigates to /contacts. "Account" (renamed from
@@ -78,6 +90,23 @@ type TodoRow = {
   dialog: { count: number }[] | null
 }
 
+// Shape returned by the get_received_requests() RPC (migration 012) —
+// deliberately close to SentRow so the row-rendering JSX below barely
+// diverges: owner_name stands in for contacts.display_name (this is the
+// sender, not a contact of the signed-in user's own), dialog_count stands
+// in for the dialog(count) embed a plain PostgREST select gets for free
+// (an RPC has to compute it server-side instead). No category anywhere —
+// PRD §2.3, enforced inside the function itself, not just left off here.
+type ReceivedRow = {
+  id: string
+  description: string
+  due_date: string | null
+  done_date: string | null
+  created_at: string
+  owner_name: string | null
+  dialog_count: number
+}
+
 const PRIORITY_LABEL: Record<number, string> = { 1: 'ASAP', 2: 'SOON', 3: 'LATER' }
 
 function todayIso(): string {
@@ -94,10 +123,21 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
-function sentStatus(r: SentRow): 'open' | 'overdue' | 'done' {
-  if (r.done_date) return 'done'
-  if (r.due_date && r.due_date < todayIso()) return 'overdue'
+// Shared by Sent and Received — both are Requests with the same Open/
+// Overdue/Done lifecycle over due_date/done_date. ToDos don't use this
+// (no "overdue" state for a ToDo per the PRD's status-values list).
+function statusFor(due_date: string | null, done_date: string | null): 'open' | 'overdue' | 'done' {
+  if (done_date) return 'done'
+  if (due_date && due_date < todayIso()) return 'overdue'
   return 'open'
+}
+
+function sentStatus(r: SentRow): 'open' | 'overdue' | 'done' {
+  return statusFor(r.due_date, r.done_date)
+}
+
+function receivedStatus(r: ReceivedRow): 'open' | 'overdue' | 'done' {
+  return statusFor(r.due_date, r.done_date)
 }
 
 function dialogCount(dialog: { count: number }[] | null): number {
@@ -117,6 +157,7 @@ function dialogCount(dialog: { count: number }[] | null): number {
 // text box is a separate control and stays session-only/unpersisted unless
 // asked.
 const SENT_FILTER_KEY = 'wyp.mainSentFilter'
+const RECEIVED_FILTER_KEY = 'wyp.mainReceivedFilter'
 const TODO_FILTER_KEY = 'wyp.mainTodoFilter'
 const HK_TAB_KEY = 'wyp.mainHkTab'
 
@@ -193,6 +234,7 @@ export default function MainScreen() {
   const router = useRouter()
 
   const [sent, setSent] = useState<SentRow[]>([])
+  const [received, setReceived] = useState<ReceivedRow[]>([])
   const [todos, setTodos] = useState<TodoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -204,6 +246,9 @@ export default function MainScreen() {
   const [sentFilter, setSentFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
     readStoredChip(SENT_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'all')
   )
+  const [receivedFilter, setReceivedFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
+    readStoredChip(RECEIVED_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'all')
+  )
   const [todoFilter, setTodoFilter] = useState<'all' | 'open' | 'done'>(() =>
     readStoredChip(TODO_FILTER_KEY, ['all', 'open', 'done'] as const, 'open')
   )
@@ -212,6 +257,10 @@ export default function MainScreen() {
   useEffect(() => {
     window.sessionStorage.setItem(SENT_FILTER_KEY, sentFilter)
   }, [sentFilter])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(RECEIVED_FILTER_KEY, receivedFilter)
+  }, [receivedFilter])
 
   useEffect(() => {
     window.sessionStorage.setItem(TODO_FILTER_KEY, todoFilter)
@@ -228,12 +277,19 @@ export default function MainScreen() {
       setLoading(true)
       setLoadError(null)
 
-      const [sentRes, todoRes] = await Promise.all([
+      const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
           .select('id, description, due_date, done_date, created_at, contacts(display_name), dialog(count)')
           .not('contact_id', 'is', null)
           .order('due_date', { ascending: false, nullsFirst: false }),
+        // get_received_requests() (migration 012) — a plain owner-scoped RLS
+        // select can't do this: there's no column linking a requests row to
+        // its recipient's own account, only to the sender's Contact record
+        // for them. The function matches on that Contact's email against
+        // the signed-in caller's own session email instead. Already sorted
+        // server-side (due_date desc nulls last), matching Sent's own order.
+        supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
           .select('id, description, priority, done_date, categories(name), dialog(count)')
@@ -243,10 +299,13 @@ export default function MainScreen() {
 
       if (cancelled) return
 
-      if (sentRes.error || todoRes.error) {
-        setLoadError((sentRes.error ?? todoRes.error)?.message ?? 'Could not load requests.')
+      if (sentRes.error || receivedRes.error || todoRes.error) {
+        setLoadError(
+          (sentRes.error ?? receivedRes.error ?? todoRes.error)?.message ?? 'Could not load requests.'
+        )
       } else {
         setSent((sentRes.data as unknown as SentRow[]) ?? [])
+        setReceived((receivedRes.data as unknown as ReceivedRow[]) ?? [])
         setTodos((todoRes.data as unknown as TodoRow[]) ?? [])
       }
       setLoading(false)
@@ -276,6 +335,17 @@ export default function MainScreen() {
       )
     })
   }, [sent, sentFilter, query])
+
+  const filteredReceived = useMemo(() => {
+    return received.filter((r) => {
+      if (receivedFilter !== 'all' && receivedStatus(r) !== receivedFilter) return false
+      if (query === '') return true
+      return (
+        r.description.toLowerCase().includes(query) ||
+        (r.owner_name ?? '').toLowerCase().includes(query)
+      )
+    })
+  }, [received, receivedFilter, query])
 
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
@@ -365,7 +435,12 @@ export default function MainScreen() {
             </div>
           </div>
 
-          {/* Received — deferred, see file header comment */}
+          {/* Received — live (migration 012, 2026-08-11). Matched on the
+              signed-in user's own session email against the sending Contact's
+              email, server-side, inside get_received_requests() — there's no
+              column linking a requests row to its recipient's own account,
+              only to the sender's Contact record for them, so this can't be
+              a plain owner-scoped RLS select the way Sent/ToDos are. */}
           <div className="subcard">
             <div className="subhead">
               <div className="subhead-top">
@@ -376,10 +451,10 @@ export default function MainScreen() {
                 </span>
               </div>
               <div className="chips">
-                <span className="chip sel">All</span>
-                <span className="chip">Open</span>
-                <span className="chip over">Overdue</span>
-                <span className="chip done">Done</span>
+                <button className={`chip${receivedFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('all')}>All</button>
+                <button className={`chip${receivedFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('open')}>Open</button>
+                <button className={`chip over${receivedFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('overdue')}>Overdue</button>
+                <button className={`chip done${receivedFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('done')}>Done</button>
               </div>
             </div>
             <div className="subbody">
@@ -389,8 +464,42 @@ export default function MainScreen() {
                 <span className="c-due"><span className="pill">Due&nbsp;▼</span></span>
                 <span className="c-dn">Done</span>
               </div>
-              <div className="subempty">
-                Receiving Requests from other Would You Please users isn&rsquo;t built yet.
+              <div className="rows">
+                {loading && <div className="subempty">Loading…</div>}
+                {!loading && loadError && <div className="subempty">{loadError}</div>}
+                {!loading && !loadError && received.length === 0 && (
+                  <div className="subempty">No Received Requests yet.</div>
+                )}
+                {!loading && !loadError && received.length > 0 && filteredReceived.length === 0 && (
+                  <div className="subempty">No Received Requests match this filter.</div>
+                )}
+                {!loading && !loadError && filteredReceived.map((r) => {
+                  const status = receivedStatus(r)
+                  const late = status === 'done' && !!r.due_date && !!r.done_date && r.done_date > r.due_date
+                  return (
+                    <div
+                      key={r.id}
+                      className={`row${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(`/requests/${r.id}/respond`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/requests/${r.id}/respond`) }}
+                    >
+                      <div className="r1">
+                        <span className="nm">{r.owner_name ?? '—'}</span>
+                        <span className="dt">{formatMDY(r.created_at)}</span>
+                        <span className="due">{formatMDY(r.due_date)}</span>
+                        <span className={`dn${late ? ' late' : ''}`}>{formatMDY(r.done_date)}</span>
+                      </div>
+                      <div className="r2">
+                        {r.dialog_count > 0 && (
+                          <span className="ii"><DialogIcon /></span>
+                        )}
+                        <span className="desc">{r.description}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>

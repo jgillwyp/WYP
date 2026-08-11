@@ -1,0 +1,291 @@
+-- ============================================================================
+-- WYP migration 012 — Received Requests: signed-in-recipient read/write path
+-- CONFIRMED RUN by the owner 2026-08-11.
+--
+-- Design confirmed 2026-08-11 (see decisions log). No new columns: the match
+-- key is contacts.email (already required, not null) against the signed-in
+-- caller's own auth email (auth.jwt() ->> 'email'), lower/trim-normalized.
+-- A recipient_user_id column resolved at send time was considered and
+-- rejected — a recipient almost never has an account yet when a Request is
+-- sent (magic-link auth creates the account on first sign-in), so the column
+-- would sit null for nearly every real case, and it reopens the exact
+-- snapshot-vs-live argument the Entitlements section of CLAUDE.md already
+-- settled once for `tier`.
+--
+-- Four SECURITY DEFINER functions, parallel to the existing /r/[token] set
+-- (migrations 008/009/010) but keyed by session identity instead of a
+-- token. Functions, not RLS policies: RLS is row-level, not column-level — a
+-- permissive SELECT/UPDATE policy on requests scoped by a contact-email
+-- subquery would let a signed-in recipient read or write columns that must
+-- stay sender-only (Category, PRD §2.3) — the same class of bug migration
+-- 009 already fixed once on the token path. A function allow-lists exactly
+-- what a recipient is entitled to touch, same reasoning CLAUDE.md's Database
+-- section already gives for the anonymous link case, extended here.
+--
+-- Self-sent Requests are NOT excluded. Owner: "I can imagine circumstances
+-- where a person might choose to send themselves requests instead of using
+-- ToDos." No owner_id <> auth.uid() filter anywhere below.
+--
+-- Every function grants execute to `authenticated` only, never `anon` — this
+-- whole path requires a real signed-in session, unlike the token path.
+-- ============================================================================
+
+begin;
+
+-- ----------------------------------------------------------------------------
+-- get_received_requests — list shape for Main Screen's Received subcard.
+-- Shape matches SentRow in MainScreen.tsx (id, description, due_date,
+-- done_date, created_at, owner_name in place of contacts.display_name,
+-- dialog_count in place of the dialog(count) embed Sent's plain PostgREST
+-- select already gets for free) so the existing row-rendering JSX needs
+-- minimal adaptation. No category_id/category_name in the payload — PRD
+-- §2.3, same rule as get_request_by_token (migration 009's correction).
+-- ----------------------------------------------------------------------------
+create or replace function public.get_received_requests()
+returns table (
+  id uuid,
+  description text,
+  due_date date,
+  done_date date,
+  created_at timestamptz,
+  owner_name text,
+  dialog_count bigint
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' then
+    return; -- no email claim on the session; nothing to match
+  end if;
+
+  return query
+    select
+      r.id, r.description, r.due_date, r.done_date, r.created_at,
+      p.display_name as owner_name,
+      (select count(*) from public.dialog d where d.request_id = r.id) as dialog_count
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where lower(trim(c.email)) = v_email
+    order by r.due_date desc nulls last;
+end;
+$$;
+
+revoke all on function public.get_received_requests() from public;
+grant execute on function public.get_received_requests() to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_received_request — single-row detail shape for the live Response
+-- Detail screen (/requests/[id]/respond). Verifies the caller's own email
+-- matches the linked Contact's email before returning anything — the same
+-- generic-failure shape as get_request_by_token, so a signed-in user can't
+-- fish for other people's Requests by guessing ids. No link_token_hash/
+-- link_expires_at/link_revoked_at in the payload — those are the sender's
+-- own link-management fields, irrelevant and none of the recipient's
+-- business here. No category_id/category_name — same PRD §2.3 rule.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         p.display_name as owner_name, p.tier as owner_tier, c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_as_recipient — the signed-in recipient's Send action,
+-- same shape/restrictions as set_response_done_by_token: Done Date/Time
+-- only, nothing else on the Request is recipient-editable. Both parameters
+-- nullable, same as everywhere else Done Date/Time are optional.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_as_recipient(
+  p_request_id uuid,
+  p_done_date date,
+  p_done_time time
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date, done_time = p_done_time
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'response_done_updated',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'via', 'recipient_session')
+    );
+end;
+$$;
+
+revoke all on function public.set_response_done_as_recipient(uuid, date, time) from public;
+grant execute on function public.set_response_done_as_recipient(uuid, date, time) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- add_dialog_as_recipient — the signed-in recipient's Add Dialog Save. Unlike
+-- add_dialog_by_token (where `who` has to come from the Request's own
+-- Contact record, since there's no real account behind an anonymous visit),
+-- this caller IS a real signed-in user — `who` is their own profile
+-- display_name, falling back to their session email, matching the same
+-- fallback chain CreateRequestForm.tsx/CreateTodoForm.tsx already use
+-- client-side for the owner's own Dialog entries. author_user_id is set
+-- (auth.uid()), unlike the token path.
+-- ----------------------------------------------------------------------------
+create or replace function public.add_dialog_as_recipient(
+  p_request_id uuid,
+  p_kind text,
+  p_body text,
+  p_replies_to_id bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+  v_who text;
+  v_new_id bigint;
+  v_created_at timestamptz;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  if p_kind not in ('question', 'answer', 'comment') then
+    raise exception 'Invalid Dialog entry type.';
+  end if;
+
+  if trim(coalesce(p_body, '')) = '' then
+    raise exception 'Enter Dialog Text.';
+  end if;
+
+  select coalesce(p.display_name, v_email) into v_who
+    from public.profiles p where p.id = auth.uid();
+  v_who := coalesce(v_who, v_email, 'Recipient'); -- defensive only
+
+  insert into public.dialog (request_id, kind, body, who, author_user_id, replies_to_id)
+    values (
+      v_request_id, p_kind, p_body, v_who, auth.uid(),
+      case when p_kind = 'answer' then p_replies_to_id else null end
+    )
+    returning id, created_at into v_new_id, v_created_at;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('dialog', v_new_id, v_request_id, 'created_by_recipient', jsonb_build_object('kind', p_kind, 'via', 'recipient_session'));
+
+  return jsonb_build_object('id', v_new_id, 'created_at', v_created_at, 'who', v_who);
+end;
+$$;
+
+revoke all on function public.add_dialog_as_recipient(uuid, text, text, bigint) from public;
+grant execute on function public.add_dialog_as_recipient(uuid, text, text, bigint) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here — same caution as every earlier migration:
+-- this connection is superuser and auth.jwt()/auth.uid() are null, so a
+-- check here "succeeds" without proving anything.
+--
+--   await supabase.rpc('get_received_requests')
+--        -> signed in as the recipient's own email: rows for every Request
+--           whose Contact (in ANY sender's contacts) has a matching email,
+--           and NO category key anywhere in the row shape
+--        -> signed in as an unrelated user: empty array
+--   await supabase.rpc('get_received_request', { p_request_id: <id> })
+--        -> succeeds only for the matching recipient; any other signed-in
+--           user gets 'Request not found.', same generic error whether the
+--           id is wrong or just not theirs
+--   await supabase.rpc('set_response_done_as_recipient',
+--        { p_request_id: <id>, p_done_date: '2026-08-20', p_done_time: null })
+--        -> succeeds only for the matching recipient; re-fetch shows the new
+--           done_date, and it also now shows correctly on the SENDER's own
+--           Request Detail (same row, same columns)
+--   await supabase.rpc('add_dialog_as_recipient',
+--        { p_request_id: <id>, p_kind: 'comment', p_body: 'test',
+--          p_replies_to_id: null })
+--        -> succeeds; returned `who` is the recipient's own display_name (or
+--           email if display_name is null), not the sender's Contact record
+--   Self-sent case: a Request whose Contact email matches the sender's own
+--   session email should appear in that same session's get_received_requests
+--   -> confirms the owner's "I would not exclude it" decision actually holds
+-- ============================================================================

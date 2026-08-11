@@ -24,7 +24,7 @@ npm run lint
 | Path | Holds | Rule |
 |---|---|---|
 | `app/` | Routes and components | **Only** things Next renders. Nothing else. |
-| `app/src/lib/` | Client modules (`supabaseClient.ts`) | Conventional spot is root `src/lib`; moving it is deferred, not endorsed |
+| `app/src/lib/` | Client modules (`supabaseClient.ts`, `timeZones.ts`, `ics.ts`) | Conventional spot is root `src/lib`; moving it is deferred, not endorsed |
 | `design/` | Mockups, screen map, UI spec | Not served, not typechecked. See `design/README.md` |
 | `docs/` | SQL history, design notes, project notes | Excluded from tsconfig |
 | `public/` | Publicly served assets | **Never** put mockups or internal docs here — everything is reachable from the live URL |
@@ -287,14 +287,13 @@ link is built only after the stack is proven on Add Contact.
   Detail screens, so the "visual-only" and "inert placeholder" notes that
   used to be here no longer apply to those pieces.
 - **Seed script for the Main Screen's demo data** — `docs/Week2 - SQL
-  history.txt`, appended 2026-08-08, not yet run. Not a numbered migration
-  (nothing in it alters a table); inserts Contacts, Sent Requests, and ToDos
-  under `jimgillon@gmail.com` specifically (looked up by email inside the
-  script, never a hardcoded uuid), with CURRENT_DATE-relative due dates so the
-  Open/Overdue/Done mix stays believable whenever it's actually run. Every
-  insert is existence-checked first, so re-running the whole block is safe.
-  Run it once, in the Supabase SQL editor, to see the live Sent/ToDos sections
-  populated.
+  history.txt`, appended 2026-08-08, confirmed run by the owner 2026-08-11.
+  Not a numbered migration (nothing in it alters a table); inserts Contacts,
+  Sent Requests, and ToDos under `jimgillon@gmail.com` specifically (looked
+  up by email inside the script, never a hardcoded uuid), with
+  CURRENT_DATE-relative due dates so the Open/Overdue/Done mix stays
+  believable. Every insert is existence-checked first, so re-running the
+  whole block is safe.
 - **Create ToDo is now Live** (`app/components/CreateTodoForm.tsx`,
   `/todos/new`, 2026-08-09) — Main Screen's Create ToDo button now goes
   somewhere. Same Category lookup / Add Category / Add Dialog modal pattern
@@ -335,9 +334,9 @@ link is built only after the stack is proven on Add Contact.
   a row opens Contact Detail, which is Create Contact's fields (Name/Email/
   Phone/Notes/Time Zone) with Save + Close instead of Save + Cancel. Add
   Contact from My Contacts routes through the existing `/contacts/new`.
-- **Time Zone gap closed (2026-08-09, migration 007 — DRAFTED, not yet run;
-  see `docs/Week3 - SQL history.txt`).** `profiles.time_zone` and
-  `contacts.time_zone` are real columns now (once the migration is run), and
+- **Time Zone gap closed (2026-08-09, migration 007 — confirmed run by the
+  owner 2026-08-11; see `docs/Week3 - SQL history.txt`).** `profiles.time_zone`
+  and `contacts.time_zone` are real columns now, and
   the Time Zone field on Add Contact and Contact Detail is a working required
   §6.16 lookup (`app/src/lib/timeZones.ts`, every IANA zone name via
   `Intl.supportedValuesOf('timeZone')`), not a decorative mockup field. It
@@ -509,8 +508,8 @@ link is built only after the stack is proven on Add Contact.
   2026-08-07 scoping decision** ("it only needs to be presented if there is
   more than one question"); now shows for any open Question. See the
   decisions log's two 2026-08-10 entries for full reasoning.
-- **Migration 011 — adds `owner_tier` to `get_request_by_token`, DRAFTED,
-  not yet run** (`docs/Week3 - SQL history.txt`, 2026-08-10). Lets Request
+- **Migration 011 — adds `owner_tier` to `get_request_by_token`, confirmed
+  run by the owner 2026-08-11** (`docs/Week3 - SQL history.txt`, 2026-08-10). Lets Request
   Response gate its Attachments segment by the issuer's tier rather than
   always showing it. Not a privacy concern the way `category_name` was
   (migration 009) — tier is exactly what this screen's own free/subscriber
@@ -600,3 +599,61 @@ link is built only after the stack is proven on Add Contact.
   Request Response's own mockup still hasn't gotten the feature (flagged
   above) — Create ToDo's Due Date/Done Date fields already exist as visible
   targets for the demo to fill.
+- **Received Requests is now live (2026-08-11, migration 012, confirmed run
+  by the owner 2026-08-11)** —
+  the deferred piece flagged repeatedly since Main Screen went live. No new
+  columns: `contacts.email` (already required) is the match key against the
+  signed-in caller's own session email (`auth.jwt() ->> 'email'`). A
+  `recipient_user_id` column resolved at send time was considered and
+  rejected — a recipient almost never has an account yet when a Request is
+  sent, so it would sit null for nearly every real case, reopening the
+  snapshot-vs-live argument this file's own Entitlements section already
+  settled once for `tier`. Four new `SECURITY DEFINER` functions, parallel to
+  the `/r/[token]` set (migrations 008/009/010) but keyed by session identity:
+  `get_received_requests()` (Main Screen's list), `get_received_request`,
+  `set_response_done_as_recipient`, `add_dialog_as_recipient` — functions
+  rather than RLS policies, since RLS can't hide Category (PRD §2.3) from an
+  otherwise-visible row, the same reasoning this section already gives above
+  for the anonymous link case. Self-sent Requests are NOT excluded — owner:
+  "I would not exclude it... I can imagine circumstances where a person might
+  choose to send themselves requests instead of using ToDos." `MainScreen.tsx`
+  fetches and renders real Received rows (replacing the old placeholder),
+  routing to the new `/requests/[id]/respond` (`ResponseDetailForm.tsx`, new,
+  wrapped in `RequireAuth`) rather than `/requests/[id]`. The `.ics` builder
+  moved to `app/src/lib/ics.ts` so this new screen could reuse
+  `RequestResponseForm.tsx`'s existing logic verbatim rather than duplicate
+  it. See decisions log and `docs/WYP_Week4_Plan.md` for full reasoning.
+- **Main Screen column-header sorting — not yet built.** Owner, clarifying
+  scope: "Main screen sorting was referring to the various column headings
+  and the ascending and descending sort options with the yellow background
+  for the selected column title." Today only Due (Sent/Received) and
+  Priority (ToDos) render as the `.pill` (`--sort` yellow token) indicating
+  the current sort column, and it's a static default (Due descending /
+  Priority ascending), not a clickable, direction-toggling control — every
+  other `.colbar` header (To/From, Date, Done; Category — Description) is
+  plain text. Priority 2 in `docs/WYP_Week4_Plan.md`, after Received.
+- **Simplified empty-state Dialog/Attachments row (§6.32, 2026-08-11).**
+  Owner, with a pasted-in reference mockup: Create Request, Request Detail,
+  Request Response, Response Detail, Create ToDo, and ToDo Detail each showed
+  a different empty-state treatment for Dialog and Attachments, and the
+  descriptive text next to Add Dialog/Add Attachment was only needed while
+  there were no entries yet. New CSS component `.actlabel`/`.actlabel.locked`
+  in `app/globals.css`: a single `.frow` pairing a label with the Add button
+  at zero entries — `.actlabel` (bordered box, "Questions, Answers,
+  Comments") for Dialog, `.actlabel.locked` (plain muted text, "Subscription
+  feature") for Attachments — replacing whatever heavier empty-state markup
+  each screen used before (staged-entry screens' bare button, or
+  existing-thread screens' always-rendered `.panel`+`.panelhead` with a "No
+  Dialog entries yet." placeholder). Reverts to each screen's existing
+  populated-state markup once entries exist; Attachments has no populated
+  state anywhere in the app yet, so it stays the compact row unconditionally
+  (Request Response/Response Detail's `owner_tier === 'subscriber'` gate is
+  unchanged around it). Applied to `CreateRequestForm.tsx`,
+  `RequestDetailForm.tsx`, `RequestResponseForm.tsx`, `ResponseDetailForm.tsx`,
+  `CreateTodoForm.tsx`, `TodoDetailForm.tsx`, and all six mockups — Create
+  Request/Create ToDo's mockups got a real functional empty/populated JS
+  toggle (their Dialog demos actually go from empty to populated); the other
+  four mockups' Dialog threads are permanently seeded with demo data, so
+  their empty state is documented in a comment rather than built as
+  unreachable toggle JS. See `design/README.md` §6.32 and the decisions log's
+  2026-08-11 entry.

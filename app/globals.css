@@ -570,6 +570,54 @@ body {
 }
 
 /* ============================================================================
+   SIMPLIFIED EMPTY-STATE ACTION ROW (§6.32, PROPOSED, 2026-08-11) — Dialog
+   and Attachments, when there is nothing yet to show.
+   Owner: five screens (Create Request, Request Detail, Request Response,
+   Create ToDo, ToDo Detail — Response Detail added the same day for
+   consistency) had grown inconsistent about how an empty Dialog/Attachments
+   section presents itself — Create Request/Create ToDo showed a bare button
+   with no panel at all, while Request Detail/Request Response/ToDo Detail
+   always rendered the full .panelfull/.panel, heading included ("Dialog
+   (Questions, Answers, Comments)"), even with zero entries. Pasted-in
+   reference: a single .frow — Dialog gets a bordered box reading "Questions,
+   Answers, Comments" (echoes the Recipient/Category field boxes it sits
+   among, since Dialog is a normal, available feature), Attachments gets
+   plain muted text reading "Subscription feature" with no box at all (it's
+   unavailable, so it stays in the .is-locked visual language instead of
+   looking like an active field) — both paired with their Add button on the
+   same line, reusing the existing §6.16 .frow layout rather than a new one.
+   "The suggested text... would not be needed when there are entries" — once
+   dialogEntries/sortedDialog holds anything, the row reverts to whichever
+   populated-state markup that screen already had (.fieldact+.dlgstaged or
+   .panelact+.panelfull+.panelhead); Attachments has no code path to a
+   populated state yet (no attachment storage anywhere in the app), so it
+   stays this compact row unconditionally until that's built. This is NOT a
+   revival of the superseded §6.10 read-only-boxed-field variant (a fake
+   input standing in for a value) — .actlabel is a static section
+   descriptor next to a button, not a value display, closer in spirit to an
+   unfilled field's own resting state than to a read-only one. */
+.actlabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.actlabel.locked {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--locked-ink);
+}
+
+/* ============================================================================
    STACKED ACTION ROW (§6.26, PROPOSED, 2026-08-07) — Add control above a
    full-width box, not beside it.
    Dialog and Attachments hold a full-paragraph textarea or a file list, not

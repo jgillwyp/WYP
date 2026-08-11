@@ -440,27 +440,27 @@ html,body{margin:0;height:100%;background:#fff;}
            when Send is pressed. Answer stays .chip.is-locked here — a
            Request always starts with an empty thread, so there is nothing
            yet to answer (see Respond to Request for the dynamic version). -->
+      <!-- Simplified empty-state row (§6.32, PROPOSED, 2026-08-11) — replaces
+           the always-bare .fieldact with a .frow + .actlabel while nothing is
+           staged yet; saveDialogEntry()/JS below swaps to the old .fieldact +
+           .dlgstaged treatment once an entry exists. -->
       <div class="fgroup">
-        <div class="fieldact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
+        <div class="frow" id="dlg-empty-row">
+          <span class="actlabel">Questions, Answers, Comments</span>
+          <button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button>
+        </div>
+        <div class="fieldact" id="dlg-fieldact" style="display:none;"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
         <div class="dlgstaged" id="dlg-staged" style="display:none;"></div>
       </div>
 
-      <!-- Attachments panel — v1 locked "paid feature" state (attachments deferred
-           to the paid tier). The functional list + Add control return with the paid
-           tier; here the panel advertises the upcoming capability and points to the
-           subscription banner (§6.14). Stacked action row (§6.26, 2026-08-07):
-           Add Attachment above, full-width panel below — was .attachrow. -->
+      <!-- Attachments — v1 locked "paid feature" state. Simplified
+           empty-state row (§6.32, 2026-08-11), replacing the old
+           .fieldact+.attachpanel: attachment storage doesn't exist anywhere
+           in the app yet, so there's no populated state to revert to. -->
       <div class="fgroup">
-        <div class="fieldact">
+        <div class="frow">
+          <span class="actlabel locked">Subscription feature</span>
           <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
-        </div>
-        <div class="attachpanel">
-          <span class="plabel">Attachments</span>
-          <div class="locked">
-            <svg class="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg>
-            <span class="lockttl">A subscription feature</span>
-            <span class="locknote">Attach files to your Requests with a subscription &#8212; see the banner below.</span>
-          </div>
         </div>
       </div>
 
@@ -542,10 +542,28 @@ function saveDialogEntry(){
   row.className = 'attitem';
   var label = dlgKind === 'question' ? 'Question' : 'Comment';
   row.innerHTML = '<span class="attname"><b>' + label + ':</b> ' + text.replace(/</g,'&lt;') + '</span>' +
-    '<button class="attremove" type="button" aria-label="Remove this Dialog entry" onclick="this.parentElement.remove()">&times;</button>';
+    '<button class="attremove" type="button" aria-label="Remove this Dialog entry" onclick="removeDialogRow(this)">&times;</button>';
   list.appendChild(row);
   list.style.display = 'block';
+  // Simplified empty-state row (§6.32, 2026-08-11): first entry staged —
+  // swap the .frow/.actlabel empty row for the stacked-action .fieldact.
+  document.getElementById('dlg-empty-row').style.display = 'none';
+  document.getElementById('dlg-fieldact').style.display = 'flex';
   closeDialogModal();
+}
+
+// Reverses the swap above if the last staged entry is removed — matches
+// the live component's own re-render-driven behavior (dialogEntries.length
+// === 0 shows the empty row again), which a demo built on manual class
+// toggles has to do by hand.
+function removeDialogRow(btn){
+  var list = document.getElementById('dlg-staged');
+  btn.parentElement.remove();
+  if (list.children.length === 0) {
+    list.style.display = 'none';
+    document.getElementById('dlg-fieldact').style.display = 'none';
+    document.getElementById('dlg-empty-row').style.display = 'flex';
+  }
 }
 </script>
 </body></html>

@@ -1,43 +1,58 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, todayISODate, truncate } from '@/lib/ics'
 
 /**
- * Request Response (§9.3) — converted from
- * design/screens/WYP_respond_to_request_palette1.html. This is the ONE
- * screen in the app an anonymous, unauthenticated visitor reaches: the
- * recipient of a Request, following the secure link mailed/texted to them.
- * No `RequireAuth` wrapper — see app/r/[token]/page.tsx.
+ * Response Detail (§6.28) — converted from
+ * design/screens/WYP_response_detail_palette1.html, 2026-08-11. The
+ * signed-in equivalent of Request Response (RequestResponseForm.tsx): a
+ * recipient who already has a Would You Please account, viewing/continuing
+ * a Request someone else sent them from inside the app, at
+ * /requests/[id]/respond — reached by clicking a row in Main Screen's now-
+ * live Received section (migration 012).
  *
- * All data in and out goes through the three `SECURITY DEFINER` functions
- * from migrations 008/009 — never a raw `select`/`update`/`insert` on
- * `requests`/`dialog`, since there is deliberately no `anon` policy on
- * those tables (CLAUDE.md's Database section: "a client-supplied WHERE
- * clause is not a permission check"):
- *   - get_request_by_token   — read (multi-use, logs an 'events' row every call)
- *   - set_response_done_by_token — write Done Date/Done Time
- *   - add_dialog_by_token    — write a Dialog entry, `who` resolved server-side
- *     from the Request's own Contact, never supplied by the client. Recipient
- *     name collection was explicitly rejected — "the response needs to be as
- *     frictionless as possible" — so there is nothing to ask for up front.
+ * All data in and out goes through the four `SECURITY DEFINER` functions
+ * from migration 012 — never a raw select/update/insert on requests/dialog,
+ * mirroring the reasoning CLAUDE.md's Database section already gives for
+ * the anonymous /r/[token] path (migrations 008/009/010), extended here to
+ * the signed-in case for the same reason: a plain owner-scoped or
+ * RLS-policy-based approach can't hide Category from an otherwise-visible
+ * row (RLS is row-level, not column-level), so a function allow-lists
+ * exactly what a recipient may read or write instead:
+ *   - get_received_request        — read, verifies the caller's own session
+ *     email against the linked Contact's email before returning anything;
+ *     logs an 'events' row every call (multi-use, mirrors the token path)
+ *   - set_response_done_as_recipient — write Done Date/Done Time
+ *   - add_dialog_as_recipient     — write a Dialog entry. Unlike the token
+ *     path, `who` is the caller's OWN profile display_name (falling back to
+ *     their session email) — this is a real signed-in person, not an
+ *     anonymous visitor with no account to draw a name from.
  *
- * Category is never fetched or rendered anywhere on this screen — PRD §2.3:
- * Category is a sender-side-only organizing label, never shown to the
- * recipient. migration 009 exists specifically because an earlier draft of
- * get_request_by_token violated this by including category_name; caught and
- * corrected before that migration was ever run.
+ * Category is never fetched or rendered here — same PRD §2.3 rule as
+ * Request Response, enforced inside get_received_request itself.
  *
- * Done Date/Done Time are optional here (no required-field validation blocks
- * Send) even though Request Detail's own .req styling treats them as
- * required in some states — the mockup's static "req" borders describe a
- * demo snapshot, not a universal rule, and an anonymous recipient should
- * always be able to respond with Dialog alone.
+ * Diverges from RequestResponseForm.tsx in three deliberate ways:
+ *   1. No "Create your own Free Account" promo block — this visitor already
+ *      has an account. (Matches the mockup's own header comment: "the
+ *      .promo block from Respond to Request is dropped... whoever's
+ *      looking at this screen already has an account.")
+ *   2. Cancel uses router.back(), not a local-state reset — unlike an
+ *      anonymous /r/[token] visitor (who has no prior in-app history entry
+ *      to return to), this screen is only ever reached by clicking a row on
+ *      Main Screen, same as every other signed-in Detail screen
+ *      (Request Detail, ToDo Detail, Contact Detail all use router.back()
+ *      for the identical reason).
+ *   3. The quick-Done band (§6.31) and owner_tier-gated Attachments segment
+ *      — both built for Request Response on 2026-08-10 — are included here
+ *      too, even though the static mockup file predates both and hasn't
+ *      been updated to show them (same situation Create ToDo's mockup was
+ *      in before it caught up). Flagged in design/README.md, not silently
+ *      diverged from without a trace.
  */
 
 type Kind = 'question' | 'answer' | 'comment'
@@ -51,7 +66,7 @@ type DialogEntry = {
   replies_to_id: number | null
 }
 
-type ResponsePayload = {
+type ReceivedDetailPayload = {
   id: string
   description: string
   created_at: string
@@ -61,7 +76,6 @@ type ResponsePayload = {
   done_time: string | null
   owner_name: string | null
   owner_tier: 'free' | 'subscriber' | null
-  contact_name: string | null
   dialog: DialogEntry[]
 }
 
@@ -108,24 +122,22 @@ function formatTime12h(value: string | null): string {
   return `${h}:${mStr} ${ampm}`
 }
 
-// todayISODate, truncate, and the full .ics builder (buildIcsContent et al.,
-// including ICS_DEFAULT_DUE_TIME/ICS_DURATION_MINUTES) moved to
-// app/src/lib/ics.ts, 2026-08-11 — see that file's own header comment for
-// why this earned an exception to the app's usual no-shared-lib convention
-// (ResponseDetailForm.tsx needed the identical logic verbatim).
-
-export default function RequestResponseForm() {
-  const params = useParams<{ token: string }>()
-  const token = params.token
+export default function ResponseDetailForm() {
+  const params = useParams<{ id: string }>()
+  const requestId = params.id
+  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [data, setData] = useState<ResponsePayload | null>(null)
+  const [data, setData] = useState<ReceivedDetailPayload | null>(null)
 
+  // No savedDoneDate/savedDoneTime pair here, unlike RequestResponseForm.tsx
+  // — that screen's Cancel resets in-place to the last-saved values because
+  // an anonymous visitor has nothing to navigate back to; this screen's
+  // Cancel uses router.back() instead (file header comment, point 2), so
+  // there's nothing that needs remembering.
   const [doneDate, setDoneDate] = useState('')
   const [doneTime, setDoneTime] = useState('')
-  const [savedDoneDate, setSavedDoneDate] = useState('')
-  const [savedDoneTime, setSavedDoneTime] = useState('')
 
   const [dialogList, setDialogList] = useState<DialogEntry[]>([])
 
@@ -143,34 +155,32 @@ export default function RequestResponseForm() {
   const [sendConfirmed, setSendConfirmed] = useState(false)
 
   useEffect(() => {
-    if (!token) return
+    if (!requestId) return
     let cancelled = false
 
     async function load() {
       setLoading(true)
       setLoadError(null)
 
-      const { data: rpcData, error: rpcError } = await supabase.rpc('get_request_by_token', {
-        p_token: token,
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_received_request', {
+        p_request_id: requestId,
       })
 
       if (cancelled) return
 
       if (rpcError || !rpcData) {
-        // get_request_by_token returns one generic message for every failure
-        // (not found / expired / revoked) so a bad guess can't be
-        // distinguished from an expired link — shown to the visitor as-is.
-        setLoadError(rpcError?.message ?? 'This link is no longer valid.')
+        // Same generic failure message whether the id is wrong or just not
+        // this signed-in user's to see — matches get_request_by_token's own
+        // "don't distinguish not-found from not-yours" shape.
+        setLoadError(rpcError?.message ?? 'Request not found.')
         setLoading(false)
         return
       }
 
-      const payload = rpcData as ResponsePayload
+      const payload = rpcData as ReceivedDetailPayload
       setData(payload)
       setDoneDate(payload.done_date ?? '')
       setDoneTime(payload.done_time ?? '')
-      setSavedDoneDate(payload.done_date ?? '')
-      setSavedDoneTime(payload.done_time ?? '')
       setDialogList(payload.dialog ?? [])
       setLoading(false)
     }
@@ -179,7 +189,7 @@ export default function RequestResponseForm() {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [requestId])
 
   const openQuestions = useMemo(() => {
     const answered = new Set<number>()
@@ -198,13 +208,8 @@ export default function RequestResponseForm() {
     return dialogList.find((e) => e.id === id)
   }
 
-  // Owner-reported (2026-08-10): opening Add Dialog always defaulted to the
-  // Question chip, even when every existing entry was itself an unanswered
-  // Question — "it seems more appropriate to show the Answer chip as
-  // selected if there are any questions in the dialog which have not been
-  // answered yet." selectKind('answer') already knows how to pick the right
-  // Question (or show the picker for more than one); this just changes
-  // which chip starts selected.
+  // Same defaulting/focus rules as Request Response's identical function —
+  // see that file's own comment.
   function openDialogModal() {
     setDialogModalBody('')
     setDialogModalError(null)
@@ -222,33 +227,20 @@ export default function RequestResponseForm() {
     } else {
       setDialogSelectedQuestionId(null)
     }
-    // Owner-reported (2026-08-10): the default chip on open gets focus in
-    // Dialog Text (the textarea's own `autoFocus`), but clicking a
-    // different chip afterward didn't move focus there too — `autoFocus`
-    // only fires on mount, not on every re-render. This call is a no-op
-    // during openDialogModal's own selectKind call (the textarea hasn't
-    // mounted yet at that point, so the ref is still null and `autoFocus`
-    // handles that case as before); it only does something on a later,
-    // in-modal chip click, which is exactly the case that needed it.
     dialogTextRef.current?.focus()
   }
 
   async function handleDialogModalSave() {
     const body = dialogModalBody.trim()
     if (body === '') {
-      // Owner-reported, 2026-08-10: after this error, the Dialog Text field
-      // showed its full-size placeholder with no focus rather than the
-      // usual floated-label/focused state — same underlying focus-
-      // management gap as the chip-switch fix above, just on a different
-      // trigger (Save-with-empty-body instead of a chip click).
       setDialogModalError('Enter Dialog Text or Cancel.')
       dialogTextRef.current?.focus()
       return
     }
 
     setDialogSaving(true)
-    const { data: rpcData, error: rpcError } = await supabase.rpc('add_dialog_by_token', {
-      p_token: token,
+    const { data: rpcData, error: rpcError } = await supabase.rpc('add_dialog_as_recipient', {
+      p_request_id: requestId,
       p_kind: dialogModalKind,
       p_body: body,
       p_replies_to_id: dialogModalKind === 'answer' ? dialogSelectedQuestionId : null,
@@ -261,8 +253,9 @@ export default function RequestResponseForm() {
     }
 
     // Append the RPC's returned {id, created_at, who} locally rather than
-    // re-running get_request_by_token — a re-fetch here would log a second,
-    // semantically wrong 'viewed' event for what was actually a write.
+    // re-running get_received_request — a re-fetch here would log a second,
+    // semantically wrong 'viewed_by_recipient' event for what was actually
+    // a write.
     const returned = rpcData as { id: number; created_at: string; who: string }
     setDialogList((list) => [
       ...list,
@@ -284,8 +277,8 @@ export default function RequestResponseForm() {
     setSendConfirmed(false)
     setSending(true)
 
-    const { error: rpcError } = await supabase.rpc('set_response_done_by_token', {
-      p_token: token,
+    const { error: rpcError } = await supabase.rpc('set_response_done_as_recipient', {
+      p_request_id: requestId,
       p_done_date: doneDate.trim() === '' ? null : doneDate,
       p_done_time: doneTime.trim() === '' ? null : doneTime,
     })
@@ -297,30 +290,22 @@ export default function RequestResponseForm() {
       return
     }
 
-    setSavedDoneDate(doneDate)
-    setSavedDoneTime(doneTime)
     setSendConfirmed(true)
   }
 
-  // Owner's ask (2026-08-10): mark a Request Done in as few keystrokes as
-  // possible, without forcing Done/Add Dialog/Add Attachment into a
-  // mutually-exclusive choice (a recipient may want more than one). Sets
-  // Done Date only — Done Time stays untouched, same "optional refinement,
-  // not required" role it has everywhere else in the app. Purely a local
-  // field fill; Send is still the actual write (set_response_done_by_token).
-  // Owner's own flagged concern, 2026-08-10, resolved as he suggested: moving
-  // Add to Calendar above the Date/From/Due block (below) pushes Done
-  // Date/Done Time further down the screen, so scroll the just-filled Done
-  // Date field into view rather than leaving it stranded below the fold.
+  // Same quick-Done band as Request Response (§6.31, built 2026-08-10) —
+  // fills Done Date with today only, Done Time stays untouched, purely a
+  // local field fill (Send/set_response_done_as_recipient is still the
+  // actual write).
   function handleQuickDone() {
     setDoneDate(todayISODate())
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  // Owner's ask, 2026-08-10 — see buildIcsContent above for the field
-  // mapping and the boilerplate-text flag. The link is just this page's own
-  // URL (the /r/[token] the recipient is already looking at), so there's
-  // nothing to fetch — the whole file is built and downloaded locally.
+  // Link is this page's own URL — a signed-in user re-opening this same
+  // /requests/[id]/respond page later still lands on the same event, unlike
+  // the token path's one-time-mailed link, but it's the closest equivalent
+  // available and matches what Request Response already does.
   function handleAddToCalendar() {
     if (!data) return
     const link = window.location.href
@@ -336,16 +321,11 @@ export default function RequestResponseForm() {
     URL.revokeObjectURL(url)
   }
 
-  // Discards in-progress edits back to the last successfully loaded/saved
-  // values. Not router.back() — every other Detail screen's Cancel returns
-  // to the Main Screen history entry it was reached from, but an anonymous
-  // visitor arriving via a mailed/texted link typically has no such prior
-  // in-app entry to return to.
+  // router.back(), not a local-state reset — see file header comment
+  // point 2. Restores Main Screen's Received row and scroll position, same
+  // as Request Detail/ToDo Detail/Contact Detail's own Cancel/Close.
   function handleCancel() {
-    setDoneDate(savedDoneDate)
-    setDoneTime(savedDoneTime)
-    setSendError(null)
-    setSendConfirmed(false)
+    router.back()
   }
 
   if (loading) {
@@ -364,7 +344,7 @@ export default function RequestResponseForm() {
       <div className="frame-none">
         <div className="app">
           <WypHeader />
-          <div className="subempty">{loadError ?? 'This link is no longer valid.'}</div>
+          <div className="subempty">{loadError ?? 'Request not found.'}</div>
         </div>
       </div>
     )
@@ -393,9 +373,9 @@ export default function RequestResponseForm() {
         />
 
         <div className="band">
-          <span className="glabel">Request Response</span>
+          <span className="glabel">Response Detail</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="request-response-form" disabled={sending}>
+            <button className="btn" type="submit" form="response-detail-form" disabled={sending}>
               {sending ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={sending}>
@@ -407,26 +387,9 @@ export default function RequestResponseForm() {
         {sendConfirmed && <div className="noticeband"><b>Response saved.</b> Your update has been recorded.</div>}
 
         <div className="scroll">
-          <form id="request-response-form" onSubmit={handleSend} noValidate>
+          <form id="response-detail-form" onSubmit={handleSend} noValidate>
 
-            {/* Owner-reported, 2026-08-10, testing live on a narrow Android
-                phone: pairing the Date/From/Due column with Add to Calendar
-                beside it squeezed the column enough that "Monday, August 10,"
-                wrapped before the year, and left unused space under the
-                button and to the right of From/Due. Moved the button to its
-                own row above (.panelact, the same pattern already used for
-                Add Dialog/Add Attachment on this screen) so Date/From/Due get
-                the full row width instead — chosen over reformatting the date
-                string itself, which is the identical verbose weekday format
-                used across Request Detail/ToDo Detail/Response Detail/Dialog
-                Detail's own label:value date displays and would go out of
-                step with those screens for a problem this layout change
-                already solves. Costs one extra row of vertical space, same
-                trade-off §6.26 already made. */}
             <div className="panelact panelact-top">
-              {/* Was deliberately inert (Days 2-3 covered response
-                  read/write only); .ics generation built 2026-08-10 — see
-                  buildIcsContent/handleAddToCalendar above. */}
               <button className="btn" type="button" onClick={handleAddToCalendar}>
                 Add to Calendar
               </button>
@@ -448,24 +411,6 @@ export default function RequestResponseForm() {
 
             <div className="grabber" aria-hidden="true"></div>
 
-            {/* Editable Done Date/Done Time — not the mockup's boxed .duo/
-                .fieldval static display (that's a read-only preview state;
-                the mockup's own comment flags its .panel.req border rule as
-                an unresolved "should be conditional... not permanent"
-                question). Reuses Request Detail's exact
-                .fgroup.frow + .ffloat.picker.native editable markup instead,
-                already proven there. */}
-            {/* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — owner's ask:
-                mark a Request Done in as few keystrokes as possible. Not a
-                Done/Add-Dialog/Add-Attachment chip picker (rejected: those
-                aren't mutually exclusive — a recipient may want more than
-                one). Not an auto-filled Done Date on page load either
-                (rejected: forces anyone who only wants to add Dialog to
-                first clear it). Purely reactive to whether Done Date already
-                holds a value, however it got there — clicking Done here, or
-                typing directly into the field below both land in the same
-                state, so there's no separate "did they click Done" flag to
-                get out of sync. */}
             <div className="donerow">
               <span className="donenote">
                 {doneDate.trim() === '' ? (
@@ -484,11 +429,6 @@ export default function RequestResponseForm() {
               </button>
             </div>
 
-            {/* This screen has no shared .form wrapper (matching the mockup's
-                own flat, per-block-padded .scroll children) — pad this one
-                editable row directly with --pad, same as every sibling block
-                below (.meta/.seclabel/.respdesc/.panelact/.panelfull/.promo
-                all carry their own var(--pad) the same way). */}
             <div className="fgroup frow" style={{ padding: '0 var(--pad)' }}>
               <span className="ffloat picker native">
                 <input
@@ -583,13 +523,7 @@ export default function RequestResponseForm() {
               </>
             )}
 
-            {/* Owner's ask (2026-08-10): don't show a locked, non-usable
-                Attachments segment when the Request's issuer is a free
-                user — a free-tier promo hits the recipient elsewhere on
-                this screen already (the Free Account Features block below),
-                and this panel offers no path to act on it either way.
-                Reads owner_tier (migration 011) rather than assuming.
-                Gating unchanged 2026-08-11 — simplified empty-state row
+            {/* owner_tier gating unchanged — simplified empty-state row
                 (§6.32) inside it, replacing the old .panelact+.panelfull:
                 attachment storage doesn't exist anywhere in the app yet, so
                 there's no populated state to revert to. */}
@@ -605,21 +539,6 @@ export default function RequestResponseForm() {
                 </button>
               </div>
             )}
-
-            {/* Owner-reported, 2026-08-10: dropped the "Free Account
-                Features" kicker line — the button's own label already says
-                "Free Account", so it was redundant, and removing it
-                shortens this block by a line. Also moved the button above
-                the descriptive sentence: with the sentence first, it read
-                as something to read before clicking, which isn't the
-                intent. */}
-            <div className="promo">
-              <div className="promo-h">Send it, Track it, Get it Done</div>
-              <Link href="/login" className="btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-                Create your own Free Account
-              </Link>
-              <p className="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
-            </div>
 
             {sendError && (
               <p className="ferror" role="alert" style={{ margin: '0 var(--pad) 12px' }}>
@@ -690,21 +609,6 @@ export default function RequestResponseForm() {
                 </div>
               </div>
 
-              {/* Owner-reported (2026-08-10): after answering one of two
-                  open Questions, reopening Add Dialog and picking Answer
-                  showed nothing — the remaining single open Question was
-                  linked silently, with no visual confirmation of which one.
-                  Originally scoped (2026-08-07) to show only when more than
-                  one Question was open; relaxed to any open Question (>0),
-                  so composing an Answer always confirms what it's answering.
-                  Follow-up (same day): with exactly one open Question, its
-                  row already renders .selected — but that's the identical
-                  visual treatment a multi-row picker uses for "the one
-                  you've clicked," so a person could read it as needing a
-                  click. The .subnote "(The only question is selected
-                  below.)" only appears in the single-question case, where
-                  it's true and disambiguating; it would be redundant noise
-                  once there's an actual choice to make. */}
               {dialogModalKind === 'answer' && openQuestions.length > 0 && (
                 <div>
                   <span className="flabel">

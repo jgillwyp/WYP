@@ -247,6 +247,13 @@ html,body{margin:0;height:100%;background:#fff;}
       </div>
     </div>
 
+    <!-- Simplified empty-state row (§6.32, PROPOSED, 2026-08-11): the live
+         screen (ResponseDetailForm.tsx) shows a .frow + .actlabel
+         "Questions, Answers, Comments" row instead of this .panel when
+         sortedDialog is empty. Not reachable in this demo: dialogEntries is
+         seeded with sample data on load and this mockup has no remove-entry
+         control, so it's always in the populated state shown below — kept
+         in sync structurally, not duplicated as unreachable demo JS. -->
     <div class="panelact"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
     <div class="panelfull">
       <div class="panel">
@@ -255,6 +262,13 @@ html,body{margin:0;height:100%;background:#fff;}
       </div>
     </div>
 
+    <!-- This block is a deliberately aspirational demo (design/README's own
+         flag): a populated file list, beyond what's actually built — the
+         live screen only ever has zero attachments. Simplified empty-state
+         row (§6.32, PROPOSED, 2026-08-11) applies to that true empty case —
+         a .frow + plain "Subscription feature" text (no box, unlike
+         Dialog's .actlabel) next to Add Attachment — but doesn't apply to
+         this demo's own populated scenario, left as-is. -->
     <div class="panelact">
       <button class="btn is-locked" id="attach-btn" type="button" aria-disabled="true">
         <svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
