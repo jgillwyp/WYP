@@ -1,0 +1,285 @@
+/*
+ * app/components/landing.css — Would You Please landing page styles
+ * (marketing, not an app screen). Ported from
+ * design/marketing/WYP_landing_page.html, 2026-08-13, when the owner asked
+ * to make this the actual unauthenticated `/` route rather than a static
+ * mockup only — see app/page.tsx and the decisions log's 2026-08-13 entry.
+ *
+ * Every selector is scoped under .wyp-landing (LandingPage.tsx's own root
+ * wrapper) rather than left bare. Next.js's App Router allows importing a
+ * plain, non-module CSS file from any component, but doing so makes it
+ * global — unscoped, it would apply site-wide, on top of app/globals.css's
+ * own very large, unrelated rule set. One real collision was found:
+ * globals.css already defines a bare `.panel` (the Dialog/Attachments
+ * panel used elsewhere in the app). Scoping alone (`.wyp-landing .panel`)
+ * would still let globals.css's own unscoped `.panel` rule contribute any
+ * properties this file doesn't itself override, since it matches by class
+ * name regardless of ancestry — so this file's subscription/roadmap panels
+ * are named `.lpanel` instead, avoiding the collision outright rather than
+ * relying on specificity.
+ *
+ * `:root` color tokens are NOT redeclared here — app/globals.css already
+ * defines every one this file uses (--brand-blue, --ink, --ink-soft,
+ * --rule, --strip, --band, --row-tint, --sort, --focus-tint,
+ * --blue-pressed, --btn-top) and they're already in scope site-wide, since
+ * globals.css is imported once in app/layout.tsx. Redeclaring them here
+ * would just be a second copy that could drift from the canonical one.
+ * Same reasoning for the mockup's global `*`/`body`/`html` resets — this
+ * app already uses Tailwind, whose own preflight layer normalizes
+ * box-sizing/margin site-wide; only the .wyp-landing container itself gets
+ * the font/color/line-height baseline below, rather than redeclaring
+ * against the real <body> tag.
+ */
+
+.wyp-landing {
+  font-family: Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
+  line-height: 1.4;
+}
+.wyp-landing, .wyp-landing * { box-sizing: border-box; }
+.wyp-landing a { color: inherit; }
+.wyp-landing .wrap { max-width: 1120px; margin: 0 auto; padding: 0 18px; }
+.wyp-landing img, .wyp-landing svg { display: block; max-width: 100%; }
+
+/* Header */
+.wyp-landing .topbar {
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 10;
+}
+.wyp-landing .topbar .wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.wyp-landing .brandmark {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+}
+.wyp-landing .brandmark svg { height: 28px; width: auto; }
+.wyp-landing .brandmark .word {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--brand-blue);
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+.wyp-landing .topbar .spacer { flex: 1 1 auto; }
+.wyp-landing .signin-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 8px 6px;
+  white-space: nowrap;
+}
+.wyp-landing .btn-primary {
+  display: inline-block;
+  background: var(--brand-blue);
+  background-image: linear-gradient(var(--btn-top), var(--brand-blue));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 9px 14px;
+  border-radius: 8px;
+  white-space: nowrap;
+  border: none;
+}
+.wyp-landing .btn-primary:active { background: var(--blue-pressed); background-image: none; }
+.wyp-landing .btn-white {
+  display: inline-block;
+  background: #fff;
+  color: var(--brand-blue);
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+  padding: 13px 22px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+/* Hero */
+.wyp-landing .hero {
+  background: linear-gradient(115deg, #123B7A 0%, #1E5AA8 42%, #1C8FA0 100%);
+  color: #fff;
+  padding: 34px 0 40px;
+  position: relative;
+  overflow: hidden;
+}
+.wyp-landing .hero .wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  position: relative;
+  z-index: 1;
+}
+.wyp-landing .hero-copy { max-width: 640px; }
+.wyp-landing .h1 {
+  font-size: 30px;
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -.015em;
+}
+.wyp-landing .h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #DCE6FA;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+.wyp-landing .lede {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: #EAF0FB;
+  margin-top: 14px;
+}
+.wyp-landing .hero-ctas {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+.wyp-landing .hero-ctas .btn-white { width: 100%; }
+.wyp-landing .hero-secondary {
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #EAF0FB;
+  text-decoration: none;
+  padding: 6px;
+}
+.wyp-landing .hero-secondary b { text-decoration: underline; }
+.wyp-landing .reassure {
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #CFE0F7;
+}
+.wyp-landing .hero-art { align-self: center; width: 100%; max-width: 420px; }
+
+/* Section labels */
+.wyp-landing .section { padding: 34px 0; }
+.wyp-landing .section.alt { background: var(--row-tint); }
+.wyp-landing .slabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.wyp-landing .slabel .t {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.wyp-landing .badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.wyp-landing .badge.free { background: var(--brand-blue); color: #fff; }
+.wyp-landing .badge.sub { background: var(--sort); color: var(--ink); }
+.wyp-landing .badge.soon { background: var(--band); color: var(--ink-soft); }
+
+/* Feature cards */
+.wyp-landing .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.wyp-landing .card {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 14px 15px;
+  background: #fff;
+}
+.wyp-landing .card.hi { background: var(--focus-tint); border-color: #BCCCEE; }
+.wyp-landing .card .ct { font-size: 14.5px; font-weight: 800; color: var(--brand-blue); }
+.wyp-landing .card .cb { font-size: 13px; line-height: 1.48; color: var(--ink); margin-top: 5px; }
+
+/* Subscription / Coming soon panels — .lpanel, not .panel; see file header */
+.wyp-landing .cols { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.wyp-landing .lpanel { border: 1px solid var(--rule); border-radius: 12px; padding: 16px 17px; background: #fff; }
+.wyp-landing .lpanel.sub { border-color: #E7D98A; }
+.wyp-landing .lpanel h3 { font-size: 16px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.wyp-landing .lpanel h3 .price { font-size: 13px; font-weight: 700; color: var(--brand-blue); }
+.wyp-landing .lpanel ul { list-style: none; margin-top: 10px; }
+.wyp-landing .lpanel li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  padding-left: 18px;
+  position: relative;
+  margin-bottom: 6px;
+}
+.wyp-landing .lpanel li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--brand-blue);
+}
+.wyp-landing .lpanel.soon li::before { background: var(--ink-soft); }
+.wyp-landing .lpanel .note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; line-height: 1.5; }
+
+/* Final CTA band + footer */
+.wyp-landing .ctaband {
+  background: var(--brand-blue);
+  border-radius: 14px;
+  padding: 22px 18px;
+  text-align: center;
+}
+.wyp-landing .ctaband .big { font-size: 19px; font-weight: 800; color: #fff; line-height: 1.25; }
+.wyp-landing .ctaband .sub { font-size: 13px; color: #DCE6FA; margin-top: 6px; }
+.wyp-landing .ctaband .price { margin-top: 14px; color: #fff; }
+.wyp-landing .ctaband .price .amt { font-size: 17px; font-weight: 800; }
+.wyp-landing .ctaband .price .per { font-size: 11.5px; color: #DCE6FA; margin-top: 2px; }
+.wyp-landing .ctaband .btn-white { margin-top: 16px; width: 100%; }
+.wyp-landing footer { padding: 22px 0 34px; }
+.wyp-landing footer .wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+/* Tablet and up (~600px) */
+@media (min-width: 600px) {
+  .wyp-landing .grid { grid-template-columns: 1fr 1fr; }
+  .wyp-landing .cols { grid-template-columns: 1.1fr 1fr; }
+  .wyp-landing .hero-ctas { flex-direction: row; align-items: center; }
+  .wyp-landing .hero-ctas .btn-white { width: auto; }
+  .wyp-landing .hero-secondary { text-align: left; padding: 6px 4px; }
+  .wyp-landing .ctaband { display: flex; align-items: center; text-align: left; gap: 18px; }
+  .wyp-landing .ctaband > div:first-child { flex: 1 1 auto; }
+  .wyp-landing .ctaband .price { margin-top: 0; text-align: right; }
+  .wyp-landing .ctaband .btn-white { margin-top: 0; width: auto; flex: 0 0 auto; }
+  .wyp-landing footer .wrap { flex-direction: row; justify-content: space-between; text-align: left; }
+}
+
+/* Desktop (~900px) */
+@media (min-width: 900px) {
+  .wyp-landing .hero .wrap { flex-direction: row; align-items: center; gap: 40px; }
+  .wyp-landing .hero-copy { flex: 1 1 52%; max-width: none; }
+  .wyp-landing .hero-art { flex: 1 1 44%; max-width: 460px; align-self: center; }
+  .wyp-landing .h1 { font-size: 38px; }
+  .wyp-landing .grid { grid-template-columns: 1fr 1fr 1fr; }
+}

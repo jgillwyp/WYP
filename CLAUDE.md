@@ -996,3 +996,27 @@ link is built only after the stack is proven on Add Contact.
   persistent — Request links are multi-use, so the same recipient reaching
   the page via the original, unmarked email link still sees the button.
   See the decisions log for the full write-up.
+- **Landing page is now the live, unauthenticated `/` route (2026-08-13,
+  `app/components/LandingPage.tsx`, `app/components/landing.css`,
+  `app/page.tsx`).** Owner: a new/signed-out visitor was being bounced
+  straight to `/login`; wanted `design/marketing/WYP_landing_page.html`
+  shown instead, same as any normal sales-first landing page — "my
+  understanding is that a login is only needed on a per-device basis,"
+  which is correct ("Keep Me Signed In" persists via `localStorage`, so a
+  returning signed-in visitor is unaffected). `page.tsx` no longer wraps
+  `/` in `RequireAuth` (whose no-session redirect is unconditional); it
+  checks `supabase.auth.getUser()` itself and renders `MainScreen` or
+  `LandingPage` accordingly — every other route still uses `RequireAuth`
+  unchanged, this carve-out is `/`-only. `LandingPage.tsx` is a close
+  mechanical port of the mockup (class->className, kebab-case SVG attrs->
+  camelCase, `<a>`->`next/link`'s `Link`, no re-added Google Fonts link
+  since Inter's already self-hosted app-wide via `next/font`). Styles live
+  in `landing.css`, scoped under a `.wyp-landing` root class to avoid
+  leaking into `globals.css`'s site-wide rules — the one real collision
+  found (`.panel`, already the app's own Dialog/Attachments panel) is
+  renamed `.lpanel` here rather than relying on scoping specificity alone;
+  `:root` tokens are not redeclared, `landing.css` reads the same custom
+  properties `globals.css` already defines. `npx tsc --noEmit`/`npm run
+  lint` clean; not yet visually verified in a real browser (no headless
+  browser reachable in this sandbox). See the decisions log for the full
+  write-up, including the apostrophe/curly-quote JSX-escaping decision.
