@@ -453,18 +453,28 @@ footer .wrap {
           <text x="40" y="21" font-family="Inter, sans-serif" font-size="12" font-weight="800" fill="#ffffff">Send It</text>
         </g>
 
-        <!-- floating badge: Done, with check -->
-        <g transform="translate(288,268)">
-          <rect width="128" height="46" rx="12" fill="#ffffff"/>
-          <circle cx="24" cy="23" r="13" fill="#2A5FC8"/>
-          <path d="M18 23 L22 27 L31 17" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="44" y="20" font-family="Inter, sans-serif" font-size="11" font-weight="800" fill="#1F2933">Get it Done!</text>
-          <text x="44" y="34" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#5A6675">Confirmed &amp; closed out</text>
+        <!-- floating badge: Done, with check. Owner-reported, 2026-08-13:
+             the two-line text overflowed the old 128px-wide rect (the
+             second line, "Confirmed & closed out," is the longer of the
+             two) — widened to 200px and shifted left to stay on-canvas.
+             Also gained a #123B7A border (the Send It badge's own
+             background color) per the owner's ask, since a white badge
+             sitting over the mostly-white/grey dashboard card had almost
+             no visual separation from what's behind it. -->
+        <g transform="translate(216,264)">
+          <rect width="200" height="48" rx="12" fill="#ffffff" stroke="#123B7A" stroke-width="2"/>
+          <circle cx="24" cy="24" r="13" fill="#2A5FC8"/>
+          <path d="M18 24 L22 28 L31 18" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="44" y="21" font-family="Inter, sans-serif" font-size="11" font-weight="800" fill="#1F2933">Get it Done!</text>
+          <text x="44" y="35" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#5A6675">Confirmed &amp; closed out</text>
         </g>
 
-        <!-- floating badge: Track It -->
+        <!-- floating badge: Track It. Owner-reported, 2026-08-13: its teal
+             fill (#1C8FA0) is the same color as the hero gradient's own
+             right-hand end, so it barely stood out — gained the same
+             #123B7A border as the Get it Done badge above for contrast. -->
         <g transform="translate(302,4)">
-          <rect width="120" height="32" rx="16" fill="#1C8FA0"/>
+          <rect width="120" height="32" rx="16" fill="#1C8FA0" stroke="#123B7A" stroke-width="2"/>
           <circle cx="18" cy="16" r="9" fill="none" stroke="#ffffff" stroke-width="2"/>
           <line x1="18" y1="16" x2="18" y2="11" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
           <line x1="18" y1="16" x2="22" y2="18" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>

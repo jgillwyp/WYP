@@ -6,6 +6,18 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-13 — Live send confirmed on Vercel; Outlook .ics rejection fixed; landing page badge fixes
+
+Owner confirmed the Vercel-deployed app now sends real email (env vars added there per the earlier ask) and reported two further issues from testing.
+
+**Outlook rejected the .ics attachment** — "Invalid ICAL element: Inbound Mime method and ICAL method mismatch. Invalid ICAL element: VCALENDAR" — on both mobile and web Outlook, while Gmail accepted the identical file without complaint. Root cause: `app/api/email/send-request/route.ts` declared the attachment as `text/calendar; method=REQUEST`, but the VCALENDAR body itself (`buildIcsContent`, `app/src/lib/ics.ts`) carried no `METHOD` property at all — Outlook cross-checks the MIME-declared method against the body and rejects on a mismatch; Gmail apparently doesn't check. `REQUEST` was also the wrong iTIP method on its own terms regardless of the mismatch: it means "meeting invitation, expects an ORGANIZER/ATTENDEE who can accept or decline," and this event has neither — a WYP Request's due date was never a meeting. Fixed both sides to agree: `ics.ts` now writes `METHOD:PUBLISH` into the VCALENDAR body (the correct iTIP method for a one-way informational entry), and the route's attachment `contentType` changed to `method=PUBLISH` to match. The two direct-download call sites (`RequestResponseForm.tsx`, `ResponseDetailForm.tsx`) never declared a MIME method in the first place (plain `Blob` download, not an email attachment), so they were never affected and needed no change. Owner separately found he could add the event to Outlook manually by opening the attachment — useful confirmation the file itself wasn't corrupt, just the method declaration.
+
+**Landing page hero badges** — two issues from a visual review of the drafted SVG illustration (`design/marketing/WYP_landing_page.html`). (1) The "Get it Done!" badge's second line, "Confirmed & closed out," overflowed its 128px-wide rect to the right — widened to 200px and shifted left (translate `288,268` → `216,264`) to stay within the 440-wide viewBox with margin to spare; text/icon positions shifted to match. (2) Owner: the Track It badge's teal fill (`#1C8FA0`) is the same color as the hero gradient's own right-hand end, so it barely registered against the background, and the white Get it Done badge "visually runs together with the gray and white image behind it" (the dashboard illustration it floats over). Fixed by adding a 2px `#123B7A` border to both — the same navy the Send It badge already uses as its own fill, which is why Send It didn't have this problem and needed no change. Verified structurally (tag-balance check) rather than visually — no headless browser reachable from this session's sandbox, same limitation noted when this file was first drafted.
+
+`npx tsc --noEmit` and `npm run lint` both clean after the .ics/route changes.
+
+\---
+
 ## 2026-08-13 — Real bug found: `profiles` table completely empty; Create Free Account was silently no-oping
 
 Follow-up to the missing-Subject-name investigation directly above (read that entry first — this one supersedes its tentative conclusion). Asked the owner to check `profiles.display_name` for his own account; the join query against `auth.users` on email returned zero rows. Had him run two simpler checks instead: `select id, email from auth.users;` (found exactly one row, his own — confirming the earlier join's WHERE clause wasn't the problem) and `select id, display_name, tier from public.profiles;` (returned **zero rows, full stop** — not just missing his row, the table has never held a single row).

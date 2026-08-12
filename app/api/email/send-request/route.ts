@@ -194,7 +194,12 @@ export async function POST(request: Request) {
         {
           filename: 'request.ics',
           content: icsContent,
-          contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+          // method=PUBLISH must match the METHOD:PUBLISH property ics.ts now
+          // writes into the VCALENDAR body itself — Outlook checks the two
+          // against each other and rejected the file when this said REQUEST
+          // (a meeting invite) with no METHOD at all in the body. See
+          // buildIcsContent's own comment in app/src/lib/ics.ts.
+          contentType: 'text/calendar; charset=utf-8; method=PUBLISH',
         },
       ],
     })

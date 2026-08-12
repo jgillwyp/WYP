@@ -936,7 +936,14 @@ link is built only after the stack is proven on Add Contact.
   `profiles.display_name` likely being empty for the test account, not a
   route bug (the omit-when-null behavior is exactly what PRD §7.3
   specifies); flagged for the owner to confirm via a direct query rather
-  than changed blind. **That investigation's tentative conclusion was
+  than changed blind. **`.ics` fixed for Outlook, same day, live test on
+  Vercel**: Outlook (mobile and web) rejected the emailed .ics —
+  "Inbound Mime method and ICAL method mismatch" — because the email route
+  declared `method=REQUEST` while `buildIcsContent` wrote no `METHOD` into
+  the VCALENDAR body at all; Gmail didn't care, Outlook does. `ics.ts` now
+  writes `METHOD:PUBLISH` (the correct iTIP method for a one-way
+  informational entry, not a meeting invite) and the route's attachment
+  `contentType` matches. **That investigation's tentative conclusion was
   wrong — see the decisions log's next 2026-08-13 entry.** `profiles` was
   found completely empty (zero rows, not just missing the owner's own),
   because `CreateFreeAccountForm.tsx`'s `handleSubmit` only ever ran a
@@ -973,4 +980,8 @@ link is built only after the stack is proven on Add Contact.
   breakpoints (600px/900px) targets a phone by default; not yet wired to a
   route or reviewed in an actual browser (no headless browser reachable in
   this session's sandbox to screenshot it — verified structurally instead,
-  see the decisions log).
+  see the decisions log). **Two badge fixes, 2026-08-13**: the "Get it
+  Done!" badge's second line overflowed its rect (widened 128px -> 200px);
+  both it and the Track It badge gained a 2px `#123B7A` border (matching
+  the Send It badge's own fill) after the owner reported both blending
+  into the background/dashboard art behind them.

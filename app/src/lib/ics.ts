@@ -155,6 +155,21 @@ export function buildIcsContent(payload: IcsRequestFields, link: string): string
     'VERSION:2.0',
     'PRODID:-//Would You Please//Request Response//EN',
     'CALSCALE:GREGORIAN',
+    // Owner-reported, 2026-08-13: Outlook (mobile and web) rejected the
+    // emailed .ics — "Invalid ICAL element: Inbound Mime method and ICAL
+    // method mismatch" — while Google Calendar accepted the identical file
+    // without complaint. Root cause: the email route (app/api/email/
+    // send-request/route.ts) attached this content as
+    // `text/calendar; method=REQUEST`, but the VCALENDAR body itself carried
+    // no METHOD property at all — Outlook checks the two against each other
+    // and Google apparently doesn't. REQUEST was also the wrong choice on
+    // its own terms: it's iTIP's meeting-invitation method, implying an
+    // ORGANIZER/ATTENDEE who can accept or decline, neither of which this
+    // event has — a WYP Request's due date was never a meeting. PUBLISH is
+    // the correct iTIP method for a one-way informational calendar entry
+    // like this one; the email route's attachment content-type now declares
+    // method=PUBLISH to match.
+    'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:request-${payload.id}@wouldyouplease.com`,
     `DTSTAMP:${formatIcsUtc(new Date())}`,
