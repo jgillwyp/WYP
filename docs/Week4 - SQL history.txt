@@ -292,10 +292,11 @@ commit;
 
 -- ============================================================================
 -- WYP migration 013 — grant UPDATE(time_zone) on profiles to authenticated
--- DRAFTED 2026-08-11 — NOT YET RUN. Run in the Supabase SQL editor, then
--- change the line above to "Run <date>" and update CLAUDE.md / decisions log
--- from "drafted" to "confirmed run by the owner", same as every earlier
--- migration in this project.
+-- CONFIRMED RUN by the owner, verified 2026-08-12 via a direct
+-- information_schema.column_privileges query (authenticated holds UPDATE on
+-- profiles.time_zone) rather than relying on the Supabase SQL editor's own
+-- History view, which the owner reported only showing entries through
+-- migration 011.
 --
 -- Bug found investigating Create Free Account (owner asked to build it,
 -- 2026-08-11 — see decisions log). Week 1's original profiles setup revoked

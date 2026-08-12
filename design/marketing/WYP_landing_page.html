@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Would You Please — Send it. Track it. Get it done.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Would You Please — Landing Page (marketing, not an app screen)
+
+   Draft, 2026-08-12. Owner ask: a landing page for wouldyouplease.com opened
+   with no parameters — a sales pitch whose one action item is the Free
+   Account signup (Start Free Account / Sign In, both -> /login, same
+   dual-purpose entry point every other sales-facing screen in this app
+   already uses — see CLAUDE.md's Auth section and design/README.md's
+   "Sign-up flow" diagram, which already anticipated a "sales page" leading
+   here and is the reason this file finally exists).
+
+   Copy is adapted from the owner's own sales one-pager
+   (uploads: "WYP onepager.html") rather than invented fresh — same feature
+   descriptions, same $17.95/yr figure, same "Send it. Track it. Get it
+   done." headline. Colors are the canonical palette-1 tokens
+   (design/screens/tokens.css / app/globals.css), not the onepager's own
+   hardcoded hex values, so this file can't quietly drift from the live
+   app's palette.
+
+   The owner separately supplied an AI-generated Facebook cover placeholder
+   as visual reference for the hero: a device showing the dashboard, a
+   person, and floating "SEND IT" / "TRACK IT" / "GET IT DONE!" callout
+   badges on a blue-to-teal gradient. He was explicit that he didn't like
+   that image's gold/yellow headline lettering, but did like the right-side
+   device-plus-badges presentation. That placeholder's own "dashboard"
+   content is AI-garbled nonsense text ("DeeFlines", "Gcatifnes", etc.) and
+   there's no image-generation tool available in this session to replace it
+   with a real photo — so the hero illustration below is a hand-built SVG
+   instead: a simplified, legible rendering of the app's own real Main
+   Screen (chips, rows, due dates, brand blue) with the same floating-badge
+   idea, using only tokens from the palette rather than the placeholder's
+   teal/gold. This is closer to how a real product should represent itself
+   than a stock photo would be, and it sidesteps rebuilding "gold lettering
+   the owner already said he doesn't like" from a different source.
+
+   MOBILE-FIRST (owner, 2026-08-12): "the primary people going to this
+   landing page would be mobile phone users." Every rule below this comment
+   block is written for a narrow viewport first; the two @media blocks near
+   the bottom of this stylesheet are what widen things for tablet/desktop —
+   nothing here assumes a wide viewport by default. Single-column stacking
+   throughout at rest; the hero illustration sits BELOW the headline/CTA on
+   a phone (so the sales copy and the button are the first thing seen, not
+   pushed down by a graphic) and moves beside it only once there's room.
+
+   Not yet wired to a route — CLAUDE.md's own screen-mockup convention
+   applies here too ("a screen is designed here first, reviewed here, then
+   converted"), and this is a new category (full-width marketing page, not
+   a 480px app frame), not an existing §-numbered screen. See
+   design/README.md for routing/status notes once this is reviewed.
+   ============================================================================ */
+
+:root {
+  --brand-blue: #2A5FC8;
+  --blue-pressed: #1E4AA0;
+  --btn-top: #3A70DC;
+  --alert-red: #D32F2F;
+  --sort: #FFE34D;
+  --focus-tint: #EDF2FD;
+  --ink: #1F2933;
+  --ink-soft: #5A6675;
+  --row-tint: #F6F7F9;
+  --rule: #E2E6EC;
+  --strip: #E5ECF7;
+  --band: #E7E7E7;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
+  line-height: 1.4;
+}
+a { color: inherit; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 18px; }
+img, svg { display: block; max-width: 100%; }
+
+/* ----------------------------------------------------------------------
+   Header — logo + wordmark, Sign In + Start Free Account. Kept small and
+   single-row even on a narrow phone: compact button padding, no tagline
+   here (the hero says it better with room to breathe).
+   ---------------------------------------------------------------------- */
+.topbar {
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 10;
+}
+.topbar .wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.brandmark {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+}
+.brandmark svg { height: 28px; width: auto; }
+.brandmark .word {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--brand-blue);
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+.topbar .spacer { flex: 1 1 auto; }
+.signin-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 8px 6px;
+  white-space: nowrap;
+}
+.btn-primary {
+  display: inline-block;
+  background: var(--brand-blue);
+  background-image: linear-gradient(var(--btn-top), var(--brand-blue));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 9px 14px;
+  border-radius: 8px;
+  white-space: nowrap;
+  border: none;
+}
+.btn-primary:active { background: var(--blue-pressed); background-image: none; }
+.btn-white {
+  display: inline-block;
+  background: #fff;
+  color: var(--brand-blue);
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+  padding: 13px 22px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------------
+   Hero — gradient band. Stacked mobile-first: headline, subhead, lede,
+   CTA stack, then the illustration below. Becomes a two-column row with
+   the illustration on the right once there's room (see @media).
+   ---------------------------------------------------------------------- */
+.hero {
+  background: linear-gradient(115deg, #123B7A 0%, #1E5AA8 42%, #1C8FA0 100%);
+  color: #fff;
+  padding: 34px 0 40px;
+  position: relative;
+  overflow: hidden;
+}
+.hero .wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  position: relative;
+  z-index: 1;
+}
+.hero-copy { max-width: 640px; }
+.h1 {
+  font-size: 30px;
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -.015em;
+}
+.h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #DCE6FA;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+.lede {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: #EAF0FB;
+  margin-top: 14px;
+}
+.hero-ctas {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+.hero-ctas .btn-white { width: 100%; }
+.hero-secondary {
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #EAF0FB;
+  text-decoration: none;
+  padding: 6px;
+}
+.hero-secondary b { text-decoration: underline; }
+.reassure {
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #CFE0F7;
+}
+.hero-art { align-self: center; width: 100%; max-width: 420px; }
+
+/* ----------------------------------------------------------------------
+   Section labels — small caps + colored badge, same visual grammar as the
+   one-pager's own .slabel.
+   ---------------------------------------------------------------------- */
+.section { padding: 34px 0; }
+.section.alt { background: var(--row-tint); }
+.slabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.slabel .t {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.badge.free { background: var(--brand-blue); color: #fff; }
+.badge.sub { background: var(--sort); color: var(--ink); }
+.badge.soon { background: var(--band); color: var(--ink-soft); }
+
+/* ----------------------------------------------------------------------
+   Feature cards — single column on a phone, 2 then 3 columns as width
+   allows (see @media).
+   ---------------------------------------------------------------------- */
+.grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.card {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 14px 15px;
+  background: #fff;
+}
+.card.hi { background: var(--focus-tint); border-color: #BCCCEE; }
+.card .ct { font-size: 14.5px; font-weight: 800; color: var(--brand-blue); }
+.card .cb { font-size: 13px; line-height: 1.48; color: var(--ink); margin-top: 5px; }
+
+/* ----------------------------------------------------------------------
+   Subscription / Coming soon panels — stacked mobile, side by side once
+   there's room.
+   ---------------------------------------------------------------------- */
+.cols { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.panel { border: 1px solid var(--rule); border-radius: 12px; padding: 16px 17px; background: #fff; }
+.panel.sub { border-color: #E7D98A; }
+.panel h3 { font-size: 16px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.panel h3 .price { font-size: 13px; font-weight: 700; color: var(--brand-blue); }
+.panel ul { list-style: none; margin-top: 10px; }
+.panel li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  padding-left: 18px;
+  position: relative;
+  margin-bottom: 6px;
+}
+.panel li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--brand-blue);
+}
+.panel.soon li::before { background: var(--ink-soft); }
+.panel .note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; line-height: 1.5; }
+
+/* ----------------------------------------------------------------------
+   Final CTA band + footer.
+   ---------------------------------------------------------------------- */
+.ctaband {
+  background: var(--brand-blue);
+  border-radius: 14px;
+  padding: 22px 18px;
+  text-align: center;
+}
+.ctaband .big { font-size: 19px; font-weight: 800; color: #fff; line-height: 1.25; }
+.ctaband .sub { font-size: 13px; color: #DCE6FA; margin-top: 6px; }
+.ctaband .price { margin-top: 14px; color: #fff; }
+.ctaband .price .amt { font-size: 17px; font-weight: 800; }
+.ctaband .price .per { font-size: 11.5px; color: #DCE6FA; margin-top: 2px; }
+.ctaband .btn-white { margin-top: 16px; width: 100%; }
+footer { padding: 22px 0 34px; }
+footer .wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------------
+   Tablet and up (~600px): feature grid to 2 columns, subscription panels
+   to 2 columns, hero CTAs go inline instead of stacked.
+   ---------------------------------------------------------------------- */
+@media (min-width: 600px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+  .cols { grid-template-columns: 1.1fr 1fr; }
+  .hero-ctas { flex-direction: row; align-items: center; }
+  .hero-ctas .btn-white { width: auto; }
+  .hero-secondary { text-align: left; padding: 6px 4px; }
+  .ctaband { display: flex; align-items: center; text-align: left; gap: 18px; }
+  .ctaband > div:first-child { flex: 1 1 auto; }
+  .ctaband .price { margin-top: 0; text-align: right; }
+  .ctaband .btn-white { margin-top: 0; width: auto; flex: 0 0 auto; }
+  footer .wrap { flex-direction: row; justify-content: space-between; text-align: left; }
+}
+
+/* ----------------------------------------------------------------------
+   Desktop (~900px): hero becomes two columns (copy left, illustration
+   right, matching the owner's reference composition); feature grid to 3
+   columns.
+   ---------------------------------------------------------------------- */
+@media (min-width: 900px) {
+  .hero .wrap { flex-direction: row; align-items: center; gap: 40px; }
+  .hero-copy { flex: 1 1 52%; max-width: none; }
+  .hero-art { flex: 1 1 44%; max-width: 460px; align-self: center; }
+  .h1 { font-size: 38px; }
+  .grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brandmark" href="#top">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      <span class="word">Would You Please</span>
+    </a>
+    <span class="spacer"></span>
+    <a class="signin-link" href="/login">Sign In</a>
+    <a class="btn-primary" href="/login">Start Free Account</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <div class="h1">Send it. Track it. Get it done.</div>
+        <div class="h2">The simple way to ask anyone for anything — and actually see it through.</div>
+        <div class="lede">
+          Asks sent by email or chat get buried, forgotten, and lost in long threads.
+          Would You Please turns every ask into a structured, trackable request with a
+          due date, a formal response, and a clear status — Open, Overdue, or Done —
+          visible to both of you. Your personal ToDos live right alongside, on one
+          dashboard.
+        </div>
+        <div class="hero-ctas">
+          <a class="btn-white" href="/login">Start Free Account</a>
+          <a class="hero-secondary" href="/login">Already using Would You Please? <b>Sign In</b></a>
+        </div>
+        <div class="reassure">No credit card. Nothing to install — works right in your phone's browser.</div>
+      </div>
+
+      <!-- Hero illustration — hand-built SVG, not the AI placeholder photo;
+           see the file-level comment at the top of this stylesheet for why.
+           A simplified, legible version of the app's own Main Screen, with
+           two floating callout badges echoing the owner's reference
+           composition ("Send It" / "Done"). viewBox scaling keeps this
+           crisp from a small phone width up through desktop. -->
+      <svg class="hero-art" viewBox="0 0 440 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A Would You Please dashboard showing tracked requests and their due dates">
+        <circle cx="392" cy="46" r="30" fill="#ffffff" opacity=".08"/>
+        <circle cx="34" cy="300" r="46" fill="#ffffff" opacity=".07"/>
+
+        <!-- dashboard card -->
+        <rect x="46" y="34" width="330" height="272" rx="16" fill="#ffffff"/>
+        <rect x="46" y="34" width="330" height="40" rx="16" fill="#F6F7F9"/>
+        <rect x="46" y="58" width="330" height="16" fill="#F6F7F9"/>
+        <circle cx="64" cy="54" r="5" fill="#D8DEE7"/>
+        <circle cx="80" cy="54" r="5" fill="#D8DEE7"/>
+        <circle cx="96" cy="54" r="5" fill="#D8DEE7"/>
+        <text x="330" y="59" text-anchor="end" font-family="Inter, sans-serif" font-size="12" font-weight="800" fill="#2A5FC8">Would You Please</text>
+
+        <!-- section pills: Sent / Received / ToDos -->
+        <rect x="62" y="84" width="70" height="20" rx="10" fill="#2A5FC8"/>
+        <text x="97" y="98" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="#ffffff">Sent</text>
+        <rect x="138" y="84" width="86" height="20" rx="10" fill="#E5ECF7"/>
+        <text x="181" y="98" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="#5A6675">Received</text>
+        <rect x="230" y="84" width="70" height="20" rx="10" fill="#E5ECF7"/>
+        <text x="265" y="98" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="#5A6675">ToDos</text>
+
+        <!-- rows -->
+        <g font-family="Inter, sans-serif">
+          <!-- row 1: open -->
+          <rect x="62" y="118" width="298" height="1" fill="#E2E6EC"/>
+          <text x="62" y="140" font-size="12" font-weight="700" fill="#1F2933">Prepare the June cash flow report</text>
+          <text x="360" y="140" text-anchor="end" font-size="11" font-weight="800" fill="#1F2933">08-17-26</text>
+
+          <!-- row 2: overdue (red) -->
+          <rect x="62" y="152" width="298" height="1" fill="#E2E6EC"/>
+          <text x="62" y="174" font-size="12" font-weight="700" fill="#D32F2F">Hire referees for Valley Little League</text>
+          <text x="360" y="174" text-anchor="end" font-size="11" font-weight="800" fill="#D32F2F">07-22-26</text>
+
+          <!-- row 3: open -->
+          <rect x="62" y="186" width="298" height="1" fill="#E2E6EC"/>
+          <text x="62" y="208" font-size="12" font-weight="700" fill="#1F2933">Confirm the office lease renewal terms</text>
+          <text x="360" y="208" text-anchor="end" font-size="11" font-weight="800" fill="#1F2933">08-19-26</text>
+
+          <!-- row 4: done (muted) -->
+          <rect x="62" y="220" width="298" height="1" fill="#E2E6EC"/>
+          <text x="62" y="242" font-size="12" font-weight="600" fill="#5A6675">Renew the annual insurance policy</text>
+          <text x="360" y="242" text-anchor="end" font-size="11" font-weight="600" fill="#5A6675">08-02-26</text>
+        </g>
+
+        <!-- search/filter strip -->
+        <rect x="62" y="258" width="298" height="26" rx="8" fill="#F6F7F9"/>
+        <circle cx="76" cy="271" r="5" fill="none" stroke="#7E8A9A" stroke-width="2"/>
+        <line x1="80" y1="275" x2="85" y2="280" stroke="#7E8A9A" stroke-width="2" stroke-linecap="round"/>
+        <text x="96" y="275" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#8A93A0">Search requests and ToDos…</text>
+
+        <!-- floating badge: Send It -->
+        <g transform="translate(2,178)">
+          <rect width="118" height="34" rx="17" fill="#123B7A"/>
+          <path d="M14 17 L26 11 L23 17 L26 23 Z" fill="#ffffff"/>
+          <text x="40" y="21" font-family="Inter, sans-serif" font-size="12" font-weight="800" fill="#ffffff">Send It</text>
+        </g>
+
+        <!-- floating badge: Done, with check -->
+        <g transform="translate(288,268)">
+          <rect width="128" height="46" rx="12" fill="#ffffff"/>
+          <circle cx="24" cy="23" r="13" fill="#2A5FC8"/>
+          <path d="M18 23 L22 27 L31 17" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="44" y="20" font-family="Inter, sans-serif" font-size="11" font-weight="800" fill="#1F2933">Get it Done!</text>
+          <text x="44" y="34" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#5A6675">Confirmed &amp; closed out</text>
+        </g>
+
+        <!-- floating badge: Track It -->
+        <g transform="translate(302,4)">
+          <rect width="120" height="32" rx="16" fill="#1C8FA0"/>
+          <circle cx="18" cy="16" r="9" fill="none" stroke="#ffffff" stroke-width="2"/>
+          <line x1="18" y1="16" x2="18" y2="11" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+          <line x1="18" y1="16" x2="22" y2="18" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+          <text x="34" y="20" font-family="Inter, sans-serif" font-size="12" font-weight="800" fill="#ffffff">Track It</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Feature grid -->
+  <section class="section">
+    <div class="wrap">
+      <div class="slabel">
+        <span class="t">Everything you need to follow through</span>
+        <span class="badge free">Free</span>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ct">Trackable Requests</div>
+          <div class="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar.</div>
+        </div>
+        <div class="card">
+          <div class="ct">Formal Responses</div>
+          <div class="cb">Recipients reply with answers. A timestamped Done confirmation closes the loop — no more "did you get to it?"</div>
+        </div>
+        <div class="card hi">
+          <div class="ct">Add to Calendar</div>
+          <div class="cb">Every request a recipient receives drops onto their calendar in one tap — the due date never gets lost.</div>
+        </div>
+        <div class="card">
+          <div class="ct">ToDos with Priorities</div>
+          <div class="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a request in one tap.</div>
+        </div>
+        <div class="card">
+          <div class="ct">Dialog Threads</div>
+          <div class="cb">Questions, answers, and comments stay attached to the item itself — a clear, auditable record, never lost in chat.</div>
+        </div>
+        <div class="card">
+          <div class="ct">One Dashboard &amp; Search</div>
+          <div class="cb">Sent, Received, and My ToDos on one screen — filter, sort, print, and search. Find anything by person, category, or date.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Subscription / Coming soon -->
+  <section class="section alt">
+    <div class="wrap">
+      <div class="cols">
+        <div>
+          <div class="slabel">
+            <span class="t">Coming with a subscription</span>
+            <span class="badge sub">$17.95 / yr</span>
+          </div>
+          <div class="panel sub">
+            <ul>
+              <li><b>File attachments</b> — send and receive documents, photos, and PDFs with your requests and responses.</li>
+              <li><b>Request Texting</b> — deliver requests by SMS text in addition to email.</li>
+              <li><b>Keep everything forever</b> — perpetual history for your requests and files.</li>
+              <li><b>Ad-free</b>, with priority support.</li>
+            </ul>
+            <div class="note">Just $1.50 a month — a fraction of team tools. The free plan keeps a full year of history.</div>
+          </div>
+        </div>
+        <div>
+          <div class="slabel">
+            <span class="t">Coming soon</span>
+            <span class="badge soon">Roadmap</span>
+          </div>
+          <div class="panel soon">
+            <ul>
+              <li><b>Voice search</b> — dictate a search, or speak your request text instead of typing.</li>
+              <li><b>Native apps</b> for iPhone, Android, and Windows, with push notifications.</li>
+            </ul>
+            <div class="note">Start on the web today — your account, requests, and ToDos carry over automatically when new features and apps arrive.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="section">
+    <div class="wrap">
+      <div class="ctaband">
+        <div>
+          <div class="big">Start free today at wouldyouplease.com</div>
+          <div class="sub">No download. No setup. Send your first request in under a minute.</div>
+        </div>
+        <div class="price">
+          <div class="amt">Free</div>
+          <div class="per">for advanced features, subscription $17.95/yr</div>
+        </div>
+        <a class="btn-white" href="/login">Start Free Account</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>&copy; 2026 Would You Please</span>
+    <span>wouldyouplease.com</span>
+  </div>
+</footer>
+
+</body>
+</html>

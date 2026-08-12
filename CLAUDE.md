@@ -365,16 +365,20 @@ link is built only after the stack is proven on Add Contact.
   sign-up screen — Email is read-only from the session, and the account/
   stub `profiles` row (via `handle_new_user`) already exist by the time this
   screen is reached; no conflict with the magic-link-only Auth section.
-  **Depends on migration 013** (grant `UPDATE(time_zone)` on `profiles` to
-  `authenticated`, drafted in `docs/Week4 - SQL history.txt`, not yet run) —
-  a real bug found while scoping this screen: the Week 1 column-specific
-  UPDATE grant predates `time_zone` (added later, migration 007) and was
-  never extended to include it, so every write to `profiles.time_zone` —
-  including Add Contact/Contact Detail's own browser-detected fallback
-  write-back — has been silently failing since migration 007 (SELECT was
-  unaffected, which is what masked it). Until the owner runs migration 013,
-  Save on Create Free Account will surface a permission error on that one
-  field. See decisions log for the full write-up.
+  **Depended on migration 013** (grant `UPDATE(time_zone)` on `profiles` to
+  `authenticated`, `docs/Week4 - SQL history.txt`) — **confirmed run by the
+  owner, verified 2026-08-12** via a direct `information_schema.
+  column_privileges` query (`authenticated` holds `UPDATE` on
+  `profiles.time_zone`), after the Supabase SQL editor's own History view
+  was reported showing entries only through migration 011 and couldn't be
+  trusted on its own. A real bug had been found while scoping this screen:
+  the Week 1 column-specific UPDATE grant predates `time_zone` (added
+  later, migration 007) and was never extended to include it, so every
+  write to `profiles.time_zone` — including Add Contact/Contact Detail's
+  own browser-detected fallback write-back — had been silently failing
+  since migration 007 (SELECT was unaffected, which is what masked it).
+  Save on Create Free Account now writes Time Zone successfully. See
+  decisions log for the full write-up.
 - **PRD §7.3 "Notification Email Templates" (2026-08-11, `docs/
   WouldYouPlease_PRD_v12_9.docx`) — spec only, nothing built.** Owner gave
   literal to:/from:/subject:/body: templates for an Initial Request email and
@@ -392,8 +396,9 @@ link is built only after the stack is proven on Add Contact.
   building this (Resend integration, send-on-create, the reminder's
   scheduled job, the Send-time advisory UI) has not been discussed. **The
   Create Free Account dependency this entry originally flagged is resolved**
-  — see the entry above; `profiles.display_name` now has a live path once
-  migration 013 is run.
+  — see the entry above; `profiles.display_name` now has a live path, and
+  migration 013 is confirmed run, so Create Free Account's Save works
+  end to end.
 - **Main Screen's filter chips and search are now functional** (2026-08-09):
   All/Open/Overdue/Done on Sent and All/Open/Done on ToDos filter the
   already-fetched rows client-side; search matches description/contact-name/
@@ -868,3 +873,104 @@ link is built only after the stack is proven on Add Contact.
   column at all — the owner's own request already reasons past this).
   Neither doc edited here — open question for the owner on whether/when to
   do the formal revision. See the decisions log's 2026-08-12 entry.
+- **Week 5 Priority 1 (email sending) started — template module, send
+  route, and the Tight-window advisory built; the actual send path is not
+  yet live (2026-08-12).** Owner confirmed wouldyouplease.com is his real
+  domain and will set up Resend/DNS himself: "Please start on the part you
+  suggested and await my real MX information to proceed." New
+  `app/src/lib/email.ts` — pure, no env var access — renders PRD §7.3's
+  Initial Request and Reminder email subject/body from a Request's own
+  data, matching the PRD's literal wording (extracted verbatim from
+  `docs/WouldYouPlease_PRD_v12_9.docx`, same zipfile+regex technique used
+  elsewhere in this file's history), plus `isTightWindow` (24-hour
+  threshold, missing Due Time falls back to `ics.ts`'s own
+  `ICS_DEFAULT_DUE_TIME` rather than a second convention for the same
+  ambiguity). New `app/api/email/send-request/route.ts` is the only place
+  `RESEND_API_KEY` is read — **re-derives the Request's description, Due
+  Date/Time, and the recipient's stored email from Supabase itself, scoped
+  by the caller's own forwarded JWT** (anon key + `Authorization` header
+  passthrough, no `service_role` anywhere in this file — same posture
+  CLAUDE.md's Database section already takes), rather than trusting
+  whatever the client posts; only the Request id and an already-minted
+  `issue_request_link` token/link come from the client. Every failure
+  path, including the no-SMTP-configured case (`reason: 'not_configured'`),
+  returns 200 with `sent: false` — this must never surface as an error
+  against a Request that already saved successfully. Wired into
+  `CreateRequestForm.tsx`'s `handleSubmit`: after Send succeeds, mints a
+  response-link token (the same owner-only `issue_request_link` RPC,
+  migration 008, that `RequestDetailForm.tsx`'s "Get Response Link" band
+  already calls manually) and POSTs to the new route, fire-and-forget,
+  wrapped so nothing in that block can undo or block the already-saved
+  Request. A Tight-window advisory note (reusing `isTightWindow`) shows
+  near Due Date/Time on Create Request only — **not** ported to Request
+  Detail, since whether re-editing an existing Request's Due Date there
+  should re-trigger the Initial email at all is a genuinely open question,
+  flagged rather than silently decided.
+  **Send path switched from Resend to Hostinger SMTP, same day** — the
+  owner signed up for Hostinger's mailbox hosting (`notifications@would
+  youplease.com`, his own choice after being asked what local-part to
+  use) rather than Resend, the placeholder provider `docs/WYP_Week5_Plan.md`
+  had assumed. `app/api/email/send-request/route.ts` now sends via
+  `nodemailer` over SMTP (`smtp.hostinger.com:465`) instead of a Resend
+  `fetch` call; `export const runtime = 'nodejs'` added explicitly since
+  `nodemailer` needs Node's `net`/`tls`, unavailable on Edge. Env vars are
+  now `EMAIL_SMTP_HOST`/`EMAIL_SMTP_PORT`/`EMAIL_SMTP_USER`/
+  `EMAIL_SMTP_PASSWORD` (replacing `RESEND_API_KEY`) — the real mailbox
+  password lives only in `.env.local` (git-ignored) and, once the owner
+  adds it there himself, Vercel's own Environment Variables; never in a
+  committed file. **Verification blocked by this session's own sandbox
+  network allowlist, not a credentials problem** — `transporter.verify()`
+  failed with a DNS resolution error (`EAI_AGAIN`) before authentication
+  was ever attempted; `.env.local` was written into the owner's own real
+  project folder, so `npm run dev` on his machine (or the deployed Vercel
+  app, once configured there) should be able to verify this for real. See
+  the decisions log's two 2026-08-12 entries for the full write-up.
+  **Still open, from `docs/WYP_Week5_Plan.md`**: the Reminder email's own
+  day-before scheduled job (Vercel Cron vs. `pg_cron`, undecided).
+  **Live test, 2026-08-13**: `.ics` events with no Due Time now render as
+  RFC 5545 all-day (`VALUE=DATE`) events instead of defaulting to a
+  fabricated 9:00 AM slot — the old default made Gmail/Outlook offer
+  "Invite Others" on what was never a meeting (`buildIcsContent`,
+  `app/src/lib/ics.ts`; a Due Time the sender actually sets is unaffected).
+  The same test's email Subject was missing "from `<name>`" — traced to
+  `profiles.display_name` likely being empty for the test account, not a
+  route bug (the omit-when-null behavior is exactly what PRD §7.3
+  specifies); flagged for the owner to confirm via a direct query rather
+  than changed blind. **That investigation's tentative conclusion was
+  wrong — see the decisions log's next 2026-08-13 entry.** `profiles` was
+  found completely empty (zero rows, not just missing the owner's own),
+  because `CreateFreeAccountForm.tsx`'s `handleSubmit` only ever ran a
+  plain `UPDATE ... WHERE id = X`, and Postgrest doesn't treat "matched
+  zero rows" as an error — every prior Save had silently done nothing while
+  reporting success. Fixed: the UPDATE now chains `.select('id')` to detect
+  a zero-row result, and falls back to a plain `INSERT` (same field set,
+  safe under the existing `"profiles: insert own"` RLS policy) when it
+  finds one. Self-healing regardless of whether `handle_new_user`'s trigger
+  (Week 1 SQL history) is ever confirmed working — not yet verified either
+  way; the owner has a direct verification query and a one-time backfill
+  for his own row. **Confirmed fixed, live** — the owner redid Create Free
+  Account (not the manual backfill) and his name now shows correctly on
+  Received Requests, exercising the new INSERT-fallback path for real.
+  Trigger status was genuinely unconfirmed (only `handle_new_user`'s own
+  existence had been verified, not the trigger itself), so **migration 014**
+  (`docs/Week5 - SQL history.txt`, confirmed run by the owner 2026-08-13)
+  recreated `on_auth_user_created` idempotently rather than leave it open —
+  protects future sign-ups regardless of whether the trigger really was
+  missing before.
+- **Marketing landing page drafted, mobile-first — `design/marketing/WYP_landing_page.html`, new 2026-08-12.** A new
+  category in `design/` (see that folder's own README), separate from the
+  480px app-screen mockups — this is a full-width, responsive sales page
+  for an unauthenticated, no-parameter visit to wouldyouplease.com, not an
+  app screen. Owner: "a landing page... as a sales pitch to set up a Free
+  Account... The action item from the page would be the login/create
+  account screen" — both CTAs point to `/login`. Copy reused from the
+  owner's own sales one-pager; hero illustration is a hand-built SVG of the
+  app's own real Main Screen rather than the owner's AI-generated reference
+  photo, which had garbled placeholder text and no way to regenerate in
+  this session — see the decisions log for the full reasoning, including
+  why the palette stays strictly on-token. **Mobile-first**, per the
+  owner's own follow-up correction — every rule outside two `@media`
+  breakpoints (600px/900px) targets a phone by default; not yet wired to a
+  route or reviewed in an actual browser (no headless browser reachable in
+  this session's sandbox to screenshot it — verified structurally instead,
+  see the decisions log).

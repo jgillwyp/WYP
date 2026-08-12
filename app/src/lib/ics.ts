@@ -117,11 +117,38 @@ export type IcsRequestFields = {
   owner_name: string | null
 }
 
+// Local calendar date as "YYYYMMDD" (no time component) — the DATE form
+// RFC 5545 §3.3.4 requires for an all-day VEVENT's DTSTART/DTEND;VALUE=DATE.
+function formatIcsDateOnly(d: Date): string {
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`
+}
+
 export function buildIcsContent(payload: IcsRequestFields, link: string): string {
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
-  const [hh, mm] = (payload.due_time ?? ICS_DEFAULT_DUE_TIME).split(':').map(Number)
-  const start = new Date(y, m - 1, d, hh, mm)
-  const end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000)
+  const hasTime = payload.due_time != null && payload.due_time.trim() !== ''
+
+  // Owner-reported, 2026-08-13, testing the live email: with no Due Time,
+  // the old behavior (default to ICS_DEFAULT_DUE_TIME, 9:00 AM, and build a
+  // 30-minute timed event) made Google Calendar and Outlook both offer an
+  // "Invite Others" control on the resulting event — noise for a WYP
+  // Request/ToDo, which was never a scheduled meeting with attendees to
+  // begin with. A Due Time the sender actually set is unaffected and still
+  // renders as a timed event; only the "no time given" case changes, to an
+  // all-day (VALUE=DATE) event instead of a fabricated 9:00 AM slot.
+  let dtstartLine: string
+  let dtendLine: string
+  if (hasTime) {
+    const [hh, mm] = payload.due_time!.split(':').map(Number)
+    const start = new Date(y, m - 1, d, hh, mm)
+    const end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000)
+    dtstartLine = `DTSTART:${formatIcsLocal(start)}`
+    dtendLine = `DTEND:${formatIcsLocal(end)}`
+  } else {
+    // DTEND is exclusive per RFC 5545 §3.6.1 — a single-day all-day event
+    // still needs DTEND one calendar day past DTSTART, not the same date.
+    dtstartLine = `DTSTART;VALUE=DATE:${formatIcsDateOnly(new Date(y, m - 1, d))}`
+    dtendLine = `DTEND;VALUE=DATE:${formatIcsDateOnly(new Date(y, m - 1, d + 1))}`
+  }
 
   const lines = [
     'BEGIN:VCALENDAR',
@@ -131,8 +158,8 @@ export function buildIcsContent(payload: IcsRequestFields, link: string): string
     'BEGIN:VEVENT',
     `UID:request-${payload.id}@wouldyouplease.com`,
     `DTSTAMP:${formatIcsUtc(new Date())}`,
-    `DTSTART:${formatIcsLocal(start)}`,
-    `DTEND:${formatIcsLocal(end)}`,
+    dtstartLine,
+    dtendLine,
     `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
     `DESCRIPTION:${icsEscapeText(buildIcsDescription(payload.owner_name, payload.description, link))}`,
     `URL:${link}`,

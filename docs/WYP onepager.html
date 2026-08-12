@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Would You Please — Sales One-Pager v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--brand-blue:#2A5FC8;--ink:#1F2933;--ink-soft:#5A6675;--rule:#E2E6EC;
+  --strip:#E5ECF7;--band:#E7E7E7;--row-tint:#F6F7F9;--focus-tint:#EDF2FD;--sort:#FFE34D;}
+*{box-sizing:border-box;margin:0;padding:0;}
+@page{size:letter;margin:0;}
+html,body{background:#fff;}
+body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
+  -webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1;}
+.page{width:8.5in;min-height:11in;padding:0.5in 0.55in 0.45in;margin:0 auto;display:flex;flex-direction:column;}
+
+/* Header */
+.hdr{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:2px solid var(--brand-blue);}
+.hdr .logo svg{height:52px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.03;}
+.word{font-size:30px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:14px;font-weight:600;color:var(--ink-soft);margin-top:2px;}
+.hdr .meta{margin-left:auto;text-align:right;}
+.hdr .url{font-size:14px;font-weight:800;color:var(--ink);}
+.hdr .avail{font-size:11.5px;font-weight:600;color:var(--brand-blue);margin-top:2px;}
+
+/* Hero */
+.hero{margin-top:16px;}
+.h1{font-size:26px;font-weight:800;letter-spacing:-.015em;}
+.h2{font-size:14.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.lede{font-size:12.5px;line-height:1.5;color:var(--ink);margin-top:9px;max-width:7.4in;}
+.install{font-size:12.5px;line-height:1.5;color:var(--ink);margin-top:8px;background:var(--focus-tint);
+  border-radius:8px;padding:8px 11px;}
+.install b{color:var(--brand-blue);}
+
+/* Section label */
+.slabel{display:flex;align-items:center;gap:9px;margin:16px 0 9px;}
+.slabel .t{font-size:13px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--ink);white-space:nowrap;}
+.slabel .badge{font-size:10.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:2px 8px;border-radius:999px;}
+.badge.free{background:var(--brand-blue);color:#fff;}
+.badge.sub{background:var(--sort);color:var(--ink);}
+.badge.soon{background:var(--band);color:var(--ink-soft);}
+.slabel .rule{flex:1 1 auto;height:1px;background:var(--rule);}
+
+/* Feature grid */
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
+.card{border:1px solid var(--rule);border-radius:9px;padding:9px 11px;background:#fff;}
+.card .ct{font-size:13px;font-weight:800;color:var(--brand-blue);}
+.card .cb{font-size:11.5px;line-height:1.42;color:var(--ink);margin-top:3px;}
+.card.hi{background:var(--focus-tint);border-color:#BcCcEE;}
+.card.hi .ct{color:var(--brand-blue);}
+
+/* Subscription + soon two-column */
+.cols{display:grid;grid-template-columns:1.15fr 1fr;gap:12px;margin-top:2px;}
+.panel{border:1px solid var(--rule);border-radius:10px;padding:11px 13px;}
+.panel.sub{background:#fff;border-color:#E7D98A;}
+.panel h3{font-size:14px;font-weight:800;color:var(--ink);display:flex;align-items:baseline;gap:8px;}
+.panel h3 .price{font-size:12.5px;font-weight:700;color:var(--brand-blue);}
+.panel ul{list-style:none;margin-top:7px;}
+.panel li{font-size:11.5px;line-height:1.5;color:var(--ink);padding-left:16px;position:relative;margin-bottom:2px;}
+.panel li::before{content:"";position:absolute;left:2px;top:6px;width:6px;height:6px;border-radius:2px;background:var(--brand-blue);}
+.panel.soon li::before{background:var(--ink-soft);}
+.panel .note{font-size:11px;color:var(--ink-soft);margin-top:7px;line-height:1.45;}
+
+/* Footer CTA */
+.cta{margin-top:auto;padding-top:14px;}
+.ctabar{background:var(--brand-blue);border-radius:11px;padding:13px 16px;display:flex;align-items:center;gap:14px;}
+.ctabar .big{font-size:16px;font-weight:800;color:#fff;}
+.ctabar .sub{font-size:12px;color:#DCE6FA;margin-top:2px;}
+.ctabar .price{margin-left:auto;text-align:right;color:#fff;}
+.ctabar .price .amt{font-size:16px;font-weight:800;}
+.ctabar .price .per{font-size:11px;color:#DCE6FA;}
+.foot{font-size:10.5px;color:var(--ink-soft);margin-top:9px;display:flex;justify-content:space-between;}
+</style></head>
+<body>
+<div class="page">
+
+  <div class="hdr">
+    <span class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg></span>
+    <span class="brand"><span class="word">Would You Please</span><span class="tag">For Request Tracking and ToDos</span></span>
+    <span class="meta"><div class="url">wouldyouplease.com</div><div class="avail">Now available in your web browser</div></span>
+  </div>
+
+  <div class="hero">
+    <div class="h1">Send it. Track it. Get it done.</div>
+    <div class="h2">The simple way to ask anyone for anything &#8212; and actually see it through.</div>
+    <div class="lede">Asks sent by email or chat get buried, forgotten, and lost in long threads. Would You Please turns every ask into a structured, trackable request with a due date, a formal response, and a clear status &#8212; Open, Overdue, or Done &#8212; visible to both of you. Your personal ToDos live right alongside, on one dashboard.</div>
+    <div class="install"><b>Nothing to install. Works wherever you are.</b> Open it in any browser on your computer, tablet, or phone &#8212; and the people you send requests to can respond through a secure web link without creating an account or downloading anything.</div>
+  </div>
+
+  <div class="slabel"><span class="t">Everything you need to follow through</span><span class="badge free">Free</span><span class="rule"></span></div>
+  <div class="grid">
+    <div class="card"><div class="ct">Trackable Requests</div><div class="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar.</div></div>
+    <div class="card"><div class="ct">Formal Responses</div><div class="cb">Recipients reply with answers. A timestamped Done confirmation closes the loop &#8212; no more &#8220;did you get to it?&#8221;</div></div>
+    <div class="card hi"><div class="ct">Add to Calendar</div><div class="cb">Every request a recipient receives drops onto their calendar in one tap &#8212; the due date never gets lost.</div></div>
+    <div class="card"><div class="ct">ToDos with Priorities</div><div class="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a request in one tap.</div></div>
+    <div class="card"><div class="ct">Dialog Threads</div><div class="cb">Questions, answers, and comments stay attached to the item itself &#8212; a clear, auditable record, never lost in chat.</div></div>
+    <div class="card"><div class="ct">One Dashboard &amp; Search</div><div class="cb">Sent, Received, and My ToDos on one screen &#8212; filter, sort, print, and expand. Find anything by person, category, or date.</div></div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="slabel"><span class="t">Coming with a subscription</span><span class="badge sub">$17.95 / yr</span><span class="rule"></span></div>
+      <div class="panel sub">
+        <ul>
+          <li><b>File attachments</b> &#8212; send and receive documents, photos, and PDFs with your requests and responses.</li>
+          <li><b>Request Texting</b> &#8212; deliver requests by SMS text in addition to email.</li>
+          <li><b>Keep everything forever</b> &#8212; perpetual history for your requests and files.</li>
+          <li><b>Ad-free</b>, with priority support.</li>
+        </ul>
+        <div class="note">Just $1.50 a month &#8212; a fraction of team tools. The free plan keeps a full year of history.</div>
+      </div>
+    </div>
+    <div>
+      <div class="slabel"><span class="t">Coming soon</span><span class="badge soon">Roadmap</span><span class="rule"></span></div>
+      <div class="panel soon">
+        <ul>
+          <li><b>Voice search</b> &#8212; dictate a search, or speak your request text instead of typing.</li>
+          <li><b>Native apps</b> for iPhone, Android, and Windows, with push notifications.</li>
+        </ul>
+        <div class="note">Start on the web today &#8212; your account, requests, and ToDos carry over automatically when new features and apps arrive.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta">
+    <div class="ctabar">
+      <div><div class="big">Start free today at wouldyouplease.com</div><div class="sub">No download. No setup. Send your first request in under a minute.</div></div>
+      <div class="price"><div class="amt">Free</div><div class="per">for advanced features, subscription $17.95/yr</div></div>
+    </div>
+    <div class="foot"><span>&#169; 2026 Would You Please</span><span>wouldyouplease.com</span></div>
+  </div>
+
+</div>
+</body></html>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { isTightWindow } from '@/lib/email'
 
 /**
  * Create Request (§9.2) — converted by hand from
@@ -38,6 +39,18 @@ import { supabase } from '@/lib/supabaseClient'
  * the "which Question" picker that comes with it (migration 006,
  * replies_to_id), exist only on Respond to Request / Request Detail, where a
  * thread can already be open — see that mockup's own comment.
+ *
+ * Initial Request email (PRD §7.3, Week 5 Priority 1, 2026-08-12): once the
+ * Request (and any Dialog entries) save successfully, handleSubmit mints a
+ * response-link token via issue_request_link and POSTs to
+ * /api/email/send-request — best-effort, never awaited-to-block or allowed
+ * to surface an error, since the Request itself is already saved by that
+ * point. The route no-ops safely with RESEND_API_KEY unset, which is the
+ * case until Jim's wouldyouplease.com domain DNS and Resend account are
+ * ready — see docs/WYP_Week5_Plan.md. tightWindow (isTightWindow, @/lib/email)
+ * drives the inline advisory note near Due Date/Time, computed the same way
+ * the send-request route itself decides whether to omit the Reminder
+ * sentence, so the two can never disagree.
  */
 
 type Contact = {
@@ -231,6 +244,14 @@ export default function CreateRequestForm() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  // Tight-window advisory (PRD §7.3, Week 5 Priority 1) — a Request due in
+  // under 24 hours gets no day-before Reminder email; this note tells the
+  // sender that at Send time rather than leaving it a silent gap. Purely
+  // informational — isTightWindow is also what the send-request route
+  // itself uses to decide whether to omit the Initial email's own reminder
+  // sentence, so this note and that behavior can never disagree.
+  const tightWindow = form.dueDate.trim() !== '' && isTightWindow(form.dueDate, form.dueTime || null)
+
   const contactQueryEmpty = form.recipientName.trim() === ''
   const contactsBrowsable = contacts.length < LOOKUP_BROWSE_THRESHOLD
 
@@ -403,6 +424,41 @@ export default function CreateRequestForm() {
         )
         return
       }
+    }
+
+    // Initial Request email (PRD §7.3, Week 5 Priority 1, 2026-08-12) —
+    // best-effort, fire-and-forget: a failure anywhere in this block must
+    // never undo or block the Request that's already saved above, so
+    // everything here is wrapped and swallowed rather than surfaced via
+    // setError. issue_request_link (migration 008) is owner-only and
+    // multi-use — minting a token here is the same call RequestDetailForm's
+    // own "Get Response Link" band already makes, just triggered
+    // automatically at Send instead of by a manual click.
+    try {
+      const { data: linkToken } = await supabase.rpc('issue_request_link', {
+        p_request_id: newRequest.id,
+      })
+      if (linkToken) {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const accessToken = sessionData.session?.access_token
+        if (accessToken) {
+          fetch('/api/email/send-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({
+              requestId: newRequest.id,
+              link: `${window.location.origin}/r/${linkToken}`,
+            }),
+          }).catch(() => {
+            // Best-effort — see comment above. app/api/email/send-request's
+            // own route already no-ops safely (RESEND_API_KEY isn't set
+            // yet, 2026-08-12) rather than erroring in the common case;
+            // this catch only guards the network call itself.
+          })
+        }
+      }
+    } catch {
+      // Best-effort — see comment above.
     }
 
     setSaving(false)
@@ -599,6 +655,15 @@ export default function CreateRequestForm() {
               </span>
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
+            {/* Tight-window advisory (PRD §7.3, Week 5 Priority 1, 2026-08-12) —
+                a Due Date under 24 hours away gets no day-before Reminder
+                email; told here at compose time rather than left a silent
+                gap. Not an error — doesn't block Send. */}
+            {tightWindow && !dueDateInvalid && (
+              <p className="subnote" style={{ marginTop: -8 }}>
+                This Due Date is less than 24 hours away — no day-before Reminder email will be sent.
+              </p>
+            )}
 
             {/* Category row */}
             <div className="fgroup">

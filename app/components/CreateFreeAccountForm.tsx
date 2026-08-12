@@ -13,14 +13,27 @@ import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
  *
  * NOT a sign-up screen. The mockup's own footer copy says it directly: "No
  * password on this account — you have already signed in with the one-time
- * link emailed to the address above." signInWithOtp already created the
- * auth.users row and, via the handle_new_user trigger (Week 1 SQL history),
- * a matching profiles row with display_name = null. This screen's only job
- * is to fill in the profile fields OTP alone can't supply — First/Last/
- * Display Name, Time Zone, Phone, Notify Me By — via UPDATE, never INSERT.
+ * link emailed to the address above." signInWithOtp creates the auth.users
+ * row and, via the handle_new_user trigger (Week 1 SQL history), is
+ * *supposed* to also create a matching profiles row with display_name =
+ * null. This screen's job is to fill in the profile fields OTP alone can't
+ * supply — First/Last/Display Name, Time Zone, Phone, Notify Me By.
  * Email is read-only (`.metarow`, §6.28), sourced from the session, not
  * collected here — consistent with "no separate signup step" in CLAUDE.md's
  * Auth section, not a conflict with it.
+ *
+ * UPDATE-with-INSERT-fallback, not UPDATE alone (2026-08-13 fix) — the
+ * owner's own live test found his `profiles` table completely empty (zero
+ * rows, not just his own row missing), meaning the trigger above never ran
+ * for his account. A plain `.update().eq('id', ...)` against a row that
+ * doesn't exist is not an error in Postgrest — it just matches and affects
+ * nothing — so the old code always reported success and navigated to `/`
+ * regardless, with nothing ever actually saved. `handleSubmit` below now
+ * requests the updated row back (`.select('id')`) and, if that comes back
+ * empty, inserts it instead — safe under RLS (`"profiles: insert own"`,
+ * migration 002, `with check (id = auth.uid())`, same column set the
+ * existing UPDATE grant already allows) and means this screen no longer
+ * depends on the trigger having worked. See the decisions log, 2026-08-13.
  *
  * Wired as the mandatory first-run step 2026-08-11 (owner decision, see
  * decisions log): app/auth/callback/page.tsx redirects here whenever
@@ -40,10 +53,9 @@ import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
  * browsing-on-focus, selectedTimeZone guard) but simpler: this screen is
  * where profiles.time_zone first gets a value, so there's no prior stored
  * value to prefer — it defaults straight from the browser and is editable
- * if that guess is wrong. Requires migration 013 (grant UPDATE(time_zone)
+ * if that guess is wrong. Required migration 013 (grant UPDATE(time_zone)
  * on profiles to authenticated) to actually save — see docs/Week4 - SQL
- * history.txt; until the owner runs it, Save will surface a permission
- * error on this field specifically.
+ * history.txt; confirmed run by the owner, verified 2026-08-12.
  */
 
 type AccountFormState = {
@@ -169,29 +181,51 @@ export default function CreateFreeAccountForm() {
       return
     }
 
-    // UPDATE, not insert — the row already exists (handle_new_user trigger,
-    // Week 1 SQL history) from the moment the magic link created the
-    // account. See this file's header comment re: migration 013 for why
-    // time_zone specifically can fail here until that grant is run.
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({
-        first_name: form.firstName.trim(),
-        last_name: form.lastName.trim(),
-        display_name: form.displayName.trim(),
-        phone: form.phone.trim() || null,
-        time_zone: selectedTimeZone,
-        notify_by: notifyBy,
-      })
-      .eq('id', userData.user.id)
+    const payload = {
+      first_name: form.firstName.trim(),
+      last_name: form.lastName.trim(),
+      display_name: form.displayName.trim(),
+      phone: form.phone.trim() || null,
+      time_zone: selectedTimeZone,
+      notify_by: notifyBy,
+    }
 
-    setSaving(false)
+    // UPDATE first — the row is supposed to already exist (handle_new_user
+    // trigger, Week 1 SQL history) from the moment the magic link created
+    // the account. See this file's header comment re: migration 013, which
+    // this write to time_zone specifically depended on (confirmed run).
+    // .select('id') forces Postgrest to return the row(s) actually matched,
+    // so an empty result is distinguishable from success — a bare
+    // .update().eq(...) with no matching row is NOT an error, it just
+    // silently affects nothing, which is exactly the bug this fixes.
+    const { data: updated, error: updateError } = await supabase
+      .from('profiles')
+      .update(payload)
+      .eq('id', userData.user.id)
+      .select('id')
 
     if (updateError) {
+      setSaving(false)
       setError(updateError.message)
       return
     }
 
+    if (!updated || updated.length === 0) {
+      // No row existed to update — see this file's header comment,
+      // 2026-08-13. Insert it now instead of reporting success with
+      // nothing saved.
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({ id: userData.user.id, ...payload })
+
+      if (insertError) {
+        setSaving(false)
+        setError(insertError.message)
+        return
+      }
+    }
+
+    setSaving(false)
     router.push('/')
   }
 

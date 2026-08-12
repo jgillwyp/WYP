@@ -1,0 +1,52 @@
+-- ============================================================================
+-- WYP migration 014 — recreate the on_auth_user_created trigger
+-- CONFIRMED RUN by the owner 2026-08-13.
+--
+-- Background (see decisions log, 2026-08-13): the owner's own `profiles`
+-- table was found completely empty — not just his row, zero rows, despite
+-- the account existing since Week 1. `handle_new_user()` (migration 002) is
+-- supposed to insert a stub profiles row via an AFTER INSERT trigger on
+-- auth.users named on_auth_user_created, every time a new account is
+-- created. A direct check found the function itself exists
+-- (`select proname from pg_proc where proname = 'handle_new_user' ...`
+-- returned one row), but did not confirm the trigger itself still exists —
+-- migration 002's own trigger-creation statement may never have taken, or
+-- something later dropped it. Rather than keep guessing which, this
+-- migration just (re)creates it: `drop trigger if exists` then
+-- `create trigger` is idempotent and safe to run whether or not the trigger
+-- currently exists — it's the same statement migration 002 itself used.
+--
+-- This does NOT retroactively fix any other account that signed up while
+-- the trigger was missing (if it ever was) — each such account needs the
+-- same one-time backfill the owner's own account already got, either by
+-- going through Create Free Account again (CreateFreeAccountForm.tsx now
+-- self-heals a missing row via its own INSERT fallback, 2026-08-13 fix) or
+-- a manual `insert into profiles (id) values (...)`. For this app, at this
+-- stage, that's just the owner's own account — already fixed.
+-- ============================================================================
+
+begin;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+commit;
+
+-- ============================================================================
+-- Verify — this connection is superuser, so seeing the trigger "exist" here
+-- proves creation succeeded, not that it will fire correctly for a real
+-- anon/authenticated sign-in (though there's no RLS-shaped reason it
+-- wouldn't: the function is SECURITY DEFINER, same as before).
+--
+--   select tgname, tgenabled, tgrelid::regclass
+--   from pg_trigger
+--   where tgname = 'on_auth_user_created';
+--        -> should return exactly one row, tgenabled = 'O' (enabled)
+--
+-- Real-world confirmation only comes from a fresh sign-up: have a *new*
+-- email address sign in via magic link, then check
+--   select id from public.profiles where id = '<their auth.users id>';
+-- immediately after — should return one row with no other action taken.
+-- ============================================================================
