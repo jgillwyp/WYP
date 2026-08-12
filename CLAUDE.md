@@ -797,3 +797,74 @@ link is built only after the stack is proven on Add Contact.
   `ResponseDetailForm.tsx` — identical donerow, identical fix. No mockup
   change: the quick-Done band has never been ported into either screen's
   static HTML.
+- **Stylesheets organized and realigned (2026-08-12) — corrects an earlier
+  wrong claim in this same file's history.** Owner: "please organize and
+  realign the style sheets as needed." A prior answer in this session had
+  told the owner the mockups "link a shared `components.css`... read-only
+  from this session," so that day's `.actlabel`/`.donerow` fix couldn't be
+  ported into any mockup. **That was wrong** — re-verified while scoping
+  this task and found none of the 17 `design/screens/*.html` files has a
+  real `<link rel="stylesheet">` to `tokens.css`/`components.css`; every
+  apparent match was a docstring pasted inside a mockup's own `<style>`
+  comment, not an active tag. All 17 mockups are, and always have been,
+  fully self-contained. Regenerated `design/screens/tokens.css` (49 lines)
+  and `design/screens/components.css` (2,100+ lines) from `app/globals.css`
+  — the file that's actually been kept current every session — as the
+  reference for keeping each mockup's embedded `<style>` in sync by hand;
+  no mockup was converted to link them (a separate, bigger architectural
+  change, not requested). Audited class coverage across all 17 mockups
+  against the regenerated copy and found five with real pre-existing gaps:
+  `WYP_create_request_palette1.html` was missing `.actlabel`/`.dlgstaged`/
+  `.ferror`, and separately (missed by the first coverage pass) `.chip`/
+  `.chip.selected` entirely — its Add Dialog Kind chips have been rendering
+  as unstyled native buttons; `WYP_create_todo_palette1.html` was missing
+  `.actlabel`/`.ferror` and, more notably, `.donerow`/`.donenote` — the
+  quick-Done band shipped 2026-08-10 has been rendering unstyled ever
+  since; `WYP_request_detail_palette1.html` and `WYP_todo_detail_palette1.html`
+  needed `.donerow`/`.donenote` for the Attachments conversion below;
+  `WYP_respond_to_request_palette1.html` was missing `.subnote`. Added each
+  rule verbatim from the new canonical `components.css`. Ported the same
+  day's Dialog `(optional)`/Row-Tint fix and Attachments `.donerow`/
+  `.donenote` conversion into the four mockups using the current `.actlabel`
+  pattern (the two just named above, plus Create Request and Create ToDo)
+  — deliberately not into Request Response/Response Detail's mockups, which
+  still use the older `.panel`-based Dialog/Attachments markup, a separate
+  and already-flagged conversion gap. Checked, and confirmed not a bug:
+  Main Screen mockup's `c-cat`/`c-nm`/`c-pri` column classes have no CSS
+  rule of their own in the live app either — only the date columns
+  (`.c-dt`/`.c-due`/`.c-dn`) ever needed one. See the decisions log's
+  2026-08-12 entry for the full write-up.
+- **ToDos gain an Overdue chip; Expand icon dropped app-wide (2026-08-12).**
+  Owner: "Now that ToDos have Due and Done Dates, we need to add the
+  Overdue chip for ToDos to match the chips order for Requests Sent and
+  Received... ToDos without a Due Date would be ignored for the Overdue
+  chip." `todoFilter` is now All/Open/Overdue/Done, same order and same
+  `statusFor(due_date, done_date)` helper Sent/Received already used — a
+  null `due_date` already read as never-overdue there, exactly the owner's
+  own rule, so no new logic was needed beyond fetching `due_date` for ToDos
+  at all (Main Screen's ToDos query never had before). Row-level red text
+  needed its own CSS pass, added after the owner's direct follow-up ("The
+  overdue items in the ToDo list should follow the red-display of text to
+  match the Requests"): `.row.overdue`/`.row.done` previously only targeted
+  Sent/Received's own child classes (`.nm`/`.dt`/`.due`/`.dn`/`.desc`); new
+  rules target ToDo's own (`.pri`/`.cat`/`.tdd`) the same way. **Same
+  message, separate reasoning: the Expand icon is gone, app-wide.** Owner's
+  stated premise for it — each section has a limited "elevator" view, Expand
+  opens the rest full-screen — doesn't match how Sent/Received/ToDos
+  actually shipped (every selected item already shows under its own
+  section, judged the practically correct behavior, not a shortfall), and
+  an expanded view's only remaining value (more Description lines) was
+  judged minimal utility on its own. Removed from `MainScreen.tsx` (three
+  `.subicons` clusters, plus the now-dead `ExpandIcon()`) and from
+  `WYP_main_screen_palette1.html` (three icon `<span>`s plus a stale
+  header comment). Contract was never built anywhere, so nothing to remove
+  for it. This drops the "Priority 3: Expanded screens" phase
+  `docs/WYP_Week4_Plan.md` had reserved — that doc's own entry updated to
+  record the reversal. **Both changes leave PRD/UI spec content stale,
+  flagged together rather than silently diverged from**: PRD §3.7 and UI
+  spec §8.7/§9.7/§5.1/§11.1 still document the Expand/Contract feature in
+  detail; PRD and UI spec §6.2 both still say Overdue doesn't apply to
+  ToDos "since due date is optional" (true before ToDos had a due_date
+  column at all — the owner's own request already reasons past this).
+  Neither doc edited here — open question for the owner on whether/when to
+  do the formal revision. See the decisions log's 2026-08-12 entry.

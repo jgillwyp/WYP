@@ -1,0 +1,48 @@
+/* ============================================================================
+   Would You Please — Design Tokens (palette 1)
+   Single source of truth for colors, effects, and base spacing, used by
+   both the design/screens mockups and app/globals.css (the live app).
+
+   Regenerated 2026-08-12 from app/globals.css's own :root block, which is
+   what has actually been kept current every session since Week 1 — the
+   previous version of this file (headed "Draft v0.1 - July 2026," consolidated
+   from the six original mockups) had not been touched since, and was
+   missing --locked/--locked-ink/--locked-border and other tokens added
+   since. See docs/wyp_decisions_log.md, 2026-08-12, for the full history.
+
+   Historical note: app/globals.css's own header comment says mockups are
+   the source of truth and it should be kept in sync from them (matching
+   CLAUDE.md's stated design-system rule). In practice, for a long stretch
+   of this project, new tokens and components have been added to
+   app/globals.css first as live-app features were built, with mockups
+   updated after (or, often, not at all - see design/README.md's many
+   "mockup unchanged, live only" notes). This file now formalizes that
+   practical direction rather than the aspirational one: app/globals.css
+   is treated as canonical, and this file is regenerated from it.
+
+   USAGE
+     <link rel="stylesheet" href="tokens.css">   (before components.css)
+   ============================================================================ */
+
+:root {
+  --brand-blue: #2A5FC8;
+  --blue-pressed: #1E4AA0;
+  --btn-top: #3A70DC;
+  --alert-red: #D32F2F;
+  --sort: #FFE34D;
+  --focus-tint: #EDF2FD;
+  --icon-grey: #6B7280;
+  --ink: #1F2933;
+  --ink-soft: #5A6675;
+  --row-tint: #F6F7F9;
+  --rule: #E2E6EC;
+  --pad: 14px;
+  --strip: #E5ECF7;
+  --band: #E7E7E7;
+  --input-border: #7E8A9A;
+  --focus-halo: 0 0 0 3px rgba(42,95,200,.22);
+  --scrim: rgba(31,41,51,.45);
+  --locked: #EDEFF2;
+  --locked-ink: #8A93A0;
+  --locked-border: #DDE1E7;
+}

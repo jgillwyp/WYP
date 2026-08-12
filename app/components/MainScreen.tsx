@@ -85,6 +85,7 @@ type TodoRow = {
   id: string
   description: string
   priority: number | null
+  due_date: string | null
   done_date: string | null
   categories: { name: string } | null
   dialog: { count: number }[] | null
@@ -123,9 +124,16 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
-// Shared by Sent and Received — both are Requests with the same Open/
-// Overdue/Done lifecycle over due_date/done_date. ToDos don't use this
-// (no "overdue" state for a ToDo per the PRD's status-values list).
+// Shared by Sent, Received, and (as of 2026-08-12) ToDos — all three now
+// carry the same Open/Overdue/Done lifecycle over due_date/done_date. A
+// null due_date can never read as overdue, which is exactly the rule that
+// keeps a ToDo with no Due Date out of the Overdue chip: PRD/UI spec v2.9
+// both still say "Overdue does not apply to ToDos... due date is optional"
+// (true before ToDos ever had a due_date column to test), but the owner's
+// own request treats "no due date" as "never overdue" rather than "the
+// concept doesn't apply" — same outcome for a ToDo with no Due Date, but
+// now a real ToDo with a real, past Due Date reads as Overdue like a
+// Request does. See CLAUDE.md/decisions log, 2026-08-12.
 function statusFor(due_date: string | null, done_date: string | null): 'open' | 'overdue' | 'done' {
   if (done_date) return 'done'
   if (due_date && due_date < todayIso()) return 'overdue'
@@ -138,6 +146,10 @@ function sentStatus(r: SentRow): 'open' | 'overdue' | 'done' {
 
 function receivedStatus(r: ReceivedRow): 'open' | 'overdue' | 'done' {
   return statusFor(r.due_date, r.done_date)
+}
+
+function todoStatus(t: TodoRow): 'open' | 'overdue' | 'done' {
+  return statusFor(t.due_date, t.done_date)
 }
 
 function dialogCount(dialog: { count: number }[] | null): number {
@@ -313,18 +325,6 @@ function DialogIcon() {
   )
 }
 
-function ExpandIcon() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="8" y="8" width="32" height="32" rx="5" stroke="currentColor" strokeWidth="2.5" />
-      <line x1="24" y1="24" x2="32" y2="16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      <polyline points="26,16 32,16 32,22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="24" y1="24" x2="16" y2="32" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      <polyline points="22,32 16,32 16,26" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function PrintIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -375,8 +375,8 @@ export default function MainScreen() {
   const [receivedFilter, setReceivedFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
     readStoredChip(RECEIVED_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'all')
   )
-  const [todoFilter, setTodoFilter] = useState<'all' | 'open' | 'done'>(() =>
-    readStoredChip(TODO_FILTER_KEY, ['all', 'open', 'done'] as const, 'open')
+  const [todoFilter, setTodoFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
+    readStoredChip(TODO_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'open')
   )
   const [searchText, setSearchText] = useState('')
 
@@ -440,7 +440,7 @@ export default function MainScreen() {
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, done_date, categories(name), dialog(count)')
+          .select('id, description, priority, due_date, done_date, categories(name), dialog(count)')
           .is('contact_id', null)
           .order('priority', { ascending: true, nullsFirst: false }),
       ])
@@ -497,8 +497,7 @@ export default function MainScreen() {
 
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
-      const status: 'open' | 'done' = t.done_date ? 'done' : 'open'
-      if (todoFilter !== 'all' && status !== todoFilter) return false
+      if (todoFilter !== 'all' && todoStatus(t) !== todoFilter) return false
       if (query === '') return true
       return (
         t.description.toLowerCase().includes(query) ||
@@ -586,7 +585,6 @@ export default function MainScreen() {
               <div className="subhead-top">
                 <span className="subname">Sent</span>
                 <span className="subicons">
-                  <span className="iconbtn" role="button" tabIndex={0} aria-label="Expand Sent"><ExpandIcon /></span>
                   <span className="iconbtn" role="button" tabIndex={0} aria-label="Print Sent"><PrintIcon /></span>
                 </span>
               </div>
@@ -655,7 +653,6 @@ export default function MainScreen() {
               <div className="subhead-top">
                 <span className="subname">Received</span>
                 <span className="subicons">
-                  <span className="iconbtn" role="button" tabIndex={0} aria-label="Expand Received"><ExpandIcon /></span>
                   <span className="iconbtn" role="button" tabIndex={0} aria-label="Print Received"><PrintIcon /></span>
                 </span>
               </div>
@@ -724,10 +721,10 @@ export default function MainScreen() {
               <div className="chips">
                 <button className={`chip${todoFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('all')}>All</button>
                 <button className={`chip${todoFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('open')}>Open</button>
+                <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('overdue')}>Overdue</button>
                 <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
               </div>
               <span className="subicons">
-                <span className="iconbtn" role="button" tabIndex={0} aria-label="Expand ToDos"><ExpandIcon /></span>
                 <span className="iconbtn" role="button" tabIndex={0} aria-label="Print ToDos"><PrintIcon /></span>
               </span>
             </div>
@@ -745,26 +742,29 @@ export default function MainScreen() {
                 {!loading && !loadError && todos.length > 0 && filteredTodos.length === 0 && (
                   <div className="subempty">No ToDos match this filter.</div>
                 )}
-                {!loading && !loadError && sortedTodos.map((t) => (
-                  <div
-                    key={t.id}
-                    className="row td"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => router.push(`/todos/${t.id}`)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/todos/${t.id}`) }}
-                  >
-                    <div className="t1">
-                      {dialogCount(t.dialog) > 0 && (
-                        <span className="ii"><DialogIcon /></span>
-                      )}
-                      <span className="tdc">
-                        <span className="pri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>{' '}
-                        <span className="cat">{t.categories?.name ?? '—'}</span> — <span className="tdd">{t.description}</span>
-                      </span>
+                {!loading && !loadError && sortedTodos.map((t) => {
+                  const status = todoStatus(t)
+                  return (
+                    <div
+                      key={t.id}
+                      className={`row td${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(`/todos/${t.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/todos/${t.id}`) }}
+                    >
+                      <div className="t1">
+                        {dialogCount(t.dialog) > 0 && (
+                          <span className="ii"><DialogIcon /></span>
+                        )}
+                        <span className="tdc">
+                          <span className="pri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>{' '}
+                          <span className="cat">{t.categories?.name ?? '—'}</span> — <span className="tdd">{t.description}</span>
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>

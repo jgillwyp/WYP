@@ -1,36 +1,29 @@
-@import "tailwindcss";
-
 /* ============================================================================
-   WYP DESIGN TOKENS — palette 1
-   Source of truth: app/src/lib/WYP_add_contact_palette1_floating.html
-   Keep in sync with the mockups; referenced by § numbers in the UI spec.
-   ========================================================================= */
-:root {
-  --brand-blue: #2A5FC8;
-  --blue-pressed: #1E4AA0;
-  --btn-top: #3A70DC;
-  --alert-red: #D32F2F;
-  --sort: #FFE34D;
-  --focus-tint: #EDF2FD;
-  --icon-grey: #6B7280;
-  --ink: #1F2933;
-  --ink-soft: #5A6675;
-  --row-tint: #F6F7F9;
-  --rule: #E2E6EC;
-  --pad: 14px;
-  --strip: #E5ECF7;
-  --band: #E7E7E7;
-  --input-border: #7E8A9A;
-  --focus-halo: 0 0 0 3px rgba(42,95,200,.22);
-  --scrim: rgba(31,41,51,.45);
-  --locked: #EDEFF2;
-  --locked-ink: #8A93A0;
-  --locked-border: #DDE1E7;
-}
+   Would You Please — Components (palette 1)
+   Shared component styles for the design/screens mockups. Reads its colors
+   and effects from tokens.css - link tokens.css FIRST.
 
-@theme inline {
-  --font-sans: var(--font-inter);
-}
+   Regenerated 2026-08-12 as a full, current copy of app/globals.css (the
+   live app's stylesheet), minus its :root block (see tokens.css) and its
+   Tailwind/Next.js-specific bits (@theme inline; the next/font
+   var(--font-inter) fallback in .app's font-family, which has no meaning
+   outside a Next.js build and would otherwise invalidate that whole
+   font-family declaration when var(--font-inter) resolves to nothing).
+   The previous version of this file (headed "Draft v0.1 - July 2026") had
+   not been kept in sync and was missing most component classes built since
+   - .actlabel, .donerow, .metarow, .subnote, and many more. See
+   docs/wyp_decisions_log.md, 2026-08-12.
+
+   None of the design/screens mockups actually link this file today (each
+   embeds its own full copy of tokens+components inline in its own <style>
+   block, verified 2026-08-12 - the handful that appeared to reference
+   tokens.css/components.css via <link> were matching a docstring inside
+   their own inline CSS comments, not a real <link> tag). This file exists
+   as the current, correct reference for keeping those embedded copies in
+   sync by hand, and as what a future move to real shared <link>s would
+   point at.
+   ============================================================================ */
+
 
 /* ============================================================================
    BASE
@@ -80,7 +73,7 @@ body {
   height: 100%;
   background: #fff;
   color: var(--ink);
-  font-family: var(--font-inter), Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: Inter, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-feature-settings: "tnum" 1;
   -webkit-font-smoothing: antialiased;
   /* Positioned so .scrim/.modal (§6.12) confine to the app frame rather than
@@ -1716,32 +1709,6 @@ body {
   color: var(--ink);
 }
 
-/* ToDo Overdue/Done row treatment (2026-08-12) — same "entire row in red" /
-   "entire row in grey" design constant as Sent/Received above (§8.4),
-   applied to ToDos' own text classes (.pri/.cat/.tdd) instead of
-   .nm/.dt/.due/.dn/.desc, since a ToDo row is laid out as one flowing line,
-   not the four-column grid a Request row uses. Only reachable once a ToDo
-   actually has a Due Date to compare against today's date — see
-   `todoStatus()` in MainScreen.tsx; a ToDo with no Due Date never carries
-   `.overdue` and is unaffected by this rule, matching the owner's own
-   scoping ("ToDos without a Due Date would be ignored for the Overdue
-   chip"). Overdue keeps each class's existing font-weight, only recoloring
-   to Alert Red (mirrors `.row.overdue` above, which doesn't touch weight
-   either); Done normalizes weight to 500 the same way `.row.done` does for
-   Sent/Received, overriding Priority's and Category's normal 700 bold. */
-.row.overdue .pri,
-.row.overdue .cat,
-.row.overdue .tdd {
-  color: var(--alert-red);
-}
-
-.row.done .pri,
-.row.done .cat,
-.row.done .tdd {
-  color: var(--ink-soft);
-  font-weight: 500;
-}
-
 /* Housekeeping row (§6.23, PROPOSED) — same title/description visual
    language as the ToDo row above: bold Brand-Blue label, em-dash, regular
    Ink description, 2-line clamp. Distinct classes rather than reusing
@@ -2131,3 +2098,4 @@ body {
   line-height: 1.4;
   color: var(--ink);
 }
+

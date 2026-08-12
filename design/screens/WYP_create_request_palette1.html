@@ -237,6 +237,18 @@ html,body{margin:0;height:100%;background:#fff;}
    neutral name; see globals.css for the fuller comment. */
 .chiprow{display:flex;align-items:center;gap:6px;background:var(--strip);border-radius:9px;
   padding:6px 10px;width:100%;min-height:44px;flex-wrap:wrap;}
+/* Kind chip (§6.x, Add Dialog's Question/Comment/Answer picker) — was
+   missing from this file entirely (2026-08-12 stylesheet-realignment audit):
+   the .chiprow above and the locked variant below both existed, but the
+   plain and .selected states did not, so these chips rendered with no
+   button styling at all. Added verbatim from app/globals.css /
+   design/screens/components.css, the current canonical copy. */
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);border-radius:9px;
+  padding:5px 12px;min-height:30px;}
+.chip.selected{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 
 /* --- Icon button (band cluster addition, 2026-08-05) ----------------------
    40-px touch target / 22-px glyph, same sizing as Main Screen's .iconbtn.
@@ -267,6 +279,17 @@ html,body{margin:0;height:100%;background:#fff;}
    the row's horizontal space to the box that needs it. Recipient/Category
    keep .frow: a one-line input doesn't have this problem. */
 .fieldact{display:flex;justify-content:flex-end;margin-bottom:6px;}
+
+/* Simplified empty-state row (§6.32, 2026-08-11) — was missing from this
+   file's own <style> (2026-08-12 audit): the .actlabel span was used in the
+   markup below but had no rule, so it rendered unstyled. Added verbatim
+   from the canonical components.css. */
+.actlabel{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:4px;
+  height:40px;padding:0 12px;border:1px solid var(--input-border);border-radius:9px;
+  background:var(--row-tint);color:var(--ink-soft);font-size:13px;}
+
+/* Validation message (Add Dialog's empty-body check) — was also missing. */
+.ferror{font-size:12.5px;font-weight:600;color:var(--alert-red);margin:5px 2px 0;}
 /* padding-top reverted to the base .ftextarea value (2026-08-07): the label
    went back to one line (below) now that the box is full-width, so the extra
    36px clearance for a two-line label is no longer needed — kept it would
@@ -339,6 +362,17 @@ html,body{margin:0;height:100%;background:#fff;}
   color:var(--ink-soft);background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:6px;}
 .attremove:active{background:var(--row-tint);color:var(--alert-red);}
 .attremove:focus-visible{outline:2px solid var(--brand-blue);outline-offset:1px;}
+
+/* Staged Dialog entries (2026-08-06) — reuses .attitem/.attname/.attremove's
+   row styling; was referenced in this file's markup/comments but had no
+   rule of its own. Added verbatim from the canonical components.css. */
+.dlgstaged{border:1px solid var(--rule);border-radius:9px;background:#fff;margin-top:8px;overflow:hidden;}
+
+/* Quick-Done / Note: band (§6.31) — reused 2026-08-12 for Attachments'
+   empty-state note (see the markup below), same as the live app. */
+.donerow{display:flex;align-items:center;gap:10px;margin:4px var(--pad) 14px;
+  background:var(--strip);border-radius:12px;padding:11px 13px;}
+.donenote{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.4;color:var(--ink);}
 
 /* Paid-feature locked state (v1: attachments deferred to the paid tier).
    Keeps the attachments panel frame; replaces the functional list with a lock
@@ -446,20 +480,20 @@ html,body{margin:0;height:100%;background:#fff;}
            .dlgstaged treatment once an entry exists. -->
       <div class="fgroup">
         <div class="frow" id="dlg-empty-row">
-          <span class="actlabel">Questions, Answers, Comments</span>
+          <span class="actlabel">Questions, Answers, Comments <span class="subnote">(optional)</span></span>
           <button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button>
         </div>
         <div class="fieldact" id="dlg-fieldact" style="display:none;"><button class="btn" type="button" onclick="openDialogModal()">Add Dialog</button></div>
         <div class="dlgstaged" id="dlg-staged" style="display:none;"></div>
       </div>
 
-      <!-- Attachments — v1 locked "paid feature" state. Simplified
-           empty-state row (§6.32, 2026-08-11), replacing the old
-           .fieldact+.attachpanel: attachment storage doesn't exist anywhere
-           in the app yet, so there's no populated state to revert to. -->
+      <!-- Attachments — v1 locked "paid feature" state. Note: band
+           (§6.31/§6.32, 2026-08-12), matching the live app: replaces the
+           earlier centered "Subscription feature" text, which read as
+           visually unrelated to the Add Attachment button beside it. -->
       <div class="fgroup">
-        <div class="frow">
-          <span class="actlabel locked">Subscription feature</span>
+        <div class="donerow">
+          <span class="donenote"><b>Note:</b> Attachments are a Subscription feature.</span>
           <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
         </div>
       </div>

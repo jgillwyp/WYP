@@ -39,6 +39,6 @@ Once Received has real rows to sort. Currently the `.colbar` column headers (To/
 
 ---
 
-## Priority 3: Expanded screens
+## Priority 3: Expanded screens — dropped, 2026-08-12
 
-Owner's stated next phase after Received and sorting are both done. Scope not yet defined.
+Was: owner's stated next phase after Received and sorting are both done, scope not yet defined. **Dropped, not designed.** Owner: the Expand icon's whole premise assumed each Main Screen section had its own scrollable "elevator" showing only some of its items, with the full-page Expanded view existing to show the rest. That's not how Sent/Received/ToDos were actually built — every selected item already renders under its own section on the Main Screen itself, which the owner also flagged as the practically correct behavior for normal use, not a bug to fix. A full-page or in-place expansion would only have offered more lines of Request Description per row, which he judged minimal utility given items are already fully visible. Directs dropping the Expand/Contract icon's use in the app entirely, rather than building the screen this priority was reserved for. See decisions log, 2026-08-12, and CLAUDE.md's Known gaps — this also leaves the PRD (§3.7 "Expanded Full-Page View") and UI spec (§8.7, §9.7, §5.1/§11.1 icon inventory) documenting a feature the app no longer offers; flagged to the owner as a separate open question about whether/when to formally revise those two documents.

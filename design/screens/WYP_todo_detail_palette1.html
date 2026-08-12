@@ -148,6 +148,24 @@ html,body{margin:0;height:100%;background:#fff;}
 
 .fieldact{display:flex;justify-content:flex-end;margin-bottom:6px;}
 
+/* Simplified empty-state row (§6.32) + validation message — both used
+   elsewhere in this file's markup/comments but neither was actually
+   defined (2026-08-12 audit). Added verbatim from the canonical
+   components.css. */
+.actlabel{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:4px;
+  height:40px;padding:0 12px;border:1px solid var(--input-border);border-radius:9px;
+  background:var(--row-tint);color:var(--ink-soft);font-size:13px;}
+.ferror{font-size:12.5px;font-weight:600;color:var(--alert-red);margin:5px 2px 0;}
+
+/* Quick-Done / Note: band (§6.31) — needed for Attachments' empty-state
+   note below. (The quick-Done shortcut itself, added to the live
+   TodoDetailForm.tsx 2026-08-11, is still flagged as not yet ported into
+   this mockup — see the decisions log — so only the Attachments use is
+   wired here.) */
+.donerow{display:flex;align-items:center;gap:10px;margin:4px var(--pad) 14px;
+  background:var(--strip);border-radius:12px;padding:11px 13px;}
+.donenote{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.4;color:var(--ink);}
+
 .finput.req,.ftextarea.req{border-color:var(--ink);}
 .finput.req:focus,.ftextarea.req:focus{border-color:var(--brand-blue);}
 
@@ -305,13 +323,14 @@ html,body{margin:0;height:100%;background:#fff;}
         </div>
       </div>
 
-      <!-- Attachments — v1 locked "paid feature" state. Simplified
-           empty-state row (§6.32, 2026-08-11), replacing the old
-           .fieldact+.attachpanel: attachment storage doesn't exist anywhere
-           in the app yet, so there's no populated state to revert to. -->
+      <!-- Attachments — v1 locked "paid feature" state. Note: band
+           (§6.31/§6.32, 2026-08-12), matching the live app: replaces the
+           earlier centered "Subscription feature" text (.actlabel.locked),
+           which read as visually unrelated to the Add Attachment button
+           beside it. -->
       <div class="fgroup">
-        <div class="frow">
-          <span class="actlabel locked">Subscription feature</span>
+        <div class="donerow">
+          <span class="donenote"><b>Note:</b> Attachments are a Subscription feature.</span>
           <button class="btn is-locked" type="button" aria-disabled="true"><svg class="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2.2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Add Attachment</button>
         </div>
       </div>

@@ -753,7 +753,9 @@ export default function RequestDetailForm() {
             <div className="fgroup">
               {sortedDialog.length === 0 ? (
                 <div className="frow">
-                  <span className="actlabel">Questions, Answers, Comments</span>
+                  <span className="actlabel">
+                    Questions, Answers, Comments <span className="subnote">(optional)</span>
+                  </span>
                   <button className="btn" type="button" onClick={openDialogModal}>
                     Add Dialog
                   </button>
@@ -795,17 +797,17 @@ export default function RequestDetailForm() {
                 always-shown .fieldact+.attachpanel: attachment storage
                 doesn't exist anywhere in the app yet, so there's no
                 populated state to revert to. */}
-            <div className="fgroup">
-              <div className="frow">
-                <span className="actlabel locked">Subscription feature</span>
-                <button className="btn is-locked" type="button" aria-disabled="true">
-                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                  </svg>
-                  Add Attachment
-                </button>
-              </div>
+            <div className="donerow">
+              <span className="donenote">
+                <b>Note:</b> Attachments are a Subscription feature.
+              </span>
+              <button className="btn is-locked" type="button" aria-disabled="true">
+                <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
+                  <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                </svg>
+                Add Attachment
+              </button>
             </div>
 
             {error && (
