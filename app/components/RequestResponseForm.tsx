@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
-import { buildIcsContent, todayISODate, truncate } from '@/lib/ics'
+import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 
 /**
  * Request Response (§9.3) — converted from
@@ -162,6 +162,17 @@ export default function RequestResponseForm() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendConfirmed, setSendConfirmed] = useState(false)
+
+  // Owner's ask, 2026-08-13 — see cameFromCalendarLink's own comment in
+  // @/lib/ics: hide the Add to Calendar button when the visitor arrived by
+  // clicking the event's own link from inside their calendar app, since
+  // they already have it there. Read once, lazily, same
+  // typeof-window-guarded pattern this app already uses for its
+  // sessionStorage lazy initializers (see readStoredChip in MainScreen.tsx)
+  // — window.location.search never changes after mount for this screen.
+  const [cameFromCalendar] = useState(() =>
+    typeof window === 'undefined' ? false : cameFromCalendarLink(window.location.search)
+  )
 
   useEffect(() => {
     if (!token) return
@@ -444,14 +455,20 @@ export default function RequestResponseForm() {
                 step with those screens for a problem this layout change
                 already solves. Costs one extra row of vertical space, same
                 trade-off §6.26 already made. */}
-            <div className="panelact panelact-top">
-              {/* Was deliberately inert (Days 2-3 covered response
-                  read/write only); .ics generation built 2026-08-10 — see
-                  buildIcsContent/handleAddToCalendar above. */}
-              <button className="btn" type="button" onClick={handleAddToCalendar}>
-                Add to Calendar
-              </button>
-            </div>
+            {/* Hidden entirely, not just disabled, when cameFromCalendar —
+                the visitor already has this on their calendar (that's how
+                they got here), so the row would just be dead space. See
+                cameFromCalendarLink's comment in @/lib/ics. */}
+            {!cameFromCalendar && (
+              <div className="panelact panelact-top">
+                {/* Was deliberately inert (Days 2-3 covered response
+                    read/write only); .ics generation built 2026-08-10 — see
+                    buildIcsContent/handleAddToCalendar above. */}
+                <button className="btn" type="button" onClick={handleAddToCalendar}>
+                  Add to Calendar
+                </button>
+              </div>
+            )}
             <div className="meta">
               <div className="metarow"><span className="mlabel">Date:</span><span className="mval">{formatLongDateTime(data.created_at)}</span></div>
               <div className="metarow"><span className="mlabel">From:</span><span className="mval">{data.owner_name ?? '—'}</span></div>

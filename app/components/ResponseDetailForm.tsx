@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
-import { buildIcsContent, todayISODate, truncate } from '@/lib/ics'
+import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 
 /**
  * Response Detail (§6.28) — converted from
@@ -174,6 +174,12 @@ export default function ResponseDetailForm() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendConfirmed, setSendConfirmed] = useState(false)
+
+  // Owner's ask, 2026-08-13 — see cameFromCalendarLink's own comment in
+  // @/lib/ics and RequestResponseForm.tsx's identical use of it.
+  const [cameFromCalendar] = useState(() =>
+    typeof window === 'undefined' ? false : cameFromCalendarLink(window.location.search)
+  )
 
   useEffect(() => {
     if (!requestId) return
@@ -410,11 +416,15 @@ export default function ResponseDetailForm() {
         <div className="scroll">
           <form id="response-detail-form" onSubmit={handleSend} noValidate>
 
-            <div className="panelact panelact-top">
-              <button className="btn" type="button" onClick={handleAddToCalendar}>
-                Add to Calendar
-              </button>
-            </div>
+            {/* Hidden when cameFromCalendar — see RequestResponseForm.tsx's
+                identical block and @/lib/ics's cameFromCalendarLink comment. */}
+            {!cameFromCalendar && (
+              <div className="panelact panelact-top">
+                <button className="btn" type="button" onClick={handleAddToCalendar}>
+                  Add to Calendar
+                </button>
+              </div>
+            )}
             <div className="meta">
               <div className="metarow"><span className="mlabel">Date:</span><span className="mval">{formatLongDateTime(data.created_at)}</span></div>
               <div className="metarow"><span className="mlabel">From:</span><span className="mval">{data.owner_name ?? '—'}</span></div>

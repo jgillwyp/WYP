@@ -123,6 +123,42 @@ function formatIcsDateOnly(d: Date): string {
   return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`
 }
 
+// Owner's ask, 2026-08-13: hide the Request Response page's own "Add to
+// Calendar" button when the visitor arrived by clicking the event's link
+// *from inside their calendar app* — they already have it on their
+// calendar at that point, so the button is redundant. buildIcsContent
+// below stamps every link it embeds (both DESCRIPTION's inline link and
+// the VEVENT's own URL property) with this marker; RequestResponseForm.tsx
+// and ResponseDetailForm.tsx read it back via cameFromCalendarLink() on
+// mount to decide whether to render the button at all.
+//
+// This is a per-click signal, not a persistent "already added" flag on the
+// Request itself — Request links are multi-use (CLAUDE.md, Database
+// section), so the same recipient can still reach this page via the
+// original email link (no marker, button shows) even after having already
+// added the event once via the calendar link. That's judged the right
+// trade-off: a false "not yet added" is harmless (the button just
+// reappears), where a false "already added" would hide a button someone
+// genuinely still needed.
+//
+// Applied unconditionally inside buildIcsContent, including the client-side
+// "Add to Calendar" button's own call (handleAddToCalendar in both forms,
+// which passes window.location.href as `link`) — a manually re-downloaded
+// .ics also deserves the marker on its own embedded link, so a *future*
+// visit via that link hides the button too, same reasoning either way.
+export function calendarLinkFor(link: string): string {
+  // Idempotent — cameFromCalendarLink already hides the button that's the
+  // only path back into buildIcsContent with an already-marked link, but
+  // guarding here too costs nothing and avoids a duplicated ?src=calendar
+  // query param if that ever changes.
+  if (cameFromCalendarLink(link.includes('?') ? link.slice(link.indexOf('?')) : '')) return link
+  return `${link}${link.includes('?') ? '&' : '?'}src=calendar`
+}
+
+export function cameFromCalendarLink(search: string): boolean {
+  return new URLSearchParams(search).get('src') === 'calendar'
+}
+
 export function buildIcsContent(payload: IcsRequestFields, link: string): string {
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
   const hasTime = payload.due_time != null && payload.due_time.trim() !== ''
@@ -176,8 +212,8 @@ export function buildIcsContent(payload: IcsRequestFields, link: string): string
     dtstartLine,
     dtendLine,
     `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
-    `DESCRIPTION:${icsEscapeText(buildIcsDescription(payload.owner_name, payload.description, link))}`,
-    `URL:${link}`,
+    `DESCRIPTION:${icsEscapeText(buildIcsDescription(payload.owner_name, payload.description, calendarLinkFor(link)))}`,
+    `URL:${calendarLinkFor(link)}`,
     'END:VEVENT',
     'END:VCALENDAR',
   ]

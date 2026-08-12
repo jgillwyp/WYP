@@ -6,6 +6,18 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-13 — Add to Calendar hidden when the visitor arrived via the calendar's own link
+
+Owner: "Is there a way to add information in the .ics link so the app knows the Request Response came from a calendar click so that the 'Add to Calendar' button would not be shown to the end-user." Yes — a query-string marker on the link embedded inside the .ics itself, read back once the recipient's click lands them on the response page.
+
+**`app/src/lib/ics.ts`**: `buildIcsContent` now runs every link it embeds (both the VEVENT's own `URL` property and the inline link inside `DESCRIPTION`) through a new `calendarLinkFor()`, which appends `?src=calendar` (idempotent — checks first, won't double-append). A matching `cameFromCalendarLink(search)` reads it back from a `location.search`-shaped string. Applied unconditionally inside `buildIcsContent`, so this covers both the emailed .ics (server-side, `app/api/email/send-request/route.ts`) and the client-side "Add to Calendar" button's own manually-downloaded .ics (`handleAddToCalendar` in both response forms, which passes `window.location.href` as the link) — a manually re-downloaded file deserves the same marker on its own embedded link, so a future visit via *that* link also hides the button.
+
+**`RequestResponseForm.tsx`** (anonymous `/r/[token]`) **and `ResponseDetailForm.tsx`** (signed-in `/requests/[id]/respond`): both read `cameFromCalendarLink(window.location.search)` once via a lazy `useState` initializer, guarded `typeof window === 'undefined'` the same way `MainScreen.tsx`'s existing `sessionStorage` lazy initializers already are (`readStoredChip`) — consistent with an established pattern rather than a new one. The `.panelact.panelact-top` Add to Calendar row is hidden entirely (not just disabled) when true, rather than left as dead space.
+
+**Explicitly a per-click signal, not a persistent "already added" flag** — Request links are multi-use (CLAUDE.md, Database section), so the same recipient can still reach this page via the original, unmarked email link after already adding the event once via the calendar link, and the button will show again. Judged the right trade-off: a false "not yet added" just means the button reappears (harmless); a false "already added" would hide a button someone genuinely still needed, with no way back to it short of re-requesting the email. `npx tsc --noEmit` and `npm run lint` both clean.
+
+\---
+
 ## 2026-08-13 — Live send confirmed on Vercel; Outlook .ics rejection fixed; landing page badge fixes
 
 Owner confirmed the Vercel-deployed app now sends real email (env vars added there per the earlier ask) and reported two further issues from testing.

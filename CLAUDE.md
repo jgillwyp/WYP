@@ -985,3 +985,14 @@ link is built only after the stack is proven on Add Contact.
   both it and the Track It badge gained a 2px `#123B7A` border (matching
   the Send It badge's own fill) after the owner reported both blending
   into the background/dashboard art behind them.
+- **Add to Calendar hides itself when reached via the calendar's own link
+  (2026-08-13, `app/src/lib/ics.ts`, `RequestResponseForm.tsx`,
+  `ResponseDetailForm.tsx`).** `buildIcsContent` stamps every link it
+  embeds in the `.ics` (both `URL` and the inline link in `DESCRIPTION`)
+  with `?src=calendar`; both response forms read it back via
+  `cameFromCalendarLink()` on mount and hide their own "Add to Calendar"
+  row when present, on the reasoning that a recipient who got there by
+  clicking the event already has it on their calendar. Per-click, not
+  persistent — Request links are multi-use, so the same recipient reaching
+  the page via the original, unmarked email link still sees the button.
+  See the decisions log for the full write-up.
