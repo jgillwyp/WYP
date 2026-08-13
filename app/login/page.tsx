@@ -32,6 +32,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [remember, setRemember] = useState(true)
   const [sent, setSent] = useState(false)
+  const [gated, setGated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [invalid, setInvalid] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,6 +84,16 @@ export default function LoginPage() {
     return true
   }
 
+  // Private-testing signup gate (2026-08-13, migration 015) — owner: "the
+  // app testing group will not [be at] risk [of] an unexpected expansion."
+  // can_create_account() is the only thing the client asks: it always
+  // returns true for an email already in auth.users (a returning user is
+  // never gated, matching the owner's own scoping — "This should only
+  // apply to brand new signups"), and only checks the allowlist for a
+  // genuinely new email while the gate is on. Checked before
+  // signInWithOtp is ever called, not after — Supabase creates the
+  // auth.users row and sends a real email the moment signInWithOtp runs,
+  // so the gate has to sit in front of that call, not clean up after it.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const address = email.trim()
@@ -93,6 +104,24 @@ export default function LoginPage() {
       return
     }
     setInvalid(false)
+    setError(null)
+    setLoading(true)
+
+    const { data: allowed, error: gateError } = await supabase.rpc('can_create_account', {
+      p_email: address,
+    })
+
+    if (gateError) {
+      setLoading(false)
+      setError(gateError.message)
+      return
+    }
+
+    if (!allowed) {
+      setLoading(false)
+      setGated(true)
+      return
+    }
 
     if (await sendLink(address)) setSent(true)
   }
@@ -104,6 +133,7 @@ export default function LoginPage() {
 
   function startOver() {
     setSent(false)
+    setGated(false)
     setError(null)
     setCooldown(0)
   }
@@ -114,10 +144,50 @@ export default function LoginPage() {
         <WypHeader />
 
         <div className="band">
-          <span className="glabel">{isSignupIntent ? 'Sign In for Free Account' : 'Sign In'}</span>
+          <span className="glabel">
+            {gated ? 'Private Testing' : isSignupIntent ? 'Sign In for Free Account' : 'Sign In'}
+          </span>
         </div>
 
-        {!sent ? (
+        {gated ? (
+          <div className="scroll">
+            <div className="sent" aria-live="polite">
+              <div className="sent-icon" aria-hidden="true">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                  <rect x="5" y="10.5" width="14" height="10" rx="2" stroke="#2A5FC8" strokeWidth="2" />
+                  <path
+                    d="M8 10.5V7.5a4 4 0 0 1 8 0v3"
+                    stroke="#2A5FC8"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+
+              <h2 className="sent-h">Private Testing</h2>
+              <p className="sent-p">
+                This app is currently in a private testing mode with a limited number of
+                users.
+              </p>
+              <p className="sent-p">
+                If you would like to participate in this testing process, let us know how
+                you heard about Would You Please and introduce yourself in an email to{' '}
+                <a href="mailto:notifications@wouldyouplease.com?subject=Would%20You%20Please%20%E2%80%94%20Testing%20Access">
+                  notifications@wouldyouplease.com
+                </a>
+                .
+              </p>
+
+              <p className="sent-meta">
+                Entered the wrong address?{' '}
+                <button className="linkbtn" type="button" onClick={startOver}>
+                  Try a different email
+                </button>
+                .
+              </p>
+            </div>
+          </div>
+        ) : !sent ? (
           <div className="scroll">
             <form className="form" onSubmit={handleSubmit} noValidate>
               <div className={`fgroup ffloat${invalid ? ' is-invalid' : ''}`}>

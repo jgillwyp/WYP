@@ -50,3 +50,122 @@ commit;
 --   select id from public.profiles where id = '<their auth.users id>';
 -- immediately after — should return one row with no other action taken.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 015 — private-testing signup gate
+-- DRAFTED 2026-08-13 — NOT YET CONFIRMED RUN.
+--
+-- Background (see decisions log, 2026-08-13): owner wants to test with a
+-- small, known group of people without the app being openly self-serve —
+-- "the app testing group will not [be at] risk [of] an unexpected
+-- expansion." Two new tables plus one SECURITY DEFINER function anon can
+-- call from /login before it ever calls signInWithOtp.
+--
+-- app_settings — a plain key/value control table, one row per switch.
+-- Toggle the gate with a single UPDATE, exactly as the owner asked for:
+--   update app_settings set value = false where key = 'signup_gate_enabled';
+-- turns it back into an open, self-serve app with no code change or
+-- redeploy; setting it back to true re-enables the gate.
+--
+-- beta_allowlist — one row per email invited to create a brand-new
+-- account while the gate is on. Managed the same way: a plain INSERT.
+--
+-- can_create_account(p_email) — the only thing the client ever calls.
+-- Deliberately gates *account creation*, not sign-in in general: if the
+-- email already exists in auth.users, it always returns true regardless of
+-- the allowlist or the gate setting — a returning user (including the
+-- owner's own account) is never affected, matching the owner's own scoping
+-- ("This should only apply to brand new signups"). Only a genuinely new
+-- email, while the gate is on and not on the allowlist, is refused. Reads
+-- auth.users directly, which is safe here specifically because this
+-- function is SECURITY DEFINER, owned by the same superuser role that
+-- creates every function in this file (CLAUDE.md's Database section: "The
+-- SQL editor runs as superuser and bypasses RLS") — anon itself is never
+-- granted any access to auth.users, app_settings, or beta_allowlist; it
+-- can only ever get a yes/no boolean back through this one function.
+-- ============================================================================
+
+begin;
+
+create table if not exists app_settings (
+  key text primary key,
+  value boolean not null
+);
+alter table app_settings enable row level security;
+-- No policies — deny-all for every client role. Only the SECURITY DEFINER
+-- function below (running as the table owner) ever reads this table.
+
+insert into app_settings (key, value)
+values ('signup_gate_enabled', true)
+on conflict (key) do nothing;
+
+create table if not exists beta_allowlist (
+  email text primary key,
+  added_at timestamptz not null default now(),
+  note text
+);
+alter table beta_allowlist enable row level security;
+-- No policies — same reasoning as app_settings above.
+
+create or replace function public.can_create_account(p_email text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_gate_enabled boolean;
+  v_existing boolean;
+  v_allowlisted boolean;
+begin
+  select coalesce(
+    (select value from app_settings where key = 'signup_gate_enabled'),
+    true
+  ) into v_gate_enabled;
+
+  if not v_gate_enabled then
+    return true;
+  end if;
+
+  -- Returning user (any email already in auth.users) is never gated,
+  -- regardless of the allowlist — the gate is about account *creation*.
+  select exists(
+    select 1 from auth.users where lower(email) = lower(p_email)
+  ) into v_existing;
+
+  if v_existing then
+    return true;
+  end if;
+
+  select exists(
+    select 1 from beta_allowlist where lower(email) = lower(p_email)
+  ) into v_allowlisted;
+
+  return v_allowlisted;
+end;
+$$;
+
+revoke all on function public.can_create_account(text) from public;
+grant execute on function public.can_create_account(text) to anon, authenticated;
+
+commit;
+
+-- ============================================================================
+-- Managing the gate day to day, once this migration has run:
+--
+--   -- invite someone new:
+--   insert into beta_allowlist (email, note) values ('someone@example.com', 'heard from Jane');
+--
+--   -- turn the gate off (open signup):
+--   update app_settings set value = false where key = 'signup_gate_enabled';
+--
+--   -- turn it back on:
+--   update app_settings set value = true where key = 'signup_gate_enabled';
+--
+-- Verify (superuser, proves creation only — see the same caveat on
+-- migration 014 above):
+--   select public.can_create_account('someone-not-invited@example.com');
+--        -> should return false while the gate is on
+--   select public.can_create_account('jimgillon@gmail.com');
+--        -> should return true — already a real auth.users row
+-- ============================================================================

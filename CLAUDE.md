@@ -1049,3 +1049,41 @@ link is built only after the stack is proven on Add Contact.
   `design/marketing/WYP_landing_page.html` to stay in sync with the live
   component. `npx tsc --noEmit`/`npm run lint` clean; not yet visually
   verified on a real phone. See the decisions log for the full write-up.
+  **Owner-reported not showing, same day, unresolved as of this writing**:
+  testing after logging out and clicking Start Free Account from the
+  landing page still showed plain "Sign In," not "Sign In for Free
+  Account." The code read correctly on inspection (both landing-page links
+  carry `?intent=signup`; `isSignupIntent`'s lazy `useState` initializer
+  reads `window.location.search` correctly) — likely not yet deployed at
+  the point he tested, since this shipped in the same batch as the
+  header/hero redesign above; flagged rather than silently assumed fixed,
+  pending the owner confirming he's on the latest deploy.
+- **Open chip was excluding Overdue rows on Sent/Received/ToDos
+  (2026-08-13, `MainScreen.tsx`).** Owner: "Open chip displayed items do
+  not include Overdue items - which should be shown - because they are
+  open." `statusFor()`'s three-way exclusive status (open/overdue/done)
+  was compared to the Open filter with plain equality, so an Overdue row
+  never matched. New shared `matchesStatusFilter()` helper: the Open chip
+  now matches both `open` and `overdue`; the Overdue chip is unchanged
+  (still narrows to just `overdue`). `npx tsc --noEmit`/`npm run lint`
+  clean.
+- **Private-testing signup gate — migration 015, drafted, NOT yet
+  confirmed run** (`docs/Week5 - SQL history.txt`, `app/login/page.tsx`,
+  2026-08-13). Owner: wants a small testing group without "an unexpected
+  expansion" of self-serve signups. New `app_settings` (key/value control
+  table — `update app_settings set value = false where key =
+  'signup_gate_enabled';` turns the gate off, no redeploy) and
+  `beta_allowlist` (one row per invited email, plain `insert`) tables, plus
+  a `SECURITY DEFINER` function `can_create_account(p_email)` that anon can
+  call. Always returns `true` for an email already in `auth.users` — a
+  returning user, including the owner's own account, is never gated,
+  matching his explicit scoping ("This should only apply to brand new
+  signups") — otherwise `true` only if the gate is off or the email is
+  allowlisted. `app/login/page.tsx`'s `handleSubmit` calls it before
+  `signInWithOtp` (has to be before, since that call is what actually
+  creates the account and sends a real email); a blocked email shows a new
+  `gated` screen state with the owner's exact wording and a
+  `mailto:notifications@wouldyouplease.com` link. See the decisions log for
+  the full write-up, including the rejected Auth-Hook alternative.
+  **Migration 015 has not been run yet.** `npx tsc --noEmit`/`npm run
+  lint` clean.

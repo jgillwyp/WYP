@@ -152,6 +152,23 @@ function todoStatus(t: TodoRow): 'open' | 'overdue' | 'done' {
   return statusFor(t.due_date, t.done_date)
 }
 
+// Owner-reported, 2026-08-13: the Open chip on Sent/Received/ToDos was
+// excluding Overdue rows entirely — "Overdue items ... should be shown -
+// because they are open." statusFor() above is a three-way exclusive
+// status (open/overdue/done) so a plain equality check against the 'open'
+// filter naturally missed them; Overdue is a stricter subset of "not done,"
+// not a sibling category disjoint from Open. The Overdue chip itself still
+// narrows to just status === 'overdue', unchanged — only the Open chip's
+// own matching rule changes, to treat overdue rows as open too.
+function matchesStatusFilter(
+  status: 'open' | 'overdue' | 'done',
+  filter: 'all' | 'open' | 'overdue' | 'done'
+): boolean {
+  if (filter === 'all') return true
+  if (filter === 'open') return status === 'open' || status === 'overdue'
+  return status === filter
+}
+
 function dialogCount(dialog: { count: number }[] | null): number {
   return dialog?.[0]?.count ?? 0
 }
@@ -475,7 +492,7 @@ export default function MainScreen() {
 
   const filteredSent = useMemo(() => {
     return sent.filter((r) => {
-      if (sentFilter !== 'all' && sentStatus(r) !== sentFilter) return false
+      if (!matchesStatusFilter(sentStatus(r), sentFilter)) return false
       if (query === '') return true
       return (
         r.description.toLowerCase().includes(query) ||
@@ -486,7 +503,7 @@ export default function MainScreen() {
 
   const filteredReceived = useMemo(() => {
     return received.filter((r) => {
-      if (receivedFilter !== 'all' && receivedStatus(r) !== receivedFilter) return false
+      if (!matchesStatusFilter(receivedStatus(r), receivedFilter)) return false
       if (query === '') return true
       return (
         r.description.toLowerCase().includes(query) ||
@@ -497,7 +514,7 @@ export default function MainScreen() {
 
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
-      if (todoFilter !== 'all' && todoStatus(t) !== todoFilter) return false
+      if (!matchesStatusFilter(todoStatus(t), todoFilter)) return false
       if (query === '') return true
       return (
         t.description.toLowerCase().includes(query) ||

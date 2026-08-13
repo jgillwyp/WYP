@@ -1,0 +1,20 @@
+1. Private app testing....................................................................
+
+-- add allowed user
+insert into beta_allowlist (email, note) values ('someone@example.com', 'heard from Jane');
+-- turn the gate off (open signup):
+update app_settings set value = false where key = 'signup_gate_enabled';
+-- turn it back on:
+update app_settings set value = true where key = 'signup_gate_enabled';
+
+2. Hostinger Agentic email setup..........................................................
+
+notifications@wouldyouplease.com
+password: aWYP!xyMail7Pw.
+Protocol				Hostname		Port	TLS/SSL
+Incoming server (IMAP)			imap.hostinger.com	993	Yes	
+Outgoing server (SMTP)			smtp.hostinger.com	465	Yes	
+Incoming server (POP3)Not recommended	pop.hostinger.com	995	Yes
+
+	
+
