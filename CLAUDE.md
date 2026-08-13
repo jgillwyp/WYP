@@ -1020,3 +1020,32 @@ link is built only after the stack is proven on Add Contact.
   lint` clean; not yet visually verified in a real browser (no headless
   browser reachable in this sandbox). See the decisions log for the full
   write-up, including the apostrophe/curly-quote JSX-escaping decision.
+- **Landing page header/hero redesigned for phone; `/login?intent=signup`
+  title variant (2026-08-13).** Owner testing on a phone: the header's one
+  row (logo + wordmark + both CTA buttons) broke down narrow — logo didn't
+  render, "Start Free Account" truncated mid-word, "Sign In" read as plain
+  text easily mistaken for a caption. Fix: header now shows logo + wordmark
+  + a "Tracking Requests and ToDos" tagline only (same tagline
+  `WypHeader.tsx` already uses), no buttons; `Start Free Account`/`Sign In`
+  moved into the hero, stacked (`.hero-btns`) beside three explicit
+  headline lines ("Send it." / "Track it." / "Get it Done.", each its own
+  line) rather than below the lede. `Start Free Account` here is light-blue
+  (`.btn-tint`) and `Sign In` white (`.btn-white`, smaller) — owner's own
+  reasoning: the light-blue version "looks better when on the same page as
+  the larger white background version deeper in the text" (the final CTA
+  band's own, larger, white Start Free Account button). `.brandmark svg`
+  gained explicit `width`/`height` attributes as a defensive fix; header
+  and hero-line sizes now scale up at the existing 600px/900px breakpoints
+  instead of staying fixed at the original small mobile-only values.
+  Landing page's Start Free Account links (hero-top and final CTA band) and
+  Request Response's "Create your own Free Account" link now carry
+  `?intent=signup`; `app/login/page.tsx` reads it via
+  `window.location.search` (same precedent as `AddContactForm.tsx`'s
+  `?from=create-request`, avoiding a `useSearchParams()` Suspense boundary)
+  and shows "Sign In for Free Account" instead of "Sign In" when present —
+  owner: clicking Start Free Account and landing on a plain "Sign In"
+  screen was "a little jarring," though it's still the same one screen
+  either way (no separate sign-up form exists). Ported into
+  `design/marketing/WYP_landing_page.html` to stay in sync with the live
+  component. `npx tsc --noEmit`/`npm run lint` clean; not yet visually
+  verified on a real phone. See the decisions log for the full write-up.

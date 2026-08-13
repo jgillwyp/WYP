@@ -44,7 +44,16 @@
 .wyp-landing .wrap { max-width: 1120px; margin: 0 auto; padding: 0 18px; }
 .wyp-landing img, .wyp-landing svg { display: block; max-width: 100%; }
 
-/* Header */
+/* Header — logo + wordmark + tagline only, no CTAs (2026-08-13). Buttons
+ * used to live here but were dropped: on a narrow phone the single row
+ * (logo + wordmark + two buttons) squeezed the logo to invisible and
+ * truncated "Start Free Account" mid-word. With nothing else competing for
+ * width, the logo/wordmark/tagline block can run larger here than
+ * WypHeader.tsx's fixed 40px/23px/13.5px (tuned for the 480px app frame)
+ * — sized up further still at the tablet/desktop breakpoints below, per
+ * the owner's separate report that the app-frame-derived starting size
+ * read too small once stretched across a wider screen.
+ */
 .wyp-landing .topbar {
   border-bottom: 1px solid var(--rule);
   position: sticky;
@@ -55,47 +64,34 @@
 .wyp-landing .topbar .wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  padding-top: 12px;
+  padding-bottom: 12px;
 }
 .wyp-landing .brandmark {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   text-decoration: none;
 }
-.wyp-landing .brandmark svg { height: 28px; width: auto; }
+.wyp-landing .brandmark svg { height: 34px; width: auto; flex-shrink: 0; display: block; }
+.wyp-landing .brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
 .wyp-landing .brandmark .word {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--brand-blue);
   letter-spacing: -.01em;
   white-space: nowrap;
 }
-.wyp-landing .topbar .spacer { flex: 1 1 auto; }
-.wyp-landing .signin-link {
-  font-size: 13px;
+.wyp-landing .brandmark .tag {
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--ink-soft);
-  text-decoration: none;
-  padding: 8px 6px;
   white-space: nowrap;
 }
-.wyp-landing .btn-primary {
-  display: inline-block;
-  background: var(--brand-blue);
-  background-image: linear-gradient(var(--btn-top), var(--brand-blue));
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-  padding: 9px 14px;
-  border-radius: 8px;
-  white-space: nowrap;
-  border: none;
-}
-.wyp-landing .btn-primary:active { background: var(--blue-pressed); background-image: none; }
 .wyp-landing .btn-white {
   display: inline-block;
   background: #fff;
@@ -106,6 +102,23 @@
   padding: 13px 22px;
   border-radius: 10px;
   text-align: center;
+}
+/* Light-blue CTA, 2026-08-13 — used for the hero-top "Start Free Account"
+ * so it reads as secondary to the larger white "Start Free Account" in the
+ * final CTA band further down the same page; see LandingPage.tsx's own
+ * header comment for the owner's exact reasoning.
+ */
+.wyp-landing .btn-tint {
+  display: inline-block;
+  background: var(--strip);
+  color: var(--brand-blue);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 /* Hero */
@@ -124,17 +137,45 @@
   z-index: 1;
 }
 .wyp-landing .hero-copy { max-width: 640px; }
-.wyp-landing .h1 {
-  font-size: 30px;
-  line-height: 1.12;
+/* hero-top: the three headline lines beside a stacked CTA column, replacing
+ * the old single-line h1 + below-the-lede button row (2026-08-13) — see
+ * LandingPage.tsx's own header comment for the full reasoning. No/very
+ * little gap between the two columns on purpose, per the owner's own
+ * finding: "The width of the 'Start Free Account' button when placed
+ * adjacent to the 'Get it Done' line works on a vertical columnar basis as
+ * long as there is either no gap or a very little gap between those
+ * columns." */
+.wyp-landing .hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+}
+.wyp-landing .hero-lines { min-width: 0; }
+.wyp-landing .hero-line {
+  font-size: 24px;
+  line-height: 1.16;
   font-weight: 800;
   letter-spacing: -.015em;
+  color: #fff;
+}
+.wyp-landing .hero-btns {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+}
+.wyp-landing .hero-btns .btn-tint,
+.wyp-landing .hero-btns .btn-white {
+  padding: 9px 14px;
+  font-size: 12.5px;
 }
 .wyp-landing .h2 {
   font-size: 16px;
   font-weight: 600;
   color: #DCE6FA;
-  margin-top: 8px;
+  margin-top: 16px;
   line-height: 1.4;
 }
 .wyp-landing .lede {
@@ -143,23 +184,6 @@
   color: #EAF0FB;
   margin-top: 14px;
 }
-.wyp-landing .hero-ctas {
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: stretch;
-}
-.wyp-landing .hero-ctas .btn-white { width: 100%; }
-.wyp-landing .hero-secondary {
-  text-align: center;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #EAF0FB;
-  text-decoration: none;
-  padding: 6px;
-}
-.wyp-landing .hero-secondary b { text-decoration: underline; }
 .wyp-landing .reassure {
   margin-top: 16px;
   font-size: 12px;
@@ -265,9 +289,12 @@
 @media (min-width: 600px) {
   .wyp-landing .grid { grid-template-columns: 1fr 1fr; }
   .wyp-landing .cols { grid-template-columns: 1.1fr 1fr; }
-  .wyp-landing .hero-ctas { flex-direction: row; align-items: center; }
-  .wyp-landing .hero-ctas .btn-white { width: auto; }
-  .wyp-landing .hero-secondary { text-align: left; padding: 6px 4px; }
+  .wyp-landing .brandmark svg { height: 40px; }
+  .wyp-landing .brandmark .word { font-size: 19px; }
+  .wyp-landing .brandmark .tag { font-size: 12.5px; }
+  .wyp-landing .hero-line { font-size: 30px; }
+  .wyp-landing .hero-btns .btn-tint,
+  .wyp-landing .hero-btns .btn-white { padding: 10px 18px; font-size: 13.5px; }
   .wyp-landing .ctaband { display: flex; align-items: center; text-align: left; gap: 18px; }
   .wyp-landing .ctaband > div:first-child { flex: 1 1 auto; }
   .wyp-landing .ctaband .price { margin-top: 0; text-align: right; }
@@ -280,6 +307,9 @@
   .wyp-landing .hero .wrap { flex-direction: row; align-items: center; gap: 40px; }
   .wyp-landing .hero-copy { flex: 1 1 52%; max-width: none; }
   .wyp-landing .hero-art { flex: 1 1 44%; max-width: 460px; align-self: center; }
-  .wyp-landing .h1 { font-size: 38px; }
+  .wyp-landing .brandmark svg { height: 46px; }
+  .wyp-landing .brandmark .word { font-size: 21px; }
+  .wyp-landing .brandmark .tag { font-size: 13.5px; }
+  .wyp-landing .hero-line { font-size: 38px; }
   .wyp-landing .grid { grid-template-columns: 1fr 1fr 1fr; }
 }

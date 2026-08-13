@@ -681,7 +681,7 @@ export default function RequestResponseForm() {
                 intent. */}
             <div className="promo">
               <div className="promo-h">Send it, Track it, Get it Done</div>
-              <Link href="/login" className="btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+              <Link href="/login?intent=signup" className="btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
                 Create your own Free Account
               </Link>
               <p className="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>

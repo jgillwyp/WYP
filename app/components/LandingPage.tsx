@@ -16,13 +16,36 @@ import './landing.css'
 // next/link's <Link> for in-app destinations, and Inter is not re-loaded
 // via a Google Fonts <link> (app/layout.tsx already self-hosts it via
 // next/font as --font-inter, already in scope here).
+//
+// Header + hero-top redesigned 2026-08-13, owner-reported testing on a
+// phone: the original single-row header (logo + wordmark + both CTA
+// buttons) squeezed everything on a narrow viewport — the logo failed to
+// render at all, and "Start Free Account" truncated mid-word. Owner's own
+// fix, described directly and matched here: drop both buttons from the
+// header entirely (logo + wordmark + tagline only, given more room since
+// nothing else competes for it — "Tracking Requests and ToDos" reuses the
+// exact tagline WypHeader.tsx already uses elsewhere in the app, for
+// consistency) and move Start Free Account / Sign In into the hero itself,
+// stacked in a column beside the three headline lines rather than below
+// the lede — a layout that holds on a phone without the headline wrapping
+// mid-word ("Send it.", "Track it.", "Get it Done." as three explicit
+// lines, not one wrapped sentence). Start Free Account is light-blue
+// (`.btn-tint`) here specifically so it reads as secondary to the larger
+// white `.btn-white` "Start Free Account" repeated in the final CTA band
+// further down the page — owner's own reasoning: "it looks better when on
+// the same page as the larger white background version deeper in the
+// text." Sign In is white (`.btn-white`, smaller) — a real button now,
+// not the old plain-text link, so it can't read as a caption under Start
+// Free Account. Both CTAs point to `/login`; Start Free Account adds
+// `?intent=signup` so the sign-in screen can show "Sign In for Free
+// Account" instead of a bare "Sign In" — see app/login/page.tsx.
 export default function LandingPage() {
   return (
     <div className="wyp-landing">
       <header className="topbar">
         <div className="wrap">
           <a className="brandmark" href="#top">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200" width="42" height="40">
               <g>
                 <path
                   d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z"
@@ -53,11 +76,11 @@ export default function LandingPage() {
                 />
               </g>
             </svg>
-            <span className="word">Would You Please</span>
+            <span className="brand">
+              <span className="word">Would You Please</span>
+              <span className="tag">Tracking Requests and ToDos</span>
+            </span>
           </a>
-          <span className="spacer" />
-          <Link className="signin-link" href="/login">Sign In</Link>
-          <Link className="btn-primary" href="/login">Start Free Account</Link>
         </div>
       </header>
 
@@ -66,7 +89,17 @@ export default function LandingPage() {
         <section className="hero">
           <div className="wrap">
             <div className="hero-copy">
-              <div className="h1">Send it. Track it. Get it done.</div>
+              <div className="hero-top">
+                <div className="hero-lines">
+                  <div className="hero-line">Send it.</div>
+                  <div className="hero-line">Track it.</div>
+                  <div className="hero-line">Get it Done.</div>
+                </div>
+                <div className="hero-btns">
+                  <Link className="btn-tint" href="/login?intent=signup">Start Free Account</Link>
+                  <Link className="btn-white" href="/login">Sign In</Link>
+                </div>
+              </div>
               <div className="h2">The simple way to ask anyone for anything — and actually see it through.</div>
               <div className="lede">
                 Asks sent by email or chat get buried, forgotten, and lost in long threads.
@@ -74,12 +107,6 @@ export default function LandingPage() {
                 due date, a formal response, and a clear status — Open, Overdue, or Done —
                 visible to both of you. Your personal ToDos live right alongside, on one
                 dashboard.
-              </div>
-              <div className="hero-ctas">
-                <Link className="btn-white" href="/login">Start Free Account</Link>
-                <Link className="hero-secondary" href="/login">
-                  Already using Would You Please? <b>Sign In</b>
-                </Link>
               </div>
               <div className="reassure">No credit card. Nothing to install — works right in your phone’s browser.</div>
             </div>
@@ -270,7 +297,7 @@ export default function LandingPage() {
                 <div className="amt">Free</div>
                 <div className="per">for advanced features, subscription $17.95/yr</div>
               </div>
-              <Link className="btn-white" href="/login">Start Free Account</Link>
+              <Link className="btn-white" href="/login?intent=signup">Start Free Account</Link>
             </div>
           </div>
         </section>

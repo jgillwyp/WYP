@@ -14,6 +14,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export default function LoginPage() {
   const router = useRouter()
 
+  // Owner-reported, 2026-08-13: clicking "Start Free Account" on the
+  // landing page and landing on a screen titled plain "Sign In" reads as
+  // jarring/confusing — this is still the single dual-purpose auth screen
+  // (no separate sign-up form exists; see the Auth section of CLAUDE.md),
+  // so the fix is wording, not a second screen. LandingPage.tsx's Start
+  // Free Account links carry `?intent=signup`; Sign In links (here and on
+  // Request Response's "Create your own Free Account" block) don't. Read
+  // via window.location.search rather than useSearchParams(), matching the
+  // precedent set in AddContactForm.tsx — this value is only ever read
+  // client-side already, so there's no SSR pass to guard and no reason to
+  // force a Suspense boundary onto this page for it.
+  const [isSignupIntent] = useState(() =>
+    typeof window === 'undefined' ? false : new URLSearchParams(window.location.search).get('intent') === 'signup'
+  )
+
   const [email, setEmail] = useState('')
   const [remember, setRemember] = useState(true)
   const [sent, setSent] = useState(false)
@@ -99,7 +114,7 @@ export default function LoginPage() {
         <WypHeader />
 
         <div className="band">
-          <span className="glabel">Sign In</span>
+          <span className="glabel">{isSignupIntent ? 'Sign In for Free Account' : 'Sign In'}</span>
         </div>
 
         {!sent ? (
