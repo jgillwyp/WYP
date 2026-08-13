@@ -308,6 +308,22 @@ function ColSort({
 // Videos tab), matching the owner's own wording ("chip state") — the search
 // text box is a separate control and stays session-only/unpersisted unless
 // asked.
+//
+// Extended cross-session, per-account, 2026-08-13 (migration 016,
+// profiles.main_chip_prefs) — owner: "keep track of the chip settings
+// last-used for an account user... these defaults should only be used the
+// first time an account user sees the main screen." sessionStorage above
+// is kept as-is, unchanged, purely as a same-tab fast path (it resolves
+// synchronously on mount, so a quick round trip to a Detail screen and back
+// shows the right chips instantly, with no flash of default state while the
+// slower DB read below is still in flight). The DB column is the actual
+// source of truth across sessions and devices: read once on mount and
+// applied on top of whatever sessionStorage/hardcoded default already
+// rendered, then kept in sync on every change via loadMainChipPrefs/
+// MAIN_CHIP_PREFS_DEFAULT below. An empty `{}` (a brand new account's
+// initial default value, migration 016) is the one and only condition that
+// means "first time" — real values, once saved, are never overwritten by
+// the hardcoded defaults again for that account.
 const SENT_FILTER_KEY = 'wyp.mainSentFilter'
 const RECEIVED_FILTER_KEY = 'wyp.mainReceivedFilter'
 const TODO_FILTER_KEY = 'wyp.mainTodoFilter'
@@ -315,6 +331,16 @@ const HK_TAB_KEY = 'wyp.mainHkTab'
 const SENT_SORT_KEY = 'wyp.mainSentSort'
 const RECEIVED_SORT_KEY = 'wyp.mainReceivedSort'
 const TODO_SORT_KEY = 'wyp.mainTodoSort'
+
+type FilterValue = 'all' | 'open' | 'overdue' | 'done'
+const FILTER_VALUES = ['all', 'open', 'overdue', 'done'] as const
+
+type MainChipPrefs = {
+  sentFilter?: FilterValue
+  receivedFilter?: FilterValue
+  todoFilter?: FilterValue
+  hkTab?: 'tasks' | 'videos'
+}
 
 function readStoredChip<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -386,16 +412,25 @@ export default function MainScreen() {
   )
   const [signingOut, setSigningOut] = useState(false)
 
-  const [sentFilter, setSentFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
-    readStoredChip(SENT_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'all')
+  const [sentFilter, setSentFilter] = useState<FilterValue>(() =>
+    readStoredChip(SENT_FILTER_KEY, FILTER_VALUES, 'all')
   )
-  const [receivedFilter, setReceivedFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
-    readStoredChip(RECEIVED_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'all')
+  const [receivedFilter, setReceivedFilter] = useState<FilterValue>(() =>
+    readStoredChip(RECEIVED_FILTER_KEY, FILTER_VALUES, 'all')
   )
-  const [todoFilter, setTodoFilter] = useState<'all' | 'open' | 'overdue' | 'done'>(() =>
-    readStoredChip(TODO_FILTER_KEY, ['all', 'open', 'overdue', 'done'] as const, 'open')
+  const [todoFilter, setTodoFilter] = useState<FilterValue>(() =>
+    readStoredChip(TODO_FILTER_KEY, FILTER_VALUES, 'open')
   )
   const [searchText, setSearchText] = useState('')
+
+  // Cross-session, per-account chip persistence (2026-08-13, migration
+  // 016) — see the comment above MAIN_CHIP_PREFS' storage-key block for
+  // the full reasoning. userId is filled in by the fetch effect below;
+  // prefsLoaded gates the save effect so it can't fire (and overwrite a
+  // real saved preference with the initial default) before the one-time
+  // load has actually completed.
+  const [userId, setUserId] = useState<string | null>(null)
+  const [prefsLoaded, setPrefsLoaded] = useState(false)
 
   const [sentSort, setSentSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
     readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
@@ -409,19 +444,75 @@ export default function MainScreen() {
 
   useEffect(() => {
     window.sessionStorage.setItem(SENT_FILTER_KEY, sentFilter)
-  }, [sentFilter])
-
-  useEffect(() => {
     window.sessionStorage.setItem(RECEIVED_FILTER_KEY, receivedFilter)
-  }, [receivedFilter])
-
-  useEffect(() => {
     window.sessionStorage.setItem(TODO_FILTER_KEY, todoFilter)
-  }, [todoFilter])
-
-  useEffect(() => {
     window.sessionStorage.setItem(HK_TAB_KEY, hkTab)
-  }, [hkTab])
+  }, [sentFilter, receivedFilter, todoFilter, hkTab])
+
+  // One-time load, on mount: the signed-in user's own saved chip prefs
+  // (profiles.main_chip_prefs, migration 016) take precedence over
+  // whatever sessionStorage/hardcoded default already rendered on first
+  // paint — an empty `{}` (a brand-new account, never saved before) is
+  // left alone, which is exactly what makes the hardcoded defaults above
+  // apply on a real first-ever visit and never again after that.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPrefs() {
+      const { data: userData } = await supabase.auth.getUser()
+      const uid = userData.user?.id ?? null
+      if (cancelled) return
+      setUserId(uid)
+
+      if (!uid) {
+        setPrefsLoaded(true)
+        return
+      }
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('main_chip_prefs')
+        .eq('id', uid)
+        .single()
+      if (cancelled) return
+
+      const prefs = (data?.main_chip_prefs ?? {}) as MainChipPrefs
+      if (prefs.sentFilter && (FILTER_VALUES as readonly string[]).includes(prefs.sentFilter)) {
+        setSentFilter(prefs.sentFilter)
+      }
+      if (prefs.receivedFilter && (FILTER_VALUES as readonly string[]).includes(prefs.receivedFilter)) {
+        setReceivedFilter(prefs.receivedFilter)
+      }
+      if (prefs.todoFilter && (FILTER_VALUES as readonly string[]).includes(prefs.todoFilter)) {
+        setTodoFilter(prefs.todoFilter)
+      }
+      if (prefs.hkTab === 'tasks' || prefs.hkTab === 'videos') {
+        setHkTab(prefs.hkTab)
+      }
+      setPrefsLoaded(true)
+    }
+
+    loadPrefs()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Save on every change, once the initial load above has actually
+  // resolved — never before, or the hardcoded/sessionStorage defaults this
+  // effect would otherwise fire with first could stomp a real saved
+  // preference the fetch just hadn't returned yet.
+  useEffect(() => {
+    if (!prefsLoaded || !userId) return
+    const prefs: MainChipPrefs = { sentFilter, receivedFilter, todoFilter, hkTab }
+    supabase
+      .from('profiles')
+      .update({ main_chip_prefs: prefs })
+      .eq('id', userId)
+      .then(({ error }) => {
+        if (error) console.error('Failed to save Main Screen chip preferences:', error.message)
+      })
+  }, [prefsLoaded, userId, sentFilter, receivedFilter, todoFilter, hkTab])
 
   useEffect(() => {
     writeStoredSort(SENT_SORT_KEY, sentSort)
@@ -602,7 +693,7 @@ export default function MainScreen() {
               <div className="subhead-top">
                 <span className="subname">Sent</span>
                 <span className="subicons">
-                  <span className="iconbtn" role="button" tabIndex={0} aria-label="Print Sent"><PrintIcon /></span>
+                  <button className="iconbtn" type="button" aria-label="Print Sent" onClick={() => window.print()}><PrintIcon /></button>
                 </span>
               </div>
               <div className="chips">
@@ -670,7 +761,7 @@ export default function MainScreen() {
               <div className="subhead-top">
                 <span className="subname">Received</span>
                 <span className="subicons">
-                  <span className="iconbtn" role="button" tabIndex={0} aria-label="Print Received"><PrintIcon /></span>
+                  <button className="iconbtn" type="button" aria-label="Print Received" onClick={() => window.print()}><PrintIcon /></button>
                 </span>
               </div>
               <div className="chips">
@@ -742,7 +833,7 @@ export default function MainScreen() {
                 <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
               </div>
               <span className="subicons">
-                <span className="iconbtn" role="button" tabIndex={0} aria-label="Print ToDos"><PrintIcon /></span>
+                <button className="iconbtn" type="button" aria-label="Print ToDos" onClick={() => window.print()}><PrintIcon /></button>
               </span>
             </div>
             <div className="subbody">

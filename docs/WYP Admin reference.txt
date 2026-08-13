@@ -6,6 +6,12 @@ insert into beta_allowlist (email, note) values ('someone@example.com', 'heard f
 update app_settings set value = false where key = 'signup_gate_enabled';
 -- turn it back on:
 update app_settings set value = true where key = 'signup_gate_enabled';
+-- see table
+select * from beta_allowlist order by added_at desc limit 100
+
+usage:
+08-13-26
+insert into beta_allowlist (email, note) values ('jimgillon@hotmail.com', 'Please add me to the test group.  I run a dog poop scoop business and am interested in this app.  My friend Robert Jones told me about it ');
 
 2. Hostinger Agentic email setup..........................................................
 
@@ -15,6 +21,4 @@ Protocol				Hostname		Port	TLS/SSL
 Incoming server (IMAP)			imap.hostinger.com	993	Yes	
 Outgoing server (SMTP)			smtp.hostinger.com	465	Yes	
 Incoming server (POP3)Not recommended	pop.hostinger.com	995	Yes
-
-	
 

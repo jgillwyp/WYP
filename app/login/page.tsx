@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import WypHeader from '../components/WypHeader'
 import { supabase, setRememberMe } from '@/lib/supabaseClient'
@@ -11,23 +11,34 @@ const RESEND_COOLDOWN_SECONDS = 60
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// Bug fix, 2026-08-13 — owner-reported, screenshot of the address bar
+// showing /login?intent=signup while the band still read plain "Sign In".
+// The original fix (same day, earlier) read `?intent=signup` once via a
+// lazy useState initializer on window.location.search, on the reasoning
+// that this page is only ever reached client-side anyway. That reasoning
+// missed a real case: Next's client-side router can keep a `/login` page
+// instance alive/reused across a same-route navigation that only changes
+// the search string (e.g. following a prefetched or previously-visited
+// `/login` with a fresh `?intent=signup` click) — a lazy useState
+// initializer only ever runs once, on that instance's original mount, so a
+// later, param-only navigation left it stuck on whatever it read the first
+// time. `useSearchParams()` is the actual fix: it subscribes to the
+// router's own search-params state and re-renders on every change, mount
+// or not. It requires a Suspense boundary around anything that calls it,
+// so the page default-exports a thin wrapper and the real screen moved to
+// `LoginScreen` below.
 export default function LoginPage() {
-  const router = useRouter()
-
-  // Owner-reported, 2026-08-13: clicking "Start Free Account" on the
-  // landing page and landing on a screen titled plain "Sign In" reads as
-  // jarring/confusing — this is still the single dual-purpose auth screen
-  // (no separate sign-up form exists; see the Auth section of CLAUDE.md),
-  // so the fix is wording, not a second screen. LandingPage.tsx's Start
-  // Free Account links carry `?intent=signup`; Sign In links (here and on
-  // Request Response's "Create your own Free Account" block) don't. Read
-  // via window.location.search rather than useSearchParams(), matching the
-  // precedent set in AddContactForm.tsx — this value is only ever read
-  // client-side already, so there's no SSR pass to guard and no reason to
-  // force a Suspense boundary onto this page for it.
-  const [isSignupIntent] = useState(() =>
-    typeof window === 'undefined' ? false : new URLSearchParams(window.location.search).get('intent') === 'signup'
+  return (
+    <Suspense fallback={<div>Loading…</div>}>
+      <LoginScreen />
+    </Suspense>
   )
+}
+
+function LoginScreen() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const isSignupIntent = searchParams.get('intent') === 'signup'
 
   const [email, setEmail] = useState('')
   const [remember, setRemember] = useState(true)
@@ -170,12 +181,18 @@ export default function LoginPage() {
                 users.
               </p>
               <p className="sent-p">
-                If you would like to participate in this testing process, let us know how
-                you heard about Would You Please and introduce yourself in an email to{' '}
+                If you would like to participate in this testing process, let us know in
+                an email to{' '}
                 <a href="mailto:notifications@wouldyouplease.com?subject=Would%20You%20Please%20%E2%80%94%20Testing%20Access">
                   notifications@wouldyouplease.com
-                </a>
-                .
+                </a>{' '}
+                the following information: your first name, how you heard about Would You
+                Please, and a short introduction.
+              </p>
+              <p className="sent-p">
+                If your participation is approved, you will receive an email explaining the
+                Private Testing process, related limitations, the expected testing
+                duration, and a &ldquo;Start a Free Account&rdquo; link to click.
               </p>
 
               <p className="sent-meta">

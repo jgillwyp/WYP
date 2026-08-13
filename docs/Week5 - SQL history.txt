@@ -53,7 +53,7 @@ commit;
 
 -- ============================================================================
 -- WYP migration 015 — private-testing signup gate
--- DRAFTED 2026-08-13 — NOT YET CONFIRMED RUN.
+-- CONFIRMED RUN by the owner 2026-08-13.
 --
 -- Background (see decisions log, 2026-08-13): owner wants to test with a
 -- small, known group of people without the app being openly self-serve —
@@ -168,4 +168,55 @@ commit;
 --        -> should return false while the gate is on
 --   select public.can_create_account('jimgillon@gmail.com');
 --        -> should return true — already a real auth.users row
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 016 — profiles.main_chip_prefs (Main Screen chip persistence)
+-- DRAFTED 2026-08-13 — NOT YET CONFIRMED RUN.
+--
+-- Background (see decisions log, 2026-08-13): the Main Screen's filter
+-- chips (Sent/Received/ToDos All-Open-Overdue-Done, Housekeeping's Tasks/
+-- How-to Videos tab) have been sessionStorage-only since 2026-08-09 — a
+-- deliberate choice at the time ("a within-session view preference, fine
+-- to reset once the tab closes"). Owner has now asked for more: "keep
+-- track of the chip settings last-used for an account user... these
+-- defaults should only be used the first time an account user sees the
+-- main screen" — durable per-account persistence, superseding that
+-- earlier scoping call, not contradicting a still-current one.
+--
+-- One jsonb column rather than four/five separate boolean/text columns —
+-- this is UI view state, not a modeled business fact worth its own schema
+-- entry each time a new chip or tab is added later (the app already has
+-- four such controls today: Sent filter, Received filter, ToDo filter,
+-- Housekeeping tab). Same column-grant pattern as migration 013's
+-- time_zone: the existing "profiles: update own" RLS policy (migration
+-- 002) already scopes updates to the caller's own row; this only adds the
+-- new column to the column-level grant list so authenticated can write it
+-- at all.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists main_chip_prefs jsonb not null default '{}'::jsonb;
+
+comment on column public.profiles.main_chip_prefs is
+  'Main Screen chip-state UI preference (Sent/Received/ToDo filter, Housekeeping tab), keyed by short names chosen client-side (app/components/MainScreen.tsx). Empty object means this account has never saved a preference yet — MainScreen.tsx treats that, and only that, as "first time" and falls back to its own hardcoded defaults.';
+
+grant update (main_chip_prefs) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only, per this file's own recurring
+-- caveat — test as authenticated/anon or from the browser for a real
+-- check):
+--   select column_name from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'main_chip_prefs';
+--        -> should return exactly one row
+--
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles' and column_name = 'main_chip_prefs';
+--        -> should show authenticated / UPDATE
 -- ============================================================================

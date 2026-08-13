@@ -1085,5 +1085,69 @@ link is built only after the stack is proven on Add Contact.
   `gated` screen state with the owner's exact wording and a
   `mailto:notifications@wouldyouplease.com` link. See the decisions log for
   the full write-up, including the rejected Auth-Hook alternative.
-  **Migration 015 has not been run yet.** `npx tsc --noEmit`/`npm run
-  lint` clean.
+  **Migration 015 confirmed run by the owner 2026-08-13** — the gate is
+  live: any brand-new email not on `beta_allowlist` now sees the Private
+  Testing screen instead of getting a magic link. `npx tsc --noEmit`/`npm
+  run lint` clean.
+- **Three small live-testing fixes (2026-08-13): dead Main Screen print
+  icons, session-check flakiness, per-account chip persistence.** (1)
+  Main Screen's Print Sent/Received/ToDos were `<span role="button">`s
+  with no `onClick` at all — never actually wired, unlike Create Request's
+  own working Print icon (`onClick={() => window.print()}`), which the
+  owner correctly remembered working elsewhere. Fixed to match that
+  pattern (`MainScreen.tsx`). (2) Owner-reported: closing the browser
+  signed in, then reopening it later, sometimes showed the landing page
+  instead of Main Screen, then correctly showed Main Screen again on a
+  later visit with no action taken. `app/page.tsx` and `RequireAuth.tsx`
+  both used `supabase.auth.getUser()` — a live round-trip to Supabase's
+  Auth server — and treated any failure, including a transient network
+  hiccup right after reopening, as "not signed in." Both switched to
+  `supabase.auth.getSession()` (reads the already-initialized local
+  session, no network call of its own), matching the pattern
+  `app/login/page.tsx`'s own already-signed-in check already used — a
+  UI-routing decision only, not a security change; real access control is
+  still Supabase's RLS/JWT verification on every actual data call. (3)
+  Owner: "keep track of the chip settings last-used for an account user...
+  these defaults should only be used the first time an account user sees
+  the main screen" — new scope, not a correction of the 2026-08-09
+  sessionStorage decision. **Migration 016** (`docs/Week5 - SQL
+  history.txt`, drafted, NOT yet confirmed run) adds
+  `profiles.main_chip_prefs jsonb not null default '{}'::jsonb` plus a
+  column-level `grant update (main_chip_prefs)` to `authenticated`, same
+  pattern as migration 013's `time_zone` grant. `MainScreen.tsx` keeps its
+  existing `sessionStorage` fast path unchanged (avoids a flash of default
+  state on a quick Detail-screen round trip) and adds a one-time load of
+  `main_chip_prefs` on mount, applied on top of whatever already rendered,
+  plus a save-on-change effect gated so it can never fire before that
+  initial load resolves. An empty `{}` (a brand-new account) is the only
+  condition where the hardcoded defaults apply; any saved value is used
+  from then on, on any device. `npx tsc --noEmit`/`npm run lint` clean.
+- **Supabase Auth's own Custom SMTP is now configured (2026-08-13),
+  separately from WYP's own Hostinger integration.** Owner was hitting
+  Supabase's built-in mailer limits testing sign-up/login — 2 magic-link
+  emails/hour, and more restrictively, delivery refused entirely to any
+  address outside the Supabase project's own team. Fixed in the Supabase
+  dashboard (Authentication → SMTP Settings) using the same Hostinger
+  mailbox `app/api/email/send-request/route.ts` already sends from — a
+  separate configuration, not the same setting, since Supabase Auth's own
+  mailer and this repo's `nodemailer` transport are independent systems
+  that happen to share a mailbox. Confirmed working (a sender-name typo the
+  owner made while entering it showed up verbatim in a received magic-link
+  email, then was corrected). No code or env var in this repo controls
+  this — it's entirely a Supabase project setting.
+- **`/login`'s `?intent=signup` fix from earlier the same day had a real
+  bug — fixed with `useSearchParams()` (2026-08-13).** Owner-reported,
+  screenshot: address bar showed `?intent=signup`, band still read plain
+  "Sign In." The lazy-`useState`-on-`window.location.search` approach only
+  reads once, on that component instance's original mount — stale once
+  Next's client router reuses an already-mounted `/login` instance across a
+  params-only navigation instead of remounting fresh. Fixed with
+  `useSearchParams()` (`next/navigation`), which re-renders on every
+  search-param change regardless of mount history; requires a `Suspense`
+  boundary, so `app/login/page.tsx` now default-exports a thin
+  `<Suspense>` wrapper around the real screen (`LoginScreen`).
+  `AddContactForm.tsx`'s own `?from=create-request` read is unaffected —
+  it's read live inside a click handler, never cached across renders.
+  Private Testing's copy was also revised twice, both times to the owner's
+  own wording verbatim — see the decisions log for both changes in full.
+  `npx tsc --noEmit`/`npm run lint` clean.
