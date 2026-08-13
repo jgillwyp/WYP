@@ -1274,3 +1274,16 @@ link is built only after the stack is proven on Add Contact.
   toggle-driven collapsed state to demonstrate; flagged in
   `design/README.md`, not silently skipped. `npx tsc --noEmit`/`npm run
   lint` clean.
+- **Fixed, same day: a lone native date field (Create Request's Due Date
+  with Due Time off; Request Response's/Response Detail's Done Date with
+  the issuer's Due/Done Time off) rendered Safari's spelled-out date format
+  ("Wednesday, September 30, 2026") instead of the app's usual short one.**
+  Root cause: `.frow .ffloat`'s `flex: 1 1 0%` (2026-08-11) grows a
+  field with no row sibling to ~400px+; Safari's native date control
+  switches to a wider, verbose format past a certain width, matching mm/
+  dd/yyyy at the ~200px two paired fields split evenly. Fixed with
+  `.frow > .ffloat.picker.native:only-child { flex: 0 1 220px; }` in
+  `app/globals.css` — caps a lone field to roughly what a paired field
+  already gets, leaving the two-field case untouched. No mockup changes —
+  none of the three affected screens' static HTML has a real
+  `type="date"` input to trigger the same browser behavior.

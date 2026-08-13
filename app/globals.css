@@ -622,6 +622,25 @@ body {
   min-width: 0;
 }
 
+/* A single native date/time field left alone in a .frow — Create Request's
+   Due Date when Due Time is turned off (profiles.request_time_enabled,
+   migration 019), or Request Response/Response Detail's Done Date when the
+   Request's own issuer has it off — otherwise inherits the flex:1 1 0% rule
+   above and grows to the row's full ~400px+ width. Safari's native
+   <input type="date"> renders a longer, spelled-out date ("Wednesday,
+   September 30, 2026") once the control is that wide, instead of the
+   abbreviated mm/dd/yyyy it uses at the narrower ~200px two paired fields
+   share — owner-reported 2026-08-13, comparing it against the Due:
+   metarow's own compact presentation above it on Response Detail. Capped to
+   the width a paired field would have had, rather than left to stretch,
+   which keeps the date in its familiar short format regardless of which
+   fields are turned on. `:only-child` scopes this to exactly the
+   single-field case — a .frow with two .ffloat children (or one .ffloat
+   beside a .btn, e.g. Recipient/Category) is unaffected. */
+.frow > .ffloat.picker.native:only-child {
+  flex: 0 1 220px;
+}
+
 .frow .btn {
   align-self: center;
 }

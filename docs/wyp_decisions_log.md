@@ -6,6 +6,18 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-13 — Cap a lone native date field's width to keep Safari's short date format
+
+Owner, on Response Detail: a solo Done Date field (Done Time turned off for that Request's issuer) rendered its value as "Wednesday, September 30, 2026" — full weekday-spelled-out format — instead of the app's usual compact date, asking for it to match "the Due Date presentation above" (the Due: metarow's own short-form label:value line just above it).
+
+**Root cause**: `.frow .ffloat`'s existing `flex: 1 1 0%` rule (2026-08-11, the equal-width fix for paired Due/Done rows) grows a lone field to the full row width — roughly 400px+ — when nothing else shares the row. Safari's native `<input type="date">` renders its own selected value using a width-dependent format: narrow (~200px, the width two paired fields split evenly) gets the abbreviated mm/dd/yyyy; wide enough (~400px+) gets the full spelled-out date. This is the browser's own rendering, not something the page's CSS or JS controls directly — Chrome doesn't do this, which is presumably why it wasn't caught earlier.
+
+**Where this can happen**: any `.frow` whose native date/time field lost its sibling to the new Due/Done Time toggle (migration 019) and is now alone. That's three places, not just Response Detail: Create Request's Due row (Due Time off), and Request Response's/Response Detail's Done row (issuer's owner_request_time_enabled off) — the same collapse logic built for that feature. Flagged to the owner as broader than the one screen he tested, and fixed at the CSS source rather than per-screen, since it's the identical browser behavior in all three places.
+
+**Fix**: `.frow > .ffloat.picker.native:only-child { flex: 0 1 220px; }` in `app/globals.css`, right after the existing `.frow .ffloat` rule — higher specificity (an extra class plus `:only-child`) wins over it without touching the paired-field case, which still needs its own equal-width behavior untouched. 220px matches roughly what a paired field already gets, so the lone field now renders at the same width (and therefore the same short format) it always had before the Due/Done Time toggle existed, rather than stretching to fill the empty row. No mockup changes — confirmed none of the three affected screens' static HTML use real `type="date"` inputs (Create Request's is a styled `type="text"`; Request Response/Response Detail have no `<input>` for these fields at all, just static `.fieldval` text), so there's nothing there to trigger the same browser rendering.
+
+\---
+
 ## 2026-08-13 — Due/Done Time becomes an opt-in account preference (Requests)
 
 Owner, immediately after Private Category shipped: "A similar modification for simplification can be done for the Due Time and Done Time for Requests without much of a complication (I think). As another account option, when turned off the four-value two-line presentation of Due Date Due Time Done Date Done Time on Requests would become like a ToDo one-line two-value presentation of Due Date and Done Date."
