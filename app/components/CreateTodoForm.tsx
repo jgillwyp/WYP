@@ -102,6 +102,10 @@ export default function CreateTodoForm() {
 
   const [form, setForm] = useState<TodoFormState>(initialState)
 
+  // Private Category is now an opt-in account preference (migration 018,
+  // 2026-08-13), off by default — see AccountForm.tsx and
+  // CreateRequestForm.tsx's identical gate.
+  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -136,9 +140,12 @@ export default function CreateTodoForm() {
 
     supabase
       .from('profiles')
-      .select('display_name')
+      .select('display_name, private_category_enabled')
       .single()
-      .then(({ data }) => setOwnerName(data?.display_name ?? null))
+      .then(({ data }) => {
+        setOwnerName(data?.display_name ?? null)
+        setCategoriesEnabled(data?.private_category_enabled ?? false)
+      })
   }, [])
 
   function openDialogModal() {
@@ -321,11 +328,19 @@ export default function CreateTodoForm() {
     }
 
     setSaving(false)
-    router.push('/')
+    // router.back(), not push('/') — matches Request/ToDo/Contact Detail's
+    // own convention (2026-08-09) and, combined with MainScreen.tsx's new
+    // scrollTop restore (2026-08-13), returns to Main Screen at the same
+    // scroll position instead of a fresh top-of-page load. This was the one
+    // create-a-new-item screen still using push('/'), which is what the
+    // owner was actually seeing when he reported "add or edit a ToDo"
+    // together — Detail's edit path already used back() but had no scroll
+    // restore to rely on either, until now.
+    router.back()
   }
 
   function handleCancel() {
-    router.push('/')
+    router.back()
   }
 
   return (
@@ -483,72 +498,77 @@ export default function CreateTodoForm() {
               </span>
             </div>
 
-            {/* Category row */}
-            <div className="fgroup">
-              <div className="frow" style={{ position: 'relative' }}>
-                <span className="ffloat">
-                  <input
-                    className={`finput${form.categoryName.trim() === '' ? ' opt' : ''}`}
-                    id="cat"
-                    type="text"
-                    autoComplete="off"
-                    placeholder=" "
-                    value={form.categoryName}
-                    onChange={(e) => {
-                      set('categoryName', e.target.value)
-                      if (selectedCategory && e.target.value !== selectedCategory.name) {
-                        setSelectedCategory(null)
-                      }
-                      setCategoryBrowsing(false)
-                      setShowCategoryResults(true)
-                    }}
-                    onFocus={(e) => {
-                      e.target.select()
-                      setCategoryBrowsing(true)
-                      setShowCategoryResults(true)
-                    }}
-                    onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
-                  />
-                  <label className="flabel" htmlFor="cat">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
-                        <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
-                      </svg>
-                    </span>
-                    Private Category <span className="subnote">(optional)</span>
-                  </label>
-                </span>
-                <button className="btn" type="button" onClick={openAddCategory}>
-                  Add Category
-                </button>
+            {/* Category row — only when the account has turned Private
+                Category on (migration 018, 2026-08-13). See
+                CreateRequestForm.tsx's identical gate for the full
+                reasoning. */}
+            {categoriesEnabled && (
+              <div className="fgroup">
+                <div className="frow" style={{ position: 'relative' }}>
+                  <span className="ffloat">
+                    <input
+                      className={`finput${form.categoryName.trim() === '' ? ' opt' : ''}`}
+                      id="cat"
+                      type="text"
+                      autoComplete="off"
+                      placeholder=" "
+                      value={form.categoryName}
+                      onChange={(e) => {
+                        set('categoryName', e.target.value)
+                        if (selectedCategory && e.target.value !== selectedCategory.name) {
+                          setSelectedCategory(null)
+                        }
+                        setCategoryBrowsing(false)
+                        setShowCategoryResults(true)
+                      }}
+                      onFocus={(e) => {
+                        e.target.select()
+                        setCategoryBrowsing(true)
+                        setShowCategoryResults(true)
+                      }}
+                      onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
+                    />
+                    <label className="flabel" htmlFor="cat">
+                      <span className="lglyph" aria-hidden="true">
+                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
+                          <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
+                        </svg>
+                      </span>
+                      Private Category <span className="subnote">(optional)</span>
+                    </label>
+                  </span>
+                  <button className="btn" type="button" onClick={openAddCategory}>
+                    Add Category
+                  </button>
 
-                {showCategoryResults && showCategoryDropdown && (
-                  <div className="lookup-results" role="listbox">
-                    {filteredCategories.length === 0 ? (
-                      <div className="lookup-empty">
-                        {categoryQueryEmpty ? 'No categories yet — use Add Category.' : 'No matching category — use Add Category.'}
-                      </div>
-                    ) : (
-                      filteredCategories.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
-                          role="option"
-                          aria-selected={selectedCategory?.id === c.id}
-                          onMouseDown={() => selectCategory(c)}
-                        >
-                          {c.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
+                  {showCategoryResults && showCategoryDropdown && (
+                    <div className="lookup-results" role="listbox">
+                      {filteredCategories.length === 0 ? (
+                        <div className="lookup-empty">
+                          {categoryQueryEmpty ? 'No categories yet — use Add Category.' : 'No matching category — use Add Category.'}
+                        </div>
+                      ) : (
+                        filteredCategories.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
+                            role="option"
+                            aria-selected={selectedCategory?.id === c.id}
+                            onMouseDown={() => selectCategory(c)}
+                          >
+                            {c.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* ToDo Description (§6.10): 500-char limit, the only required field */}
             <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>

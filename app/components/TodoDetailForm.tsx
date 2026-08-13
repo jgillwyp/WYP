@@ -109,6 +109,10 @@ export default function TodoDetailForm() {
     description: '',
   })
 
+  // Private Category is now an opt-in account preference (migration 018,
+  // 2026-08-13), off by default — see AccountForm.tsx and
+  // CreateRequestForm.tsx's identical gate.
+  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -175,7 +179,7 @@ export default function TodoDetailForm() {
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
-        supabase.from('profiles').select('display_name').single(),
+        supabase.from('profiles').select('display_name, private_category_enabled').single(),
       ])
 
       if (cancelled) return
@@ -208,6 +212,7 @@ export default function TodoDetailForm() {
       }
       setCategories(catRes.data ?? [])
       setOwnerName(ownerRes.data?.display_name ?? null)
+      setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
 
       await loadDialog()
       if (!cancelled) setLoading(false)
@@ -592,71 +597,78 @@ export default function TodoDetailForm() {
               </span>
             </div>
 
-            <div className="fgroup">
-              <div className="frow" style={{ position: 'relative' }}>
-                <span className="ffloat">
-                  <input
-                    className={`finput${form.categoryName.trim() === '' ? ' opt' : ''}`}
-                    id="cat"
-                    type="text"
-                    autoComplete="off"
-                    placeholder=" "
-                    value={form.categoryName}
-                    onChange={(e) => {
-                      set('categoryName', e.target.value)
-                      if (selectedCategory && e.target.value !== selectedCategory.name) {
-                        setSelectedCategory(null)
-                      }
-                      setCategoryBrowsing(false)
-                      setShowCategoryResults(true)
-                    }}
-                    onFocus={(e) => {
-                      e.target.select()
-                      setCategoryBrowsing(true)
-                      setShowCategoryResults(true)
-                    }}
-                    onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
-                  />
-                  <label className="flabel" htmlFor="cat">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
-                        <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
-                      </svg>
-                    </span>
-                    Private Category <span className="subnote">(optional)</span>
-                  </label>
-                </span>
-                <button className="btn" type="button" onClick={openAddCategory}>
-                  Add Category
-                </button>
+            {/* Category row — only when the account has turned Private
+                Category on (migration 018, 2026-08-13). See
+                CreateRequestForm.tsx's identical gate for the full
+                reasoning, and RequestDetailForm.tsx's note on the
+                already-set-category edge case. */}
+            {categoriesEnabled && (
+              <div className="fgroup">
+                <div className="frow" style={{ position: 'relative' }}>
+                  <span className="ffloat">
+                    <input
+                      className={`finput${form.categoryName.trim() === '' ? ' opt' : ''}`}
+                      id="cat"
+                      type="text"
+                      autoComplete="off"
+                      placeholder=" "
+                      value={form.categoryName}
+                      onChange={(e) => {
+                        set('categoryName', e.target.value)
+                        if (selectedCategory && e.target.value !== selectedCategory.name) {
+                          setSelectedCategory(null)
+                        }
+                        setCategoryBrowsing(false)
+                        setShowCategoryResults(true)
+                      }}
+                      onFocus={(e) => {
+                        e.target.select()
+                        setCategoryBrowsing(true)
+                        setShowCategoryResults(true)
+                      }}
+                      onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
+                    />
+                    <label className="flabel" htmlFor="cat">
+                      <span className="lglyph" aria-hidden="true">
+                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
+                          <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
+                        </svg>
+                      </span>
+                      Private Category <span className="subnote">(optional)</span>
+                    </label>
+                  </span>
+                  <button className="btn" type="button" onClick={openAddCategory}>
+                    Add Category
+                  </button>
 
-                {showCategoryResults && showCategoryDropdown && (
-                  <div className="lookup-results" role="listbox">
-                    {filteredCategories.length === 0 ? (
-                      <div className="lookup-empty">
-                        {categoryQueryEmpty ? 'No categories yet — use Add Category.' : 'No matching category — use Add Category.'}
-                      </div>
-                    ) : (
-                      filteredCategories.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
-                          role="option"
-                          aria-selected={selectedCategory?.id === c.id}
-                          onMouseDown={() => selectCategory(c)}
-                        >
-                          {c.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
+                  {showCategoryResults && showCategoryDropdown && (
+                    <div className="lookup-results" role="listbox">
+                      {filteredCategories.length === 0 ? (
+                        <div className="lookup-empty">
+                          {categoryQueryEmpty ? 'No categories yet — use Add Category.' : 'No matching category — use Add Category.'}
+                        </div>
+                      ) : (
+                        filteredCategories.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
+                            role="option"
+                            aria-selected={selectedCategory?.id === c.id}
+                            onMouseDown={() => selectCategory(c)}
+                          >
+                            {c.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>
               <textarea

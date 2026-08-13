@@ -220,3 +220,423 @@ commit;
 --   where table_name = 'profiles' and column_name = 'main_chip_prefs';
 --        -> should show authenticated / UPDATE
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 017 — add due_time to get_received_requests()
+-- First attempt failed when the owner ran it (see correction below);
+-- corrected version CONFIRMED RUN by the owner 2026-08-13.
+--
+-- Background (see decisions log, 2026-08-13): the new Main Screen Print
+-- Reports feature shows a Due Time sub-line under a Request's Due Date when
+-- one is set (owner's own xlsx mockup). Sent already has due_time via a
+-- plain PostgREST select (MainScreen.tsx's own .select() string, no
+-- migration needed — the column already existed on requests). Received
+-- goes through get_received_requests() (migration 012) instead, whose
+-- return table has to be extended explicitly to add a column — same
+-- precedent as migration 011 adding owner_tier to get_request_by_token.
+--
+-- CORRECTION: the first draft below used `create or replace function`, on
+-- the assumption (wrong — migration 011's own owner_tier precedent happened
+-- to append its new column last, which is why that one worked) that
+-- Postgres allows a RETURNS TABLE function's row shape to change freely
+-- under CREATE OR REPLACE. Running it as drafted failed:
+--   ERROR: 42P13: cannot change return type of existing function
+--   DETAIL: Row type defined by OUT parameters is different.
+--   HINT: Use DROP FUNCTION get_received_requests() first.
+-- Postgres implements RETURNS TABLE as a set of OUT parameters, and
+-- CREATE OR REPLACE cannot alter that OUT-parameter list at all once a
+-- function exists — not just reordering; inserting due_time in the middle
+-- (between due_date and done_date) was what triggered it here, matching the
+-- exact instruction in Postgres's own HINT. Fixed by dropping the function
+-- first, then creating it fresh with the new shape. Dropping a function
+-- also drops its own grants, so the revoke/grant pair below has to be
+-- re-run after create, not just left in place from before the drop.
+-- ============================================================================
+
+begin;
+
+drop function if exists public.get_received_requests();
+
+create function public.get_received_requests()
+returns table (
+  id uuid,
+  description text,
+  due_date date,
+  due_time time,
+  done_date date,
+  created_at timestamptz,
+  owner_name text,
+  dialog_count bigint
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' then
+    return; -- no email claim on the session; nothing to match
+  end if;
+
+  return query
+    select
+      r.id, r.description, r.due_date, r.due_time, r.done_date, r.created_at,
+      p.display_name as owner_name,
+      (select count(*) from public.dialog d where d.request_id = r.id) as dialog_count
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where lower(trim(c.email)) = v_email
+    order by r.due_date desc nulls last;
+end;
+$$;
+
+revoke all on function public.get_received_requests() from public;
+grant execute on function public.get_received_requests() to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only — see this file's recurring
+-- caveat; the real check is calling the RPC as a signed-in recipient from
+-- the browser, e.g. via the already-live Received subcard or Print
+-- Received, and confirming due_time comes back for a Request that has one):
+--   select prosrc from pg_proc where proname = 'get_received_requests';
+--        -> should show due_time in both the returns table and the select list
+--
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name = 'get_received_requests';
+--        -> should show authenticated / EXECUTE (dropping the function
+--           drops this too, so it's worth re-checking after the drop+create
+--           above, not just assuming it carried over)
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 018 — profiles.private_category_enabled
+-- CONFIRMED RUN by the owner 2026-08-13.
+--
+-- Background (see decisions log, 2026-08-13): owner — "In the interest of
+-- keeping this app as simple as possible, I think the Private Category
+-- should be an account option, not a standard presented data element...
+-- available for Free Accounts, but only if they turn it on... A single
+-- option could control its availability for both Requests and ToDos."
+-- Not tier-gated (any account, free or subscriber, may turn it on) — a
+-- decluttering preference, not an entitlement. Off by default: a brand-new
+-- account never sees Category anywhere until it's explicitly turned on, at
+-- which point the field behaves exactly as it does today (including the
+-- existing "no Categories yet" empty-state formatting, unaffected — nothing
+-- about that formatting changes, only whether the field is reachable at
+-- all). Same column-grant pattern as migration 013's time_zone/migration
+-- 016's main_chip_prefs: the existing "profiles: update own" RLS policy
+-- (migration 002) already scopes updates to the caller's own row; this only
+-- adds the new column to the column-level grant list so authenticated can
+-- write it at all.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists private_category_enabled boolean not null default false;
+
+comment on column public.profiles.private_category_enabled is
+  'Off by default. When true, the Category lookup is shown on Create Request, Create ToDo, Request Detail, ToDo Detail, and the ToDos column on Main Screen. A single flag governs both Requests and ToDos — see app/components/AccountForm.tsx, the new minimal /account screen this shipped alongside.';
+
+grant update (private_category_enabled) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only, per this file's own recurring
+-- caveat — test as authenticated/anon or from the browser for a real
+-- check):
+--   select column_name from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'private_category_enabled';
+--        -> should return exactly one row
+--
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles' and column_name = 'private_category_enabled';
+--        -> should show authenticated / UPDATE
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 019 — profiles.request_time_enabled
+-- DRAFTED 2026-08-13 — CONFIRMED RUN by the owner 2026-08-13.
+--
+-- Background (see decisions log, 2026-08-13): owner — "As another account
+-- option, when turned off the four-value two-line presentation of Due Date
+-- Due Time Done Date Done Time on Requests would become like a ToDo
+-- one-line two-value presentation of Due Date and Done Date." Same shape as
+-- migration 018's Private Category toggle, but the DEFAULT is the opposite:
+-- true, not false. Category was a brand-new, never-before-shown field, so
+-- off-by-default was the natural "simple until you opt in" choice. Due
+-- Time/Done Time are pre-existing, already-adopted behavior (Print Reports'
+-- own Due Time sub-line, the .ics Due Time default, etc.) — defaulting this
+-- to false would silently hide already-set Due/Done Time values for every
+-- existing account the moment this migration runs, which is a regression,
+-- not a simplification. Defaulting to true preserves exactly the current
+-- behavior for everyone; only an account that explicitly turns it off ever
+-- sees the simplified one-line presentation.
+--
+-- Scope confirmed with the owner: this also governs the recipient-facing
+-- Request Response (`/r/[token]`) and Response Detail
+-- (`/requests/[id]/respond`) screens, driven by the REQUEST'S OWNER's own
+-- setting, not the recipient's — same "rights on a request come from its
+-- issuer" principle CLAUDE.md's Entitlements section already establishes
+-- for `tier`, and the exact precedent migration 011's `owner_tier` already
+-- set for exposing an owner-side profiles column through the anonymous/
+-- recipient-facing functions. See migrations 020/021 for that plumbing.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists request_time_enabled boolean not null default true;
+
+comment on column public.profiles.request_time_enabled is
+  'Default true (preserves existing behavior). When false, Due Time and Done Time are hidden everywhere a Request appears — Create Request, Request Detail, and (via owner_request_time_enabled on get_request_by_token/get_received_request/get_received_requests) the recipient-facing Request Response and Response Detail screens too, plus the Print Reports Due Time sub-line. Governs Requests only — ToDos have never had a Due Time/Done Time field to begin with.';
+
+grant update (request_time_enabled) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only, per this file's own recurring
+-- caveat — test as authenticated/anon or from the browser for a real
+-- check):
+--   select column_name from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'request_time_enabled';
+--        -> should return exactly one row
+--
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles' and column_name = 'request_time_enabled';
+--        -> should show authenticated / UPDATE
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 020 — owner_request_time_enabled on get_request_by_token
+-- and get_received_request
+-- DRAFTED 2026-08-13 — CONFIRMED RUN by the owner 2026-08-13.
+--
+-- Both functions RETURN jsonb, not RETURNS TABLE — unlike get_received_requests
+-- (migration 017's own hard-won lesson), a jsonb-returning function has no
+-- OUT-parameter row shape for CREATE OR REPLACE to choke on, so a plain
+-- create-or-replace is safe here regardless of where the new field lands in
+-- the object. Both queries already join profiles as p for owner_name/
+-- owner_tier — p.request_time_enabled is the same join, one more column.
+-- ============================================================================
+
+begin;
+
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here:
+--   await supabase.rpc('get_request_by_token', { p_token: token })
+--        -> payload now also has owner_request_time_enabled (boolean)
+--   await supabase.rpc('get_received_request', { p_request_id: id })
+--        -> same
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 021 — owner_request_time_enabled on get_received_requests
+-- DRAFTED 2026-08-13 — CONFIRMED RUN by the owner 2026-08-13.
+--
+-- get_received_requests RETURNS TABLE (implemented as OUT parameters) —
+-- migration 017 already learned the hard way that CREATE OR REPLACE cannot
+-- alter that row shape at all, in any position, once the function exists.
+-- drop function first, same fix as 017, applied straight away this time
+-- rather than rediscovering it.
+--
+-- Needed for two things: Response Detail (same reasoning as migration 020)
+-- and, more subtly, Print Received — each row on that report can belong to
+-- a different sender, so the Due Time sub-line has to be gated per-row by
+-- that row's own sender's setting, not the signed-in viewer's own profile.
+-- ============================================================================
+
+begin;
+
+drop function if exists public.get_received_requests();
+
+create function public.get_received_requests()
+returns table (
+  id uuid,
+  description text,
+  due_date date,
+  due_time time,
+  done_date date,
+  created_at timestamptz,
+  owner_name text,
+  owner_request_time_enabled boolean,
+  dialog_count bigint
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' then
+    return; -- no email claim on the session; nothing to match
+  end if;
+
+  return query
+    select
+      r.id, r.description, r.due_date, r.due_time, r.done_date, r.created_at,
+      p.display_name as owner_name,
+      coalesce(p.request_time_enabled, true) as owner_request_time_enabled,
+      (select count(*) from public.dialog d where d.request_id = r.id) as dialog_count
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where lower(trim(c.email)) = v_email
+    order by r.due_date desc nulls last;
+end;
+$$;
+
+revoke all on function public.get_received_requests() from public;
+grant execute on function public.get_received_requests() to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only — see this file's recurring
+-- caveat):
+--   select prosrc from pg_proc where proname = 'get_received_requests';
+--        -> should show owner_request_time_enabled in both the returns
+--           table and the select list
+--
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name = 'get_received_requests';
+--        -> should show authenticated / EXECUTE
+-- ============================================================================

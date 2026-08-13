@@ -2131,3 +2131,209 @@ body {
   line-height: 1.4;
   color: var(--ink);
 }
+
+/* Print Reports (2026-08-13, MainScreen.tsx) — §6.34 PROPOSED, not yet
+   drawn in any mockup (see design/README.md). Fixes the owner's report that
+   printing Main Screen "only shows what can fit onto a page": the previous
+   Print buttons printed the live, internally-scrolling on-screen layout
+   as-is, which a browser can only ever print the currently-visible portion
+   of. .print-report is a separate, dedicated report layout per section
+   (Sent/Received/ToDos), built from the owner's own xlsx mockup, rendered
+   only for the brief window a Print button is active — .no-print and this
+   block's own @media print rule make sure exactly one of "the live app" or
+   "the current report" is ever visible, on screen or on paper, never both.
+   Uses the same design tokens as the rest of the app (--ink/--ink-soft/
+   --rule/--brand-blue/--alert-red) — no new hex values introduced. */
+.print-report {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-report {
+    display: block;
+  }
+  @page {
+    margin: 0.5in;
+  }
+}
+
+.pmast {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.pmast-brand {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.pmast-time {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.ptitle {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.pcolbar {
+  display: grid;
+  background: var(--strip);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 6px 8px;
+  column-gap: 10px;
+}
+
+.pcolbar.psr {
+  grid-template-columns: 1fr 70px 70px 70px;
+}
+
+.pcolbar.ptdc {
+  grid-template-columns: 1fr 70px 70px;
+}
+
+.pcolbar .c-dt,
+.pcolbar .c-due,
+.pcolbar .c-dn {
+  text-align: center;
+}
+
+.prows {
+  margin-top: 4px;
+}
+
+.prow {
+  padding: 7px 8px 8px;
+  border-bottom: 1px solid var(--rule);
+  break-inside: avoid;
+}
+
+.prow:last-child {
+  border-bottom: none;
+}
+
+.pempty {
+  padding: 10px 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* Sent/Received print rows: bold name + centered date columns, matching
+   .pcolbar.psr's own grid exactly so the header labels and the data below
+   line up. ToDos print rows (no name/date columns, see .ptd below) instead
+   put .pr2's description first, .pr1.ptd's Due/Done second — matching the
+   xlsx mockup's own column order (Description, Due, Done). */
+.pr1 {
+  display: grid;
+  grid-template-columns: 1fr 70px 70px 70px;
+  column-gap: 10px;
+  align-items: baseline;
+}
+
+.pr1.ptd {
+  grid-template-columns: 70px 70px;
+  justify-content: end;
+  margin-top: 2px;
+}
+
+.pnm {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pdt,
+.pdn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.pdue {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+}
+
+/* Due Time sub-line (2026-08-13) — "the time renders beneath the date in
+   the Due column" (project convention, CLAUDE.md), applied here for the
+   first time: due_time has never been shown on the live Main Screen rows
+   themselves, only on Request Detail/Response. */
+.ptime {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.pr2 {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 3px;
+}
+
+/* No truncation here — the whole reason this feature exists (design
+   constant: on-screen .desc clamps to 2 lines with an ellipsis; the print
+   report is exactly where the owner wants the full text instead). */
+.pdesc {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.32;
+}
+
+.pii {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 5px;
+  padding-top: 1px;
+  color: var(--icon-grey);
+}
+
+.pii .iico {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+/* Overdue/Done rows render entirely in red/grey — same design constant as
+   the live .row.overdue/.row.done rules above. */
+.prow.overdue .pnm,
+.prow.overdue .pdt,
+.prow.overdue .pdue,
+.prow.overdue .ptime,
+.prow.overdue .pdn,
+.prow.overdue .pdesc {
+  color: var(--alert-red);
+}
+
+.prow.done .pnm,
+.prow.done .pdt,
+.prow.done .pdue,
+.prow.done .ptime,
+.prow.done .pdn,
+.prow.done .pdesc {
+  color: var(--ink-soft);
+  font-weight: 500;
+}

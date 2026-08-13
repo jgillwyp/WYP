@@ -1151,3 +1151,126 @@ link is built only after the stack is proven on Add Contact.
   Private Testing's copy was also revised twice, both times to the owner's
   own wording verbatim — see the decisions log for both changes in full.
   `npx tsc --noEmit`/`npm run lint` clean.
+- **Main Screen scroll position now survives Add/Edit ToDo (2026-08-13).**
+  Owner: "back does not work as expected... returns to the top of the screen
+  and shows Requests Sent." Real root cause: `.scroll` is an internally-
+  scrolling `overflow-y: auto` div, not the window — the 2026-08-09
+  `router.back()` convention only ever restores `window.scrollY`, which this
+  screen never uses, so the div's own `scrollTop` was silently reset to 0 on
+  every remount regardless of `back()` vs `push()`. Fixed with explicit
+  `sessionStorage` persistence in `MainScreen.tsx` (`wyp.mainScrollTop`):
+  saved on every scroll, restored once after `loading` first turns false on
+  a fresh mount (so it lands against real row heights, not the "Loading…"
+  placeholder). Separately, `CreateTodoForm.tsx`'s Save/Cancel were still
+  `router.push('/')` — the one create-new-item screen that never got the
+  2026-08-09 Detail-screen `back()` convention (that batch only touched
+  *edit* screens, reached from an existing row; Create ToDo is reached from
+  a button and was written on its own). Fixed to `router.back()` to match.
+  `npx tsc --noEmit`/`npm run lint` clean.
+- **Main Screen Print Reports (2026-08-13, §6.34 PROPOSED, not drawn in any
+  mockup).** Owner: the existing Print buttons printed the live,
+  internally-scrolling on-screen layout as-is — "only shows what can fit
+  onto a page." Built from the owner's own uploaded xlsx mockup: a
+  dedicated print-only layout per section (`.print-report`, shown via
+  `@media print`, mutually exclusive with the live UI's new `.no-print`
+  wrapper), driven by a `printSection`/`printGeneratedAt` state pair and an
+  effect that calls `window.print()` once the report JSX has committed,
+  resetting on the browser's `afterprint` event. Sourced from
+  `sortedSent`/`sortedReceived`/`sortedTodos` — already filtered/sorted —
+  per the owner's own confirmation: "The print should follow the chip and
+  sort set for the section by the user." Full untruncated descriptions (no
+  2-line clamp), the existing Dialog icon reused (Attachments has no data
+  model yet, so no icon slot for it), red text for Overdue rows, and a Due
+  Time sub-line when set. ToDos' print columns (Description/Due/Done)
+  deliberately don't match its on-screen row (Priority/Category, no dates)
+  — followed from the owner's own mockup rather than reconciled with the
+  live layout. Due Time required adding `due_time` to `SentRow`/
+  `ReceivedRow` (not `TodoRow`) and to the Sent query's `.select()`
+  directly; Received needed **migration 017** (`get_received_requests()`
+  extended to return `due_time`). **First draft failed when the owner ran
+  it**: `create or replace function` cannot change a `RETURNS TABLE`
+  function's OUT-parameter row shape at all (migration 011's `owner_tier`
+  precedent only worked because it was appended last; `due_time` was
+  inserted mid-list here) — Postgres's own error names the fix: `drop
+  function` first, then `create function` fresh, re-granting `execute`
+  afterward since the drop clears it too. Corrected in the migration file
+  and **confirmed run by the owner 2026-08-13** — Print Received and the
+  Received subcard can now show a Due Time sub-line. `npx tsc --noEmit`/`npm
+  run lint` clean.
+- **Private Category becomes an opt-in account preference (2026-08-13,
+  migration 018, `profiles.private_category_enabled boolean not null
+  default false`) — confirmed run by the owner 2026-08-13.** Owner: "I think the
+  Private Category should be an account option, not a standard presented
+  data element... available for Free Accounts, but only if they turn it
+  on... A single option could control its availability for both Requests
+  and ToDos." Not tier-gated — any account may turn it on. **Account is
+  now live for the first time**, superseding every earlier "intentionally
+  undesigned" note on it — offered a choice between building a minimal
+  Account screen now vs. adding the toggle to Housekeeping instead, the
+  owner picked Account. New `app/components/AccountForm.tsx` + `/account`
+  route: one `.checkrow` toggle, auto-saves on change (optimistic, reverted
+  on a failed write), nothing else from the `WYP_your_account_palette1_
+  floating.html` mockup is built. Main Screen's Housekeeping "Account" row
+  now navigates there instead of doing nothing. Gated everywhere Category
+  appears — the entire `.fgroup` (lookup + Add Category) is unrendered, not
+  locked, on Create Request/Create ToDo/Request Detail/ToDo Detail when
+  off; Main Screen's ToDos colbar drops to plain "Description" (no longer
+  clickable) and each row drops its `.cat` span, keeping the dash for
+  readability. Sent/Received never showed Category on Main Screen or
+  either print report, so nothing needed gating there. Each screen reads
+  the flag off the same `profiles` round trip it already made for
+  `display_name`/`main_chip_prefs`, no extra query. **Two edge cases
+  flagged, not specially handled**: an existing `category_id` from before
+  the toggle was turned off stays in the database, just hidden until
+  turned back on; and a persisted ToDos sort state of `category` from
+  before toggling off still technically sorts by the now-hidden name.
+  **No mockups updated** — all five source mockups still draw Category as
+  always-present; flagged in `design/README.md`, not silently skipped.
+  `npx tsc --noEmit`/`npm run lint` clean.
+- **Due/Done Time becomes an opt-in account preference on Requests
+  (2026-08-13) — migrations 019/020/021 confirmed run by the owner
+  2026-08-13.**
+  Owner: "As another account option, when turned off the four-value
+  two-line presentation of Due Date Due Time Done Date Done Time on
+  Requests would become like a ToDo one-line two-value presentation of Due
+  Date and Done Date." Broader than the owner's own estimate ("without much
+  of a complication (I think)") — Due/Done Time also shows on
+  recipient-facing screens (Request Response, Response Detail), and this
+  file's own Entitlements rule ("rights on a request come from its issuer,
+  never from whoever is reading it") means a consistent implementation has
+  to gate those too, off the *sender's* setting. Offered owner-only vs.
+  recipient-inclusive scope via AskUserQuestion; owner picked
+  recipient-inclusive. **Migration 019** —
+  `profiles.request_time_enabled boolean not null default true` (true, not
+  false like Category's `private_category_enabled` — this is pre-existing,
+  already-relied-upon behavior, e.g. Print Reports' Due Time sub-line and
+  the `.ics` builder, so defaulting off would silently hide already-set
+  data for every existing account). **Migration 020** adds
+  `owner_request_time_enabled` to `get_request_by_token` and
+  `get_received_request` — both `returns jsonb`, so a plain
+  `create or replace function` is safe (no OUT-parameter constraint; see
+  that migration's own header comment, which also corrects an earlier
+  overstated claim about why migration 011's `owner_tier` addition worked —
+  it was the `jsonb` return type all along, not "being appended last").
+  **Migration 021** adds the same field to `get_received_requests()`, which
+  *is* `RETURNS TABLE` — applying the migration-017 lesson proactively,
+  this one is `drop function if exists` then a fresh `create function`.
+  Second `.checkrow` toggle added to `AccountForm.tsx` ("Show Due/Done Time
+  (Requests)"), sharing one generalized `handleToggle(field, next, setLocal)`
+  helper with the existing Category toggle. Gated everywhere Due/Done Time
+  appears: Create Request's Due Time field is simply unrendered when off;
+  Request Detail's two two-value rows (Due Date/Due Time, Done Date/Done
+  Time) collapse into one combined Due Date + Done Date row, reusing ToDo
+  Detail's own combined-row markup; Request Response and Response Detail
+  read `owner_request_time_enabled` from their RPC payload (not the
+  viewer's own account) to drop the Due: metarow's time suffix and collapse
+  the editable Done Date/Done Time row to Done Date alone; Print Reports
+  gates Sent by the signed-in owner's own flag and Received per-row by each
+  row's own `owner_request_time_enabled`, since different Received rows can
+  have different senders. Same "existing value stays in the database, just
+  hidden" convention as Category — a Request's `due_time`/`done_time`
+  already set is never cleared, just not shown/edited until turned back on.
+  **No mockups updated** — none of the affected screens' static HTML has a
+  toggle-driven collapsed state to demonstrate; flagged in
+  `design/README.md`, not silently skipped. `npx tsc --noEmit`/`npm run
+  lint` clean.

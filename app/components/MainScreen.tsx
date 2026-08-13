@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -58,10 +58,13 @@ import { supabase } from '@/lib/supabaseClient'
  * - Housekeeping's "Contacts" row (renamed from "My Contacts" 2026-08-09 —
  *   a nav row's label must repeat the destination screen's own title
  *   exactly, owner's rule) navigates to /contacts. "Account" (renamed from
- *   "My Account" the same day, same rule) stays inert — that screen is
- *   intentionally undesigned pending further product evolution. Log Out is
- *   real — it is the one piece that directly serves the "test the login
- *   loop normally" goal this screen was built for.
+ *   "My Account" the same day, same rule) now navigates to /account too
+ *   (2026-08-13) — see AccountForm.tsx's own header comment for why this
+ *   is the one sliver of the previously-undesigned Account screen that
+ *   exists so far (a single Private Category on/off toggle), not a full
+ *   conversion of the Your Account mockup. Log Out is real — it is the one
+ *   piece that directly serves the "test the login loop normally" goal
+ *   this screen was built for.
  *
  * Icons are inline SVG (currentColor, driven by .iconbtn/.ii's own color),
  * not the mockup's base64 PNGs — matches how every other screen in this app
@@ -75,6 +78,7 @@ type SentRow = {
   id: string
   description: string
   due_date: string | null
+  due_time: string | null
   done_date: string | null
   created_at: string
   contacts: { display_name: string } | null
@@ -91,7 +95,8 @@ type TodoRow = {
   dialog: { count: number }[] | null
 }
 
-// Shape returned by the get_received_requests() RPC (migration 012) —
+// Shape returned by the get_received_requests() RPC (migration 012, plus
+// due_time added by migration 017 for the Print Reports feature below) —
 // deliberately close to SentRow so the row-rendering JSX below barely
 // diverges: owner_name stands in for contacts.display_name (this is the
 // sender, not a contact of the signed-in user's own), dialog_count stands
@@ -102,9 +107,16 @@ type ReceivedRow = {
   id: string
   description: string
   due_date: string | null
+  due_time: string | null
   done_date: string | null
   created_at: string
   owner_name: string | null
+  // owner_request_time_enabled added by migration 021, alongside due_time —
+  // each Received row can have a different sender, so the Print Received
+  // Due Time sub-line has to be gated per-row by that row's own sender's
+  // setting, not the signed-in viewer's own (see requestTimeEnabled below,
+  // which only governs Sent).
+  owner_request_time_enabled: boolean
   dialog_count: number
 }
 
@@ -122,6 +134,43 @@ function formatMDY(value: string | null): string {
   if (!value) return ''
   const [y, m, d] = value.slice(0, 10).split('-')
   return `${m}-${d}-${y.slice(2)}`
+}
+
+// Same helper as RequestResponseForm.tsx/ResponseDetailForm.tsx — duplicated
+// per this codebase's established convention for small stateless formatters
+// rather than extracted to a shared lib file. Only needed here for the
+// Print Reports feature below (2026-08-13): Due Time has never been shown
+// anywhere on the live Main Screen rows themselves.
+function formatTime12h(value: string | null): string {
+  if (!value) return ''
+  const [hStr, mStr] = value.split(':')
+  let h = parseInt(hStr, 10)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h}:${mStr} ${ampm}`
+}
+
+// m/d/yy h:mm AM/PM, matching this app's existing 12-hour-with-AM/PM
+// convention (formatTime12h above) rather than the xlsx mockup's raw Excel
+// number format, which had no explicit AM/PM of its own to match.
+function formatPrintTimestamp(d: Date): string {
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const y = String(d.getFullYear()).slice(2)
+  let h = d.getHours()
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
+}
+
+const CHIP_LABEL: Record<FilterValue, string> = {
+  all: 'All',
+  open: 'Open',
+  overdue: 'Overdue',
+  done: 'Done',
 }
 
 // Shared by Sent, Received, and (as of 2026-08-12) ToDos — all three now
@@ -331,6 +380,17 @@ const HK_TAB_KEY = 'wyp.mainHkTab'
 const SENT_SORT_KEY = 'wyp.mainSentSort'
 const RECEIVED_SORT_KEY = 'wyp.mainReceivedSort'
 const TODO_SORT_KEY = 'wyp.mainTodoSort'
+// .scroll (globals.css) is an internally-scrolling div, not the window —
+// browsers only restore window.scrollY across a client-side navigation,
+// never an arbitrary overflow:auto element's own scrollTop. router.back()
+// alone (2026-08-09, Request/ToDo/Contact Detail) was never enough on its
+// own for that reason; it just happened to go unnoticed until reported
+// 2026-08-13 ("returns to the top of the screen and shows Requests Sent"
+// after adding/editing a ToDo). Saved on every scroll, restored once after
+// the data fetch that follows a fresh mount has actually resolved — restoring
+// any earlier, while the section still shows "Loading…", would land on a
+// stray offset once real content changes the page's height.
+const MAIN_SCROLL_KEY = 'wyp.mainScrollTop'
 
 type FilterValue = 'all' | 'open' | 'overdue' | 'done'
 const FILTER_VALUES = ['all', 'open', 'overdue', 'done'] as const
@@ -423,6 +483,42 @@ export default function MainScreen() {
   )
   const [searchText, setSearchText] = useState('')
 
+  // Print Reports (2026-08-13) — owner: the current Print buttons print the
+  // live, internally-scrolling on-screen layout as-is, which only captures
+  // whatever currently fits the viewport ("only shows what can fit onto a
+  // page"). Fixed with a dedicated print-only report per section instead of
+  // printing the live UI at all — see the .print-report JSX/CSS below.
+  // "The print should follow the chip and sort set for the section by the
+  // user" (owner, confirmed) — sourced from sortedSent/sortedReceived/
+  // sortedTodos below, the same already-filtered-and-sorted arrays the
+  // on-screen rows themselves render from, so no separate filtering logic
+  // is needed here. printGeneratedAt is captured once per click (not
+  // computed at render time) so the masthead timestamp reflects the moment
+  // Print was clicked, not whatever instant React happens to next re-render.
+  const [printSection, setPrintSection] = useState<'sent' | 'received' | 'todos' | null>(null)
+  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
+
+  function startPrint(section: 'sent' | 'received' | 'todos') {
+    setPrintGeneratedAt(new Date())
+    setPrintSection(section)
+  }
+
+  useEffect(() => {
+    if (!printSection) return
+    // Fires after the .print-report JSX below has actually committed to the
+    // DOM (effects run post-paint), so window.print() sees the real report,
+    // not a stale one-render-behind version. 'afterprint' — not a timeout —
+    // is what clears printSection back to null, since the browser's print
+    // dialog is modal and there's no other reliable signal it closed.
+    window.print()
+    function handleAfterPrint() {
+      setPrintSection(null)
+      setPrintGeneratedAt(null)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [printSection])
+
   // Cross-session, per-account chip persistence (2026-08-13, migration
   // 016) — see the comment above MAIN_CHIP_PREFS' storage-key block for
   // the full reasoning. userId is filled in by the fetch effect below;
@@ -431,6 +527,23 @@ export default function MainScreen() {
   // load has actually completed.
   const [userId, setUserId] = useState<string | null>(null)
   const [prefsLoaded, setPrefsLoaded] = useState(false)
+
+  // Private Category is now an opt-in account preference (migration 018,
+  // 2026-08-13), off by default — see AccountForm.tsx. Read on the same
+  // profiles round trip as main_chip_prefs above, rather than a separate
+  // call. Governs only the ToDos colbar's Category segment and each ToDo
+  // row's own Category text (see the .colbar.td / .t1 JSX below) — Sent
+  // and Received have never shown Category on Main Screen at all, so
+  // there's nothing to gate on those two sections.
+  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
+
+  // Due/Done Time is now an opt-in account preference too (migration 019,
+  // 2026-08-13) — see AccountForm.tsx. On by default. Governs the Print
+  // Sent report's Due Time sub-line, gated by the signed-in owner's own
+  // setting (Sent Requests are always this account's own). Print Received
+  // is gated per-row instead, by each row's own owner_request_time_enabled
+  // (migration 021) — a different sender may have this on or off.
+  const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
 
   const [sentSort, setSentSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
     readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
@@ -471,10 +584,13 @@ export default function MainScreen() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('main_chip_prefs')
+        .select('main_chip_prefs, private_category_enabled, request_time_enabled')
         .eq('id', uid)
         .single()
       if (cancelled) return
+
+      setCategoriesEnabled(data?.private_category_enabled ?? false)
+      setRequestTimeEnabled(data?.request_time_enabled ?? true)
 
       const prefs = (data?.main_chip_prefs ?? {}) as MainChipPrefs
       if (prefs.sentFilter && (FILTER_VALUES as readonly string[]).includes(prefs.sentFilter)) {
@@ -526,6 +642,24 @@ export default function MainScreen() {
     writeStoredSort(TODO_SORT_KEY, todoSort)
   }, [todoSort])
 
+  // Scroll-position restore for the .scroll div — see MAIN_SCROLL_KEY's own
+  // comment above for why this can't just rely on the browser. Restored
+  // once loading finishes on a fresh mount (real row heights are in place by
+  // then); scrollRestored guards it from re-firing on every later re-render
+  // loading happens to cause (e.g. a chip change that re-triggers a fetch).
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const scrollRestored = useRef(false)
+
+  useEffect(() => {
+    if (loading || scrollRestored.current) return
+    scrollRestored.current = true
+    const saved = Number(window.sessionStorage.getItem(MAIN_SCROLL_KEY) ?? '0')
+    if (saved > 0 && scrollRef.current) {
+      scrollRef.current.scrollTop = saved
+    }
+  }, [loading])
+
+
   useEffect(() => {
     let cancelled = false
 
@@ -536,10 +670,10 @@ export default function MainScreen() {
       const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, done_date, created_at, contacts(display_name), dialog(count)')
+          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count)')
           .not('contact_id', 'is', null)
           .order('due_date', { ascending: false, nullsFirst: false }),
-        // get_received_requests() (migration 012) — a plain owner-scoped RLS
+        // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
         // select can't do this: there's no column linking a requests row to
         // its recipient's own account, only to the sender's Contact record
         // for them. The function matches on that Contact's email against
@@ -677,10 +811,14 @@ export default function MainScreen() {
 
   return (
     <div className="frame-none">
-      <div className="app">
+      <div className="app no-print">
         <WypHeader />
 
-        <div className="scroll">
+        <div
+          className="scroll"
+          ref={scrollRef}
+          onScroll={(e) => window.sessionStorage.setItem(MAIN_SCROLL_KEY, String(e.currentTarget.scrollTop))}
+        >
           {/* ---------------------------------------------------------- Requests */}
           <div className="band">
             <span className="glabel">Requests</span>
@@ -693,7 +831,7 @@ export default function MainScreen() {
               <div className="subhead-top">
                 <span className="subname">Sent</span>
                 <span className="subicons">
-                  <button className="iconbtn" type="button" aria-label="Print Sent" onClick={() => window.print()}><PrintIcon /></button>
+                  <button className="iconbtn" type="button" aria-label="Print Sent" onClick={() => startPrint('sent')}><PrintIcon /></button>
                 </span>
               </div>
               <div className="chips">
@@ -761,7 +899,7 @@ export default function MainScreen() {
               <div className="subhead-top">
                 <span className="subname">Received</span>
                 <span className="subicons">
-                  <button className="iconbtn" type="button" aria-label="Print Received" onClick={() => window.print()}><PrintIcon /></button>
+                  <button className="iconbtn" type="button" aria-label="Print Received" onClick={() => startPrint('received')}><PrintIcon /></button>
                 </span>
               </div>
               <div className="chips">
@@ -833,13 +971,17 @@ export default function MainScreen() {
                 <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
               </div>
               <span className="subicons">
-                <button className="iconbtn" type="button" aria-label="Print ToDos" onClick={() => window.print()}><PrintIcon /></button>
+                <button className="iconbtn" type="button" aria-label="Print ToDos" onClick={() => startPrint('todos')}><PrintIcon /></button>
               </span>
             </div>
             <div className="subbody">
               <div className="colbar td">
                 <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
-                <ColSort className="c-cat" label="Category — Description" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
+                {categoriesEnabled ? (
+                  <ColSort className="c-cat" label="Category — Description" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
+                ) : (
+                  <span className="c-cat">Description</span>
+                )}
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
@@ -867,7 +1009,12 @@ export default function MainScreen() {
                         )}
                         <span className="tdc">
                           <span className="pri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>{' '}
-                          <span className="cat">{t.categories?.name ?? '—'}</span> — <span className="tdd">{t.description}</span>
+                          {categoriesEnabled && (
+                            <>
+                              <span className="cat">{t.categories?.name ?? '—'}</span>{' '}
+                            </>
+                          )}
+                          — <span className="tdd">{t.description}</span>
                         </span>
                       </div>
                     </div>
@@ -925,7 +1072,13 @@ export default function MainScreen() {
                       <span className="hknote"> — view and edit</span>
                     </span>
                   </div>
-                  <div className="hkrow" role="button" tabIndex={0}>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/account')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/account') }}
+                  >
                     <span className="hktext">
                       <span className="hktitle">Account</span>
                       <span className="hknote"> — view and edit</span>
@@ -978,6 +1131,141 @@ export default function MainScreen() {
         <div className="subbanner" role="button" tabIndex={0}>See Subscription Features and Other Options</div>
         <div className="adslot" aria-hidden="true"><span className="adbox">AD — 320×50 RESERVED</span></div>
       </div>
+
+      {/* Print Reports (2026-08-13) — a dedicated, print-only layout per
+          section, built from the owner's own xlsx mockup rather than a
+          styled copy of the live on-screen rows: the two differ in real
+          ways (ToDos shows Description/Due/Done here, not the on-screen
+          Priority/Category; descriptions are never 2-line-truncated here).
+          Only ever rendered for the brief window between a Print click and
+          the browser's print dialog closing (see printSection/startPrint
+          above) — .no-print above and @media print in globals.css hide the
+          two from each other so exactly one is ever visible at a time,
+          on screen or on paper. Sourced from sortedSent/sortedReceived/
+          sortedTodos — the same chip-filtered, sort-applied arrays the live
+          rows render from — per the owner's own confirmation: "The print
+          should follow the chip and sort set for the section by the user."
+          Dialog icon reused from the live rows (DialogIcon); Attachments
+          has no data model yet (CLAUDE.md, deferred) so there is no icon
+          slot to reserve here beyond the Dialog one already present. */}
+      {printSection && (
+        <div className="print-report">
+          <div className="pmast">
+            <span className="pmast-brand">Would You Please</span>
+            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
+          </div>
+
+          {printSection === 'sent' && (
+            <>
+              <div className="ptitle">Requests Sent — {CHIP_LABEL[sentFilter]}</div>
+              <div className="pcolbar psr">
+                <span className="c-nm">To</span>
+                <span className="c-dt">Date{sentSort.key === 'date' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-due">Due{sentSort.key === 'due' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-dn">Done{sentSort.key === 'done' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              </div>
+              <div className="prows">
+                {sortedSent.length === 0 && <div className="pempty">No Sent Requests match this report.</div>}
+                {sortedSent.map((r) => {
+                  const status = sentStatus(r)
+                  return (
+                    <div key={r.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                      <div className="pr1">
+                        <span className="pnm">{r.contacts?.display_name ?? '—'}</span>
+                        <span className="pdt">{formatMDY(r.created_at)}</span>
+                        <span className="pdue">
+                          {formatMDY(r.due_date)}
+                          {/* Due Time sub-line — gated by the signed-in
+                              owner's own request_time_enabled (migration 019),
+                              since every Sent row is this account's own. */}
+                          {requestTimeEnabled && r.due_time && (
+                            <span className="ptime">{formatTime12h(r.due_time)}</span>
+                          )}
+                        </span>
+                        <span className="pdn">{formatMDY(r.done_date)}</span>
+                      </div>
+                      <div className="pr2">
+                        {dialogCount(r.dialog) > 0 && <span className="pii"><DialogIcon /></span>}
+                        <span className="pdesc">{r.description}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          {printSection === 'received' && (
+            <>
+              <div className="ptitle">Requests Received — {CHIP_LABEL[receivedFilter]}</div>
+              <div className="pcolbar psr">
+                <span className="c-nm">From</span>
+                <span className="c-dt">Date{receivedSort.key === 'date' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-due">Due{receivedSort.key === 'due' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-dn">Done{receivedSort.key === 'done' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              </div>
+              <div className="prows">
+                {sortedReceived.length === 0 && <div className="pempty">No Received Requests match this report.</div>}
+                {sortedReceived.map((r) => {
+                  const status = receivedStatus(r)
+                  return (
+                    <div key={r.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                      <div className="pr1">
+                        <span className="pnm">{r.owner_name ?? '—'}</span>
+                        <span className="pdt">{formatMDY(r.created_at)}</span>
+                        <span className="pdue">
+                          {formatMDY(r.due_date)}
+                          {/* Gated per-row by that row's own sender's setting
+                              (migration 021) — Received rows can come from
+                              different accounts, each with its own
+                              request_time_enabled. */}
+                          {r.owner_request_time_enabled && r.due_time && (
+                            <span className="ptime">{formatTime12h(r.due_time)}</span>
+                          )}
+                        </span>
+                        <span className="pdn">{formatMDY(r.done_date)}</span>
+                      </div>
+                      <div className="pr2">
+                        {r.dialog_count > 0 && <span className="pii"><DialogIcon /></span>}
+                        <span className="pdesc">{r.description}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          {printSection === 'todos' && (
+            <>
+              <div className="ptitle">ToDos — {CHIP_LABEL[todoFilter]}</div>
+              <div className="pcolbar ptdc">
+                <span className="c-desc">Description</span>
+                <span className="c-due">Due</span>
+                <span className="c-dn">Done</span>
+              </div>
+              <div className="prows">
+                {sortedTodos.length === 0 && <div className="pempty">No ToDos match this report.</div>}
+                {sortedTodos.map((t) => {
+                  const status = todoStatus(t)
+                  return (
+                    <div key={t.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                      <div className="pr2">
+                        {dialogCount(t.dialog) > 0 && <span className="pii"><DialogIcon /></span>}
+                        <span className="pdesc">{t.description}</span>
+                      </div>
+                      <div className="pr1 ptd">
+                        <span className="pdue">{formatMDY(t.due_date)}</span>
+                        <span className="pdn">{formatMDY(t.done_date)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

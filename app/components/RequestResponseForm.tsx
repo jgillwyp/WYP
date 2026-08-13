@@ -61,6 +61,7 @@ type ResponsePayload = {
   done_time: string | null
   owner_name: string | null
   owner_tier: 'free' | 'subscriber' | null
+  owner_request_time_enabled: boolean
   contact_name: string | null
   dialog: DialogEntry[]
 }
@@ -476,7 +477,13 @@ export default function RequestResponseForm() {
                 <span className="mlabel">Due:</span>
                 <span className="mval">
                   {data.due_date ? formatLongDate(data.due_date) : '—'}
-                  {data.due_time && <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>}
+                  {/* Due Time suffix — only when the issuer has Due/Done Time
+                      turned on (migration 019/020, 2026-08-13). Rights on a
+                      Request come from its issuer, never the viewer — same
+                      precedent as owner_tier/Attachments gating above. */}
+                  {data.owner_request_time_enabled && data.due_time && (
+                    <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>
+                  )}
                 </span>
               </div>
             </div>
@@ -536,6 +543,12 @@ export default function RequestResponseForm() {
                 editable row directly with --pad, same as every sibling block
                 below (.meta/.seclabel/.respdesc/.panelact/.panelfull/.promo
                 all carry their own var(--pad) the same way). */}
+            {/* Done Date/Done Time — collapses to Done Date alone when the
+                issuer has Due/Done Time turned off (migration 019/020,
+                2026-08-13; see the Due: metarow above for the same gate).
+                doneTime itself stays whatever was loaded (or blank) and is
+                simply never sent — set_response_done_by_token still accepts
+                p_done_time null either way. */}
             <div className="fgroup frow" style={{ padding: '0 var(--pad)' }}>
               <span className="ffloat picker native">
                 <input
@@ -564,39 +577,41 @@ export default function RequestResponseForm() {
                   Done Date <span className="subnote">(optional)</span>
                 </label>
               </span>
-              <span className="ffloat picker native">
-                <input
-                  className={`finput${doneTime.trim() === '' ? ' opt' : ''}`}
-                  id="dnt"
-                  type="time"
-                  value={doneTime}
-                  onChange={(e) => setDoneTime(e.target.value)}
-                  onClick={openPicker}
-                />
-                <label className="flabel" htmlFor="dnt">
-                  <span className="lglyph" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                    </svg>
-                  </span>
-                  Done Time <span className="subnote">(optional)</span>
-                </label>
-                {doneTime.trim() !== '' && (
-                  <button
-                    type="button"
-                    className="fclear"
-                    aria-label="Clear Done Time"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDoneTime('')
-                    }}
-                  >
-                    &times;
-                  </button>
-                )}
-              </span>
+              {data.owner_request_time_enabled && (
+                <span className="ffloat picker native">
+                  <input
+                    className={`finput${doneTime.trim() === '' ? ' opt' : ''}`}
+                    id="dnt"
+                    type="time"
+                    value={doneTime}
+                    onChange={(e) => setDoneTime(e.target.value)}
+                    onClick={openPicker}
+                  />
+                  <label className="flabel" htmlFor="dnt">
+                    <span className="lglyph" aria-hidden="true">
+                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                        <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                        <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    Done Time <span className="subnote">(optional)</span>
+                  </label>
+                  {doneTime.trim() !== '' && (
+                    <button
+                      type="button"
+                      className="fclear"
+                      aria-label="Clear Done Time"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDoneTime('')
+                      }}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </span>
+              )}
             </div>
 
             {/* Simplified empty-state row (§6.32, 2026-08-11): with no

@@ -121,6 +121,17 @@ export default function CreateRequestForm() {
   const [showContactResults, setShowContactResults] = useState(false)
   const [contactBrowsing, setContactBrowsing] = useState(false)
 
+  // Private Category is now an opt-in account preference (migration 018,
+  // 2026-08-13), off by default — see AccountForm.tsx. false until the
+  // profiles read below resolves, same as every other gate in this app
+  // that starts closed and only opens once its real value is known.
+  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
+  // Due/Done Time is now an opt-in account preference too (migration 019,
+  // 2026-08-13) — see AccountForm.tsx. On by default (true until the
+  // profiles read below resolves), unlike Category, since this is
+  // pre-existing behavior being made optional, not a new feature starting
+  // closed. When off, the Due row below collapses to just Due Date.
+  const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -190,11 +201,20 @@ export default function CreateRequestForm() {
 
     // For dialog.who — see migration 004's note on why this is a snapshot,
     // not a live join, taken once here rather than re-read at Send time.
+    // private_category_enabled (migration 018, 2026-08-13) rides along on
+    // the same read rather than a separate round trip — RLS's own
+    // "profiles: read own" policy already scopes .single() to the caller's
+    // row with no .eq('id', ...) needed, same as this call already relied
+    // on for display_name.
     supabase
       .from('profiles')
-      .select('display_name')
+      .select('display_name, private_category_enabled, request_time_enabled')
       .single()
-      .then(({ data }) => setOwnerName(data?.display_name ?? null))
+      .then(({ data }) => {
+        setOwnerName(data?.display_name ?? null)
+        setCategoriesEnabled(data?.private_category_enabled ?? false)
+        setRequestTimeEnabled(data?.request_time_enabled ?? true)
+      })
     // router is stable across renders (Next's useRouter()) and this effect
     // must run once on mount only, same as every other "load once" effect
     // in this file — same pattern TodoDetailForm.tsx already uses for its
@@ -620,39 +640,51 @@ export default function CreateRequestForm() {
                   Due Date
                 </label>
               </span>
-              <span className="ffloat picker native">
-                <input
-                  className={`finput${form.dueTime.trim() === '' ? ' opt' : ''}`}
-                  id="dt"
-                  type="time"
-                  value={form.dueTime}
-                  onChange={(e) => set('dueTime', e.target.value)}
-                  onClick={openPicker}
-                />
-                <label className="flabel" htmlFor="dt">
-                  <span className="lglyph" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                    </svg>
-                  </span>
-                  Due Time <span className="subnote">(optional)</span>
-                </label>
-                {form.dueTime.trim() !== '' && (
-                  <button
-                    type="button"
-                    className="fclear"
-                    aria-label="Clear Due Time"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      set('dueTime', '')
-                    }}
-                  >
-                    &times;
-                  </button>
-                )}
-              </span>
+              {/* Due Time — only when the account has Due/Done Time turned on
+                  (migration 019, 2026-08-13, see AccountForm.tsx). Off
+                  collapses this row to just Due Date, matching ToDo's
+                  one-line Due Date presentation — owner: "when turned off
+                  the four-value two-line presentation of Due Date Due Time
+                  Done Date Done Time on Requests would become like a ToDo
+                  one-line two-value presentation of Due Date and Done
+                  Date." (Create Request has no Done Date/Time fields at
+                  all — those only exist once a Request has been sent — so
+                  here the effect is simply dropping Due Time.) */}
+              {requestTimeEnabled && (
+                <span className="ffloat picker native">
+                  <input
+                    className={`finput${form.dueTime.trim() === '' ? ' opt' : ''}`}
+                    id="dt"
+                    type="time"
+                    value={form.dueTime}
+                    onChange={(e) => set('dueTime', e.target.value)}
+                    onClick={openPicker}
+                  />
+                  <label className="flabel" htmlFor="dt">
+                    <span className="lglyph" aria-hidden="true">
+                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                        <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                        <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    Due Time <span className="subnote">(optional)</span>
+                  </label>
+                  {form.dueTime.trim() !== '' && (
+                    <button
+                      type="button"
+                      className="fclear"
+                      aria-label="Clear Due Time"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        set('dueTime', '')
+                      }}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </span>
+              )}
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
             {/* Tight-window advisory (PRD §7.3, Week 5 Priority 1, 2026-08-12) —
@@ -665,72 +697,81 @@ export default function CreateRequestForm() {
               </p>
             )}
 
-            {/* Category row */}
-            <div className="fgroup">
-              <div className="frow" style={{ position: 'relative' }}>
-                <span className="ffloat">
-                  <input
-                    className={`finput${form.categoryName.trim() === '' ? ' opt' : ''}`}
-                    id="cat"
-                    type="text"
-                    autoComplete="off"
-                    placeholder=" "
-                    value={form.categoryName}
-                    onChange={(e) => {
-                      set('categoryName', e.target.value)
-                      if (selectedCategory && e.target.value !== selectedCategory.name) {
-                        setSelectedCategory(null)
-                      }
-                      setCategoryBrowsing(false)
-                      setShowCategoryResults(true)
-                    }}
-                    onFocus={(e) => {
-                      e.target.select()
-                      setCategoryBrowsing(true)
-                      setShowCategoryResults(true)
-                    }}
-                    onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
-                  />
-                  <label className="flabel" htmlFor="cat">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
-                        <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
-                      </svg>
-                    </span>
-                    Private Category <span className="subnote">(optional)</span>
-                  </label>
-                </span>
-                <button className="btn" type="button" onClick={openAddCategory}>
-                  Add Category
-                </button>
+            {/* Category row — only when the account has turned Private
+                Category on (migration 018, 2026-08-13). Off by default:
+                owner — "I think the Private Category should be an account
+                option, not a standard presented data element... A single
+                option could control its availability for both Requests and
+                ToDos." Not rendered at all when off, not just disabled —
+                genuinely simpler, matching the owner's own stated goal,
+                rather than a locked/upsell-style control. */}
+            {categoriesEnabled && (
+              <div className="fgroup">
+                <div className="frow" style={{ position: 'relative' }}>
+                  <span className="ffloat">
+                    <input
+                      className={`finput${form.categoryName.trim() === '' ? ' opt' : ''}`}
+                      id="cat"
+                      type="text"
+                      autoComplete="off"
+                      placeholder=" "
+                      value={form.categoryName}
+                      onChange={(e) => {
+                        set('categoryName', e.target.value)
+                        if (selectedCategory && e.target.value !== selectedCategory.name) {
+                          setSelectedCategory(null)
+                        }
+                        setCategoryBrowsing(false)
+                        setShowCategoryResults(true)
+                      }}
+                      onFocus={(e) => {
+                        e.target.select()
+                        setCategoryBrowsing(true)
+                        setShowCategoryResults(true)
+                      }}
+                      onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
+                    />
+                    <label className="flabel" htmlFor="cat">
+                      <span className="lglyph" aria-hidden="true">
+                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
+                          <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
+                        </svg>
+                      </span>
+                      Private Category <span className="subnote">(optional)</span>
+                    </label>
+                  </span>
+                  <button className="btn" type="button" onClick={openAddCategory}>
+                    Add Category
+                  </button>
 
-                {showCategoryResults && showCategoryDropdown && (
-                  <div className="lookup-results" role="listbox">
-                    {filteredCategories.length === 0 ? (
-                      <div className="lookup-empty">
-                        {categoryQueryEmpty ? 'No categories yet — use Add Category.' : 'No matching category — use Add Category.'}
-                      </div>
-                    ) : (
-                      filteredCategories.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
-                          role="option"
-                          aria-selected={selectedCategory?.id === c.id}
-                          onMouseDown={() => selectCategory(c)}
-                        >
-                          {c.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
+                  {showCategoryResults && showCategoryDropdown && (
+                    <div className="lookup-results" role="listbox">
+                      {filteredCategories.length === 0 ? (
+                        <div className="lookup-empty">
+                          {categoryQueryEmpty ? 'No categories yet — use Add Category.' : 'No matching category — use Add Category.'}
+                        </div>
+                      ) : (
+                        filteredCategories.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`lookup-item${selectedCategory?.id === c.id ? ' selected' : ''}`}
+                            role="option"
+                            aria-selected={selectedCategory?.id === c.id}
+                            onMouseDown={() => selectCategory(c)}
+                          >
+                            {c.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Request Description (§6.10): 500-char limit */}
             <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>
