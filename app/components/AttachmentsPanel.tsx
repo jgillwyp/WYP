@@ -12,6 +12,8 @@ import {
   type AttachmentRow,
 } from '@/lib/attachments'
 
+const referenceNote = 'Locations can be used for URLs or File paths.'
+
 /**
  * Shared Attachments/Locations panel for every screen with an existing
  * Request/ToDo id — Request Detail, ToDo Detail, Request Response, Response
@@ -86,6 +88,7 @@ export default function AttachmentsPanel({
   const [refLocation, setRefLocation] = useState('')
   const [refError, setRefError] = useState<string | null>(null)
   const [refSaving, setRefSaving] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!requestId) return
@@ -230,11 +233,29 @@ export default function AttachmentsPanel({
   const label = emptyLabel[mode]
   const addText = addLabel[mode]
 
+  async function handleCopyLocation(id: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1500)
+    } catch {
+      // Clipboard API can fail (permissions, non-secure context) — nothing
+      // else to do here; the path is still fully visible to select/copy by hand.
+    }
+  }
+
   if (loading) return null // avoid a flash of the empty state while the first fetch resolves
+
+  // mode = 'reference' always shows the note+button as a .donerow, whether
+  // or not any Location exists yet, rather than switching between .actlabel
+  // (empty) and a bare .fieldact button (populated) the way mode = 'file'
+  // still does — owner's own reference screenshot, 2026-08-14, kept the note
+  // visible next to Add Location even with an entry already staged.
+  const showReferenceNote = mode === 'reference' && canAdd
 
   return (
     <div className="fgroup">
-      {items.length === 0 && !refFormOpen ? (
+      {items.length === 0 && !refFormOpen && !showReferenceNote ? (
         canAdd ? (
           <div className="frow">
             <span className="actlabel">
@@ -264,13 +285,23 @@ export default function AttachmentsPanel({
         )
       ) : (
         <>
-          {canAdd && (
+          {showReferenceNote && (
+            <div className="donerow">
+              <span className="donenote">
+                <b>Note:</b> {referenceNote}
+              </span>
+              <button className="btn" type="button" onClick={() => setRefFormOpen(true)}>
+                {addText}
+              </button>
+            </div>
+          )}
+          {canAdd && mode === 'file' && (
             <div className="fieldact">
               <button
                 className="btn"
                 type="button"
                 disabled={uploading}
-                onClick={() => (mode === 'file' ? fileInputRef.current?.click() : setRefFormOpen(true))}
+                onClick={() => fileInputRef.current?.click()}
               >
                 {addText}
               </button>
@@ -348,6 +379,8 @@ export default function AttachmentsPanel({
                   </div>
                 )
               }
+              const url = row.reference_url
+              const isLink = !!url && isHttpUrl(url)
               return (
                 <div className="attitem" key={row.id}>
                   <span className="attname">
@@ -357,16 +390,21 @@ export default function AttachmentsPanel({
                         <br />
                       </>
                     )}
-                    {row.reference_url ? (
-                      isHttpUrl(row.reference_url) ? (
-                        <a href={row.reference_url} target="_blank" rel="noopener noreferrer">
-                          {row.reference_url}
+                    {url ? (
+                      isLink ? (
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          {url}
                         </a>
                       ) : (
-                        row.reference_url
+                        url
                       )
                     ) : null}
                   </span>
+                  {url && !isLink && (
+                    <button className="linkbtn" type="button" onClick={() => handleCopyLocation(row.id, url)}>
+                      {copiedId === row.id ? 'Copied' : 'Copy'}
+                    </button>
+                  )}
                   {canDelete && (
                     <button
                       className="attremove"

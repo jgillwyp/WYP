@@ -935,6 +935,14 @@ body {
   white-space: nowrap;
 }
 
+/* A file's own download link, or a Location's http(s) URL (2026-08-14) —
+   Tailwind's preflight resets <a> to color:inherit/text-decoration:inherit,
+   so this needs to be explicit rather than relying on the browser default. */
+.attname a {
+  color: var(--brand-blue);
+  text-decoration: underline;
+}
+
 .attremove {
   flex: 0 0 auto;
   font: inherit;

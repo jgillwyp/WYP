@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { insertAttachmentReference } from '@/lib/attachmentsClient'
+import { isHttpUrl } from '@/lib/attachments'
 
 /**
  * Create ToDo (§9.4) — converted by hand from
@@ -167,6 +168,7 @@ export default function CreateTodoForm() {
   const [locationDescription, setLocationDescription] = useState('')
   const [locationValue, setLocationValue] = useState('')
   const [locationError, setLocationError] = useState<string | null>(null)
+  const [copiedLocationIndex, setCopiedLocationIndex] = useState<number | null>(null)
 
   const doneDateRef = useRef<HTMLInputElement>(null)
 
@@ -243,6 +245,17 @@ export default function CreateTodoForm() {
 
   function removeStagedLocation(index: number) {
     setStagedLocations((entries) => entries.filter((_, i) => i !== index))
+  }
+
+  async function copyStagedLocation(index: number, value: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedLocationIndex(index)
+      setTimeout(() => setCopiedLocationIndex((current) => (current === index ? null : current)), 1500)
+    } catch {
+      // Clipboard API can fail (permissions, non-secure context) — the path
+      // is still fully visible to select/copy by hand.
+    }
   }
 
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
@@ -765,22 +778,16 @@ export default function CreateTodoForm() {
                 Attachments; free-tier keeps the original locked row. */}
             {tier === 'subscriber' ? (
               <div className="fgroup">
-                {stagedLocations.length === 0 && !locationFormOpen ? (
-                  <div className="frow">
-                    <span className="actlabel">
-                      Locations <span className="subnote">(optional)</span>
-                    </span>
-                    <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
-                      Add Location
-                    </button>
-                  </div>
-                ) : (
+                <div className="donerow">
+                  <span className="donenote">
+                    <b>Note:</b> Locations can be used for URLs or File paths.
+                  </span>
+                  <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
+                    Add Location
+                  </button>
+                </div>
+                {(stagedLocations.length > 0 || locationFormOpen) && (
                   <>
-                    <div className="fieldact">
-                      <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
-                        Add Location
-                      </button>
-                    </div>
                     {locationFormOpen && (
                       <div className="dlgstaged">
                         <div className="fgroup ffloat">
@@ -822,27 +829,45 @@ export default function CreateTodoForm() {
                       </div>
                     )}
                     <div className="dlgstaged">
-                      {stagedLocations.map((entry, i) => (
-                        <div className="attitem" key={i}>
-                          <span className="attname">
-                            {entry.description && (
-                              <>
-                                <b>{entry.description}</b>
-                                <br />
-                              </>
+                      {stagedLocations.map((entry, i) => {
+                        const isLink = isHttpUrl(entry.location)
+                        return (
+                          <div className="attitem" key={i}>
+                            <span className="attname">
+                              {entry.description && (
+                                <>
+                                  <b>{entry.description}</b>
+                                  <br />
+                                </>
+                              )}
+                              {isLink ? (
+                                <a href={entry.location} target="_blank" rel="noopener noreferrer">
+                                  {entry.location}
+                                </a>
+                              ) : (
+                                entry.location
+                              )}
+                            </span>
+                            {!isLink && entry.location && (
+                              <button
+                                className="linkbtn"
+                                type="button"
+                                onClick={() => copyStagedLocation(i, entry.location)}
+                              >
+                                {copiedLocationIndex === i ? 'Copied' : 'Copy'}
+                              </button>
                             )}
-                            {entry.location}
-                          </span>
-                          <button
-                            className="attremove"
-                            type="button"
-                            aria-label="Remove this Location"
-                            onClick={() => removeStagedLocation(i)}
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ))}
+                            <button
+                              className="attremove"
+                              type="button"
+                              aria-label="Remove this Location"
+                              onClick={() => removeStagedLocation(i)}
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        )
+                      })}
                     </div>
                   </>
                 )}

@@ -6,6 +6,68 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Locations UX: note text, clickable URLs, Copy-path for file paths
+
+Owner, testing Locations live: (1) wanted a note to the left of Add Location
+explaining what a Location is for ("Locations can be used for URLs or File
+paths"), pasted a reference screenshot of Create ToDo showing the exact
+wording and placement — a `.donerow`/`.donenote` strip (bold "Note:" prefix,
+button on the right), the same pattern already used for the Attachments
+empty-state note and the quick-Done bands, rather than the bordered
+`.actlabel` treatment Locations had been using. (2) wanted a saved URL to
+render as a clickable, underlined link. (3) asked whether a saved file path
+could open the browser's own file explorer, the way an Attachment does.
+
+**Note text — done as asked.** `AttachmentsPanel.tsx` (mode = 'reference',
+used by ToDo Detail) and `CreateTodoForm.tsx`'s own staged Locations both now
+show the `.donerow` note persistently — before any Location exists and after,
+matching the owner's screenshot exactly, rather than switching between an
+empty-state row and a bare populated-state button the way Attachments
+(mode = 'file') still does. `.donerow` doesn't collapse for a gated
+(non-subscriber) account with existing Locations from before the gate — same
+"viewing is never gated, only adding" rule the Entitlements section already
+states; the note+button simply doesn't render at all in that case, only the
+read-only list.
+
+**Clickable URLs — already partly built, extended for consistency.**
+`AttachmentsPanel.tsx` already rendered `isHttpUrl(reference_url)` as a real
+`<a>`, added the same day Real Attachments shipped — but Tailwind's preflight
+resets `<a>` to `color: inherit; text-decoration: inherit`, so it was
+rendering as plain unstyled text, not visibly a link. Added an explicit
+`.attname a` rule (`var(--brand-blue)`, underlined) to `globals.css`. Also
+extended the same `isHttpUrl` check to `CreateTodoForm.tsx`'s own staged list
+(before Save), which had never had it — it showed every Location as plain
+text regardless.
+
+**File-path "open a file explorer" — not built, recommended against, with an
+alternative built instead.** A browser has no filesystem access beyond a
+file the user explicitly picked via `<input type="file">` (already how real
+Attachments work) — a typed string like `C:\Project\wyp\docs` isn't something
+a web page can hand to the OS's own file explorer. A `file://` link was
+considered and rejected: modern browsers largely block or silently no-op
+navigation from an `https://` page to a `file://` URI, and even where it
+technically works it would only ever succeed if the exact path exists on
+whatever device is currently viewing the ToDo — meaningless the moment a
+Location is checked from a different device than the one that typed it. This
+constraint was already documented in `app/src/lib/attachments.ts`'s own
+`isHttpUrl` comment before this batch ("a typed local file path is inert
+text the app can never open or verify"), not a new finding. **Built instead**:
+a small "Copy" button (reusing the existing `.linkbtn` style) next to any
+non-URL Location, both in `AttachmentsPanel.tsx` and `CreateTodoForm.tsx`'s
+staged list — copies the path to the clipboard via
+`navigator.clipboard.writeText`, with the button label flipping to "Copied"
+for 1.5 seconds as feedback, so the owner can paste it into his own OS file
+explorer's address bar rather than retyping it. Silently no-ops if the
+Clipboard API is unavailable (permissions, non-secure context) — the path is
+still fully visible in the row to select and copy by hand either way.
+
+Not ported into any mockup — none of the affected screens' static HTML has
+a real Locations list to update (Create ToDo's own mockup demo doesn't
+render `attitem` rows with a Copy affordance or link detection). `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-14 — Real Attachments built (Week 5 Priority 3)
 
 Owner: "OK, please start." Built from `docs/WYP_Attachments_Plan.md`'s resolved design in full, across migrations, three new API routes, a shared panel component, and all six affected screens. Migrations 025 (`public.attachments`), 026 (private Storage bucket), and 027 (`attachment_count` on `get_received_requests()`) are all **confirmed run by the owner, 2026-08-14**. `SUPABASE_SERVICE_ROLE_KEY` is likewise **confirmed set in both `.env.local` and Vercel, 2026-08-14** — the owner used Supabase's newer secret-key system (`sb_secret_...`, named `default`) rather than the legacy `service_role` JWT; both work identically as the second argument to `createClient()`, which is all these routes ever do with it. Feature is live pending the owner's own end-to-end test.
