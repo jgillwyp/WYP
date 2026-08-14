@@ -68,7 +68,11 @@ type TodoFormState = {
 }
 
 const initialState: TodoFormState = {
-  priority: 1,
+  // Owner: "the Create a ToDo should default the the 'Soon' Priority... the
+  // appropriate Priority for a 'normal' ToDo — which can be changed by the
+  // end-user to either ASAP or Later as they desire." 2 = SOON, matching
+  // PRIORITY_LABEL's own numbering (MainScreen.tsx: 1=ASAP, 2=SOON, 3=LATER).
+  priority: 2,
   dueDate: '',
   doneDate: '',
   categoryName: '',

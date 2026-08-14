@@ -723,7 +723,7 @@ commit;
 -- ============================================================================
 -- WYP migration 024 — grant update(tier) on profiles to authenticated
 -- (TESTING ONLY -- see the flagged conflict below before running)
--- DRAFTED 2026-08-14 — NOT YET CONFIRMED RUN.
+-- DRAFTED 2026-08-14 — CONFIRMED RUN by the owner 2026-08-14.
 --
 -- FLAGGED CONFLICT, not a silent overwrite: migration 002's own comment on
 -- this exact grant reads "tier is therefore writable only by service_role

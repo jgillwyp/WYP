@@ -1293,7 +1293,8 @@ link is built only after the stack is proven on Add Contact.
   `issue_request_link` function and its use inside `CreateRequestForm.tsx`'s
   automatic Initial Request email flow are unaffected.
 - **"Keep It as Simple as Possible," round three (2026-08-14) — migrations
-  022/023/024, ALL DRAFTED, NOT YET CONFIRMED RUN.** Migration 022 —
+  022/023 DRAFTED, NOT YET CONFIRMED RUN; migration 024 CONFIRMED RUN by
+  the owner 2026-08-14.** Migration 022 —
   `profiles.todo_dates_enabled boolean not null default false` — off
   collapses Create ToDo/ToDo Detail's Due Date/Done Date fields and
   quick-Done band into a single Open/Done Status chip pair (§6.35

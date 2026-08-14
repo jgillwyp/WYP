@@ -105,20 +105,22 @@ which already went live in Week 4. Converts the existing mockup fields
 way Create Free Account did, plus one new piece not in the current mockup:
 **a tier/subscription-status display**.
 
-**Subscribe mechanism — resolved 2026-08-12, owner's choice.** `profiles.
-tier` is deliberately not writable by a signed-in user (migration 002:
-`authenticated` never gets column-level UPDATE on `tier`; only
-`service_role` can change it, reserved for a future billing webhook) — so
-there's no live path from this screen to `tier = 'subscriber'` without
-either real payment processing or a stand-in. Offered both; owner chose the
-lighter path: **the Account screen displays tier read-only** (next to the
-existing "See Subscription Features and Other Options" banner, which stays
-inert, same as everywhere else it appears), and the owner flips his own
-profile's `tier` manually via the Supabase SQL editor to test Attachments —
-the exact statement is already sketched in migration 002's own comments
-(`update profiles set tier = 'subscriber' where id = auth.uid();`). Real
-payment processing (Stripe or similar — checkout flow, subscription
-lifecycle webhooks) stays explicitly deferred, not started this week.
+**Subscribe mechanism — resolved 2026-08-12, revised 2026-08-14.**
+`profiles.tier` was deliberately not writable by a signed-in user (migration
+002: `authenticated` never got column-level UPDATE on `tier`; only
+`service_role` could change it, reserved for a future billing webhook) — so
+there was no live path from this screen to `tier = 'subscriber'` without
+either real payment processing or a stand-in. Originally planned as a
+read-only tier display plus the owner flipping his own profile's `tier`
+manually via the Supabase SQL editor. **Superseded, 2026-08-14**: Account
+instead gained a real "Subscribed? (testing only)" `.checkrow` (migration
+024, `AccountForm.tsx`) that writes `tier` directly from the UI — a
+deliberate, flagged reopening of the grant migration 002 withheld, framed
+explicitly as temporary and meant to be revoked or replaced once real
+billing exists. See the decisions log's 2026-08-14 entry and
+`docs/WYP_Attachments_Plan.md`. Real payment processing (Stripe or similar
+— checkout flow, subscription lifecycle webhooks) stays explicitly
+deferred.
 
 **Change my email address** stays a `.btn-quiet` with no handler, same as
 Create Free Account's mockup precedent — the actual change-email flow
