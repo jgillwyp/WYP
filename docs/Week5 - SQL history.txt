@@ -1048,3 +1048,184 @@ commit;
 --   where routine_name = 'get_received_requests';
 --        -> should show authenticated / EXECUTE
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 028 — Archive: requests.archived_at / received_archived_at,
+-- archive_received_request()
+-- DRAFTED 2026-08-14 — CONFIRMED RUN by the owner 2026-08-14.
+--
+-- Backs the live Archive screen (design/screens/WYP_archive_palette1.html,
+-- now converted to ArchiveForm.tsx / /archive). Two independent nullable
+-- columns, not one shared flag — owner-confirmed 2026-08-14 via
+-- AskUserQuestion ("per-viewer" over "shared"): a Request is one row but is
+-- archived from two separate points of view. archived_at governs the row's
+-- own owner's Sent list (and, doing double duty, a ToDo's only list — ToDos
+-- have no recipient at all, so there is only ever this one archive state for
+-- them). received_archived_at governs the recipient's own Received list.
+-- Archiving from one side never touches the other — same reasoning
+-- CLAUDE.md's own Entitlements section already gives for reading tier live
+-- per-viewer rather than snapshotting it: two accounts can each have their
+-- own current relationship to the same row.
+--
+-- archived_at is plain-RLS-writable already — "requests: owners update own"
+-- (migration 002) already lets the owner UPDATE any column on their own row,
+-- archived_at included. No new function needed for the Sent/ToDo side;
+-- ArchiveForm.tsx does a plain `.update({ archived_at: ... }).in('id', ids)`.
+--
+-- received_archived_at has no such path: RLS on `requests` is owner-only, and
+-- the recipient isn't the owner. archive_received_request() is a fourth
+-- recipient-scoped SECURITY DEFINER write function, alongside
+-- set_response_done_as_recipient/add_dialog_as_recipient (migration 012) —
+-- same email-match-through-contacts pattern, same single-row shape (called
+-- once per id from ArchiveForm.tsx, same as those two).
+--
+-- Un-Archive is explicitly out of scope this batch (owner, 2026-08-14: "I did
+-- not tackle an 'Un-Archive' feature - that can be done later") — no reverse
+-- function yet; setting either column back to null would do it when that
+-- phase arrives.
+--
+-- Neither column is excluded from any existing SELECT path — deliberately.
+-- The owner's own drafted §9.5 replacement text (decisions log, 2026-08-14)
+-- says archived records are "no longer displayed" on the Main Screen "while
+-- remaining available through Search," so Sent/ToDos/Received are still
+-- fetched in full; MainScreen.tsx does the show/hide split client-side based
+-- on whether a search query is active, not by ever excluding archived rows
+-- from a query. get_received_requests() therefore adds received_archived_at
+-- to its own row shape rather than filtering by it — RETURNS TABLE, so
+-- drop-then-create (migrations 017/021/027's own lesson, applied here
+-- proactively rather than rediscovered a fourth time).
+--
+-- get_received_request() (singular, the Response Detail RPC) is NOT touched
+-- this batch — nothing reads received_archived_at there yet, and adding an
+-- unused field would be speculative. Revisit if a future Un-Archive-from-
+-- Detail affordance needs it.
+-- ============================================================================
+
+begin;
+
+alter table public.requests
+  add column if not exists archived_at timestamptz,
+  add column if not exists received_archived_at timestamptz;
+
+comment on column public.requests.archived_at is
+  'Set when the row''s own owner archives it from their Sent list (a Request) or their only list (a ToDo, contact_id null). Null = not archived. Plain-RLS-writable via the existing owner-update policy, no function needed. Still returned by every existing SELECT — MainScreen.tsx hides an archived row from the resting list client-side but still matches it when a search query is active (PRD §9.5: archived stays findable through Search). Un-Archive (setting back to null) is deferred.';
+comment on column public.requests.received_archived_at is
+  'Set when the recipient archives this Request from their own Received list — independent of archived_at above, since the sender and recipient are two different accounts each viewing the same row (2026-08-14 per-viewer decision, not a shared flag). Never touched by the owner-side "requests: owners update own" policy; only archive_received_request() (this migration) can set it. Always null for a ToDo (contact_id is null, so there is no recipient to archive it from).';
+
+create index if not exists requests_archived_idx on public.requests (owner_id, archived_at);
+create index if not exists requests_received_archived_idx on public.requests (contact_id, received_archived_at);
+
+-- ----------------------------------------------------------------------------
+-- archive_received_request — the signed-in recipient's Archive action on
+-- their own Received copy of a Request. Same email-match-through-contacts
+-- guard as set_response_done_as_recipient/add_dialog_as_recipient (migration
+-- 012); only ever sets received_archived_at, touches nothing else on the row.
+-- ----------------------------------------------------------------------------
+create or replace function public.archive_received_request(p_request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set received_archived_at = now()
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'archived_by_recipient',
+      jsonb_build_object('via', 'recipient_session')
+    );
+end;
+$$;
+
+revoke all on function public.archive_received_request(uuid) from public;
+grant execute on function public.archive_received_request(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_received_requests — add received_archived_at to the row shape (see the
+-- header comment above for why it's added, not filtered by). RETURNS TABLE,
+-- so drop-then-create (migrations 017/021/027).
+-- ----------------------------------------------------------------------------
+drop function if exists public.get_received_requests();
+
+create function public.get_received_requests()
+returns table (
+  id uuid,
+  description text,
+  due_date date,
+  due_time time,
+  done_date date,
+  created_at timestamptz,
+  owner_name text,
+  owner_request_time_enabled boolean,
+  dialog_count bigint,
+  attachment_count bigint,
+  received_archived_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' then
+    return; -- no email claim on the session; nothing to match
+  end if;
+
+  return query
+    select
+      r.id, r.description, r.due_date, r.due_time, r.done_date, r.created_at,
+      p.display_name as owner_name,
+      coalesce(p.request_time_enabled, true) as owner_request_time_enabled,
+      (select count(*) from public.dialog d where d.request_id = r.id) as dialog_count,
+      (select count(*) from public.attachments a where a.request_id = r.id and a.kind = 'file') as attachment_count,
+      r.received_archived_at
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where lower(trim(c.email)) = v_email
+    order by r.due_date desc nulls last;
+end;
+$$;
+
+revoke all on function public.get_received_requests() from public;
+grant execute on function public.get_received_requests() to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only — see this file's recurring
+-- caveat):
+--   select column_name from information_schema.columns
+--   where table_name = 'requests' and column_name in ('archived_at', 'received_archived_at');
+--        -> both should appear
+--
+--   select prosrc from pg_proc where proname = 'archive_received_request';
+--        -> should exist, security definer
+--
+--   select prosrc from pg_proc where proname = 'get_received_requests';
+--        -> should show received_archived_at in both the returns table and
+--           the select list
+--
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name in ('archive_received_request', 'get_received_requests');
+--        -> should show authenticated / EXECUTE for both
+-- ============================================================================

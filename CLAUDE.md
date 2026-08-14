@@ -1451,3 +1451,21 @@ link is built only after the stack is proven on Add Contact.
   here is already Done and Overdue/Done are mutually exclusive — flagged as
   a likely copy-paste artifact in the reference, not reproduced as-is. New
   `.archrow`/`.archcheck`/`.archspacer`/`.archbody` (§6.36 PROPOSED).
+- **Archive is now Live** (`app/components/ArchiveForm.tsx`, `/archive`,
+  2026-08-14, migration 028 confirmed run by the owner 2026-08-14) — supersedes "mockup only"
+  above. Per-viewer archive scope (owner-confirmed via AskUserQuestion):
+  `requests.archived_at` (the row's own owner, plain-RLS-writable) and
+  `requests.received_archived_at` (the recipient, via new SECURITY DEFINER
+  `archive_received_request()`) are independent — archiving a Received item
+  never touches the sender's own Sent view of the same row, and vice versa.
+  Neither column is ever excluded from a query — `MainScreen.tsx` hides an
+  archived row only while its search box is empty, matching the owner's own
+  drafted §9.5 text ("no longer displayed... while remaining available
+  through Search"). Un-Archive stays deferred, as before. Housekeeping's
+  Archive row is now wired into `MainScreen.tsx` for real. **PRD §9.5's
+  drafted replacement text (decisions log) is still not merged into the
+  actual `.docx`** — attempted this batch, deferred: the title-page/footer
+  version-number text in `WouldYouPlease_PRD_v12_9.docx` is split across XML
+  runs in a way `merge_runs.py` doesn't fully coalesce, making a safe edit
+  slower than the rest of the batch. Do on explicit owner go-ahead. See the
+  decisions log's 2026-08-14 entry for the full write-up.

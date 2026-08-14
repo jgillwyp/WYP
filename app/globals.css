@@ -1769,6 +1769,98 @@ body {
   font-weight: 500;
 }
 
+/* ============================================================================
+   ARCHIVE ROW CHECKBOX (§6.36 PROPOSED, 2026-08-14)
+   Ported from design/screens/WYP_archive_palette1.html for the live Archive
+   screen (ArchiveForm.tsx). Every existing row style above (.row/.r1/.r2,
+   .row.td/.t1/.tdc) is reused unchanged; this only adds a per-row selection
+   checkbox to its left, sized/colored like .checkrow's own input (§6.20) —
+   the app's one other checkbox precedent — rather than a new checkbox style.
+   .archrow is a plain flex wrapper so the checkbox sits outside the existing
+   4-column .r1 grid instead of becoming a 5th column in it; .archspacer is
+   the same width, used once in the column-header row so the To/Date/Due/
+   Done (or Priority/Description) labels still line up with the data below.
+   ========================================================================= */
+.archrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.archcheck {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--brand-blue);
+  cursor: pointer;
+}
+
+.archspacer {
+  flex: 0 0 auto;
+  width: 18px;
+}
+
+/* Opens the record's own Detail screen (Request/Response/ToDo Detail) — same
+   row-context convention as every other list row in the app; the checkbox
+   sits outside .archbody so its own click/change never triggers this. */
+.archbody {
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.archbody:hover {
+  background: var(--focus-tint);
+}
+
+.archbody:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 2px;
+}
+
+/* Explanatory paragraph above the filter fields — plain text, not .subempty
+   (that's for an empty-list message, not a form instruction). */
+.archnote {
+  padding: 10px var(--pad) 2px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+/* Record Type chip row — Strip background, matching every other chip row in
+   the app (.subhead on Main Screen, .sendrow/.chiprow elsewhere) so the
+   semi-transparent-white resting chips have something to contrast against. */
+.archtyperow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--strip);
+  padding: 9px var(--pad);
+  border-bottom: 1px solid var(--rule);
+}
+
+.archtypelabel {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Confirmation strip after Archive Selected — reuses .donerow's shape. */
+.archconfirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px var(--pad) 0;
+  background: var(--strip);
+  border-radius: 12px;
+  padding: 11px 13px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
 /* Housekeeping row (§6.23, PROPOSED) — same title/description visual
    language as the ToDo row above: bold Brand-Blue label, em-dash, regular
    Ink description, 2-line clamp. Distinct classes rather than reusing

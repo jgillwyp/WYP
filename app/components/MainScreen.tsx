@@ -86,6 +86,13 @@ type SentRow = {
   // Week 5 Priority 3 (Attachments, 2026-08-14) — same PostgREST count-embed
   // technique as dialog(count) above.
   attachments: { count: number }[] | null
+  // archived_at added by migration 028 (Archive, 2026-08-14) — the row's own
+  // owner archived it via /archive. Deliberately still selected/fetched here
+  // rather than filtered out server-side: PRD §9.5 keeps an archived record
+  // "available through Search," so this list hides an archived row when
+  // resting but re-includes it once the owner is actively searching (see
+  // filteredSent below).
+  archived_at: string | null
 }
 
 type TodoRow = {
@@ -96,6 +103,10 @@ type TodoRow = {
   done_date: string | null
   categories: { name: string } | null
   dialog: { count: number }[] | null
+  // archived_at — same reasoning as SentRow above. A ToDo has no recipient,
+  // so this is its only archive state (there is no received_archived_at
+  // counterpart for ToDos).
+  archived_at: string | null
 }
 
 // Shape returned by the get_received_requests() RPC (migration 012, plus
@@ -126,6 +137,13 @@ type ReceivedRow = {
   // this server-side, a plain PostgREST embed isn't available the way it
   // is for Sent's attachments(count).
   attachment_count: number
+  // received_archived_at added by migration 028 (Archive, 2026-08-14) — the
+  // signed-in recipient archived their own copy of this Request via
+  // /archive. Independent of the row's own archived_at (SentRow) — the
+  // sender's Sent view of the same row is untouched by this. Same
+  // still-fetched-but-hidden-at-rest treatment as SentRow.archived_at; see
+  // filteredReceived below.
+  received_archived_at: string | null
 }
 
 const PRIORITY_LABEL: Record<number, string> = { 1: 'ASAP', 2: 'SOON', 3: 'LATER' }
@@ -702,7 +720,7 @@ export default function MainScreen() {
       const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count)')
+          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), archived_at')
           .not('contact_id', 'is', null)
           .order('due_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
@@ -714,7 +732,7 @@ export default function MainScreen() {
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, categories(name), dialog(count)')
+          .select('id, description, priority, due_date, done_date, categories(name), dialog(count), archived_at')
           .is('contact_id', null)
           .order('priority', { ascending: true, nullsFirst: false }),
       ])
@@ -747,8 +765,17 @@ export default function MainScreen() {
 
   const query = searchText.trim().toLowerCase()
 
+  // Archived-but-still-searchable (2026-08-14, PRD §9.5's own drafted text:
+  // an archived record is "no longer displayed" on the Main Screen "while
+  // remaining available through Search"). Sent/Received/ToDos are always
+  // fetched in full (migration 028 adds the archive columns to every
+  // existing SELECT rather than filtering by them) — the hide-when-resting/
+  // show-when-searching split happens only here, client-side. An archived
+  // row still has to pass the status chip filter like any other row; only
+  // the "hidden at rest" behavior is special-cased.
   const filteredSent = useMemo(() => {
     return sent.filter((r) => {
+      if (r.archived_at && query === '') return false
       if (!matchesStatusFilter(sentStatus(r), sentFilter)) return false
       if (query === '') return true
       return (
@@ -760,6 +787,7 @@ export default function MainScreen() {
 
   const filteredReceived = useMemo(() => {
     return received.filter((r) => {
+      if (r.received_archived_at && query === '') return false
       if (!matchesStatusFilter(receivedStatus(r), receivedFilter)) return false
       if (query === '') return true
       return (
@@ -771,6 +799,7 @@ export default function MainScreen() {
 
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
+      if (t.archived_at && query === '') return false
       if (!matchesStatusFilter(todoStatus(t), todoFilter)) return false
       if (query === '') return true
       return (
@@ -1120,6 +1149,18 @@ export default function MainScreen() {
                     <span className="hktext">
                       <span className="hktitle">Account</span>
                       <span className="hknote"> — view and edit</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/archive')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/archive') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Archive</span>
+                      <span className="hknote"> — remove completed items from these lists</span>
                     </span>
                   </div>
                 </div>

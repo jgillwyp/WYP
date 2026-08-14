@@ -6,6 +6,106 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Archive converted to live (`/archive`, `ArchiveForm.tsx`); per-viewer scope; migration 028
+
+Owner: "Let's converted to a live screen next - along with the additional
+Housekeeping task." Converts `design/screens/WYP_archive_palette1.html` to
+`app/components/ArchiveForm.tsx` / `/archive`, and wires Main Screen's
+Housekeeping "Archive" row (already in the mockup) into `MainScreen.tsx` for
+real.
+
+**Per-viewer archive scope — asked, not assumed.** A Request is one database
+row but is viewed by two different accounts (sender and recipient). Before
+writing the migration, asked via AskUserQuestion whether archiving a
+Received item should hide it only from the recipient's own Received list
+(leaving the sender's Sent view of the same row untouched) or be one shared
+flag that hides it from both sides at once. Owner picked **per-viewer**. This
+matches the reasoning CLAUDE.md's own Entitlements section already gives for
+reading tier live per-viewer rather than snapshotting it — two accounts can
+each have their own current relationship to the same row.
+
+**Migration 028** (`docs/Week5 - SQL history.txt`, drafted 2026-08-14 —
+**confirmed run by the owner the same day**):
+- `requests.archived_at` — the row's own owner archiving it from Sent (a
+  Request) or their only list (a ToDo, `contact_id` null — there is no
+  recipient, so this is a ToDo's only archive state). Plain-RLS-writable via
+  the existing "requests: owners update own" policy (migration 002) — no new
+  function needed; `ArchiveForm.tsx` does a normal `.update().in('id', ids)`.
+- `requests.received_archived_at` — the recipient archiving their own
+  Received copy. RLS on `requests` is owner-only, so this needed a new
+  SECURITY DEFINER function, `archive_received_request(p_request_id)` —
+  same email-match-through-`contacts` pattern as
+  `set_response_done_as_recipient`/`add_dialog_as_recipient` (migration
+  012), single-row, called once per id.
+- `get_received_requests()` gains `received_archived_at` in its own row
+  shape (drop-then-create, the `RETURNS TABLE` lesson migrations
+  017/021/027 already learned). `get_received_request()` (singular, Response
+  Detail's own RPC) was deliberately left untouched — nothing reads
+  `received_archived_at` there yet.
+- Un-Archive stays out of scope, per the owner's own words from the mockup
+  round ("that can be done later") — no reverse function.
+
+**"Still findable through Search" is a real behavior, not just PRD copy.**
+The owner's own drafted §9.5 replacement text (this file, earlier
+2026-08-14 entry) says an archived record is "no longer displayed" on the
+Main Screen "while remaining available through Search." Implemented
+literally: neither archive column is ever excluded from a query anywhere —
+`MainScreen.tsx`'s `filteredSent`/`filteredReceived`/`filteredTodos` hide an
+archived row only while the search box is empty, and re-include it (subject
+to the usual status-chip filter and text match) the moment a query is
+typed. This is why migration 028 adds the columns to `get_received_
+requests()`'s row shape rather than filtering by them in the function's own
+`WHERE` clause — the show/hide split happens entirely client-side.
+
+**`ArchiveForm.tsx`** ports the mockup's own logic faithfully: per-Record-
+Type `deselected` id sets (React `useState<Record<RecordType, Set<string>>>`,
+same persistence rule as the mockup — a deselection survives further
+narrowing/widening of the filters, resets only on a Record Type switch), the
+empty-until-a-filter-is-entered gate, and the Recipient/Requestor type-ahead
+sourced from the currently-loaded candidate data itself (not the Contacts
+table — a Received row's "Requestor" is a sender's `profiles.display_name`,
+which isn't a Contact at all). Row click opens the record's real Detail
+screen now (`/requests/[id]`, `/requests/[id]/respond`, `/todos/[id]`) —
+the mockup's own inert "would navigate there" note was exactly this,
+promised in the first build's own log entry. Archive Selected calls a plain
+batched `.update()` for Sent/ToDos or loops `archive_received_request()` via
+`Promise.all` for Received, then updates local state so the just-archived
+rows drop out of the eligible list immediately, matching the mockup's own
+`archived[currentType].add(...)` behavior.
+
+**Before Done Date uses the app's real `.ffloat.picker.native` component
+here**, not the mockup's own `.plaingroup`/`.finput.plain` substitution —
+that substitution existed only to route around the standalone mockup file's
+missing Tailwind preflight reset (see this file's two prior 2026-08-14
+entries), and this live component has the real reset, so the normal pattern
+needs no modification. The calendar-picker-only `keydown` block (from the
+second mockup fix round) is carried over as-is — this remains the one date
+field in the app with that behavior; the other 14 date/time fields keep
+their existing typing-plus-click-to-open behavior, not retroactively
+changed.
+
+**Main Screen row types gained `archived_at`/`received_archived_at`** (both
+still selected/fetched, per the "findable through Search" reasoning above),
+and the Housekeeping band gained a real "Archive" row (`— remove completed
+items from these lists`) navigating to `/archive`, following the exact
+markup/handler pattern of the existing Contacts/Account rows.
+
+**PRD §9.5's replacement text is still only drafted in the decisions log,
+not merged into the actual `.docx`.** Attempted this batch; the title-page
+and footer version-number text in `WouldYouPlease_PRD_v12_9.docx` turned out
+to be split across `<w:r>` runs in a way `merge_runs.py` didn't fully
+coalesce (a raw-text search for "12.9" found zero contiguous matches in
+`document.xml` despite `pandoc`'s own rendered markdown showing it plainly),
+making a safe, verifiable edit slower than the rest of this batch — deferred
+rather than risk a bad edit to the canonical PRD file under time pressure.
+The live behavior already matches the drafted text; only the document itself
+still needs the version bump (title page, both footers, Schedule A entry,
+§9.5 body) whenever the owner confirms he wants that done now.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-14 — Archive mockup: Recipient/Requestor overlap, date-box explanation, icon clickability, calendar-picker-only
 
 Owner tested `WYP_archive_palette1.html` again after the prior round's
