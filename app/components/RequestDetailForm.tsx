@@ -139,17 +139,6 @@ export default function RequestDetailForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Response Link (Week 3 Day 4) — calls issue_request_link (migration 008;
-  // DRAFTED, not yet run as of 2026-08-10, see CLAUDE.md Known gaps). The raw
-  // token is returned once, by design, and never stored anywhere (only its
-  // hash is persisted) — so there is no way to recover an already-issued
-  // link later. Regenerating silently invalidates whatever token existed
-  // before, matching the function's own documented behavior.
-  const [linkUrl, setLinkUrl] = useState<string | null>(null)
-  const [linkLoading, setLinkLoading] = useState(false)
-  const [linkCopied, setLinkCopied] = useState(false)
-  const [linkError, setLinkError] = useState<string | null>(null)
-
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
@@ -431,35 +420,6 @@ export default function RequestDetailForm() {
     router.back()
   }
 
-  async function handleGetLink() {
-    setLinkError(null)
-    setLinkCopied(false)
-    setLinkLoading(true)
-
-    const { data, error: rpcError } = await supabase.rpc('issue_request_link', {
-      p_request_id: requestId,
-    })
-
-    setLinkLoading(false)
-
-    if (rpcError || !data) {
-      setLinkError(rpcError?.message ?? 'Could not create a Response Link.')
-      return
-    }
-
-    setLinkUrl(`${window.location.origin}/r/${data as string}`)
-  }
-
-  async function handleCopyLink() {
-    if (!linkUrl) return
-    try {
-      await navigator.clipboard.writeText(linkUrl)
-      setLinkCopied(true)
-    } catch {
-      setLinkError('Could not copy automatically — select and copy the link text instead.')
-    }
-  }
-
   if (loading) {
     return (
       <div className="frame-none">
@@ -517,30 +477,6 @@ export default function RequestDetailForm() {
         </div>
 
         <div className="noticeband"><b>Note:</b> The Request Recipient is notified of changes.</div>
-
-        {/* Response Link (§6.30, PROPOSED, Week 3 Day 4) — the copy-link
-            affordance standing in for real email delivery this week (SPF/
-            DKIM/DMARC stays out of scope, per CLAUDE.md's Scope discipline).
-            Not part of the Send/Cancel band: issuing a link is independent
-            of saving the form's other edits. */}
-        <div className="linkband">
-          {!linkUrl ? (
-            <button className="btn-secondary" type="button" onClick={handleGetLink} disabled={linkLoading}>
-              {linkLoading ? 'Creating Link…' : 'Get Response Link'}
-            </button>
-          ) : (
-            <>
-              <span className="linkval">{linkUrl}</span>
-              <button className="btn-secondary" type="button" onClick={handleCopyLink}>
-                {linkCopied ? 'Copied' : 'Copy'}
-              </button>
-              <button className="btn-secondary" type="button" onClick={handleGetLink} disabled={linkLoading}>
-                {linkLoading ? 'Regenerating…' : 'Regenerate'}
-              </button>
-            </>
-          )}
-          {linkError && <span className="ferror" style={{ margin: 0 }}>{linkError}</span>}
-        </div>
 
         <div className="scroll">
           <form className="form" id="request-detail-form" onSubmit={handleSubmit} noValidate>

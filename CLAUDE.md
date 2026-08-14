@@ -1287,3 +1287,45 @@ link is built only after the stack is proven on Add Contact.
   already gets, leaving the two-field case untouched. No mockup changes —
   none of the three affected screens' static HTML has a real
   `type="date"` input to trigger the same browser behavior.
+- **Get Response Link removed from Request Detail (2026-08-14)** — the
+  manual `.linkband` UI/state/handlers are gone from
+  `RequestDetailForm.tsx` ("no longer needed for testing"); migration 008's
+  `issue_request_link` function and its use inside `CreateRequestForm.tsx`'s
+  automatic Initial Request email flow are unaffected.
+- **"Keep It as Simple as Possible," round three (2026-08-14) — migrations
+  022/023/024, ALL DRAFTED, NOT YET CONFIRMED RUN.** Migration 022 —
+  `profiles.todo_dates_enabled boolean not null default false` — off
+  collapses Create ToDo/ToDo Detail's Due Date/Done Date fields and
+  quick-Done band into a single Open/Done Status chip pair (§6.35
+  PROPOSED, reusing `.sendrow`+`.chippair`+`.gatenote`), reinterpreting the
+  existing `done_date` column rather than storing anything new — Done sets
+  it to today on Save only if unset, Open clears it, `due_date` stays
+  hidden and untouched either way. Migration 023 —
+  `alter column request_time_enabled set default false` — reverses
+  migration 019's own true default, deliberately, now that this app has no
+  real users besides the owner to worry about hiding existing data from;
+  existing rows are unaffected, only future signups. Migration 024 —
+  `grant update (tier) on profiles to authenticated`, **TESTING ONLY,
+  FLAGGED CONFLICT**: migration 002 deliberately withheld this exact grant
+  so no free user could self-upgrade ("writable only by service_role, the
+  billing webhook, later"). Reopened here because the owner's own request
+  explicitly frames it as temporary ("For the development and Attachments
+  testing, perhaps an Account 'Subscribed?' option is appropriate...
+  Later... only able to be set by opening a subscription page... a
+  'Subscription Details' Task could replace the Account option") and he is
+  the only account that exists to use it. **Must be revoked (or replaced
+  by the real billing-webhook path) before any real second user or actual
+  payment processing exists** — do not let this grant survive into a
+  multi-user launch unexamined. `AccountForm.tsx` gained two more
+  `.checkrow`s ("Show Due/Done Dates (ToDos)," "Subscribed? (testing
+  only)") — the tier one uses its own `handleTierToggle`, since the
+  underlying column is text-valued, not boolean, and doesn't share the
+  other three toggles' `handleToggle` helper. **No mockups updated** — the
+  Status chip pattern has no drawn precedent in any of the five ToDo/
+  Request mockups; flagged in `design/README.md`. Deferred/logged only,
+  not built this batch: incremental report printing (owner wants a wider,
+  larger-font redesign first), Attachments delete-permission/duplicate-
+  name/type-limit notes (Attachments itself still hasn't been started —
+  task Priority 3), and an Archive UI the owner has designed and will
+  present after Attachments ships. See the decisions log's three
+  2026-08-14 entries for the full write-up.

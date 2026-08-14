@@ -640,3 +640,123 @@ commit;
 --   where routine_name = 'get_received_requests';
 --        -> should show authenticated / EXECUTE
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 022 — profiles.todo_dates_enabled
+-- DRAFTED 2026-08-14 — NOT YET CONFIRMED RUN.
+--
+-- Owner, continuing the "Keep It as Simple as Possible" path started by
+-- migrations 018/019: "please add another Account option related to ToDos
+-- ... showing the Status element as an Open or Done chip and an
+-- accompanying Note... it does not seem that any database changes are
+-- needed [for Status itself]." Correct — Status is a UI-only
+-- reinterpretation of the existing done_date column (Open = done_date is
+-- null, Done = done_date holds a value); the only new state is this one
+-- toggle controlling which presentation a ToDo screen uses. Default false,
+-- same reasoning as private_category_enabled (migration 018): this is a
+-- new, never-before-seen simplification, not existing behavior that would
+-- be hidden by defaulting off — see migration 023 below for the different
+-- case (request_time_enabled, where the opposite reasoning applied at the
+-- time, and is now being deliberately reversed).
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists todo_dates_enabled boolean not null default false;
+
+comment on column public.profiles.todo_dates_enabled is
+  'Default false. When true, Create ToDo/ToDo Detail show real Due Date and Done Date fields (current behavior). When false, both are replaced by a simple Open/Done Status chip pair -- Done sets done_date to today on Save (if not already set), Open clears it on Save. due_date is simply hidden while this is off, never cleared.';
+
+grant update (todo_dates_enabled) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'todo_dates_enabled';
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles' and column_name = 'todo_dates_enabled';
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 023 — flip profiles.request_time_enabled's default to false
+-- DRAFTED 2026-08-14 — NOT YET CONFIRMED RUN.
+--
+-- Reverses migration 019's own reasoning, deliberately, not by oversight.
+-- Migration 019 defaulted request_time_enabled to TRUE specifically because
+-- Due/Done Time was pre-existing, already-relied-upon behavior, and real
+-- accounts with real data could already depend on it -- defaulting a new
+-- column to false there would have silently hidden already-set values.
+-- That concern doesn't apply now: this app has no real users other than
+-- the owner, so there is no existing data a default change could surprise.
+-- Owner, continuing the "Keep It as Simple as Possible" path: "With these
+-- 2 changes to the Account screen, all 3 currently available options are
+-- defaulted to the simpler use of the WYP app" -- i.e. Private Category,
+-- Due/Done Time, and the new ToDo Status toggle (migration 022) should all
+-- default off/simple for a new account going forward.
+--
+-- ALTER COLUMN ... SET DEFAULT only changes what future INSERTs (new
+-- signups) get when they don't specify a value -- it does NOT retroactively
+-- change any already-set row, including the owner's own profile (already
+-- toggled off live, via /account, before this migration was even drafted).
+-- Revisit this default again before any real second account exists, if
+-- "simple by default" for new signups ever stops being the right call.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  alter column request_time_enabled set default false;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser):
+--   select column_default from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'request_time_enabled';
+--        -> should show 'false'
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 024 — grant update(tier) on profiles to authenticated
+-- (TESTING ONLY -- see the flagged conflict below before running)
+-- DRAFTED 2026-08-14 — NOT YET CONFIRMED RUN.
+--
+-- FLAGGED CONFLICT, not a silent overwrite: migration 002's own comment on
+-- this exact grant reads "tier is therefore writable only by service_role
+-- (the billing webhook, later)" -- deliberately excluding tier from the
+-- authenticated column grant so no free user could ever set
+-- tier = 'subscriber' on themselves. This migration reopens exactly that
+-- path. The owner's own request already anticipates and accepts this: "For
+-- the development and Attachments testing, perhaps an Account 'Subscribed?'
+-- option is appropriate. Later, this option would present differently and
+-- only able to be set by opening a subscription page with appropriate
+-- eCommerce links..." -- i.e. this is explicitly a temporary testing
+-- affordance, not the real entitlement flow, and the owner is the only
+-- account that exists to use it right now.
+--
+-- MUST BE REVOKED (or replaced by a proper billing-webhook-only path)
+-- before this app has any real user other than the owner, or before real
+-- payment processing exists -- a self-serve tier toggle in production
+-- would let anyone grant themselves subscriber features for free. Tracked
+-- as a known gap in CLAUDE.md, not forgotten.
+-- ============================================================================
+
+begin;
+
+grant update (tier) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser):
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles' and column_name = 'tier';
+--        -> should show authenticated / UPDATE
+-- To revoke later:
+--   revoke update (tier) on public.profiles from authenticated;
+-- ============================================================================

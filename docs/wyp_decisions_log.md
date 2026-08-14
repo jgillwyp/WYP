@@ -6,6 +6,37 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Get Response Link removed from Request Detail
+
+Owner: "Since it is no longer needed for testing, drop the 'Get Response Link' section from the Request Detail screen." Removed the `.linkband` UI (Get Response Link/Copy/Regenerate) along with its own `linkUrl`/`linkLoading`/`linkCopied`/`linkError` state and `handleGetLink`/`handleCopyLink` handlers from `RequestDetailForm.tsx` — it was always a manual testing stand-in for real email delivery (§6.30 PROPOSED, Week 3 Day 4), never drawn in any mockup. **Not removed**: `issue_request_link` (migration 008) itself, and its use inside `CreateRequestForm.tsx`'s own automatic Initial Request email flow (Week 5 Priority 1) — that's a separate, still-needed call site. `.linkband`/`.linkval` CSS stays in `globals.css`, unused for now rather than deleted, on the chance a future admin/debug surface wants the same pattern.
+
+\---
+
+## 2026-08-14 — "Keep It as Simple as Possible," round three: ToDo Status, simpler defaults, and a testing-only Subscribed? toggle
+
+Continuing the path started by migrations 018 (Private Category) and 019 (Due/Done Time), all in one request.
+
+**ToDo Status (migration 022, `profiles.todo_dates_enabled boolean not null default false`).** Owner, with a pasted ToDo Detail mockup: "please add another Account option related to ToDos... showing the Status element as an Open or Done chip and an accompanying Note... In this format, when the Done chip is selected and the ToDo is saved, the Done Date can be set as the current date... The Open chip status is based on the ToDo Done Date being empty — so, it does not seem that any database changes are needed [for Status itself]." Correct, and implemented exactly that way: Status is a UI-only reinterpretation of the existing `done_date` column, not a new fact to store — the toggle itself is the only new column. Off collapses `CreateTodoForm.tsx`'s and `TodoDetailForm.tsx`'s quick-Done band *and* Due Date/Done Date row into one Open/Done chip pair (§6.35 PROPOSED) reusing `.sendrow`+`.chippair`+`.gatenote` verbatim — the identical combo `AddContactForm.tsx` already uses for its Send Requests By picker, not new markup. On Save: flipping to Done sets `done_date` to today *only if it wasn't already set* (an existing done_date — e.g. one set while the toggle was on — is preserved, not clobbered); flipping to Open clears it. `due_date` is simply never shown or touched in this state, same "hidden, not cleared" convention already used for Category and Due Time. Create ToDo always starts Status at Open (a brand-new ToDo has no existing `done_date` to derive from); ToDo Detail derives its initial Status once, on load, from whatever `done_date` the record already has.
+
+**Simpler defaults (migration 023, `alter column request_time_enabled set default false`).** Owner, closing the same message: "With these 2 changes to the Account screen, all 3 currently available options are defaulted to the simpler use of the WYP app." Migration 019 had deliberately defaulted `request_time_enabled` to `true`, reasoning that this app might already have real accounts with real Due Time data a `false` default would silently hide — flipped here, deliberately, because that concern doesn't actually apply: this app has no real users yet besides the owner. `ALTER COLUMN ... SET DEFAULT` only changes what a brand-new signup gets; it does not retroactively touch any already-set row, including the owner's own (already toggled off, live, before this migration was even drafted). All three account preferences (Private Category, Due/Done Time, ToDo Status) are now off/simple by default for a new account, matching the stated goal exactly. Flagged directly, not silently reversed, since it contradicts migration 019's own stated reasoning at the time — see that migration's header and CLAUDE.md.
+
+**Subscribed? (migration 024, TESTING ONLY — grant update(tier) on profiles to authenticated).** Owner: "For the development and Attachments testing, perhaps an Account 'Subscribed?' option is appropriate. Later, this option would present differently and only able to be set by opening a subscription page with appropriate eCommerce links... In the full implementation, a 'Subscription Details' Task could replace the Account option." A real conflict, flagged rather than silently overwritten: migration 002 deliberately excluded `tier` from the owner's own column grant specifically so no free user could self-upgrade — "tier is therefore writable only by service_role (the billing webhook, later)." This migration reopens that path, on purpose, because the owner's own request already anticipates and accepts it as a temporary stand-in — he is the only account that exists to use it. Must be revoked (or replaced by the real billing-webhook-only path he describes) before this app has any real second user or actual payment processing; tracked in CLAUDE.md's Known gaps, not left implicit. `AccountForm.tsx` gained a fourth `.checkrow`, "Subscribed? (testing only)," writing `profiles.tier` directly via its own `handleTierToggle` (text-valued, so it doesn't join the shared boolean `handleToggle` the other three toggles use).
+
+All four migrations (022/023/024, plus the AccountForm.tsx wiring) are **DRAFTED, not yet confirmed run** as of this writing.
+
+\---
+
+## 2026-08-14 — Logged for later, not implemented this batch
+
+Four items from the same message, each explicitly deferred by the owner or clearly a design note rather than a build instruction:
+
+- **Scroll-restore confirmed working.** Owner: "the return to the main screen after creating or viewing a Request, creating or viewing a ToDo, and opening a Housekeeping task now comes back to the main screen vertical location as desired." Confirms the 2026-08-13 `wyp.mainScrollTop` fix — no further action.
+- **Incremental report printing deferred.** Owner: "I want to defer implementing incremental report printing until I can design a wider print format with a larger font. I originally did a full-sized portrait print format and then got hung up on seeing it on a screen (which is not needed) — and did not keep my original work." No code change; the existing Print Reports feature (§6.34) stands as-is until the owner brings a new design.
+- **Attachments design notes, captured for when Attachments (task Priority 3, still not started) is actually built** — not implemented now, since no attachment storage model exists yet to apply them to: (a) only the person who added an attachment should be able to delete it; (b) a duplicate attachment name should get " (1)" appended automatically; (c) if attachment types end up limited, that limitation needs to be explained to the end user, not just silently enforced.
+- **Archive UI.** Owner has designed one and will present it for discussion after Attachments is complete — no action yet, noted so it isn't lost track of.
+
+\---
+
 ## 2026-08-13 — Cap a lone native date field's width to keep Safari's short date format
 
 Owner, on Response Detail: a solo Done Date field (Done Time turned off for that Request's issuer) rendered its value as "Wednesday, September 30, 2026" — full weekday-spelled-out format — instead of the app's usual compact date, asking for it to match "the Due Date presentation above" (the Due: metarow's own short-form label:value line just above it).

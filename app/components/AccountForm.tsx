@@ -31,19 +31,43 @@ import { supabase } from '@/lib/supabaseClient'
  * this app's other one-click settings (e.g. the quick-Done bands) rather
  * than the multi-field Save/Cancel forms elsewhere in this app.
  *
- * profiles.request_time_enabled (migration 019) — on by default, unlike
- * Category, because Due Time/Done Time is pre-existing, already-relied-
- * upon behavior (Print Reports' time sub-line, the .ics builder's default),
- * not a new feature nobody has seen yet; defaulting it off would silently
- * hide already-set data for every existing account. Owner: "As another
- * account option, when turned off the four-value two-line presentation of
- * Due Date Due Time Done Date Done Time on Requests would become like a
- * ToDo one-line two-value presentation of Due Date and Done Date." Scoped,
- * per the owner's own confirmation, to include recipient-facing screens
- * (Request Response, Response Detail) — those read the *issuer's* own
- * setting via owner_request_time_enabled (migrations 020/021), same
- * "rights come from the issuer" precedent as owner_tier/Attachments.
- * Governs Requests only; ToDos have never had a Due Time/Done Time field.
+ * profiles.request_time_enabled (migration 019) — originally defaulted to
+ * true (Due Time/Done Time was pre-existing, already-relied-upon behavior,
+ * so defaulting a brand-new column off would have silently hidden
+ * already-set data). Owner: "As another account option, when turned off
+ * the four-value two-line presentation of Due Date Due Time Done Date Done
+ * Time on Requests would become like a ToDo one-line two-value
+ * presentation of Due Date and Done Date." Scoped, per the owner's own
+ * confirmation, to include recipient-facing screens (Request Response,
+ * Response Detail) — those read the *issuer's* own setting via
+ * owner_request_time_enabled (migrations 020/021), same "rights come from
+ * the issuer" precedent as owner_tier/Attachments. Governs Requests only;
+ * ToDos have never had a Due Time/Done Time field. **Default flipped to
+ * false, migration 023, 2026-08-14** — this app has no real users other
+ * than the owner yet, so the "don't hide existing data" concern no longer
+ * applies; see that migration's own header for the full reasoning.
+ *
+ * profiles.todo_dates_enabled (migration 022, 2026-08-14) — off by
+ * default, continuing the same "Keep It as Simple as Possible" path.
+ * Owner: "please add another Account option related to ToDos... showing
+ * the Status element as an Open or Done chip... it does not seem that any
+ * database changes are needed [for Status itself]" — correct: Status is a
+ * UI-only reinterpretation of the existing done_date column, not a new
+ * fact to store. See CreateTodoForm.tsx/TodoDetailForm.tsx for the actual
+ * Status chip gating.
+ *
+ * profiles.tier (migration 024, 2026-08-14, TESTING ONLY) — writable by
+ * `authenticated` for the first time; migration 002 deliberately excluded
+ * it from the owner's own column grant ("writable only by service_role,
+ * the billing webhook, later"), specifically so no free user could grant
+ * themselves subscriber features. Owner's own request explicitly frames
+ * this control as temporary: "For the development and Attachments
+ * testing, perhaps an Account 'Subscribed?' option is appropriate. Later,
+ * this option would present differently and only able to be set by
+ * opening a subscription page with appropriate eCommerce links..." — a
+ * real "Subscription Details" flow is meant to replace this checkbox
+ * outright, not extend it. Flagged, not silently reopened — see migration
+ * 024's own header and CLAUDE.md's Known gaps.
  */
 export default function AccountForm() {
   const router = useRouter()
@@ -52,7 +76,13 @@ export default function AccountForm() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [categoriesEnabled, setCategoriesEnabled] = useState(false)
-  const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
+  // Default flipped to false, migration 023 — see the file-level comment.
+  const [requestTimeEnabled, setRequestTimeEnabled] = useState(false)
+  const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  // Testing-only tier toggle (migration 024) — the DB column is text
+  // ('free'/'subscriber'), not boolean, so it gets its own state and
+  // handler rather than joining the shared boolean handleToggle below.
+  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -76,7 +106,7 @@ export default function AccountForm() {
 
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('private_category_enabled, request_time_enabled')
+        .select('private_category_enabled, request_time_enabled, todo_dates_enabled, tier')
         .eq('id', userData.user.id)
         .single()
 
@@ -89,7 +119,9 @@ export default function AccountForm() {
       }
 
       setCategoriesEnabled(data?.private_category_enabled ?? false)
-      setRequestTimeEnabled(data?.request_time_enabled ?? true)
+      setRequestTimeEnabled(data?.request_time_enabled ?? false)
+      setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+      setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setLoading(false)
     }
 
@@ -100,7 +132,7 @@ export default function AccountForm() {
   }, [])
 
   async function handleToggle(
-    field: 'private_category_enabled' | 'request_time_enabled',
+    field: 'private_category_enabled' | 'request_time_enabled' | 'todo_dates_enabled',
     next: boolean,
     setLocal: (value: boolean) => void,
   ) {
@@ -121,6 +153,29 @@ export default function AccountForm() {
       // actually saved, same reasoning as every other settings control in
       // this app that writes on change rather than on a separate Save.
       setLocal(!next)
+      setSaveError(updateError.message)
+    }
+  }
+
+  // Testing-only — see the file-level comment on migration 024. Same
+  // optimistic-update-reverted-on-failure shape as handleToggle above, but
+  // writes a text value ('free'/'subscriber') rather than a boolean.
+  async function handleTierToggle(next: boolean) {
+    if (!userId) return
+    const nextTier: 'free' | 'subscriber' = next ? 'subscriber' : 'free'
+    setTier(nextTier)
+    setSaving(true)
+    setSaveError(null)
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ tier: nextTier })
+      .eq('id', userId)
+
+    setSaving(false)
+
+    if (updateError) {
+      setTier(next ? 'free' : 'subscriber')
       setSaveError(updateError.message)
     }
   }
@@ -196,8 +251,44 @@ export default function AccountForm() {
               Show Due/Done Time (Requests)
               <span className="checknote">
                 Adds a Due Time and Done Time next to a Request&rsquo;s Due Date and Done
-                Date, for you and whoever you send it to. On by default. Turn it off
-                for a simpler one-line Due Date / Done Date, like a ToDo.
+                Date, for you and whoever you send it to. Off by default. Turn it on
+                if you want to optionally set both the Date and the Time for a Request.
+              </span>
+            </span>
+          </label>
+
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={todoDatesEnabled}
+              disabled={saving}
+              onChange={(e) =>
+                handleToggle('todo_dates_enabled', e.target.checked, setTodoDatesEnabled)
+              }
+            />
+            <span className="checktext">
+              Show Due/Done Dates (ToDos)
+              <span className="checknote">
+                Adds Due Date and Done Date for ToDos instead of just a Status of Open
+                and Done. Off by default. Turn it on for more precise ToDo tracking.
+              </span>
+            </span>
+          </label>
+
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={tier === 'subscriber'}
+              disabled={saving}
+              onChange={(e) => handleTierToggle(e.target.checked)}
+            />
+            <span className="checktext">
+              Subscribed? (testing only)
+              <span className="checknote">
+                Sets your account to the Subscriber tier so subscriber-only features
+                like Attachments can be tested. Off by default. This is a stand-in for
+                real billing — later, a Subscription Details page with actual
+                eCommerce links will replace this checkbox.
               </span>
             </span>
           </label>

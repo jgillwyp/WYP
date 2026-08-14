@@ -38,6 +38,20 @@ import { supabase } from '@/lib/supabaseClient'
  * verbatim: active "Note: To quickly complete this ToDo, click Done and
  * Save." / inactive "This ToDo is now marked as Done, just click Save." Sets
  * Done Date only — there's no Done Time on a ToDo to touch.
+ *
+ * profiles.todo_dates_enabled (migration 022, 2026-08-14) — off by default,
+ * continuing the "Keep It as Simple as Possible" path started by migrations
+ * 018/019. Off collapses the quick-Done band and Due/Done Date row above
+ * into a single §6.35 Status chip row (Open/Done, `.sendrow`+`.chippair`+
+ * `.gatenote` — the same combo AddContactForm.tsx already uses for its
+ * Send Requests By picker, not a new component) — owner: "the Status
+ * element as an Open or Done chip and an accompanying Note... it does not
+ * seem that any database changes are needed" — Status is a UI-only
+ * reinterpretation of done_date (Done sets it to today on Save if not
+ * already set; Open clears it), not a new fact to store. due_date itself
+ * is simply never shown or touched here in the off state — a brand-new
+ * ToDo just has no Due Date until the account turns this back on. See
+ * AccountForm.tsx.
  */
 
 type Category = {
@@ -106,6 +120,12 @@ export default function CreateTodoForm() {
   // 2026-08-13), off by default — see AccountForm.tsx and
   // CreateRequestForm.tsx's identical gate.
   const [categoriesEnabled, setCategoriesEnabled] = useState(false)
+  // §6.35 Status toggle (migration 022) — see the file-level comment. A
+  // brand-new ToDo always starts Open, matching form.doneDate's own empty
+  // initial state; there's no existing done_date to derive an initial
+  // 'done' status from here, unlike TodoDetailForm.tsx.
+  const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  const [todoStatus, setTodoStatus] = useState<'open' | 'done'>('open')
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -140,11 +160,12 @@ export default function CreateTodoForm() {
 
     supabase
       .from('profiles')
-      .select('display_name, private_category_enabled')
+      .select('display_name, private_category_enabled, todo_dates_enabled')
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.private_category_enabled ?? false)
+        setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
       })
   }, [])
 
@@ -286,6 +307,15 @@ export default function CreateTodoForm() {
       return
     }
 
+    // §6.35 Status (migration 022) — when todoDatesEnabled is off, done_date
+    // is driven by the Open/Done chip rather than the (unrendered) Done Date
+    // field: Done sets it to today only if it isn't already set (nothing to
+    // preserve here on a brand-new ToDo), Open leaves it null. due_date
+    // stays null too — there's no way to set one in this simplified state.
+    const effectiveDoneDate = todoDatesEnabled
+      ? (form.doneDate.trim() === '' ? null : form.doneDate)
+      : (todoStatus === 'done' ? (form.doneDate.trim() === '' ? todayISODate() : form.doneDate) : null)
+
     const { data: newTodo, error: insertError } = await supabase
       .from('requests')
       .insert({
@@ -295,7 +325,7 @@ export default function CreateTodoForm() {
         description: form.description.trim(),
         priority: form.priority,
         due_date: form.dueDate.trim() === '' ? null : form.dueDate,
-        done_date: form.doneDate.trim() === '' ? null : form.doneDate,
+        done_date: effectiveDoneDate,
       })
       .select('id')
       .single()
@@ -411,92 +441,129 @@ export default function CreateTodoForm() {
               </div>
             </div>
 
-            {/* Quick-Done band (§6.31, 2026-08-10) — same "donerow"/"donenote"
-                pattern as Request Response, purely reactive to whether Done
-                Date already holds a value, however it got there (clicking
-                Done here or typing directly into the field below both land
-                in the same state — no separate "did they click Done" flag).
-                Owner's own wording, verbatim. */}
-            <div className="donerow">
-              <span className="donenote">
-                {form.doneDate.trim() === '' ? (
-                  <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
-                ) : (
-                  'This ToDo is now marked as Done, just click Save.'
-                )}
-              </span>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleQuickDone}
-                disabled={form.doneDate.trim() !== ''}
-              >
-                Done
-              </button>
-            </div>
+            {todoDatesEnabled ? (
+              <>
+                {/* Quick-Done band (§6.31, 2026-08-10) — same "donerow"/"donenote"
+                    pattern as Request Response, purely reactive to whether Done
+                    Date already holds a value, however it got there (clicking
+                    Done here or typing directly into the field below both land
+                    in the same state — no separate "did they click Done" flag).
+                    Owner's own wording, verbatim. */}
+                <div className="donerow">
+                  <span className="donenote">
+                    {form.doneDate.trim() === '' ? (
+                      <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
+                    ) : (
+                      'This ToDo is now marked as Done, just click Save.'
+                    )}
+                  </span>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleQuickDone}
+                    disabled={form.doneDate.trim() !== ''}
+                  >
+                    Done
+                  </button>
+                </div>
 
-            {/* Due Date + Done Date, combined into one row (owner's own rough
-                draft) — both optional, so no .req border and no
-                submit-blocking validation; same .opt Row-Tint-while-empty
-                treatment as everywhere else. No Done Time — owner: "the
-                ToDos do not need Done Time." Done Date's purpose here:
-                "the reason a Create ToDo should allow a Done Date is to
-                allow completed ToDos to be entered if desired." */}
-            <div className="fgroup frow">
-              <span className="ffloat picker native">
-                <input
-                  className={`finput${form.dueDate.trim() === '' ? ' opt' : ''}`}
-                  id="dd"
-                  type="date"
-                  value={form.dueDate}
-                  onChange={(e) => set('dueDate', e.target.value)}
-                  onClick={openPicker}
-                />
-                <label className="flabel" htmlFor="dd">
-                  <span className="lglyph" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                    </svg>
+                {/* Due Date + Done Date, combined into one row (owner's own rough
+                    draft) — both optional, so no .req border and no
+                    submit-blocking validation; same .opt Row-Tint-while-empty
+                    treatment as everywhere else. No Done Time — owner: "the
+                    ToDos do not need Done Time." Done Date's purpose here:
+                    "the reason a Create ToDo should allow a Done Date is to
+                    allow completed ToDos to be entered if desired." */}
+                <div className="fgroup frow">
+                  <span className="ffloat picker native">
+                    <input
+                      className={`finput${form.dueDate.trim() === '' ? ' opt' : ''}`}
+                      id="dd"
+                      type="date"
+                      value={form.dueDate}
+                      onChange={(e) => set('dueDate', e.target.value)}
+                      onClick={openPicker}
+                    />
+                    <label className="flabel" htmlFor="dd">
+                      <span className="lglyph" aria-hidden="true">
+                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                          <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                          <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                          <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                          <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                          <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                          <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                          <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                          <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                        </svg>
+                      </span>
+                      Due Date <span className="subnote">(optional)</span>
+                    </label>
                   </span>
-                  Due Date <span className="subnote">(optional)</span>
-                </label>
-              </span>
-              <span className="ffloat picker native">
-                <input
-                  ref={doneDateRef}
-                  className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
-                  id="dnd"
-                  type="date"
-                  value={form.doneDate}
-                  onChange={(e) => set('doneDate', e.target.value)}
-                  onClick={openPicker}
-                />
-                <label className="flabel" htmlFor="dnd">
-                  <span className="lglyph" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                    </svg>
+                  <span className="ffloat picker native">
+                    <input
+                      ref={doneDateRef}
+                      className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
+                      id="dnd"
+                      type="date"
+                      value={form.doneDate}
+                      onChange={(e) => set('doneDate', e.target.value)}
+                      onClick={openPicker}
+                    />
+                    <label className="flabel" htmlFor="dnd">
+                      <span className="lglyph" aria-hidden="true">
+                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                          <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                          <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                          <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                          <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                          <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                          <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                          <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                          <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                        </svg>
+                      </span>
+                      Done Date <span className="subnote">(optional)</span>
+                    </label>
                   </span>
-                  Done Date <span className="subnote">(optional)</span>
-                </label>
-              </span>
-            </div>
+                </div>
+              </>
+            ) : (
+              /* §6.35 PROPOSED Status row (migration 022, 2026-08-14) — Due/Done
+                 Dates turned off collapses the quick-Done band and Due/Done Date
+                 row above into a single Open/Done chip pair, matching the
+                 owner's pasted ToDo Detail mockup. Reuses .sendrow+.chippair+
+                 .gatenote verbatim — the same combo AddContactForm.tsx already
+                 uses for Send Requests By — rather than inventing new markup. */
+              <div className="fgroup">
+                <span className="flabel" id="status-label">Status</span>
+                <div className="sendrow">
+                  <div className="chippair" role="radiogroup" aria-labelledby="status-label">
+                    <button
+                      className={`chip${todoStatus === 'open' ? ' selected' : ''}`}
+                      type="button"
+                      aria-pressed={todoStatus === 'open'}
+                      onClick={() => setTodoStatus('open')}
+                    >
+                      Open
+                    </button>
+                    <button
+                      className={`chip${todoStatus === 'done' ? ' selected' : ''}`}
+                      type="button"
+                      aria-pressed={todoStatus === 'done'}
+                      onClick={() => setTodoStatus('done')}
+                    >
+                      Done
+                    </button>
+                  </div>
+                  <div className="gatenote">
+                    <b>Note:</b> To complete this ToDo, click Done and Save.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). See
