@@ -1410,3 +1410,44 @@ link is built only after the stack is proven on Add Contact.
   yet. **No mockups updated** — none of the six affected screens' static
   HTML has real upload/list JS to convert; flagged in `design/README.md`.
   `npx tsc --noEmit`/`npm run lint` clean.
+- **Locations UX refined, 2026-08-14** — a persistent `.donerow`/`.donenote`
+  note ("Locations are URLs or File paths.") sits next to Add Location
+  whether or not any exist yet; a saved URL renders as a real underlined
+  link (`.attname a`, explicit color/underline since Tailwind's preflight
+  strips the anchor default); a non-URL entry gets a "Copy" button instead
+  of an attempted `file://` link, since a browser has no filesystem access
+  to open one. **URL detection widened same day**: `urlLocationHref()` in
+  `app/src/lib/attachments.ts` now recognizes a bare domain (`ft.com`,
+  `www.ft.com`), not just a full `https://` URL, while excluding file-path
+  shapes and common file extensions (`report.pdf` stays plain text). A
+  live HEAD/ranged-GET/DNS-lookup reachability check was considered and
+  rejected — a browser can't run one against an arbitrary third-party
+  origin (CORS), proxying it through our own server opens an SSRF surface
+  for user-typed text, and it answers a liveness question, not the syntax
+  question this UI actually needs. See the decisions log for the full
+  write-up of both batches.
+- **Archive screen designed, mockup only — 2026-08-14
+  (`design/screens/WYP_archive_palette1.html`).** Owner's own drafted UI
+  strategy for PRD §9.5, with pasted-in reference screenshots. One file,
+  three Record-Type states (Sent Requests/Received Requests/ToDos) switched
+  by a chip row; starts empty until a Recipient/Requestor and/or Before
+  Done Date filter is entered; a matching record's checkbox defaults
+  checked, and unchecking it persists through further filter changes
+  (per-Record-Type, real working demo JS, not just static markup — this
+  was the one behavior worth actually proving out). New Housekeeping
+  "Archive" row added to the Main Screen mockup only — **not** wired into
+  `MainScreen.tsx`, and no `archives`/Archive-Status schema work has been
+  done; this pass is the design step only, matching this project's own
+  mockup-first convention. **Diverges from PRD §9.5 (v12.9) in three
+  flagged ways** — no Archive Now/Remove Archive Status mode-chip pair (the
+  owner deferred Un-Archive explicitly, "that can be done later"), a new
+  Recipient/Requestor filter §9.5's text never mentioned, and an
+  empty-until-filtered list rather than one pre-populated on Record Type
+  selection alone. Exact proposed replacement §9.5 wording is in the
+  decisions log, drafted for the owner's approval before it's merged into
+  the actual `.docx` — not done in this pass. One row in the owner's own
+  reference screenshot rendered in the app's red Overdue treatment; built
+  instead as the existing grey Done treatment everywhere, since every row
+  here is already Done and Overdue/Done are mutually exclusive — flagged as
+  a likely copy-paste artifact in the reference, not reproduced as-is. New
+  `.archrow`/`.archcheck`/`.archspacer`/`.archbody` (§6.36 PROPOSED).

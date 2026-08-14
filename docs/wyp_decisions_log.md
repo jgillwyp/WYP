@@ -6,6 +6,203 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Archive mockup: Recipient/Requestor overlap, date-box explanation, icon clickability, calendar-picker-only
+
+Owner tested `WYP_archive_palette1.html` again after the prior round's
+fixes and reported four more things.
+
+1. **Recipient/Requestor floating label overlapped the typed text.** Not
+   the classic bug this project already has tribal knowledge about — the
+   field's markup order (`.finput` then `.flabel`) and `placeholder=" "`
+   both matched the known-working Create Request Recipient field exactly.
+   The remaining difference is that this file loads Inter from Google Fonts
+   over the network rather than the live app's self-hosted `next/font`
+   copy; an unset `line-height` computes to "normal," which is derived from
+   whichever font is actually active at that moment, so a fallback font's
+   different internal metrics can shift text within the same fixed padding
+   box before (or if) the network font finishes loading. Fixed by adding an
+   explicit `line-height: 1.2` to both `.finput` and `.ffloat .flabel`,
+   removing the font-dependent variability regardless of which font is
+   active. **Flagged as a best-diagnosis fix, not a confirmed one** — no
+   headless browser is reachable in this sandbox to render and screenshot
+   the file (same limitation as every other visual fix in this screen's
+   history), so this hasn't been visually confirmed against the reported
+   symptom.
+2. **"Why does the date entry box differ from elsewhere in the app?"** By
+   design, and already flagged in the prior round's own log entry (item 1
+   above it) — the live app's `.ffloat.picker.native` pattern depends on
+   Tailwind's preflight reset, which this self-contained mockup doesn't
+   have, so it was deliberately replaced with a plain stacked label-above-
+   input layout here. This is a real, acknowledged divergence specific to
+   the standalone-mockup file format, not an oversight; converting this
+   screen to a live React component would use the exact same
+   `.ffloat.picker.native` component every other date field in the app
+   already uses, and the difference would disappear.
+3. **Calendar icon on Before Done Date "looks clickable, which it is
+   not."** Correct catch against this project's own §6.16 rule (the
+   label-affordance glyph is a passive signifier, never an independent
+   clickable icon) — the new stacked layout put the icon visually apart
+   from the input box, unlike the live app's convention where it sits
+   inside the field. Rather than restyling the icon to look inert on its
+   own, made the entire label-plus-input region read and behave as one
+   uniform unit: `cursor: pointer` across `.plaingroup`, its label, and the
+   input, plus a `focus` listener that calls `showPicker()` (same
+   try/caught pattern as the live app's existing `openPicker()` convention,
+   for pre-16.4 Safari). A native `<label for="beforeDone">` already
+   delegates any click within it to the input, so clicking the icon, the
+   label text, or the input all now open the picker identically — nothing
+   about the icon reads as separately or specially clickable anymore.
+4. **Manual m/d/y entry allowed invalid dates** (uncontrolled month/day
+   rollover, no Feb 29 validation, a year of "276750" accepted). Owner
+   asked this field match a "calendar-picker-only strategy" used elsewhere
+   in the app. Considered `readonly` on the input and rejected it — its
+   effect on a native date picker's own open-on-click/focus interaction is
+   inconsistent across browsers, so it risked blocking the picker itself,
+   not just manual typing. Used a `keydown` listener instead: every key
+   except Tab is prevented, so the field can never receive typed characters
+   at all; the only way to set a value is through the native picker, which
+   structurally cannot represent an invalid calendar date. This resolves
+   the Feb 29 and out-of-range-year concerns by construction, not by adding
+   validation logic — there is no longer any code path that accepts typed
+   input to validate.
+
+Positive: the selected-record count in the "Archive Selected" button label
+(from the prior round) was called out as "a nice touch" — kept as-is, no
+change.
+
+Verified the same way as the prior round: Node `--check` on the extracted
+`<script>` body (clean) and a `<div>`/`</div>` tag-balance count (27/27,
+clean). No headless browser reachable in this sandbox for a real render —
+items 1 and 3 above are reasoned fixes, not screenshot-confirmed ones.
+
+\---
+
+## 2026-08-14 — Archive mockup: rendering fixes + row-click-to-Detail
+
+Owner tested the freshly-built `WYP_archive_palette1.html`, screenshots
+attached, and reported four things. All fixed the same day.
+
+1. **Before Done Date's label overlapped the native "mm/dd/yyyy"
+   placeholder**, reading as garbled text. Traced to a mismatch between this
+   file and the live app: the live app's `.ffloat.picker.native` pattern
+   (label permanently risen and absolutely positioned over the input) relies
+   on Tailwind's preflight reset being in effect, which keeps a native
+   `type="date"` control's internal placeholder confined to `.finput`'s own
+   padded content box. This mockup is fully self-contained (see the file's
+   own header) with no such reset, so the browser's own UA styling for the
+   date control doesn't reliably respect the asymmetric top padding that
+   trick depends on. Fixed by not using that pattern here at all — a plain
+   static label sits above a normally-padded input (`.plaingroup`/
+   `.finput.plain`), the same shape as any ordinary non-floating label
+   elsewhere in the app; the two elements can never overlap because they're
+   just stacked blocks, regardless of how any given browser renders the
+   native control's internals.
+2. **"Archive Selected" should be colored as primary.** It was — but only
+   when at least one record was selected; at zero selected (the state every
+   one of the owner's own screenshots happened to show) it rendered in the
+   locked/grey treatment, an addition of mine, not something the owner's own
+   reference ever depicted. Removed the disabled/grey state entirely — the
+   button now stays plain primary blue always; clicking it with nothing
+   selected is a quiet no-op instead.
+3. **"A blue background is missing for the chips row."** The Record Type
+   chip row (`.archtyperow`) was sitting directly on the white/`.scroll`
+   background with no wrapper of its own — every other chip row in the app
+   (Main Screen's `.subhead`, `.sendrow`, `.chiprow`) sits on the Strip tint
+   specifically so a resting chip's own semi-transparent white background
+   has something to contrast against. Missed when this screen was first
+   built. Added `background: var(--strip)` to `.archtyperow`, matching
+   `.subhead`'s own treatment.
+4. **"Can we let the user see the related Detail screen from clicking the
+   respective item?"** Yes — matches the row-opens-Detail convention every
+   other list in the app already uses (Main Screen's Sent/Received/ToDo
+   rows). Added `role="button"`/hover/focus styling to each row's body
+   (`.archbody`, outside the checkbox so the two never conflict) and a click/
+   Enter handler; since this file is a standalone mockup with no router, it
+   surfaces what a live conversion would do (an inline note naming the
+   target Detail screen — Request Detail for Sent, Response Detail for
+   Received, ToDo Detail for ToDos) rather than silently doing nothing or
+   faking a real navigation.
+
+`npx tsc --noEmit`/`npm run lint` not applicable — this file has no build
+step; checked instead with a Node `--check` pass on the extracted `<script>`
+body and a tag-balance check (no headless browser reachable in this
+session's sandbox to screenshot it, same limitation noted for the landing
+page and Archive's own first build).
+
+\---
+
+## 2026-08-14 — Archive screen designed (mockup only); PRD §9.5 conflicts flagged
+
+Owner drafted a full UI strategy for the Archive feature PRD §9.5 (v12.9)
+already names but leaves unbuilt, with pasted-in reference screenshots for
+the Sent Requests and ToDos states. Built as
+`design/screens/WYP_archive_palette1.html` (one file, three Record-Type
+states) plus a new Housekeeping "Archive" row in the Main Screen mockup —
+see that screen's own design/README.md entry for the full build write-up
+(selection-persistence rule, the Overdue-row correction, the real `type=
+"date"` exception, §6.36). **Mockup only, not converted to live** — no
+`archives` table, no `/archive` route, and the Main Screen row wasn't added
+to `MainScreen.tsx` — following this project's own established two-phase
+convention (design first, approved, then converted), and because the
+owner's message described a "strategy" and a "mockup," not an instruction
+to build the live feature yet.
+
+**Three real divergences from the existing PRD §9.5 text, flagged per
+CLAUDE.md's own rule ("when I ask for something that conflicts with an
+existing PRD decision, flag the conflict before making the change") rather
+than silently built over:**
+
+1. **No Archive Now / Remove Archive Status mode-chip pair.** PRD §9.5 (added
+   2026-08-09) describes two chips switching the screen between archiving
+   and un-archiving. The owner's own words this time: "I did not tackle an
+   'Un-Archive' feature - that can be done later." The mockup has only the
+   Record Type chip row and a single "Archive Selected" action button —
+   there's nothing to switch between yet. Un-Archive stays a real, deferred
+   piece of §9.5, not dropped.
+
+2. **A Recipient/Requestor filter, not in the PRD at all.** §9.5 only
+   describes filtering "by type... and a prior-to date." The owner's mockup
+   adds a Recipient (Sent) / Requestor (Received) lookup field, combining
+   with Before Done Date as two narrowing criteria rather than one.
+
+3. **The list starts empty, not pre-populated.** §9.5 reads as though every
+   matching Done item appears as soon as a Record Type is chosen ("each
+   matching item appears with a pre-checked checkbox"). The owner's own
+   description is explicit that the screen "would open with no Sent
+   Requests displayed" until a filter is entered — arguably always the
+   intended reading of "selects candidate records by type... and a
+   prior-to date" (a date is itself a filter), but different enough from a
+   literal reading of the existing text to call out rather than assume.
+
+**Proposed replacement §9.5 text**, for the owner to confirm before it's
+merged into the actual `.docx` (not done in this pass — this is a draft for
+approval, same pattern as the §7.3 email-template proposal):
+
+> **9.5 Archive Requests and ToDos**
+> Not yet phased. Allows completed Requests and ToDos to be removed from the
+> Main Screen's lists while remaining available through Search. A new
+> Archive screen selects among Requests Sent, Requests Received, and ToDos
+> via a Record Type chip row (Requests Sent is the default); the list below
+> starts empty and shows only Done items matching whatever the user has
+> entered into Recipient (Requests Sent) / Requestor (Requests Received)
+> and/or a Before Done Date field — ToDos has no Recipient/Requestor field,
+> so Before Done Date alone gates it. Each matching item shows with a
+> pre-checked checkbox and is clickable to its own Detail screen for viewing
+> or editing; unchecking a record excludes it from that Archive action, and
+> a deselection persists even if the user subsequently narrows or widens the
+> filter criteria further, as long as the record keeps matching. Removing an
+> item's Done Date on its Detail screen removes it from the eligible list,
+> since only Done items qualify. An "Archive Selected" button archives every
+> currently-checked, currently-matching item. Un-Archive (reversing archived
+> status for a previously archived item) is deferred to a later phase — not
+> in this screen yet. Requires, at minimum, an Archive Status flag and an
+> Archived Date column on the `requests` table.
+
+Not yet phased in the roadmap, same as the existing text — this proposal
+only revises the behavior description, not the phasing.
+
+\---
+
 ## 2026-08-14 — Location URL detection: bare-domain heuristic, live-verification rejected
 
 Follow-up to the same day's Locations UX batch. Owner-reported testing:

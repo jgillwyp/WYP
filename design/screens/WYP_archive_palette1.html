@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 — Would You Please — Archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Would You Please — Design Tokens (palette 1)
+   Single source of truth for colors, effects, and base spacing.
+   Copied verbatim from the other 17 palette-1 mockups — see those files'
+   own header comments for the full token-naming/change-control notes.
+   ============================================================================ */
+:root {
+  --brand-blue:    #2A5FC8;
+  --blue-pressed:  #1E4AA0;
+  --alert-red:     #D32F2F;
+  --ink:           #1F2933;
+  --ink-soft:      #5A6675;
+  --row-tint:      #F6F7F9;
+  --band:          #E7E7E7;
+  --strip:         #E5ECF7;
+  --focus-tint:    #EDF2FD;
+  --focus-halo:    0 0 0 3px rgba(42,95,200,.22);
+  --input-border:  #7E8A9A;
+  --rule:          #E2E6EC;
+  --scrim:         rgba(31,41,51,.45);
+  --sort:          #FFE34D;
+  --pad:           14px;
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7; /* §6.17 PROPOSED */
+}
+.btn.is-locked,.chip.is-locked,.is-locked{background:var(--locked);color:var(--locked-ink);
+  border:1px solid var(--locked-border);cursor:not-allowed;
+  display:inline-flex;align-items:center;gap:6px;box-shadow:none;font-weight:700;}
+</style>
+<style>
+/* ============================================================================
+   Would You Please — Components (palette 1), copied verbatim — see any other
+   mockup's own header comment for the full "ORDER OF STYLESHEETS" note.
+   ============================================================================ */
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;
+  box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){
+  html,body{background:#eef1f5;}
+  .frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;}
+
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
+
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
+.hdr + .band{margin-top:0;border-top:none;}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.form{padding:14px var(--pad) 6px;background:var(--row-tint);}
+.fgroup{margin-bottom:12px;}
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;}
+.ffloat{position:relative;}
+.ffloat .flabel{position:absolute;left:11px;top:15px;margin:0;font-size:14px;font-weight:500;
+  line-height:1.2;color:var(--ink-soft);pointer-events:none;transform-origin:left top;
+  transition:transform .14s ease,color .14s ease;background:transparent;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.ffloat .finput:focus + .flabel,
+.ffloat .finput:not(:placeholder-shown) + .flabel{
+  transform:translateY(-9px) scale(.79);font-weight:600;color:var(--ink);}
+.ffloat .finput:focus + .flabel{color:var(--brand-blue);}
+@media (prefers-reduced-motion:reduce){.ffloat .flabel{transition:none;}}
+/* line-height:1.2 added 2026-08-14, owner-reported: typing a name into
+   Recipient/Requestor overlapped the floating label. The markup/positioning
+   here is byte-identical to Create Request's own long-working Recipient
+   field, so the difference isn't a CSS logic bug — it's that this file (see
+   its own header) fetches Inter from Google Fonts over the network, unlike
+   the live Next app, which self-hosts it via next/font and never has a
+   loading race. If that fetch hasn't finished (or fails) when the page
+   first renders, the browser substitutes the next font in the stack
+   (Segoe UI on Windows), and an unset line-height ("normal") is computed
+   from whichever font is actually active — different fonts, different
+   metrics, different effective baseline inside the same fixed padding.
+   An explicit line-height removes that font-dependency for both the input
+   and its label, so the vertical position stays consistent regardless of
+   which font ends up loaded. */
+.finput{font:inherit;font-size:14px;line-height:1.2;color:var(--ink);background:#fff;
+  border:1px solid var(--input-border);border-radius:9px;width:100%;min-height:50px;
+  padding:20px 10px 6px;}
+.finput:focus{background:var(--focus-tint);outline:none;
+  border-color:var(--brand-blue);box-shadow:var(--focus-halo);}
+/* Before Done Date (2026-08-14) — deliberately NOT the live app's
+   .ffloat.picker.native pattern (absolutely-positioned label permanently
+   risen over the input). That pattern relies on the live app's Tailwind
+   preflight reset to keep a native type="date" control's internal
+   "mm/dd/yyyy" placeholder confined to the input's own padded content box;
+   this mockup has no such reset (it's fully self-contained, see the file
+   header), so the browser's own UA styling for the date control's internal
+   fields wrapper doesn't reliably respect .finput's asymmetric top padding
+   and can render on top of the risen label instead of below it — reported
+   by the owner, 2026-08-14. Fixed by not overlapping them at all: a plain
+   static label above a normally-padded input, the same shape as any
+   ordinary non-floating .flabel usage elsewhere in the app. */
+/* The calendar glyph sits inside a plain label above the field now, not
+   collapsed into the field the way every other picker's glyph is (see the
+   .finput.plain comment above) — separated enough from the input's own box
+   that it read as its own clickable icon-button, which it isn't (owner-
+   reported, 2026-08-14; §6.16's own rule is that this glyph is a signifier,
+   never an independently clickable target). Rather than a special style for
+   the icon alone, the label and the input below it now behave as one single
+   click-to-open-the-picker unit (see the focus/keydown JS), so there's
+   nothing for the icon to look anomalously separate from. cursor:pointer on
+   the whole group reflects that. */
+.plaingroup{cursor:pointer;}
+.plaingroup .flabel{display:flex;align-items:center;gap:6px;margin-bottom:6px;cursor:pointer;}
+.finput.plain{padding:12px 10px;min-height:44px;cursor:pointer;}
+
+.lglyph{flex:0 0 auto;width:17px;height:17px;display:inline-block;}
+.lglyph svg{width:17px;height:17px;display:block;}
+.ffloat .finput:focus + .flabel .lglyph,
+.ffloat .finput:not(:placeholder-shown) + .flabel .lglyph{display:none;}
+
+.lookup-results{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;
+  background:#fff;border:1px solid var(--rule);border-radius:9px;
+  box-shadow:0 4px 14px rgba(20,30,50,.14);max-height:220px;overflow-y:auto;}
+.lookup-item{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;
+  color:var(--ink);background:none;border:none;padding:9px 12px;cursor:pointer;}
+.lookup-item + .lookup-item{border-top:1px solid var(--rule);}
+.lookup-item:hover,.lookup-item:focus-visible{background:var(--row-tint);}
+.lookup-item.selected{background:var(--focus-tint);color:var(--brand-blue);font-weight:700;}
+.lookup-empty{padding:9px 12px;font-size:12.5px;color:var(--ink-soft);}
+
+.chip{font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background:rgba(255,255,255,.5);border:1px solid rgba(31,41,51,.10);border-radius:9px;
+  padding:5px 12px;min-height:30px;}
+.chip.sel{background:#fff;border:1.5px solid var(--brand-blue);color:var(--brand-blue);
+  font-weight:700;box-shadow:0 1px 2px rgba(42,95,200,.18);}
+.chip:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;
+  border-radius:10px;cursor:pointer;color:var(--ink-soft);background:none;border:none;padding:0;}
+.iconbtn:hover{background:rgba(42,95,200,.08);color:var(--brand-blue);}
+.iconbtn:active{background:rgba(42,95,200,.16);}
+.iconbtn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.iconbtn svg{width:22px;height:22px;display:block;}
+
+.subempty{padding:18px 12px;text-align:center;font-size:12.5px;color:var(--ink-soft);line-height:1.4;}
+
+/* Column header bar + sort pill, and Sent/Received/ToDo row layout — copied
+   verbatim from app/globals.css (Main Screen's own components), since this
+   screen's list reuses that exact visual language row for row. */
+.colbar{background:var(--brand-blue);color:#fff;border-radius:7px;font-size:11px;font-weight:700;
+  padding:5px 6px;display:grid;align-items:center;column-gap:6px;}
+.colbar.sr{grid-template-columns:1fr 58px 58px 58px;column-gap:10px;}
+.colbar.td{grid-template-columns:auto 1fr;column-gap:10px;}
+.colbar .c-dt,.colbar .c-due,.colbar .c-dn{text-align:center;white-space:nowrap;}
+.pill{background:var(--sort);color:var(--ink);font-weight:800;border-radius:999px;padding:2px 8px;
+  white-space:nowrap;}
+
+.rows{margin-top:3px;}
+.row{padding:7px 6px 8px;border-bottom:1px solid var(--rule);border-radius:5px;}
+.row:last-child{border-bottom:none;}
+.row:nth-child(even){background:var(--row-tint);}
+.r1{display:grid;grid-template-columns:1fr 58px 58px 58px;column-gap:10px;align-items:baseline;}
+.nm{font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dt{font-size:11px;font-weight:500;color:var(--ink-soft);text-align:center;white-space:nowrap;}
+.due{font-size:11px;font-weight:700;color:var(--ink);text-align:center;white-space:nowrap;}
+.dn{font-size:11px;font-weight:500;color:var(--ink-soft);text-align:center;white-space:nowrap;}
+.r2{display:flex;align-items:flex-start;margin-top:2px;}
+.desc{flex:1 1 auto;min-width:0;font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.28;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+/* Every row in this list is already Done — only Done items ever qualify for
+   Archive — so every row always renders in the app's existing grey "Done"
+   treatment, never the red "Overdue" one (mutually exclusive states; a
+   record can't be both). */
+.row.done .nm,.row.done .dt,.row.done .due,.row.done .dn,.row.done .desc{
+  color:var(--ink-soft);font-weight:500;}
+.row.td{padding-top:8px;padding-bottom:9px;}
+.t1{display:flex;align-items:flex-start;}
+.tdc{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.3;color:var(--ink);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.pri{font-weight:700;color:var(--brand-blue);}
+.tdd{font-weight:400;color:var(--ink);}
+.row.done .pri,.row.done .tdd{color:var(--ink-soft);font-weight:500;}
+
+/* ============================================================================
+   ARCHIVE ROW CHECKBOX (§6.36 PROPOSED, 2026-08-14)
+   Every existing row style above (.row/.r1/.r2, .row.td/.t1/.tdc) is reused
+   unchanged; this only adds a per-row selection checkbox to its left, sized
+   and colored like .checkrow's own input (§6.20) — the app's one other
+   checkbox precedent — rather than inventing a second checkbox style.
+   .archrow is a plain flex wrapper so the checkbox sits outside the existing
+   4-column .r1 grid instead of becoming a 5th column in it; .archspacer is
+   the same width, used once in .colbar's own header row so the To/Date/Due/
+   Done (or Priority/Description) labels still line up with the data below.
+   ========================================================================= */
+.archrow{display:flex;align-items:flex-start;gap:9px;}
+.archcheck{flex:0 0 auto;width:18px;height:18px;margin-top:2px;accent-color:var(--brand-blue);cursor:pointer;}
+.archspacer{flex:0 0 auto;width:18px;}
+/* Opens the record's own Detail screen once live (2026-08-14) — same
+   row-context convention as every other list row in the app; the checkbox
+   sits outside .archbody so its own click/change never triggers this. */
+.archbody{flex:1 1 auto;min-width:0;cursor:pointer;border-radius:5px;}
+.archbody:hover{background:var(--focus-tint);}
+.archbody:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+/* Explanatory paragraph above the filter fields — plain text, not .subempty
+   (that's for an empty-list message, not a form instruction). */
+.archnote{padding:10px var(--pad) 2px;font-size:12.5px;line-height:1.45;color:var(--ink);}
+
+/* Record Type chip row */
+/* Strip background (2026-08-14, owner-reported: "a blue background is
+   missing for the chips row") — every other chip row in the app sits on a
+   tinted Strip surface (.subhead on Main Screen, .sendrow/.chiprow
+   elsewhere); this one didn't, so the semi-transparent-white resting chips
+   had nothing to contrast against and read as flat/unstyled. */
+.archtyperow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--strip);padding:9px var(--pad);border-bottom:1px solid var(--rule);}
+.archtypelabel{font-size:12.5px;font-weight:700;color:var(--ink);}
+
+/* Confirmation strip after Archive Selected — reuses .donerow's shape. */
+.archconfirm{display:flex;align-items:center;gap:10px;margin:4px var(--pad) 0;
+  background:var(--strip);border-radius:12px;padding:11px 13px;font-size:12.5px;color:var(--ink);}
+.archconfirm[hidden]{display:none;}
+</style>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+  </div>
+
+  <div class="band">
+    <span class="glabel">Archive</span>
+    <span class="bandcluster">
+      <!-- No Un-Archive mode in this pass (owner, 2026-08-14: "I did not
+           tackle an Un-Archive feature - that can be done later") — so there
+           is only ever one action here, hence a plain Archive Selected
+           button rather than PRD v12.9 §9.5's original Archive Now/Remove
+           Archive Status mode-chip pair. See the decisions log. -->
+      <button class="btn" type="button" id="archiveBtn">Archive Selected</button>
+      <button class="btn-secondary" type="button">Close</button>
+    </span>
+  </div>
+
+  <div class="scroll">
+
+    <div class="archtyperow">
+      <span class="archtypelabel">Record Type:</span>
+      <button class="chip sel" type="button" data-type="sent">Sent Requests</button>
+      <button class="chip" type="button" data-type="received">Received Requests</button>
+      <button class="chip" type="button" data-type="todos">ToDos</button>
+    </div>
+
+    <p class="archnote"><b id="archNoteLead">Select records to Archive by Recipient and/or Before Done Date.</b>
+      You can uncheck any you do not want to Archive. Although Archived records are no longer displayed,
+      they are included when a Search is done.</p>
+
+    <div class="form" style="padding-top:8px;">
+      <div class="fgroup" id="recipientGroup" style="position:relative;">
+        <span class="ffloat">
+          <input class="finput" id="recipientInput" type="text" autocomplete="off" placeholder=" ">
+          <label class="flabel" for="recipientInput"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" stroke-width="3.5"/><line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" stroke-width="3.5" stroke-linecap="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/><polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933"/></svg></span><span id="recipientLabel">Recipient</span></label>
+        </span>
+        <div class="lookup-results" id="recipientResults" hidden></div>
+      </div>
+
+      <div class="fgroup plaingroup" id="beforeDoneGroup">
+        <label class="flabel" for="beforeDone"><span class="lglyph"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" stroke-width="3.5"/><line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" stroke-width="3.5"/><line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="27" r="2.2" fill="#5A6675"/><circle cx="24" cy="27" r="2.2" fill="#5A6675"/><circle cx="32" cy="27" r="2.2" fill="#5A6675"/><circle cx="16" cy="35" r="2.2" fill="#5A6675"/><circle cx="24" cy="35" r="2.2" fill="#5A6675"/></svg></span>Before Done Date</label>
+        <input class="finput plain" id="beforeDone" type="date" inputmode="none" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="band" style="margin-top:0;">
+      <span class="glabel" id="listTitle" style="font-size:17px;">Sent Requests (Done)</span>
+      <span class="bandcluster">
+        <button class="iconbtn" type="button" aria-label="Print" id="printBtn">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M7 8V3h10v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+            <path d="M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </span>
+    </div>
+
+    <div style="padding:8px var(--pad) 0;">
+      <div class="archrow">
+        <span class="archspacer" aria-hidden="true"></span>
+        <div class="archbody" id="colbarSlot"></div>
+      </div>
+    </div>
+
+    <div class="rows" id="rowsSlot"></div>
+
+    <div class="archconfirm" id="confirmBand" hidden></div>
+
+  </div>
+
+</div></div>
+
+<script>
+/* ============================================================================
+   Demo state + seed data — nothing here persists past a page reload; this is
+   a design-phase mockup, not the live app. The one thing worth actually
+   proving out live is the owner's own selection-persistence rule (see the
+   2026-08-14 decisions log entry), so that part — and the empty-until-a-
+   filter-is-entered behavior, and the Recipient/Requestor lookup — are real,
+   working JS rather than static markup.
+   ========================================================================= */
+const SENT = [
+  { id:'s1', name:'Jim G. Gillon', date:'08-12-26', due:'09-30-26', doneDisp:'09-29-26', doneISO:'2026-09-29',
+    desc:'This is a longer request description. It has several sentences. And, this is just more text — which of course can go on and on to demonstrate the two-line clamp.' },
+  { id:'s2', name:'Maximillan Snyder', date:'08-11-26', due:'09-15-26', doneDisp:'09-14-26', doneISO:'2026-09-14',
+    desc:'Complete and report staff assessments.' },
+  { id:'s3', name:'Jim G. Gillon', date:'08-12-26', due:'09-11-26', doneDisp:'09-10-26', doneISO:'2026-09-10',
+    desc:'Finish the contract for the bouncy house for the October 1st company picnic. Remember to include our standard liability language.' },
+  { id:'s4', name:'Beatrice Barrington', date:'08-09-26', due:'08-12-26', doneDisp:'08-11-26', doneISO:'2026-08-11',
+    desc:'Finish and file the ABC project plan.' },
+  { id:'s5', name:'Dana Whitfield', date:'07-20-26', due:'08-05-26', doneDisp:'08-04-26', doneISO:'2026-08-04',
+    desc:'Walk the site before the bid and send photos.' },
+];
+const RECEIVED = [
+  { id:'r1', name:'Roman Atley', date:'07-02-26', due:'07-20-26', doneDisp:'07-19-26', doneISO:'2026-07-19',
+    desc:'Send the roof estimate and the insurance declarations page.' },
+  { id:'r2', name:'Dana Whitfield', date:'06-14-26', due:'07-05-26', doneDisp:'07-03-26', doneISO:'2026-07-03',
+    desc:'Confirm the site walkthrough date and share the video.' },
+];
+const TODOS = [
+  { id:'t1', pri:1, priLabel:'ASAP', doneDisp:'08-10-26', doneISO:'2026-08-10',
+    desc:'Respond to the dev quote request for the new user UI related to mailing list preparation and subscriber onboarding flows.' },
+  { id:'t2', pri:2, priLabel:'SOON', doneDisp:'08-05-26', doneISO:'2026-08-05',
+    desc:'Prepare a budget for an August fishing trip to Alaska.' },
+  { id:'t3', pri:3, priLabel:'LATER', doneDisp:'07-22-26', doneISO:'2026-07-22',
+    desc:'Reorganize the garage shelving.' },
+];
+
+const TYPES = {
+  sent:     { data: SENT,     noun: 'Recipient',  listTitle: 'Sent Requests (Done)',     col: 'To' },
+  received: { data: RECEIVED, noun: 'Requestor',  listTitle: 'Received Requests (Done)', col: 'From' },
+  todos:    { data: TODOS,    noun: null,          listTitle: 'ToDos (Done)',              col: null },
+};
+
+// Deselection and archived-status are independent per Record Type — switching
+// chips is a different list/context, not a filter refinement of the same one
+// (only entering Recipient/Requestor and/or Before Done Date within a single
+// Record Type is a "refinement" in the owner's sense — see the decisions log).
+const deselected = { sent: new Set(), received: new Set(), todos: new Set() };
+const archived = { sent: new Set(), received: new Set(), todos: new Set() };
+
+let currentType = 'sent';
+
+function eligible(rec, query, beforeISO) {
+  if (archived[currentType].has(rec.id)) return false;
+  const noun = TYPES[currentType].noun;
+  const matchesName = !noun || !query || rec.name.toLowerCase().includes(query.toLowerCase());
+  const matchesDate = !beforeISO || rec.doneISO < beforeISO;
+  return matchesName && matchesDate;
+}
+
+function renderColbar() {
+  const slot = document.getElementById('colbarSlot');
+  if (currentType === 'todos') {
+    slot.innerHTML = '<div class="colbar td"><span class="pill">Priority ▲</span><span>Description</span></div>';
+  } else {
+    slot.innerHTML = '<div class="colbar sr"><span>' + TYPES[currentType].col + '</span>' +
+      '<span class="c-dt">Date</span><span class="c-due pill">Due ▼</span><span class="c-dn">Done</span></div>';
+  }
+}
+
+function renderRows() {
+  const query = document.getElementById('recipientInput').value.trim();
+  const beforeISO = document.getElementById('beforeDone').value;
+  const noFilters = (currentType !== 'todos' && !query && !beforeISO) || (currentType === 'todos' && !beforeISO);
+  const slot = document.getElementById('rowsSlot');
+
+  if (noFilters) {
+    slot.innerHTML = '<p class="subempty">Enter ' +
+      (currentType === 'todos' ? 'a Before Done Date' : (TYPES[currentType].noun + ' and/or a Before Done Date')) +
+      ' above to see eligible records.</p>';
+    updateArchiveButton([]);
+    return;
+  }
+
+  const matches = TYPES[currentType].data.filter((r) => eligible(r, query, beforeISO));
+
+  if (matches.length === 0) {
+    slot.innerHTML = '<p class="subempty">No Done records match.</p>';
+    updateArchiveButton([]);
+    return;
+  }
+
+  const detailLabel = { sent: 'Request Detail', received: 'Response Detail', todos: 'ToDo Detail' }[currentType];
+
+  slot.innerHTML = matches.map((r) => {
+    const checked = !deselected[currentType].has(r.id) ? 'checked' : '';
+    if (currentType === 'todos') {
+      return '<div class="row done archrow"><input class="archcheck" type="checkbox" data-id="' + r.id + '" ' + checked + '>' +
+        '<div class="archbody" role="button" tabindex="0" data-id="' + r.id + '" title="Opens ' + detailLabel + '"><div class="t1"><span class="tdc"><span class="pri">' + r.priLabel + '</span> — ' + r.desc + '</span></div>' +
+        '<div class="t1" style="margin-top:2px;"><span class="tdc" style="font-size:11px;color:var(--ink-soft);">Done ' + r.doneDisp + '</span></div></div></div>';
+    }
+    return '<div class="row done archrow"><input class="archcheck" type="checkbox" data-id="' + r.id + '" ' + checked + '>' +
+      '<div class="archbody" role="button" tabindex="0" data-id="' + r.id + '" title="Opens ' + detailLabel + '"><div class="r1"><span class="nm">' + r.name + '</span><span class="dt">' + r.date + '</span>' +
+      '<span class="due">' + r.due + '</span><span class="dn">' + r.doneDisp + '</span></div>' +
+      '<div class="r2"><span class="desc">' + r.desc + '</span></div></div></div>';
+  }).join('');
+
+  slot.querySelectorAll('.archcheck').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) deselected[currentType].delete(cb.dataset.id);
+      else deselected[currentType].add(cb.dataset.id);
+      updateArchiveButton(matches);
+    });
+  });
+
+  // Owner asked, 2026-08-14: "can we let the user see the related Detail
+  // screen from clicking the respective item?" — yes, same row-opens-Detail
+  // convention every other list in the app already uses (Main Screen's own
+  // Sent/Received/ToDo rows). This mockup has no router to actually navigate
+  // with, so clicking shows what a live conversion would do instead of
+  // silently doing nothing; the checkbox has its own change handler above
+  // and never bubbles into this one.
+  slot.querySelectorAll('.archbody').forEach((body) => {
+    body.addEventListener('click', () => showDetailNote(body.title));
+    body.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showDetailNote(body.title); }
+    });
+  });
+
+  updateArchiveButton(matches);
+}
+
+function showDetailNote(text) {
+  const band = document.getElementById('confirmBand');
+  band.hidden = false;
+  band.textContent = text + ' — not wired in this design-only mockup; would navigate there once this screen goes live.';
+}
+
+function updateArchiveButton(matches) {
+  // Owner-reported, 2026-08-14: "it seems that the Archive Selected button
+  // should be colored as primary" — his own reference always drew it as a
+  // plain solid-blue .btn; the disabled/greyed state at zero-selected was
+  // my own addition, not something he asked for. Stays primary always now;
+  // the click handler below just no-ops quietly at zero selected instead.
+  const selectedCount = matches.filter((r) => !deselected[currentType].has(r.id)).length;
+  const btn = document.getElementById('archiveBtn');
+  btn.textContent = selectedCount > 0 ? 'Archive Selected (' + selectedCount + ')' : 'Archive Selected';
+}
+
+function renderNote() {
+  const lead = document.getElementById('archNoteLead');
+  lead.textContent = currentType === 'todos'
+    ? 'Select records to Archive by the Before Done Date.'
+    : 'Select records to Archive by ' + TYPES[currentType].noun + ' and/or Before Done Date.';
+}
+
+function renderFields() {
+  const group = document.getElementById('recipientGroup');
+  group.style.display = currentType === 'todos' ? 'none' : '';
+  document.getElementById('recipientLabel').textContent = TYPES[currentType].noun || 'Recipient';
+  document.getElementById('recipientInput').value = '';
+  document.getElementById('listTitle').textContent = TYPES[currentType].listTitle;
+}
+
+function render() {
+  renderNote();
+  renderFields();
+  renderColbar();
+  renderRows();
+  document.getElementById('confirmBand').hidden = true;
+}
+
+document.querySelectorAll('.archtyperow .chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.archtyperow .chip').forEach((c) => c.classList.remove('sel'));
+    chip.classList.add('sel');
+    currentType = chip.dataset.type;
+    document.getElementById('beforeDone').value = '';
+    render();
+  });
+});
+
+document.getElementById('recipientInput').addEventListener('input', renderRows);
+document.getElementById('beforeDone').addEventListener('change', renderRows);
+
+// Calendar-picker-only (2026-08-14, owner-reported): manual m/d/y typing let
+// "m"/"d" roll over uncontrolled, never validated Feb 29 against the year,
+// and accepted a year like "276750". Blocking every key except Tab removes
+// manual entry entirely — the only way to set a value is through the native
+// picker, which can't produce an invalid calendar date in the first place.
+// Paired with focus->showPicker() below so the whole label+input area
+// (a click anywhere in .plaingroup focuses the input natively, via the
+// <label for>) opens the picker as one unit, rather than only the small
+// calendar glyph looking like an isolated clickable icon.
+const beforeDoneInput = document.getElementById('beforeDone');
+function openBeforeDonePicker() {
+  try { beforeDoneInput.showPicker(); } catch { /* pre-16.4 Safari has no showPicker() — native focus still works */ }
+}
+beforeDoneInput.addEventListener('focus', openBeforeDonePicker);
+beforeDoneInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') e.preventDefault();
+});
+
+// Minimal Recipient/Requestor type-ahead — lists the distinct names present
+// in the current Record Type's own data, filtered as the owner types.
+document.getElementById('recipientInput').addEventListener('focus', showLookup);
+document.getElementById('recipientInput').addEventListener('input', showLookup);
+document.getElementById('recipientInput').addEventListener('blur', () => {
+  setTimeout(() => { document.getElementById('recipientResults').hidden = true; }, 120);
+});
+function showLookup() {
+  if (currentType === 'todos') return;
+  const q = document.getElementById('recipientInput').value.trim().toLowerCase();
+  const names = [...new Set(TYPES[currentType].data.map((r) => r.name))].sort();
+  const matches = q === '' ? names : names.filter((n) => n.toLowerCase().includes(q));
+  const box = document.getElementById('recipientResults');
+  box.innerHTML = matches.length === 0
+    ? '<div class="lookup-empty">No matches</div>'
+    : matches.map((n) => '<button type="button" class="lookup-item' + (n.toLowerCase() === q ? ' selected' : '') + '">' + n + '</button>').join('');
+  box.hidden = false;
+  box.querySelectorAll('.lookup-item').forEach((item) => {
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      document.getElementById('recipientInput').value = item.textContent;
+      box.hidden = true;
+      renderRows();
+    });
+  });
+}
+
+document.getElementById('printBtn').addEventListener('click', () => window.print());
+
+document.getElementById('archiveBtn').addEventListener('click', () => {
+  const query = document.getElementById('recipientInput').value.trim();
+  const beforeISO = document.getElementById('beforeDone').value;
+  const matches = TYPES[currentType].data.filter((r) => eligible(r, query, beforeISO));
+  const toArchive = matches.filter((r) => !deselected[currentType].has(r.id));
+  if (toArchive.length === 0) return; // nothing checked — quiet no-op, button stays enabled/primary regardless
+  toArchive.forEach((r) => {
+    archived[currentType].add(r.id);
+    deselected[currentType].delete(r.id); // no longer meaningful once archived
+  });
+  const band = document.getElementById('confirmBand');
+  band.hidden = false;
+  band.textContent = toArchive.length + (toArchive.length === 1 ? ' record archived.' : ' records archived.') +
+    ' No longer shown here or on the Main Screen — still included when a Search is done.';
+  renderRows();
+});
+
+render();
+</script>
+</body></html>
