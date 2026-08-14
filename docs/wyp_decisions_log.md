@@ -6,6 +6,60 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Archive live: field alignment, chip highlighting, state lost on Detail round trip
+
+Owner tested `/archive` after migration 028 was confirmed run, two
+screenshots attached, and reported three things.
+
+1. **Recipient and Before Done Date fields: "placeholder/labels are 'in the
+   box', but not vertically aligned as they should be."** Root cause:
+   `ArchiveForm.tsx` wrapped each field in a bare `.fgroup` — every other
+   field of this shape in the app (Create Request's Recipient, its Due Date)
+   wraps in `.fgroup > .frow > .ffloat`, not `.fgroup > .ffloat` directly.
+   `.frow` is `display: flex`, and `.frow .ffloat { flex: 1 1 0%; min-width:
+   0; }` is what actually stretches `.ffloat` (a `<span>`, inline by default)
+   to the field's full width. Without `.frow`, `.ffloat` stayed an
+   unstretched inline box, so `.finput`'s own `width: 100%` had nothing
+   correctly sized to resolve against and the absolutely-positioned
+   `.flabel` (`top: 15px`, meant to read as a caption near the top of a
+   50px-tall input) ended up positioned against the wrong box entirely —
+   this is a different, live-app-specific bug from the two prior mockup
+   rounds' Recipient/Before-Done-Date issues (those were a missing
+   `line-height` and a Tailwind-reset gap in the *standalone mockup file*;
+   this is a missing wrapper element in the *live component*). Fixed by
+   adding the `.frow` wrapper to both fields, matching
+   `CreateRequestForm.tsx`'s own markup exactly.
+2. **"The selected chip is not highlighted."** The Record Type chips toggle
+   a `sel` class (ported straight from the mockup's own demo JS, which
+   matches Main Screen's own filter-chip convention) — but Main Screen's
+   `.sel` styling is deliberately scoped to `.chips .chip.sel`, per that
+   rule's own existing comment ("this screen's own local .sel... convention,
+   not the app-wide `.chip.selected`"), and Archive's chip row uses
+   `.archtyperow`, not `.chips`, so the rule never matched. Fixed by adding
+   an `.archtyperow .chip.sel` rule to `globals.css` with the identical
+   declarations, rather than switching the JSX to the generic `.selected`
+   class name purely to dodge a CSS scoping issue.
+3. **"I was able to see the detail for a Request, but when I returned to the
+   Archive screen, all of the entries and the search logic was cleared —
+   the same was true for ToDos."** Expected, given how the screen was built:
+   a row click does `router.push` to the Detail screen, which returns via
+   `router.back()` (Request/ToDo/Response Detail's own established
+   convention) — `ArchiveForm.tsx` fully remounts on that return trip (no
+   Cache Components/`<Activity>` enabled, same reasoning already documented
+   on `MainScreen.tsx`), so every piece of `useState` — Record Type,
+   Recipient/Requestor query, Before Done Date, and the per-type deselected
+   sets — was resetting to its default every time. Fixed with the same
+   pattern Main Screen's own 2026-08-09 chip-persistence fix used:
+   `sessionStorage` (not `localStorage` — a within-session view/selection
+   state, not a durable account setting), read via lazy `useState`
+   initializers and written back with one `useEffect` per piece of state.
+   The deselected `Set`s aren't JSON-serializable directly, so they're
+   stored as plain arrays and rehydrated into `Set`s on read.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-14 — Archive converted to live (`/archive`, `ArchiveForm.tsx`); per-viewer scope; migration 028
 
 Owner: "Let's converted to a live screen next - along with the additional

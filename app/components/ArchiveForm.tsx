@@ -140,6 +140,50 @@ const DETAIL_LABEL: Record<RecordType, string> = {
   todos: 'ToDo Detail',
 }
 
+// State persistence (2026-08-14, owner-reported: "I was able to see the
+// detail for a Request, but when I returned to the Archive screen, all of
+// the entries and the search logic was cleared"). A row click navigates
+// away via router.push, and Request/ToDo/Response Detail all return via
+// router.back() (their own established convention) — this component fully
+// remounts on the way back (no Cache Components/<Activity> enabled, same
+// reasoning already documented on MainScreen.tsx), so every piece of
+// useState here was resetting to its default on every round trip. Same
+// fix, same sessionStorage-not-localStorage reasoning as Main Screen's own
+// 2026-08-09 chip-persistence fix: a within-session view/selection state,
+// not a durable account setting.
+const ARCHIVE_TYPE_KEY = 'wyp.archiveType'
+const ARCHIVE_QUERY_KEY = 'wyp.archiveRecipientQuery'
+const ARCHIVE_BEFORE_KEY = 'wyp.archiveBeforeDone'
+const ARCHIVE_DESELECTED_KEY = 'wyp.archiveDeselected'
+
+function readStoredType(): RecordType {
+  if (typeof window === 'undefined') return 'sent'
+  const v = window.sessionStorage.getItem(ARCHIVE_TYPE_KEY)
+  return v === 'sent' || v === 'received' || v === 'todos' ? v : 'sent'
+}
+
+function readStoredString(key: string): string {
+  if (typeof window === 'undefined') return ''
+  return window.sessionStorage.getItem(key) ?? ''
+}
+
+function readStoredDeselected(): Record<RecordType, Set<string>> {
+  const empty = { sent: new Set<string>(), received: new Set<string>(), todos: new Set<string>() }
+  if (typeof window === 'undefined') return empty
+  try {
+    const raw = window.sessionStorage.getItem(ARCHIVE_DESELECTED_KEY)
+    if (!raw) return empty
+    const parsed = JSON.parse(raw) as Record<RecordType, string[]>
+    return {
+      sent: new Set(parsed.sent ?? []),
+      received: new Set(parsed.received ?? []),
+      todos: new Set(parsed.todos ?? []),
+    }
+  } catch {
+    return empty
+  }
+}
+
 export default function ArchiveForm() {
   const router = useRouter()
 
@@ -150,17 +194,36 @@ export default function ArchiveForm() {
   const [receivedData, setReceivedData] = useState<ReceivedCandidate[]>([])
   const [todoData, setTodoData] = useState<TodoCandidate[]>([])
 
-  const [currentType, setCurrentType] = useState<RecordType>('sent')
-  const [recipientQuery, setRecipientQuery] = useState('')
+  const [currentType, setCurrentType] = useState<RecordType>(readStoredType)
+  const [recipientQuery, setRecipientQuery] = useState(() => readStoredString(ARCHIVE_QUERY_KEY))
   const [recipientBrowsing, setRecipientBrowsing] = useState(false)
   const [showRecipientResults, setShowRecipientResults] = useState(false)
-  const [beforeDone, setBeforeDone] = useState('')
+  const [beforeDone, setBeforeDone] = useState(() => readStoredString(ARCHIVE_BEFORE_KEY))
 
-  const [deselected, setDeselected] = useState<Record<RecordType, Set<string>>>({
-    sent: new Set(),
-    received: new Set(),
-    todos: new Set(),
-  })
+  const [deselected, setDeselected] = useState<Record<RecordType, Set<string>>>(readStoredDeselected)
+
+  useEffect(() => {
+    window.sessionStorage.setItem(ARCHIVE_TYPE_KEY, currentType)
+  }, [currentType])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(ARCHIVE_QUERY_KEY, recipientQuery)
+  }, [recipientQuery])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(ARCHIVE_BEFORE_KEY, beforeDone)
+  }, [beforeDone])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(
+      ARCHIVE_DESELECTED_KEY,
+      JSON.stringify({
+        sent: [...deselected.sent],
+        received: [...deselected.received],
+        todos: [...deselected.todos],
+      })
+    )
+  }, [deselected])
 
   const [archiving, setArchiving] = useState(false)
   const [archiveError, setArchiveError] = useState<string | null>(null)
@@ -455,7 +518,8 @@ export default function ArchiveForm() {
 
           <div className="form" style={{ paddingTop: 8 }}>
             {noun && (
-              <div className="fgroup" style={{ position: 'relative' }}>
+              <div className="fgroup">
+              <div className="frow" style={{ position: 'relative' }}>
                 <span className="ffloat">
                   <input
                     className="finput"
@@ -512,6 +576,7 @@ export default function ArchiveForm() {
                   </div>
                 )}
               </div>
+              </div>
             )}
 
             {/* Before Done Date — real .ffloat.picker.native field (the
@@ -521,6 +586,7 @@ export default function ArchiveForm() {
                 Calendar-picker-only: a keydown listener blocks every key but
                 Tab, so a value can only ever come from the native picker. */}
             <div className="fgroup">
+              <div className="frow">
               <span className="ffloat picker native">
                 <input
                   className="finput"
@@ -552,6 +618,7 @@ export default function ArchiveForm() {
                   Before Done Date
                 </label>
               </span>
+              </div>
             </div>
           </div>
 
