@@ -83,6 +83,9 @@ type SentRow = {
   created_at: string
   contacts: { display_name: string } | null
   dialog: { count: number }[] | null
+  // Week 5 Priority 3 (Attachments, 2026-08-14) — same PostgREST count-embed
+  // technique as dialog(count) above.
+  attachments: { count: number }[] | null
 }
 
 type TodoRow = {
@@ -118,6 +121,11 @@ type ReceivedRow = {
   // which only governs Sent).
   owner_request_time_enabled: boolean
   dialog_count: number
+  // attachment_count added by migration 027, alongside dialog_count above —
+  // same reasoning as owner_request_time_enabled: an RPC has to compute
+  // this server-side, a plain PostgREST embed isn't available the way it
+  // is for Sent's attachments(count).
+  attachment_count: number
 }
 
 const PRIORITY_LABEL: Record<number, string> = { 1: 'ASAP', 2: 'SOON', 3: 'LATER' }
@@ -220,6 +228,12 @@ function matchesStatusFilter(
 
 function dialogCount(dialog: { count: number }[] | null): number {
   return dialog?.[0]?.count ?? 0
+}
+
+// Same shape as dialogCount above, for Sent's attachments(count) embed
+// (Week 5 Priority 3, 2026-08-14).
+function attachmentCount(attachments: { count: number }[] | null): number {
+  return attachments?.[0]?.count ?? 0
 }
 
 // Column-header sorting (2026-08-11) — owner: "Main screen sorting was
@@ -422,6 +436,24 @@ function DialogIcon() {
         d="M11,20 H25 A5,5 0 0 1 30,25 V33 A5,5 0 0 1 25,38 H17 L10,44 L13,38 H11 A5,5 0 0 1 6,33 V25 A5,5 0 0 1 11,20 Z"
         stroke="currentColor"
         strokeWidth="3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+// Paperclip — Attachments present (Week 5 Priority 3, 2026-08-14). Same
+// viewBox/sizing convention as DialogIcon above so the two sit evenly
+// alongside each other wherever both can appear.
+function AttachmentIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Attachments present</title>
+      <path
+        d="M32,14 L20,26 A6,6 0 0 0 28.5,34.5 L39,24 A10,10 0 0 0 24.5,9.5 L12.5,21.5 A14,14 0 0 0 32,41"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
@@ -670,7 +702,7 @@ export default function MainScreen() {
       const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count)')
+          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count)')
           .not('contact_id', 'is', null)
           .order('due_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
@@ -879,6 +911,9 @@ export default function MainScreen() {
                         {dialogCount(r.dialog) > 0 && (
                           <span className="ii"><DialogIcon /></span>
                         )}
+                        {attachmentCount(r.attachments) > 0 && (
+                          <span className="ii"><AttachmentIcon /></span>
+                        )}
                         <span className="desc">{r.description}</span>
                       </div>
                     </div>
@@ -946,6 +981,9 @@ export default function MainScreen() {
                       <div className="r2">
                         {r.dialog_count > 0 && (
                           <span className="ii"><DialogIcon /></span>
+                        )}
+                        {r.attachment_count > 0 && (
+                          <span className="ii"><AttachmentIcon /></span>
                         )}
                         <span className="desc">{r.description}</span>
                       </div>
@@ -1186,6 +1224,7 @@ export default function MainScreen() {
                       </div>
                       <div className="pr2">
                         {dialogCount(r.dialog) > 0 && <span className="pii"><DialogIcon /></span>}
+                        {attachmentCount(r.attachments) > 0 && <span className="pii"><AttachmentIcon /></span>}
                         <span className="pdesc">{r.description}</span>
                       </div>
                     </div>
@@ -1227,6 +1266,7 @@ export default function MainScreen() {
                       </div>
                       <div className="pr2">
                         {r.dialog_count > 0 && <span className="pii"><DialogIcon /></span>}
+                        {r.attachment_count > 0 && <span className="pii"><AttachmentIcon /></span>}
                         <span className="pdesc">{r.description}</span>
                       </div>
                     </div>

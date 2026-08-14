@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 import WypHeader from './WypHeader'
+import AttachmentsPanel from './AttachmentsPanel'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 
@@ -662,29 +663,26 @@ export default function RequestResponseForm() {
               </>
             )}
 
-            {/* Owner's ask (2026-08-10): don't show a locked, non-usable
-                Attachments segment when the Request's issuer is a free
-                user — a free-tier promo hits the recipient elsewhere on
-                this screen already (the Free Account Features block below),
-                and this panel offers no path to act on it either way.
-                Reads owner_tier (migration 011) rather than assuming.
-                Gating unchanged 2026-08-11 — simplified empty-state row
-                (§6.32) inside it, replacing the old .panelact+.panelfull:
-                attachment storage doesn't exist anywhere in the app yet, so
-                there's no populated state to revert to. */}
+            {/* Owner's ask (2026-08-10): don't show an Attachments segment
+                at all when the Request's issuer is a free user — a
+                free-tier promo hits the recipient elsewhere on this screen
+                already (the Free Account Features block below). Reads
+                owner_tier (migration 011). Real Add/list via
+                AttachmentsPanel as of Week 5 Priority 3 (2026-08-14) — no
+                delete UI here (see app/api/attachments/delete/route.ts's
+                own header comment: an anonymous visitor has no session to
+                attribute a delete to). */}
             {data.owner_tier === 'subscriber' && (
-              <div className="donerow">
-                <span className="donenote">
-                  <b>Note:</b> Attachments are a Subscription feature.
-                </span>
-                <button className="btn is-locked" type="button" aria-disabled="true">
-                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                  </svg>
-                  Add Attachment
-                </button>
-              </div>
+              <AttachmentsPanel
+                requestId={data.id}
+                mode="file"
+                canAdd={true}
+                authToken={null}
+                recipientToken={token}
+                isOwner={false}
+                currentUserId={null}
+                ownerLabel="Recipient"
+              />
             )}
 
             {/* Owner-reported, 2026-08-10: dropped the "Free Account

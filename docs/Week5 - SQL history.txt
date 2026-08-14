@@ -760,3 +760,291 @@ commit;
 -- To revoke later:
 --   revoke update (tier) on public.profiles from authenticated;
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 025 — public.attachments table
+-- DRAFTED 2026-08-14 — CONFIRMED RUN by the owner 2026-08-14.
+--
+-- Backs Week 5 Priority 3 (Real Attachments) -- see docs/WYP_Attachments_Plan.md
+-- for the full design and the owner's answers to its seven open questions
+-- (decisions log, 2026-08-14).
+--
+-- One table for both Requests' real uploaded files and ToDos' "Location"
+-- references (a file path or URL the owner types in rather than an actual
+-- upload) -- `kind` distinguishes them rather than splitting into two
+-- tables. request_id covers both, since ToDos are rows in `requests` too
+-- (same precedent as `dialog`).
+--
+-- uploaded_by is NULLABLE, unlike every other owner/author column in this
+-- app so far -- an anonymous Request Response visitor (no auth.users row at
+-- all) can add a 'file' attachment, the identical shape of problem
+-- dialog.author_user_id already solved the same way for the same reason
+-- (migration 004: "nothing to attribute to a real app account"). A parallel
+-- uploaded_by_label text column carries the display snapshot either way --
+-- the signed-in owner's or recipient's own name, or the anonymous visitor's
+-- Contact display_name from get_request_by_token -- matching dialog.who's
+-- own "snapshot, not a live join" precedent.
+--
+-- The two shapes never cross, enforced by a check constraint: a 'file' row
+-- must have file_name/storage_path/size_bytes/mime_type all set and both
+-- reference columns null; a 'reference' row must have both file columns
+-- null and at least one of reference_url/reference_note set.
+--
+-- RLS is deliberately narrow. SELECT is owner-only (every row on a Request/
+-- ToDo the signed-in user owns, whatever its kind) -- Create/Detail screens
+-- read attachment metadata straight off this policy without an API round
+-- trip. INSERT only allows kind = 'reference' -- a 'file' row can only ever
+-- be created by the new app/api/attachments/upload route, which uses the
+-- service_role key server-side (never the browser) specifically because
+-- Storage uploads for an ANONYMOUS Request Response visitor have no session
+-- for RLS to scope to at all -- the same category of problem `dialog`/the
+-- response-link functions already solved with SECURITY DEFINER functions,
+-- solved here with a server-only API route instead because Storage's own
+-- upload API isn't reachable from a SQL function. DELETE matches the
+-- owner's resolved answer (decisions log, 2026-08-14): the Request/ToDo
+-- owner can always delete any attachment on their own item; a non-owner
+-- uploader (a Request's recipient) can only delete their own -- and, since
+-- uploaded_by is null for an anonymous upload, an anonymous visitor's own
+-- attachment can only ever be removed by the owner, never by themselves
+-- (matches this build's scoping: no delete UI is offered on the anonymous
+-- Request Response screen at all, see app/api/attachments/delete/route.ts's
+-- own header comment). See CLAUDE.md's Database section: "assume the
+-- control was bypassed" -- the policy is what actually enforces this, the
+-- UI's own delete-button visibility is a courtesy on top.
+--
+-- No UPDATE policy -- an attachment is added or removed, never edited in
+-- place, same shape as `dialog`'s own append-only convention.
+--
+-- deleted_at exists but is NOT used by the app's own Delete button, which
+-- hard-deletes (removes the Storage object and the row) -- see
+-- app/api/attachments/delete/route.ts. It's reserved for the future lapse-
+-- and-auto-delete job (PRD §6.3, deferred -- open question #5 in the plan
+-- doc), which needs to distinguish "this Request once had an attachment,
+-- now reclaimed by a tier lapse" from "this attachment was simply removed
+-- by the user" -- a hard delete already achieves the second; the tombstone
+-- is only meaningful for the first, not built yet.
+-- ============================================================================
+
+begin;
+
+create table if not exists public.attachments (
+  id                 uuid        primary key default gen_random_uuid(),
+  request_id         uuid        not null references public.requests(id) on delete cascade,
+  uploaded_by        uuid        references auth.users(id) on delete set null,
+  uploaded_by_label  text        not null,
+  kind               text        not null default 'file'
+                                 check (kind in ('file', 'reference')),
+  file_name          text,
+  storage_path       text,
+  size_bytes         bigint,
+  mime_type          text,
+  reference_url      text,
+  reference_note     text,
+  created_at         timestamptz not null default now(),
+  deleted_at         timestamptz,   -- reserved for the future lapse-and-auto-delete
+                                     -- job; the app's own Delete button hard-deletes
+                                     -- instead -- see header comment above
+  constraint attachments_shape_check check (
+    (kind = 'file'
+       and file_name is not null and storage_path is not null
+       and size_bytes is not null and mime_type is not null
+       and reference_url is null and reference_note is null)
+    or
+    (kind = 'reference'
+       and file_name is null and storage_path is null
+       and size_bytes is null and mime_type is null
+       and (reference_url is not null or reference_note is not null))
+  )
+);
+
+comment on column public.attachments.kind is
+  '''file'' = a real uploaded file on a Request (Supabase Storage, private bucket). ''reference'' = a ToDo ''Location'' -- a typed path or URL, never stored as bytes. A ''file'' row can only be created by app/api/attachments/upload (service_role, server-only); the RLS insert policy below refuses any client-inserted ''file'' row.';
+comment on column public.attachments.uploaded_by is
+  'Nullable -- an anonymous Request Response visitor has no auth.users row. See uploaded_by_label for the always-present display snapshot.';
+comment on column public.attachments.uploaded_by_label is
+  'Display-name snapshot at add time, not a live join -- same precedent as dialog.who (migration 004). Always set, even when uploaded_by is null.';
+comment on column public.attachments.storage_path is
+  'Path within the private ''attachments'' Storage bucket (migration 026), e.g. {request_id}/{attachment_id}-{file_name}. Null for kind = ''reference''.';
+comment on column public.attachments.deleted_at is
+  'Reserved for the future lapse-and-auto-delete job -- NOT set by the app''s own Delete button, which hard-deletes the row and the Storage object. See header comment.';
+
+create index if not exists attachments_request_idx on public.attachments (request_id, created_at desc);
+
+alter table public.attachments enable row level security;
+
+create policy "attachments: owners select own"
+  on public.attachments for select to authenticated
+  using (request_id in (select id from public.requests where owner_id = auth.uid()));
+
+create policy "attachments: owners insert reference rows only"
+  on public.attachments for insert to authenticated
+  with check (
+    kind = 'reference'
+    and request_id in (select id from public.requests where owner_id = auth.uid())
+    and uploaded_by = auth.uid()
+  );
+
+create policy "attachments: owner or own-uploads delete"
+  on public.attachments for delete to authenticated
+  using (
+    uploaded_by = auth.uid()
+    or request_id in (select id from public.requests where owner_id = auth.uid())
+  );
+
+-- No update policy -- see header comment.
+
+commit;
+
+-- ============================================================================
+-- Verify as a client, not here -- same caution as every earlier migration.
+--
+--   await supabase.from('attachments').insert({
+--     request_id: '<a ToDo id you own>', kind: 'reference',
+--     uploaded_by: '<your own auth.users id>', uploaded_by_label: 'You',
+--     reference_note: 'Filed in the tax folder', reference_url: null,
+--   })
+--        -> succeeds (a Location on your own ToDo)
+--   await supabase.from('attachments').insert({
+--     request_id: '<a ToDo id you own>', kind: 'file', file_name: 'x.pdf',
+--     storage_path: 'x', size_bytes: 1, mime_type: 'application/pdf',
+--     uploaded_by: '<your own id>', uploaded_by_label: 'You',
+--   })
+--        -> must FAIL: insert policy only allows kind = 'reference'
+--   await supabase.from('attachments').select('*').eq('request_id', '<not yours>')
+--        -> returns no rows
+--   Second account, same request_id -> sees no rows (request isn't theirs);
+--   cannot delete a row they didn't upload and don't own
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 026 — attachments Storage bucket
+-- DRAFTED 2026-08-14 — CONFIRMED RUN by the owner 2026-08-14.
+--
+-- Private bucket, no public access and, deliberately, NO storage.objects RLS
+-- policies for anon/authenticated at all -- every upload, download, and
+-- delete of an actual file goes through the new app/api/attachments/*
+-- routes (Node runtime, server-only), which use the service_role key to
+-- talk to Storage directly, only after independently verifying the caller's
+-- permission through the same RLS-scoped/RPC-scoped checks the rest of the
+-- app already uses (a forwarded-JWT client for the owner and signed-in
+-- recipient, the existing get_request_by_token/get_received_request RPCs
+-- for identity) -- service_role never decides who's allowed to do
+-- something here, it only carries out a write that's already been approved.
+--
+-- This is a deliberate, narrow exception to CLAUDE.md's "service_role never
+-- goes near the browser" rule, not an oversight: the browser itself never
+-- receives or uses that key, only the server-side route does, and the
+-- reason direct-from-browser Storage access (the way `time_zone`/
+-- `main_chip_prefs` etc. write straight from the client with a column
+-- grant) doesn't work here is that Request Response's anonymous,
+-- unauthenticated visitors have no session at all for a storage.objects RLS
+-- policy to scope to -- the identical shape of problem `dialog`/the
+-- response-link functions already solved with a SECURITY DEFINER function,
+-- solved here with a server-only API route instead because Storage's
+-- upload/download APIs aren't reachable from a SQL function. See
+-- docs/WYP_Attachments_Plan.md for the full reasoning.
+--
+-- File size cap (10 MB) and the executable/installer/script extension
+-- blocklist are enforced in the API route (app/src/lib/attachments.ts), not
+-- here -- Storage bucket-level config can cap size but not filter by
+-- extension, and centralizing both checks in one place (alongside the
+-- duplicate-name suffix and the 10-item per-Request/ToDo cap) is simpler to
+-- keep correct than splitting the enforcement across Storage config and
+-- application code.
+-- ============================================================================
+
+begin;
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('attachments', 'attachments', false, 10485760)  -- 10 MB, see app/src/lib/attachments.ts
+on conflict (id) do nothing;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select id, name, public, file_size_limit from storage.buckets
+--   where id = 'attachments';
+--        -> public should be false, file_size_limit 10485760
+--
+-- Real-world confirmation only comes from actually exercising
+-- app/api/attachments/upload once it's deployed and SUPABASE_SERVICE_ROLE_KEY
+-- is set (see that route's own header comment for the exact env var name).
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 027 — add attachment_count to get_received_requests()
+-- DRAFTED 2026-08-14 — CONFIRMED RUN by the owner 2026-08-14.
+--
+-- Print Reports icon slot (plan doc open question #7 — "add it now"):
+-- Sent already gets its Attachments count for free via a plain PostgREST
+-- attachments(count) embed (MainScreen.tsx's own Sent .select() string, no
+-- migration needed — same technique dialog(count) already used). Received
+-- goes through get_received_requests() instead, whose RETURNS TABLE row
+-- shape has to be extended explicitly — same precedent as migrations
+-- 017/021 adding due_time/owner_request_time_enabled the same way, and the
+-- same drop-then-create fix migration 017 already learned the hard way
+-- (CREATE OR REPLACE cannot alter a RETURNS TABLE function's row shape at
+-- all), applied proactively this time rather than rediscovered.
+-- ============================================================================
+
+begin;
+
+drop function if exists public.get_received_requests();
+
+create function public.get_received_requests()
+returns table (
+  id uuid,
+  description text,
+  due_date date,
+  due_time time,
+  done_date date,
+  created_at timestamptz,
+  owner_name text,
+  owner_request_time_enabled boolean,
+  dialog_count bigint,
+  attachment_count bigint
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' then
+    return; -- no email claim on the session; nothing to match
+  end if;
+
+  return query
+    select
+      r.id, r.description, r.due_date, r.due_time, r.done_date, r.created_at,
+      p.display_name as owner_name,
+      coalesce(p.request_time_enabled, true) as owner_request_time_enabled,
+      (select count(*) from public.dialog d where d.request_id = r.id) as dialog_count,
+      (select count(*) from public.attachments a where a.request_id = r.id and a.kind = 'file') as attachment_count
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where lower(trim(c.email)) = v_email
+    order by r.due_date desc nulls last;
+end;
+$$;
+
+revoke all on function public.get_received_requests() from public;
+grant execute on function public.get_received_requests() to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only — see this file's recurring
+-- caveat):
+--   select prosrc from pg_proc where proname = 'get_received_requests';
+--        -> should show attachment_count in both the returns table and the
+--           select list
+--
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name = 'get_received_requests';
+--        -> should show authenticated / EXECUTE
+-- ============================================================================

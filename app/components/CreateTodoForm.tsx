@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { insertAttachmentReference } from '@/lib/attachmentsClient'
 
 /**
  * Create ToDo (§9.4) — converted by hand from
@@ -153,6 +154,20 @@ export default function CreateTodoForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Locations (Week 5 Priority 3, 2026-08-14) — a ToDo's own "Attachment
+  // References" instead of real storage (owner's own proposal, decisions
+  // log 2026-08-14): staged client-side, same reasoning as dialogEntries
+  // above, then inserted directly (kind = 'reference' rows are allowed by
+  // migration 025's RLS insert policy — no API route needed, unlike a
+  // Request's real file uploads).
+  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  type LocationEntry = { description: string; location: string }
+  const [stagedLocations, setStagedLocations] = useState<LocationEntry[]>([])
+  const [locationFormOpen, setLocationFormOpen] = useState(false)
+  const [locationDescription, setLocationDescription] = useState('')
+  const [locationValue, setLocationValue] = useState('')
+  const [locationError, setLocationError] = useState<string | null>(null)
+
   const doneDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -164,12 +179,13 @@ export default function CreateTodoForm() {
 
     supabase
       .from('profiles')
-      .select('display_name, private_category_enabled, todo_dates_enabled')
+      .select('display_name, private_category_enabled, todo_dates_enabled, tier')
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.private_category_enabled ?? false)
         setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+        setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
       })
   }, [])
 
@@ -209,6 +225,24 @@ export default function CreateTodoForm() {
 
   function removeDialogEntry(index: number) {
     setDialogEntries((entries) => entries.filter((_, i) => i !== index))
+  }
+
+  function saveStagedLocation() {
+    const description = locationDescription.trim()
+    const location = locationValue.trim()
+    if (description === '' && location === '') {
+      setLocationError('Enter a Location or Cancel.')
+      return
+    }
+    setStagedLocations((entries) => [...entries, { description, location }])
+    setLocationDescription('')
+    setLocationValue('')
+    setLocationError(null)
+    setLocationFormOpen(false)
+  }
+
+  function removeStagedLocation(index: number) {
+    setStagedLocations((entries) => entries.filter((_, i) => i !== index))
   }
 
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
@@ -358,6 +392,26 @@ export default function CreateTodoForm() {
           `ToDo saved, but Dialog entries could not be saved: ${dialogError.message}`
         )
         return
+      }
+    }
+
+    // Locations write third, same "hold as draft state until there's a
+    // real id" reasoning as Dialog above — a direct client insert
+    // (kind = 'reference' is allowed by migration 025's RLS policy).
+    if (stagedLocations.length > 0) {
+      const who = ownerName ?? userData.user.email ?? 'You'
+      for (const entry of stagedLocations) {
+        const result = await insertAttachmentReference({
+          requestId: newTodo.id,
+          uploadedByLabel: who,
+          referenceNote: entry.description === '' ? null : entry.description,
+          referenceUrl: entry.location === '' ? null : entry.location,
+        })
+        if (!result) {
+          setSaving(false)
+          setError('ToDo saved, but Locations could not be saved.')
+          return
+        }
       }
     }
 
@@ -704,23 +758,109 @@ export default function CreateTodoForm() {
               )}
             </div>
 
-            {/* Attachments — v1 locked "paid feature" state. Simplified
-                empty-state row (§6.32, 2026-08-11), replacing the old
-                always-shown .fieldact+.attachpanel: attachment storage
-                doesn't exist anywhere in the app yet, so there's no
-                populated state to revert to. */}
-            <div className="donerow">
-              <span className="donenote">
-                <b>Note:</b> Attachments are a Subscription feature.
-              </span>
-              <button className="btn is-locked" type="button" aria-disabled="true">
-                <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                Add Attachment
-              </button>
-            </div>
+            {/* Locations (Week 5 Priority 3, 2026-08-14) — a ToDo's own
+                "Attachment References": a typed path or URL plus an
+                optional Description, staged here and inserted once Save
+                has a real id. Subscriber-gated, same as a Request's real
+                Attachments; free-tier keeps the original locked row. */}
+            {tier === 'subscriber' ? (
+              <div className="fgroup">
+                {stagedLocations.length === 0 && !locationFormOpen ? (
+                  <div className="frow">
+                    <span className="actlabel">
+                      Locations <span className="subnote">(optional)</span>
+                    </span>
+                    <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
+                      Add Location
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="fieldact">
+                      <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
+                        Add Location
+                      </button>
+                    </div>
+                    {locationFormOpen && (
+                      <div className="dlgstaged">
+                        <div className="fgroup ffloat">
+                          <input
+                            className="finput"
+                            placeholder=" "
+                            value={locationDescription}
+                            onChange={(e) => setLocationDescription(e.target.value)}
+                          />
+                          <label className="flabel">Description</label>
+                        </div>
+                        <div className="fgroup ffloat">
+                          <input
+                            className="finput"
+                            placeholder=" "
+                            value={locationValue}
+                            onChange={(e) => setLocationValue(e.target.value)}
+                          />
+                          <label className="flabel">Location (path or URL)</label>
+                        </div>
+                        {locationError && <p className="ferror">{locationError}</p>}
+                        <div className="bandcluster">
+                          <button className="btn" type="button" onClick={saveStagedLocation}>
+                            Save
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            type="button"
+                            onClick={() => {
+                              setLocationFormOpen(false)
+                              setLocationDescription('')
+                              setLocationValue('')
+                              setLocationError(null)
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="dlgstaged">
+                      {stagedLocations.map((entry, i) => (
+                        <div className="attitem" key={i}>
+                          <span className="attname">
+                            {entry.description && (
+                              <>
+                                <b>{entry.description}</b>
+                                <br />
+                              </>
+                            )}
+                            {entry.location}
+                          </span>
+                          <button
+                            className="attremove"
+                            type="button"
+                            aria-label="Remove this Location"
+                            onClick={() => removeStagedLocation(i)}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="donerow">
+                <span className="donenote">
+                  <b>Note:</b> Locations are a Subscription feature.
+                </span>
+                <button className="btn is-locked" type="button" aria-disabled="true">
+                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
+                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                  </svg>
+                  Add Location
+                </button>
+              </div>
+            )}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

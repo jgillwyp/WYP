@@ -131,6 +131,13 @@ per the decisions log, not part of this priority's scope.
 
 ## Priority 3: Real Attachments, gated on subscriber tier
 
+**Built and live, 2026-08-14** — see `docs/WYP_Attachments_Plan.md` (the
+scoping pass this section's own "not yet scoped in detail" called for) and
+the decisions log's "Real Attachments built" entry for what actually
+shipped. Migrations 025/026/027 are confirmed run by the owner, 2026-08-14,
+and `SUPABASE_SERVICE_ROLE_KEY` is confirmed set in both `.env.local` and
+Vercel, 2026-08-14. Rest of this section retained for history.
+
 The v1 "locked, paid feature" placeholder — `.donerow`/`.donenote`'s
 "Attachments are a Subscription feature" note plus an inert `Add Attachment`
 button — has existed on every screen that shows it (Create Request, Create

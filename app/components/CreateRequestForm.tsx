@@ -6,6 +6,14 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { isTightWindow } from '@/lib/email'
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_ITEM,
+  dedupeFileName,
+  fileExtension,
+  formatBytes,
+  isBlockedFileType,
+} from '@/lib/attachments'
 
 /**
  * Create Request (§9.2) — converted by hand from
@@ -153,6 +161,18 @@ export default function CreateRequestForm() {
   const dialogTextRef = useRef<HTMLTextAreaElement>(null)
   const [ownerName, setOwnerName] = useState<string | null>(null)
 
+  // Attachments (Week 5 Priority 3, 2026-08-14) — staged as real File
+  // objects, same "hold as client-side draft state, write once Send
+  // succeeds and there's a real request id" pattern dialogEntries already
+  // uses above; uploaded via /api/attachments/upload in handleSubmit, not
+  // written directly (that route is the only place a kind = 'file' row can
+  // be created at all — see migration 025). tier gates whether this panel
+  // or the locked one renders; re-checked server-side regardless.
+  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [contactInvalid, setContactInvalid] = useState(false)
   const [dueDateInvalid, setDueDateInvalid] = useState(false)
   const [descInvalid, setDescInvalid] = useState(false)
@@ -208,12 +228,13 @@ export default function CreateRequestForm() {
     // on for display_name.
     supabase
       .from('profiles')
-      .select('display_name, private_category_enabled, request_time_enabled')
+      .select('display_name, private_category_enabled, request_time_enabled, tier')
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.private_category_enabled ?? false)
         setRequestTimeEnabled(data?.request_time_enabled ?? true)
+        setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
       })
     // router is stable across renders (Next's useRouter()) and this effect
     // must run once on mount only, same as every other "load once" effect
@@ -258,6 +279,66 @@ export default function CreateRequestForm() {
 
   function removeDialogEntry(index: number) {
     setDialogEntries((entries) => entries.filter((_, i) => i !== index))
+  }
+
+  // Attachments — client-side checks are a courtesy; app/api/attachments/
+  // upload/route.ts re-verifies size, type, and the 10-item cap regardless
+  // (see that route's own header comment).
+  function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? [])
+    e.target.value = '' // lets the same filename be picked again later
+    if (picked.length === 0) return
+
+    setAttachError(null)
+    setStagedFiles((current) => {
+      const next = [...current]
+      for (const f of picked) {
+        if (next.length >= MAX_ATTACHMENTS_PER_ITEM) {
+          setAttachError(`You can attach up to ${MAX_ATTACHMENTS_PER_ITEM} files.`)
+          break
+        }
+        if (isBlockedFileType(f.name)) {
+          setAttachError(`${fileExtension(f.name) || 'That file type'} isn't supported.`)
+          continue
+        }
+        if (f.size > MAX_ATTACHMENT_BYTES) {
+          setAttachError(`${f.name} is larger than ${formatBytes(MAX_ATTACHMENT_BYTES)}.`)
+          continue
+        }
+        const finalName = dedupeFileName(f.name, next.map((x) => x.name))
+        next.push(finalName === f.name ? f : new File([f], finalName, { type: f.type }))
+      }
+      return next
+    })
+  }
+
+  function removeStagedFile(index: number) {
+    setStagedFiles((files) => files.filter((_, i) => i !== index))
+  }
+
+  async function uploadStagedFiles(requestId: string) {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    if (!accessToken) throw new Error('Your session has expired.')
+
+    for (const file of stagedFiles) {
+      const body = new FormData()
+      body.append('file', file)
+      body.append('requestId', requestId)
+      const res = await fetch('/api/attachments/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body,
+      })
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}))
+        throw new Error(
+          detail.error === 'limit_reached'
+            ? `Attachment limit reached (${MAX_ATTACHMENTS_PER_ITEM}).`
+            : `Could not upload ${file.name}.`
+        )
+      }
+    }
   }
 
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
@@ -441,6 +522,23 @@ export default function CreateRequestForm() {
         // whole Send failed.
         setError(
           `Request saved, but Dialog entries could not be saved: ${dialogError.message}`
+        )
+        return
+      }
+    }
+
+    // Attachments write third, same "hold as draft state until there's a
+    // real request id" reasoning as Dialog above — /api/attachments/upload
+    // is the only path that can create a kind = 'file' row (migration 025).
+    if (stagedFiles.length > 0) {
+      try {
+        await uploadStagedFiles(newRequest.id)
+      } catch (err) {
+        setSaving(false)
+        setError(
+          `Request saved, but attachments could not be uploaded: ${
+            err instanceof Error ? err.message : 'unknown error'
+          }`
         )
         return
       }
@@ -839,25 +937,71 @@ export default function CreateRequestForm() {
               )}
             </div>
 
-            {/* Attachments — v1 locked "paid feature" state. Simplified
-                empty-state row (§6.32, 2026-08-11), replacing the old
-                always-shown .fieldact+.attachpanel: attachment storage
-                doesn't exist anywhere in the app yet, so there's no code
-                path to a populated state to revert to — unlike Dialog,
-                this stays the compact row unconditionally until that's
-                built. */}
-            <div className="donerow">
-              <span className="donenote">
-                <b>Note:</b> Attachments are a Subscription feature.
-              </span>
-              <button className="btn is-locked" type="button" aria-disabled="true">
-                <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                Add Attachment
-              </button>
-            </div>
+            {/* Attachments (Week 5 Priority 3, 2026-08-14) — subscriber-gated,
+                re-checked server-side regardless of what this renders.
+                Staged as real File objects, same pattern as Dialog above,
+                uploaded via /api/attachments/upload once Send has a real
+                request id. Free-tier keeps the original locked row. */}
+            {tier === 'subscriber' ? (
+              <div className="fgroup">
+                {stagedFiles.length === 0 ? (
+                  <div className="frow">
+                    <span className="actlabel">
+                      Attachments <span className="subnote">(optional)</span>
+                    </span>
+                    <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
+                      Add Attachment
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="fieldact">
+                      <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
+                        Add Attachment
+                      </button>
+                    </div>
+                    <div className="dlgstaged">
+                      {stagedFiles.map((f, i) => (
+                        <div className="attitem" key={i}>
+                          <span className="attname">
+                            {f.name} <span className="subnote">({formatBytes(f.size)})</span>
+                          </span>
+                          <button
+                            className="attremove"
+                            type="button"
+                            aria-label={`Remove ${f.name}`}
+                            onClick={() => removeStagedFile(i)}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={handleFilesSelected}
+                />
+                {attachError && <p className="ferror">{attachError}</p>}
+              </div>
+            ) : (
+              <div className="donerow">
+                <span className="donenote">
+                  <b>Note:</b> Attachments are a Subscription feature.
+                </span>
+                <button className="btn is-locked" type="button" aria-disabled="true">
+                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
+                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                  </svg>
+                  Add Attachment
+                </button>
+              </div>
+            )}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

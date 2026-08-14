@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AttachmentsPanel from './AttachmentsPanel'
 import { supabase } from '@/lib/supabaseClient'
 
 /**
@@ -157,6 +158,12 @@ export default function TodoDetailForm() {
 
   const doneDateRef = useRef<HTMLInputElement>(null)
 
+  // Locations (Week 5 Priority 3, 2026-08-14) — AttachmentsPanel does its
+  // own fetching once these are known.
+  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [authToken, setAuthToken] = useState<string | null>(null)
+
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
@@ -196,8 +203,14 @@ export default function TodoDetailForm() {
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
-        supabase.from('profiles').select('display_name, private_category_enabled, todo_dates_enabled').single(),
+        supabase.from('profiles').select('display_name, private_category_enabled, todo_dates_enabled, tier').single(),
       ])
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!cancelled) {
+        setCurrentUserId(sessionData.session?.user.id ?? null)
+        setAuthToken(sessionData.session?.access_token ?? null)
+      }
 
       if (cancelled) return
 
@@ -231,6 +244,7 @@ export default function TodoDetailForm() {
       setOwnerName(ownerRes.data?.display_name ?? null)
       setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
       setTodoDatesEnabled(ownerRes.data?.todo_dates_enabled ?? false)
+      setTier(ownerRes.data?.tier === 'subscriber' ? 'subscriber' : 'free')
       setTodoStatus(row.done_date ? 'done' : 'open')
 
       await loadDialog()
@@ -799,23 +813,19 @@ export default function TodoDetailForm() {
               )}
             </div>
 
-            {/* Attachments — v1 locked "paid feature" state. Simplified
-                empty-state row (§6.32, 2026-08-11), replacing the old
-                always-shown .fieldact+.attachpanel: attachment storage
-                doesn't exist anywhere in the app yet, so there's no
-                populated state to revert to. */}
-            <div className="donerow">
-              <span className="donenote">
-                <b>Note:</b> Attachments are a Subscription feature.
-              </span>
-              <button className="btn is-locked" type="button" aria-disabled="true">
-                <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                Add Attachment
-              </button>
-            </div>
+            {/* Locations (Week 5 Priority 3, 2026-08-14) — real Add/list/
+                delete via AttachmentsPanel (mode="reference"), gated on the
+                signed-in owner's own tier. */}
+            <AttachmentsPanel
+              requestId={todoId}
+              mode="reference"
+              canAdd={tier === 'subscriber'}
+              authToken={authToken}
+              recipientToken={null}
+              isOwner={true}
+              currentUserId={currentUserId}
+              ownerLabel={ownerName ?? 'You'}
+            />
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

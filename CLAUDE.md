@@ -1330,3 +1330,83 @@ link is built only after the stack is proven on Add Contact.
   task Priority 3), and an Archive UI the owner has designed and will
   present after Attachments ships. See the decisions log's three
   2026-08-14 entries for the full write-up.
+- **Attachments plan doc (`docs/WYP_Attachments_Plan.md`) and its seven open
+  questions, all resolved (2026-08-14).** Owner answered every question in
+  one message plus a follow-up on the ToDo Locations UI; see the decisions
+  log's own entry for the full write-up. Key resolutions: the Request/ToDo
+  owner can always delete any attachment on their own item, a non-owner
+  uploader only their own; a 10 MB per-file size recommendation (not an
+  owner-specified number) and a blocklist of executable/installer/script
+  extensions rather than an allowlist; no virus scanning in v1 (Supabase
+  Storage has none built in, and a real scanner is out of scope); a 10-item
+  cap per Request/ToDo; the lapse-and-auto-delete job deferred to its own
+  later priority; ToDos get "Locations" (`kind = 'reference'` — a typed
+  Description + path/URL, no real storage) instead of real file uploads,
+  since a ToDo has no recipient; the Print Reports icon added immediately
+  rather than deferred.
+- **Real Attachments, built (2026-08-14, Week 5 Priority 3) — migrations
+  025/026/027 all CONFIRMED RUN by the owner 2026-08-14.** Migration 025 adds
+  `public.attachments` (one table for both a Request's real `kind = 'file'`
+  uploads and a ToDo's `kind = 'reference'` Locations — a check constraint
+  keeps the two shapes from crossing), with RLS narrow on purpose: SELECT is
+  owner-only; INSERT only ever allows `kind = 'reference'` directly (a
+  `kind = 'file'` row can only be created by the new
+  `app/api/attachments/upload` route); DELETE matches the resolved rule
+  (owner always, non-owner uploader only their own). `uploaded_by` is
+  nullable — an anonymous Request Response visitor has no `auth.users` row,
+  same shape of problem `dialog.author_user_id` already solved the same
+  way — with a parallel `uploaded_by_label` display snapshot, always set.
+  Migration 026 creates a private Storage bucket with **no**
+  `storage.objects` RLS grants for `anon`/`authenticated` at all — every
+  upload/list/delete of a real file goes through
+  `app/api/attachments/{upload,list,delete}/route.ts` (Node runtime,
+  server-only), which use `SUPABASE_SERVICE_ROLE_KEY` to talk to Storage
+  directly, but only after independently verifying the caller's permission
+  through the same RLS-scoped/RPC-scoped paths the rest of the app already
+  uses (a forwarded-JWT client for the owner and a signed-in recipient, the
+  existing `get_request_by_token`/`get_received_request` functions for the
+  anonymous and signed-in recipient cases) — a deliberate, narrow, flagged
+  exception to this file's own "service_role never goes near the browser"
+  rule, justified the same way the SECURITY DEFINER functions already are:
+  an anonymous visitor has no session for RLS to scope to, and this problem
+  can't be solved with a SQL function since Storage's own API isn't
+  reachable from one. Migration 027 adds `attachment_count` to
+  `get_received_requests()` (drop-then-recreate, the migration
+  017/021-established fix for a `RETURNS TABLE` function) for the new Print
+  Reports icon. **`SUPABASE_SERVICE_ROLE_KEY` — confirmed set by the owner
+  in both `.env.local` and Vercel, 2026-08-14** (a Supabase `sb_secret_...`
+  key from the newer secret-key system, not the legacy `service_role` JWT —
+  functionally equivalent as the second argument to `createClient()`, which
+  is all these routes ever do with it); this key must never reach the
+  browser (see the migration 026 header comment) and lives only in the
+  three route files above.
+  New shared `app/components/AttachmentsPanel.tsx` (existing-item screens:
+  Request Detail, ToDo Detail, Request Response, Response Detail) and
+  `app/src/lib/attachments.ts`/`attachmentsClient.ts` (constants/helpers,
+  the direct-client `kind = 'reference'` insert/delete used only for
+  ToDos). Create Request/Create ToDo don't use the panel — neither has a
+  real id yet, so files/Locations are staged client-side (same pattern as
+  staged Dialog entries) and only written once Save/Send succeeds. Gating:
+  sender-side screens read the signed-in user's own `profiles.tier`;
+  recipient-side screens read the issuer's `owner_tier` (already-existing
+  plumbing, migrations 011/012) — never the recipient's own tier, per this
+  file's own Entitlements section. Viewing an already-added attachment is
+  never gated, only adding a new one (same section). No delete UI exists on
+  the anonymous Request Response screen — there's no session to attribute a
+  delete to, and `delete/route.ts` refuses without an `Authorization`
+  header regardless of what the UI shows. **A build-time design call, not
+  an explicit owner instruction, flagged here rather than silently
+  assumed**: ToDo Locations are gated on the same subscriber `tier` as a
+  Request's real Attachments, for one consistent "Attachments is a paid
+  feature" mental model — revisit if the owner wants Locations free instead
+  (it has no real storage cost, so the reasoning for gating it is weaker
+  than for real file uploads). A manual Delete hard-deletes (removes the
+  Storage object and the row) rather than setting `deleted_at` — that
+  column is reserved for the future lapse-and-auto-delete job, which needs
+  to tell "reclaimed by a tier lapse" apart from "the user removed it,"
+  something a hard delete already achieves on its own. Print Reports gained
+  a paperclip icon (`AttachmentIcon`) beside the existing Dialog icon on
+  Sent/Received rows and print rows; ToDos' own Locations have no such icon
+  yet. **No mockups updated** — none of the six affected screens' static
+  HTML has real upload/list JS to convert; flagged in `design/README.md`.
+  `npx tsc --noEmit`/`npm run lint` clean.

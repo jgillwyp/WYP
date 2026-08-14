@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AttachmentsPanel from './AttachmentsPanel'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 
@@ -176,6 +177,12 @@ export default function ResponseDetailForm() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendConfirmed, setSendConfirmed] = useState(false)
 
+  // Attachments (Week 5 Priority 3, 2026-08-14) — this signed-in recipient
+  // can delete their own uploads, unlike the anonymous Request Response
+  // screen, so both are needed (AttachmentsPanel's canDelete check).
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [authToken, setAuthToken] = useState<string | null>(null)
+
   // Owner's ask, 2026-08-13 — see cameFromCalendarLink's own comment in
   // @/lib/ics and RequestResponseForm.tsx's identical use of it.
   const [cameFromCalendar] = useState(() =>
@@ -210,6 +217,13 @@ export default function ResponseDetailForm() {
       setDoneDate(payload.done_date ?? '')
       setDoneTime(payload.done_time ?? '')
       setDialogList(payload.dialog ?? [])
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!cancelled) {
+        setCurrentUserId(sessionData.session?.user.id ?? null)
+        setAuthToken(sessionData.session?.access_token ?? null)
+      }
+
       setLoading(false)
     }
 
@@ -587,23 +601,21 @@ export default function ResponseDetailForm() {
               </>
             )}
 
-            {/* owner_tier gating unchanged — simplified empty-state row
-                (§6.32) inside it, replacing the old .panelact+.panelfull:
-                attachment storage doesn't exist anywhere in the app yet, so
-                there's no populated state to revert to. */}
+            {/* owner_tier gating unchanged. Real Add/list/delete via
+                AttachmentsPanel as of Week 5 Priority 3 (2026-08-14) — this
+                signed-in recipient can delete their own uploads (unlike the
+                anonymous Request Response screen), never the owner's. */}
             {data.owner_tier === 'subscriber' && (
-              <div className="donerow">
-                <span className="donenote">
-                  <b>Note:</b> Attachments are a Subscription feature.
-                </span>
-                <button className="btn is-locked" type="button" aria-disabled="true">
-                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                  </svg>
-                  Add Attachment
-                </button>
-              </div>
+              <AttachmentsPanel
+                requestId={requestId}
+                mode="file"
+                canAdd={true}
+                authToken={authToken}
+                recipientToken={null}
+                isOwner={false}
+                currentUserId={currentUserId}
+                ownerLabel="You"
+              />
             )}
 
             {sendError && (
