@@ -6,6 +6,47 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Archive column-header sorting
+
+Owner: "the sorting does not work for column headings in the displayed
+search results. I'm not sure this was or was not intentionally deferred -
+but, it would be helpful to have it react to users as they have learned to
+expect." It wasn't deferred as such — the mockup's static "Due ▼"/
+"Priority ▲" pill labels were ported as pure decoration when `ArchiveForm.tsx`
+was first built and never wired to real behavior, unlike Main Screen's own
+column headers, which gained real sorting back on 2026-08-11.
+
+Fixed by duplicating Main Screen's own `ColSort`/`toggleSort`/
+`compareNullable`/`compareStrings`/`compareNumbers`/`readStoredSort`/
+`writeStoredSort` into `ArchiveForm.tsx` (this app's established convention
+for small stateless helpers — see `openPicker`, `formatMDY`) rather than
+importing them, since `MainScreen.tsx` doesn't export any of them. Sent and
+Received share one sort state (`name`/`date`/`due`/`done`, defaulting to
+Due descending, matching Main Screen's own default); ToDos here only has
+Priority to sort by (defaulting ascending) — this screen never shows
+Category at all, unlike Main Screen's own ToDos list, so there's no second
+sortable column. Each Record Type's sort persists to `sessionStorage`
+independently (`wyp.archiveSentSort`/`wyp.archiveReceivedSort`/
+`wyp.archiveTodoSort`), same pattern already used for `currentType`/
+`recipientQuery`/`beforeDone`/`deselected`.
+
+Required extending the shared `Row` type: `due`/`date` were already-formatted
+MM-DD-YY display strings (via `formatMDY`), which don't sort correctly as
+plain strings. Added raw `dueISO`/`dateISO` (and `priority` as a number)
+alongside the existing display fields, sourced straight from the underlying
+`due_date`/`created_at`/`priority` columns. Also changed `name` from a
+`'—'`-baked-into-the-map fallback to a real `string | null`, so
+`compareNullable` can push a missing Recipient/Requestor name to the end of
+the list regardless of sort direction (mirroring Main Screen's own
+`contacts?.display_name ?? null` convention) — the `'—'` fallback moved to
+render time in the row JSX instead. `nameOptions`'s own filter simplified
+to match (no longer needs to exclude the literal string `'—'`).
+
+`npx tsc --noEmit`/`npm run lint` clean. No mockup change — the mockup's
+column headers were always static and this is a live-only behavior fix.
+
+\---
+
 ## 2026-08-14 — Archive live: field alignment, chip highlighting, state lost on Detail round trip
 
 Owner tested `/archive` after migration 028 was confirmed run, two

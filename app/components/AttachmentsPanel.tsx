@@ -62,6 +62,16 @@ type Props = {
   /** Own display name / fallback label, used when inserting a 'reference'
    * row directly (mode = 'reference' only). */
   ownerLabel: string
+  /** True on a screen with no `.form` wrapper (Request Response, Response
+   * Detail) — those screens' own Dialog panel already pads its empty-state
+   * `.frow` with an inline `style={{ padding: '0 var(--pad)' }}` for the
+   * same reason (2026-08-11, §6.32's own comment: "No .form/.fgroup wrapper
+   * on this screen, so the empty row needs its own var(--pad)"). Request
+   * Detail/ToDo Detail wrap everything in `<form className="form">`, which
+   * already supplies that inset via container padding — passing `standalone`
+   * there would double it. Default false (assume a `.form` ancestor).
+   * 2026-08-14, owner-reported misalignment fix. */
+  standalone?: boolean
 }
 
 const emptyLabel = { file: 'Attachments', reference: 'Locations' } as const
@@ -76,6 +86,7 @@ export default function AttachmentsPanel({
   isOwner,
   currentUserId,
   ownerLabel,
+  standalone = false,
 }: Props) {
   const [rows, setRows] = useState<AttachmentRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -246,18 +257,29 @@ export default function AttachmentsPanel({
 
   if (loading) return null // avoid a flash of the empty state while the first fetch resolves
 
-  // mode = 'reference' always shows the note+button as a .donerow, whether
-  // or not any Location exists yet, rather than switching between .actlabel
-  // (empty) and a bare .fieldact button (populated) the way mode = 'file'
-  // still does — owner's own reference screenshot, 2026-08-14, kept the note
-  // visible next to Add Location even with an entry already staged.
-  const showReferenceNote = mode === 'reference' && canAdd
+  // mode = 'reference' now matches mode = 'file's own empty/populated split
+  // (2026-08-14, owner-reported: "the Add Location behave like the Add
+  // Dialog to include erasing the 'placeholder' box... when a Location is
+  // added" — reversing the earlier same-day decision that kept this note
+  // permanently visible). The note+button shows only while nothing is
+  // staged yet and the inline form isn't open; once a Location exists, only
+  // a bare Add Location button remains (the .fieldact case below), matching
+  // Add Dialog's own populated state.
+  const showReferenceNote = mode === 'reference' && canAdd && items.length === 0 && !refFormOpen
+
+  // Screens with no `.form` wrapper (Request Response, Response Detail) need
+  // each row's own horizontal inset — see the `standalone` prop comment.
+  // `.frow`/`.fieldact` are plain flex rows (padding insets their content
+  // directly); `.dlgstaged` is a bordered/background card, so it needs
+  // margin instead — padding would shrink the box rather than shift it.
+  const rowPad = standalone ? { paddingLeft: 'var(--pad)', paddingRight: 'var(--pad)' } : undefined
+  const cardMargin = standalone ? { marginLeft: 'var(--pad)', marginRight: 'var(--pad)' } : undefined
 
   return (
     <div className="fgroup">
       {items.length === 0 && !refFormOpen && !showReferenceNote ? (
         canAdd ? (
-          <div className="frow">
+          <div className="frow" style={rowPad}>
             <span className="actlabel">
               {label} <span className="subnote">(optional)</span>
             </span>
@@ -296,7 +318,7 @@ export default function AttachmentsPanel({
             </div>
           )}
           {canAdd && mode === 'file' && (
-            <div className="fieldact">
+            <div className="fieldact" style={rowPad}>
               <button
                 className="btn"
                 type="button"
@@ -307,8 +329,15 @@ export default function AttachmentsPanel({
               </button>
             </div>
           )}
+          {canAdd && mode === 'reference' && items.length > 0 && !refFormOpen && (
+            <div className="fieldact" style={rowPad}>
+              <button className="btn" type="button" onClick={() => setRefFormOpen(true)}>
+                {addText}
+              </button>
+            </div>
+          )}
           {refFormOpen && (
-            <div className="dlgstaged">
+            <div className="dlgstaged" style={cardMargin}>
               <div className="fgroup ffloat">
                 <input
                   className="finput"
@@ -347,7 +376,7 @@ export default function AttachmentsPanel({
               </div>
             </div>
           )}
-          <div className="dlgstaged">
+          <div className="dlgstaged" style={cardMargin}>
             {items.map((row) => {
               const canDelete = !!authToken && (isOwner || (currentUserId && row.uploaded_by === currentUserId))
               if (row.kind === 'file') {

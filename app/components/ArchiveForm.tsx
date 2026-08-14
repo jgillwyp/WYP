@@ -73,6 +73,18 @@ import { supabase } from '@/lib/supabaseClient'
  * elsewhere in this app) rather than a dedicated print-report layout —
  * Main Screen's own Print Reports feature (2026-08-13) was scoped to Sent/
  * Received/ToDos specifically and was not asked to extend here.
+ *
+ * Column-header sorting (2026-08-14, owner-reported: "the sorting does not
+ * work for column headings in the displayed search results... it would be
+ * helpful to have it react to users as they have learned to expect") — the
+ * colbar's To/From, Date, Due, Done (Sent/Received) and Priority (ToDos)
+ * headers are now real sort buttons, mirroring Main Screen's own ColSort
+ * feature (2026-08-11) exactly, duplicated here rather than imported per
+ * this app's small-stateless-helper convention. Sort state persists to
+ * sessionStorage per Record Type, same pattern as currentType/
+ * recipientQuery/beforeDone/deselected above. ToDos here has only Priority
+ * to sort by — this screen never shows Category at all, unlike Main
+ * Screen's own ToDos list.
  */
 
 type RecordType = 'sent' | 'received' | 'todos'
@@ -126,6 +138,107 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
     }
   }
 }
+
+// Column-header sorting (2026-08-14, owner-reported: "the sorting does not
+// work for column headings in the displayed search results... it would be
+// helpful to have it react to users as they have learned to expect").
+// Duplicated from MainScreen.tsx's own ColSort/toggleSort/compareNullable/
+// etc. rather than shared — this app's established convention for small
+// stateless helpers (see openPicker above, formatMDY). Sent/Received share
+// one Req sort (name/date/due/done, mirroring Main Screen's own To-From/
+// Date/Due/Done columns); ToDos here has only Priority to sort by — unlike
+// Main Screen's ToDos, this screen never shows Category at all, so there's
+// no second sortable column.
+type SortDir = 'asc' | 'desc'
+type ReqSortKey = 'name' | 'date' | 'due' | 'done'
+type TodoSortKey = 'priority'
+
+const REQ_SORT_DEFAULT_DIR: Record<ReqSortKey, SortDir> = {
+  name: 'asc',
+  date: 'desc',
+  due: 'desc',
+  done: 'desc',
+}
+
+const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
+  priority: 'asc',
+}
+
+function toggleSort<K extends string>(
+  current: { key: K; dir: SortDir },
+  key: K,
+  defaults: Record<K, SortDir>
+): { key: K; dir: SortDir } {
+  if (current.key === key) {
+    return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+  }
+  return { key, dir: defaults[key] }
+}
+
+function compareNullable<T>(a: T | null, b: T | null, dir: SortDir, cmp: (a: T, b: T) => number): number {
+  if (a === null && b === null) return 0
+  if (a === null) return 1
+  if (b === null) return -1
+  const result = cmp(a, b)
+  return dir === 'asc' ? result : -result
+}
+
+function compareStrings(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+}
+
+function compareNumbers(a: number, b: number): number {
+  return a - b
+}
+
+function readStoredSort<K extends string>(
+  storageKey: string,
+  allowedKeys: readonly K[],
+  fallback: { key: K; dir: SortDir }
+): { key: K; dir: SortDir } {
+  if (typeof window === 'undefined') return fallback
+  const raw = window.sessionStorage.getItem(storageKey)
+  if (!raw) return fallback
+  const [k, d] = raw.split(':')
+  if ((allowedKeys as readonly string[]).includes(k) && (d === 'asc' || d === 'desc')) {
+    return { key: k as K, dir: d as SortDir }
+  }
+  return fallback
+}
+
+function writeStoredSort(storageKey: string, sort: { key: string; dir: SortDir }) {
+  window.sessionStorage.setItem(storageKey, `${sort.key}:${sort.dir}`)
+}
+
+function ColSort({
+  className,
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  className: string
+  label: string
+  active: boolean
+  dir: SortDir
+  onClick: () => void
+}) {
+  const stateLabel = active ? `, currently sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={onClick}
+      aria-label={`Sort by ${label}${stateLabel}`}
+    >
+      {active ? <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span> : label}
+    </button>
+  )
+}
+
+const ARCHIVE_SENT_SORT_KEY = 'wyp.archiveSentSort'
+const ARCHIVE_RECEIVED_SORT_KEY = 'wyp.archiveReceivedSort'
+const ARCHIVE_TODO_SORT_KEY = 'wyp.archiveTodoSort'
 
 const NOUN: Record<RecordType, string | null> = { sent: 'Recipient', received: 'Requestor', todos: null }
 const COL: Record<RecordType, string | null> = { sent: 'To', received: 'From', todos: null }
@@ -225,6 +338,28 @@ export default function ArchiveForm() {
     )
   }, [deselected])
 
+  const [sentSort, setSentSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
+    readStoredSort(ARCHIVE_SENT_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
+  )
+  const [receivedSort, setReceivedSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
+    readStoredSort(ARCHIVE_RECEIVED_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
+  )
+  const [todoSort, setTodoSort] = useState<{ key: TodoSortKey; dir: SortDir }>(() =>
+    readStoredSort(ARCHIVE_TODO_SORT_KEY, ['priority'] as const, { key: 'priority', dir: 'asc' })
+  )
+
+  useEffect(() => {
+    writeStoredSort(ARCHIVE_SENT_SORT_KEY, sentSort)
+  }, [sentSort])
+
+  useEffect(() => {
+    writeStoredSort(ARCHIVE_RECEIVED_SORT_KEY, receivedSort)
+  }, [receivedSort])
+
+  useEffect(() => {
+    writeStoredSort(ARCHIVE_TODO_SORT_KEY, todoSort)
+  }, [todoSort])
+
   const [archiving, setArchiving] = useState(false)
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const [confirmMessage, setConfirmMessage] = useState<string | null>(null)
@@ -274,15 +409,22 @@ export default function ArchiveForm() {
 
   // Normalized shape shared by all three record types below — name is null
   // for ToDos (no recipient), due/date are null for ToDos (never shown).
+  // dueISO/dateISO/priority are the raw sortable values alongside the
+  // already-formatted display strings (due/date/priLabel) — MM-DD-YY isn't
+  // safely string-sortable, so sorting reads these instead (2026-08-14,
+  // column-header sorting).
   type Row = {
     id: string
     name: string | null
     desc: string
     due: string | null
     date: string | null
+    dueISO: string | null
+    dateISO: string | null
     doneDisp: string
     doneISO: string
     priLabel: string
+    priority: number | null
   }
 
   const rows: Row[] = useMemo(() => {
@@ -291,13 +433,16 @@ export default function ArchiveForm() {
         .filter((r) => r.done_date && !r.archived_at)
         .map((r) => ({
           id: r.id,
-          name: r.contacts?.display_name ?? '—',
+          name: r.contacts?.display_name ?? null,
           desc: r.description,
           due: formatMDY(r.due_date),
           date: formatMDY(r.created_at),
+          dueISO: r.due_date ? r.due_date.slice(0, 10) : null,
+          dateISO: r.created_at ? r.created_at.slice(0, 10) : null,
           doneDisp: formatMDY(r.done_date),
           doneISO: (r.done_date ?? '').slice(0, 10),
           priLabel: '',
+          priority: null,
         }))
     }
     if (currentType === 'received') {
@@ -305,13 +450,16 @@ export default function ArchiveForm() {
         .filter((r) => r.done_date && !r.received_archived_at)
         .map((r) => ({
           id: r.id,
-          name: r.owner_name ?? '—',
+          name: r.owner_name ?? null,
           desc: r.description,
           due: formatMDY(r.due_date),
           date: formatMDY(r.created_at),
+          dueISO: r.due_date ? r.due_date.slice(0, 10) : null,
+          dateISO: r.created_at ? r.created_at.slice(0, 10) : null,
           doneDisp: formatMDY(r.done_date),
           doneISO: (r.done_date ?? '').slice(0, 10),
           priLabel: '',
+          priority: null,
         }))
     }
     return todoData
@@ -322,9 +470,12 @@ export default function ArchiveForm() {
         desc: t.description,
         due: null,
         date: null,
+        dueISO: null,
+        dateISO: null,
         doneDisp: formatMDY(t.done_date),
         doneISO: (t.done_date ?? '').slice(0, 10),
         priLabel: t.priority ? PRIORITY_LABEL[t.priority] : '',
+        priority: t.priority ?? null,
       }))
   }, [currentType, sentData, receivedData, todoData])
 
@@ -341,6 +492,46 @@ export default function ArchiveForm() {
     })
   }, [rows, noFilters, noun, query, beforeDone])
 
+  // Applies the active Record Type's own sort state on top of the already-
+  // filtered matches — a second pass, same reasoning as MainScreen.tsx's own
+  // sortedSent/sortedReceived/sortedTodos (filtering and ordering are
+  // independent concerns).
+  const sortedMatches = useMemo(() => {
+    const list = [...matches]
+    if (currentType === 'todos') {
+      list.sort((a, b) => compareNullable(a.priority, b.priority, todoSort.dir, compareNumbers))
+      return list
+    }
+    const sort = currentType === 'received' ? receivedSort : sentSort
+    list.sort((a, b) => {
+      switch (sort.key) {
+        case 'name':
+          return compareNullable(a.name, b.name, sort.dir, compareStrings)
+        case 'date':
+          return compareNullable(a.dateISO, b.dateISO, sort.dir, compareStrings)
+        case 'due':
+          return compareNullable(a.dueISO, b.dueISO, sort.dir, compareStrings)
+        case 'done':
+          return compareNullable(a.doneISO, b.doneISO, sort.dir, compareStrings)
+      }
+    })
+    return list
+  }, [matches, currentType, sentSort, receivedSort, todoSort])
+
+  function sortReqColumn(key: ReqSortKey) {
+    if (currentType === 'received') {
+      setReceivedSort((s) => toggleSort(s, key, REQ_SORT_DEFAULT_DIR))
+    } else {
+      setSentSort((s) => toggleSort(s, key, REQ_SORT_DEFAULT_DIR))
+    }
+  }
+
+  function sortTodoColumn(key: TodoSortKey) {
+    setTodoSort((s) => toggleSort(s, key, TODO_SORT_DEFAULT_DIR))
+  }
+
+  const currentReqSort = currentType === 'received' ? receivedSort : sentSort
+
   const currentDeselected = deselected[currentType]
   const selectedCount = matches.filter((r) => !currentDeselected.has(r.id)).length
 
@@ -350,7 +541,7 @@ export default function ArchiveForm() {
   // "Requestor" is a sender's profiles.display_name, not a Contact at all.
   const nameOptions = useMemo(() => {
     if (!noun) return []
-    const names = new Set(rows.map((r) => r.name).filter((n): n is string => !!n && n !== '—'))
+    const names = new Set(rows.map((r) => r.name).filter((n): n is string => !!n))
     return [...names].sort()
   }, [rows, noun])
 
@@ -641,15 +832,45 @@ export default function ArchiveForm() {
               <div className="archbody">
                 {currentType === 'todos' ? (
                   <div className="colbar td">
-                    <span className="pill">Priority ▲</span>
+                    <ColSort
+                      className="c-pri"
+                      label="Priority"
+                      active={todoSort.key === 'priority'}
+                      dir={todoSort.dir}
+                      onClick={() => sortTodoColumn('priority')}
+                    />
                     <span>Description</span>
                   </div>
                 ) : (
                   <div className="colbar sr">
-                    <span>{COL[currentType]}</span>
-                    <span className="c-dt">Date</span>
-                    <span className="c-due pill">Due ▼</span>
-                    <span className="c-dn">Done</span>
+                    <ColSort
+                      className="c-nm"
+                      label={COL[currentType] ?? ''}
+                      active={currentReqSort.key === 'name'}
+                      dir={currentReqSort.dir}
+                      onClick={() => sortReqColumn('name')}
+                    />
+                    <ColSort
+                      className="c-dt"
+                      label="Date"
+                      active={currentReqSort.key === 'date'}
+                      dir={currentReqSort.dir}
+                      onClick={() => sortReqColumn('date')}
+                    />
+                    <ColSort
+                      className="c-due"
+                      label="Due"
+                      active={currentReqSort.key === 'due'}
+                      dir={currentReqSort.dir}
+                      onClick={() => sortReqColumn('due')}
+                    />
+                    <ColSort
+                      className="c-dn"
+                      label="Done"
+                      active={currentReqSort.key === 'done'}
+                      dir={currentReqSort.dir}
+                      onClick={() => sortReqColumn('done')}
+                    />
                   </div>
                 )}
               </div>
@@ -665,7 +886,7 @@ export default function ArchiveForm() {
             )}
             {!noFilters && matches.length === 0 && <p className="subempty">No Done records match.</p>}
             {!noFilters &&
-              matches.map((r) => {
+              sortedMatches.map((r) => {
                 const checked = !currentDeselected.has(r.id)
                 return (
                   <div key={r.id} className="row done archrow">
@@ -704,7 +925,7 @@ export default function ArchiveForm() {
                       ) : (
                         <>
                           <div className="r1">
-                            <span className="nm">{r.name}</span>
+                            <span className="nm">{r.name ?? '—'}</span>
                             <span className="dt">{r.date}</span>
                             <span className="due">{r.due}</span>
                             <span className="dn">{r.doneDisp}</span>
