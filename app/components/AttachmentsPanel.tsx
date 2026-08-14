@@ -8,11 +8,11 @@ import {
   fileExtension,
   formatBytes,
   isBlockedFileType,
-  isHttpUrl,
+  urlLocationHref,
   type AttachmentRow,
 } from '@/lib/attachments'
 
-const referenceNote = 'Locations can be used for URLs or File paths.'
+const referenceNote = 'Locations are URLs or File paths.'
 
 /**
  * Shared Attachments/Locations panel for every screen with an existing
@@ -380,7 +380,7 @@ export default function AttachmentsPanel({
                 )
               }
               const url = row.reference_url
-              const isLink = !!url && isHttpUrl(url)
+              const href = url ? urlLocationHref(url) : null
               return (
                 <div className="attitem" key={row.id}>
                   <span className="attname">
@@ -391,8 +391,8 @@ export default function AttachmentsPanel({
                       </>
                     )}
                     {url ? (
-                      isLink ? (
-                        <a href={url} target="_blank" rel="noopener noreferrer">
+                      href ? (
+                        <a href={href} target="_blank" rel="noopener noreferrer">
                           {url}
                         </a>
                       ) : (
@@ -400,7 +400,7 @@ export default function AttachmentsPanel({
                       )
                     ) : null}
                   </span>
-                  {url && !isLink && (
+                  {url && !href && (
                     <button className="linkbtn" type="button" onClick={() => handleCopyLocation(row.id, url)}>
                       {copiedId === row.id ? 'Copied' : 'Copy'}
                     </button>

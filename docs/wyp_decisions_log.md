@@ -6,6 +6,57 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Location URL detection: bare-domain heuristic, live-verification rejected
+
+Follow-up to the same day's Locations UX batch. Owner-reported testing:
+`ft.com` and `www.ft.com` weren't recognized as URLs — only `https://www.ft.com/`
+was — since `isHttpUrl` required a working `http:`/`https:` scheme via
+`new URL()`, and a bare domain has no scheme to parse. Owner also asked
+whether a network-based check (HTTP HEAD, a ranged GET, or a DNS lookup)
+would give "a more accurate this-is-a-URL judgement."
+
+**Recommendation, implemented**: keep the check purely syntactic, but widen
+it to recognize a bare domain shape (`ft.com`, `www.ft.com`, with an optional
+port/path/query) and treat it as a link — prepending `https://` for the
+actual `href` while still displaying what the owner typed. Replaced
+`isHttpUrl` with `urlLocationHref()` in `app/src/lib/attachments.ts`, wired
+into both `AttachmentsPanel.tsx` and `CreateTodoForm.tsx`'s staged list.
+Guards against the obvious false positive — a bare filename that happens to
+look domain-shaped ("report.pdf") — two ways: reject anything shaped like a
+file path first (drive letter, UNC `\\server\share`, a leading `/`/`~`/`.`,
+any backslash or whitespace), then reject a matched "domain" whose last
+label is a common file extension (`FILE_EXTENSION_BLOCKLIST` — pdf, docx,
+jpg, mp4, etc.) rather than a plausible TLD. Not exhaustive — an obscure
+extension not on the list, or a real but unusual TLD, can still misfire in
+either direction — but covers every case actually seen in testing.
+
+**Live verification (HEAD / ranged GET / DNS lookup) — considered, not
+built.** Rejected for three reasons, not just the two adjacent to the
+recommendation above: (1) a browser can't run any of these against an
+arbitrary third-party origin itself — blocked by CORS for any site that
+hasn't opted in with `Access-Control-Allow-Origin`, which is most sites — so
+it would have to be proxied through our own server, the same
+service-role-API-route shape Attachments already uses. (2) That proxy is a
+standing SSRF surface: a saved Location is user-supplied text, and a server
+making outbound requests to whatever a user types needs real hardening
+(blocking private/internal IP ranges, redirect-chasing limits, timeouts)
+that doesn't exist anywhere else in this app yet — a disproportionate amount
+of new attack surface for what's ultimately a rendering decision. (3) It
+answers a different question than the one being asked: "is this text shaped
+like a URL" (a syntax question, decided once, instantly, client-side) is not
+the same as "is this URL currently reachable" (a liveness question that can
+change hour to hour) — a real site that's briefly down would wrongly stop
+rendering as a link under a liveness check, which is a worse outcome than
+the syntactic heuristic's rare false positive/negative. If the owner wants
+reachability checked later (e.g., to warn about a dead link), that's a
+separate, bigger feature — a dedicated server route with its own SSRF
+guardrails — not a refinement of this one.
+
+`npx tsc --noEmit`/`npm run lint` clean. No mockup changes — same reasoning
+as the note-text/Copy-button batch above.
+
+\---
+
 ## 2026-08-14 — Locations UX: note text, clickable URLs, Copy-path for file paths
 
 Owner, testing Locations live: (1) wanted a note to the left of Add Location

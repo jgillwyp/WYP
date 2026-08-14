@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { insertAttachmentReference } from '@/lib/attachmentsClient'
-import { isHttpUrl } from '@/lib/attachments'
+import { urlLocationHref } from '@/lib/attachments'
 
 /**
  * Create ToDo (§9.4) — converted by hand from
@@ -780,7 +780,7 @@ export default function CreateTodoForm() {
               <div className="fgroup">
                 <div className="donerow">
                   <span className="donenote">
-                    <b>Note:</b> Locations can be used for URLs or File paths.
+                    <b>Note:</b> Locations are URLs or File paths.
                   </span>
                   <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
                     Add Location
@@ -830,7 +830,7 @@ export default function CreateTodoForm() {
                     )}
                     <div className="dlgstaged">
                       {stagedLocations.map((entry, i) => {
-                        const isLink = isHttpUrl(entry.location)
+                        const href = urlLocationHref(entry.location)
                         return (
                           <div className="attitem" key={i}>
                             <span className="attname">
@@ -840,15 +840,15 @@ export default function CreateTodoForm() {
                                   <br />
                                 </>
                               )}
-                              {isLink ? (
-                                <a href={entry.location} target="_blank" rel="noopener noreferrer">
+                              {href ? (
+                                <a href={href} target="_blank" rel="noopener noreferrer">
                                   {entry.location}
                                 </a>
                               ) : (
                                 entry.location
                               )}
                             </span>
-                            {!isLink && entry.location && (
+                            {!href && entry.location && (
                               <button
                                 className="linkbtn"
                                 type="button"

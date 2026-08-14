@@ -68,18 +68,75 @@ export function dedupeFileName(fileName: string, existingNames: string[]): strin
 }
 
 /**
- * Only a well-formed http(s) URL renders as an actual clickable link on a
- * ToDo Location — a typed local file path is inert text the app can never
- * open or verify (no filesystem access to the user's device). See the plan
- * doc / decisions log, 2026-08-14.
+ * File extensions that would otherwise match the bare-domain heuristic
+ * below (a short alpha "TLD"-shaped suffix) but are actually just a
+ * filename someone typed as a Location ("report.pdf", not a website).
+ * Not exhaustive — a genuinely obscure extension can still misfire — but
+ * covers the common cases without maintaining a real TLD allowlist, which
+ * would need constant updating as new gTLDs/ccTLDs appear.
  */
-export function isHttpUrl(value: string): boolean {
+const FILE_EXTENSION_BLOCKLIST = new Set([
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'rtf', 'odt',
+  'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'tif', 'tiff',
+  'zip', 'rar', 'tar', 'gz',
+  'mp3', 'wav', 'mp4', 'mov', 'avi', 'mkv',
+  'exe', 'msi', 'dmg', 'app', 'apk',
+  'json', 'xml', 'html', 'htm', 'css', 'js', 'ts',
+  'log', 'ini', 'cfg', 'bak',
+])
+
+/**
+ * Recognizes a ToDo Location that's a website — a full `https://ft.com` URL,
+ * or a bare domain typed without a scheme (`ft.com`, `www.ft.com`) — and
+ * returns the href to link to (adding `https://` for the bare-domain case).
+ * Returns null for anything else, including a typed file path: the app has
+ * no filesystem access to the user's device, so a path is always inert text
+ * (see the plan doc / decisions log, 2026-08-14).
+ *
+ * A syntactic heuristic, not a liveness check. A live-verification approach
+ * (HTTP HEAD, a ranged GET, or a DNS lookup against the typed value) was
+ * considered and rejected, 2026-08-14 decisions log: a browser can't run any
+ * of those against an arbitrary third-party origin itself (blocked by CORS
+ * for any site that hasn't opted in), so it would need our own server to
+ * proxy the request — which turns "decide how to render some text" into a
+ * standing SSRF surface (a saved Location could point our server's own
+ * outbound request at an internal address) for no real gain: a real site
+ * that's briefly unreachable would wrongly stop rendering as a link, and a
+ * live check doesn't answer the actual question here any better than the
+ * shape of the text already does.
+ */
+export function urlLocationHref(value: string): string | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+
+  // Already has a scheme — trust URL() outright rather than the heuristic
+  // below, and only ever link http(s), never mailto:/tel:/ftp:/etc.
   try {
-    const u = new URL(value)
-    return u.protocol === 'http:' || u.protocol === 'https:'
+    const u = new URL(trimmed)
+    return u.protocol === 'http:' || u.protocol === 'https:' ? trimmed : null
   } catch {
-    return false
+    // No scheme — a bare domain is the common case Locations actually see
+    // ("ft.com", "www.ft.com"), fall through to the heuristic below.
   }
+
+  // Reject anything shaped like a file path before checking the domain
+  // shape, so "C:\Reports\q3.pdf", "\\server\share", "/Users/jim/x",
+  // "./notes.txt" never reach the domain regex at all.
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed)) return null // C:\... or C:/...
+  if (trimmed.startsWith('\\\\')) return null // \\server\share
+  if (trimmed.startsWith('/') || trimmed.startsWith('~') || trimmed.startsWith('.')) return null
+  if (trimmed.includes('\\') || /\s/.test(trimmed)) return null
+
+  // Bare-domain shape: dot-separated labels, optional port/path/query.
+  const domainPattern =
+    /^(www\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d+)?(\/\S*)?$/i
+  if (!domainPattern.test(trimmed)) return null
+
+  const host = trimmed.split(/[/:]/)[0]
+  const tld = (host.split('.').pop() ?? '').toLowerCase()
+  if (tld.length < 2 || FILE_EXTENSION_BLOCKLIST.has(tld)) return null
+
+  return `https://${trimmed}`
 }
 
 export type AttachmentRow = {
