@@ -1,0 +1,107 @@
+-- ============================================================================
+-- WYP migration 029 — get_received_print_detail(): full Dialog + Attachments
+-- for the Received print report
+-- DRAFTED 2026-08-15 — NOT YET CONFIRMED RUN.
+--
+-- Context: the owner's own xlsx print mockups (Main Screen sections - Sent/
+-- Received/ToDos) show each record's full Dialog thread (every Question/
+-- Answer/Comment, in full) and full Attachments/Locations list under its
+-- description, not just an icon indicating either exists. Sent and ToDos
+-- already load dialog/attachments as PostgREST count embeds only
+-- (dialog(count), attachments(count) — MainScreen.tsx's own .select()
+-- strings), same as Received's own dialog_count/attachment_count (migration
+-- 027) — none of the three sections has ever loaded full Dialog/Attachment
+-- *content* for the Main Screen list, only counts, since the on-screen rows
+-- only ever needed an icon, not the text.
+--
+-- Deliberately NOT switching the main list queries themselves to load full
+-- content by default — that would add real Dialog-thread and Attachment-
+-- metadata payload weight to every ordinary Main Screen load, for content
+-- the on-screen UI never displays. Instead, the full content is fetched only
+-- at the moment Print is actually clicked, for just the ids currently on
+-- screen (see MainScreen.tsx's loadPrintDetail/startPrint).
+--
+-- Sent and ToDos can do this fetch as a plain client-side query — both are
+-- rows the signed-in owner already has SELECT access to on public.dialog/
+-- public.attachments under existing RLS (migration 025: "SELECT is
+-- owner-only"). Received cannot: a Received row's dialog/attachments belong
+-- to a different owner, invisible to the recipient's own RLS the same way
+-- Category is (CLAUDE.md's Entitlements section) — this function is that
+-- gap's fix, parallel to get_received_requests() (migration 012) itself,
+-- keyed by the same contacts.email match against the caller's own session
+-- email (auth.jwt() ->> 'email'), not a new access model.
+--
+-- Returns one row per matched request id (silently drops any id in p_ids
+-- that isn't actually a Received request for the caller — same "return
+-- nothing rather than error" posture as every other token/session-scoped
+-- function here), with dialog and attachments each as a jsonb array so one
+-- round trip covers every row on the current Received print. Field lists
+-- match RequestDetailForm.tsx's own dialog select (id, kind, body, who,
+-- replies_to_id) and the attachments API route's own select (id, kind,
+-- file_name, reference_url, reference_note) — no new fields invented.
+-- ============================================================================
+
+begin;
+
+create or replace function public.get_received_print_detail(p_ids uuid[])
+returns table (
+  request_id uuid,
+  dialog jsonb,
+  attachments jsonb
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' or p_ids is null or array_length(p_ids, 1) is null then
+    return; -- no email claim, or nothing asked for
+  end if;
+
+  return query
+    select
+      r.id as request_id,
+      coalesce((
+        select jsonb_agg(
+                 jsonb_build_object(
+                   'id', d.id, 'kind', d.kind, 'body', d.body,
+                   'who', d.who, 'replies_to_id', d.replies_to_id
+                 ) order by d.id
+               )
+        from public.dialog d
+        where d.request_id = r.id
+      ), '[]'::jsonb) as dialog,
+      coalesce((
+        select jsonb_agg(
+                 jsonb_build_object(
+                   'id', a.id, 'kind', a.kind, 'file_name', a.file_name,
+                   'reference_url', a.reference_url, 'reference_note', a.reference_note
+                 ) order by a.created_at
+               )
+        from public.attachments a
+        where a.request_id = r.id and a.deleted_at is null
+      ), '[]'::jsonb) as attachments
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = any(p_ids)
+      and lower(trim(c.email)) = v_email;
+end;
+$$;
+
+revoke all on function public.get_received_print_detail(uuid[]) from public;
+grant execute on function public.get_received_print_detail(uuid[]) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only — see this file's recurring
+-- caveat; test as authenticated to prove the RLS-equivalent email match):
+--   select prosrc from pg_proc where proname = 'get_received_print_detail';
+--
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name = 'get_received_print_detail';
+--        -> should show authenticated / EXECUTE
+-- ============================================================================

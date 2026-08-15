@@ -125,6 +125,111 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
+// Print (2026-08-15) — same shapes/helpers as MainScreen.tsx's own Print
+// Reports, duplicated per this app's established convention. Owner: "the
+// same formats would work along with the insertion of a checkbox in its own
+// narrow column as is done with the on-screen view" — reuses the identical
+// .print-report/.prow/.pdlg/.patt layout, with .archcheck's own checkbox
+// added as a fourth column. Deliberately does NOT yet show the filter
+// criteria (Recipient/Requestor and Before Done Date) anywhere in the
+// printed header — the owner flagged that as its own follow-up ("the
+// Archive report needs to show selection criteria - I will work on that
+// next") while this batch was in progress, so it's left out here rather
+// than guessed at.
+function formatPrintTimestamp(d: Date): string {
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const y = String(d.getFullYear()).slice(2)
+  let h = d.getHours()
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
+}
+
+type PrintDialogEntry = { id: string; kind: string; body: string; who: string | null; replies_to_id: string | null }
+type PrintAttachmentEntry = {
+  id: string
+  kind: 'file' | 'reference'
+  file_name: string | null
+  reference_url: string | null
+  reference_note: string | null
+}
+type PrintDetail = { dialog: PrintDialogEntry[]; attachments: PrintAttachmentEntry[] }
+type PrintDetailMap = Record<string, PrintDetail>
+
+function PrintDialogList({ entries }: { entries: PrintDialogEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="pdlg">
+      <div className="pdlghead">Dialog</div>
+      {entries.map((e) => {
+        const kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment'
+        return (
+          <div className="pdlgitem" key={e.id}>
+            <span className="pdlgkind">{kindLabel}</span> {e.body}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PrintAttachmentList({ entries, heading }: { entries: PrintAttachmentEntry[]; heading: string }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="patt">
+      <div className="patthead">{heading}</div>
+      {entries.map((a) => (
+        <div className="pattitem" key={a.id}>
+          {a.kind === 'file'
+            ? a.file_name
+            : a.reference_note
+              ? `${a.reference_note} — ${a.reference_url ?? ''}`
+              : a.reference_url}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Sent/ToDos: owner-scoped, plain RLS access, same as MainScreen.tsx's own
+// loadOwnedPrintDetail(). Received: migration 029's get_received_print_detail
+// RPC, same as MainScreen.tsx's own loadReceivedPrintDetail().
+async function loadOwnedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
+  const map: PrintDetailMap = {}
+  for (const id of ids) map[id] = { dialog: [], attachments: [] }
+  if (ids.length === 0) return map
+  const [dlgRes, attRes] = await Promise.all([
+    supabase.from('dialog').select('id, request_id, kind, body, who, replies_to_id').in('request_id', ids).order('id'),
+    supabase
+      .from('attachments')
+      .select('id, request_id, kind, file_name, reference_url, reference_note')
+      .in('request_id', ids)
+      .is('deleted_at', null)
+      .order('created_at'),
+  ])
+  for (const d of (dlgRes.data as unknown as (PrintDialogEntry & { request_id: string })[]) ?? []) {
+    map[d.request_id]?.dialog.push(d)
+  }
+  for (const a of (attRes.data as unknown as (PrintAttachmentEntry & { request_id: string })[]) ?? []) {
+    map[a.request_id]?.attachments.push(a)
+  }
+  return map
+}
+
+async function loadReceivedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
+  const map: PrintDetailMap = {}
+  for (const id of ids) map[id] = { dialog: [], attachments: [] }
+  if (ids.length === 0) return map
+  const { data } = await supabase.rpc('get_received_print_detail', { p_ids: ids })
+  for (const row of (data as { request_id: string; dialog: PrintDialogEntry[]; attachments: PrintAttachmentEntry[] }[]) ?? []) {
+    map[row.request_id] = { dialog: row.dialog ?? [], attachments: row.attachments ?? [] }
+  }
+  return map
+}
+
 // Same helper as CreateRequestForm.tsx/RequestDetailForm.tsx etc. — see this
 // app's established convention for small stateless formatters duplicated
 // per component rather than centralized in a shared lib file.
@@ -364,6 +469,13 @@ export default function ArchiveForm() {
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const [confirmMessage, setConfirmMessage] = useState<string | null>(null)
 
+  // Print (2026-08-15) — same afterprint-driven pattern as MainScreen.tsx's
+  // own Print Reports; printDetail is fetched fresh for whichever Record
+  // Type's currently visible matches are being printed.
+  const [showPrint, setShowPrint] = useState(false)
+  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
+  const [printDetail, setPrintDetail] = useState<PrintDetailMap>({})
+
   useEffect(() => {
     let cancelled = false
 
@@ -574,6 +686,25 @@ export default function ArchiveForm() {
     })
   }
 
+  async function startPrint() {
+    const ids = sortedMatches.map((r) => r.id)
+    const detail = currentType === 'received' ? await loadReceivedPrintDetail(ids) : await loadOwnedPrintDetail(ids)
+    setPrintDetail(detail)
+    setPrintGeneratedAt(new Date())
+    setShowPrint(true)
+  }
+
+  useEffect(() => {
+    if (!showPrint) return
+    window.print()
+    function handleAfterPrint() {
+      setShowPrint(false)
+      setPrintGeneratedAt(null)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [showPrint])
+
   async function handleArchiveSelected() {
     const toArchive = matches.filter((r) => !currentDeselected.has(r.id))
     if (toArchive.length === 0) return // nothing checked — quiet no-op
@@ -658,8 +789,25 @@ export default function ArchiveForm() {
 
   return (
     <div className="frame-none">
-      <div className="app">
-        <WypHeader />
+      <div className="app no-print">
+        <WypHeader
+          action={
+            <button
+              className="iconbtn"
+              type="button"
+              aria-label="Print Archive"
+              onClick={startPrint}
+              style={{ marginLeft: 'auto' }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M7 8V3h10v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+                <path d="M7 14h10v7H7v-7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                <circle cx="17" cy="11" r="1" fill="currentColor" />
+              </svg>
+            </button>
+          }
+        />
 
         <div className="band">
           <span className="glabel">Archive</span>
@@ -954,6 +1102,64 @@ export default function ArchiveForm() {
           {confirmMessage && <div className="archconfirm">{confirmMessage}</div>}
         </div>
       </div>
+
+      {/* Print (2026-08-15) — same .print-report/.prow shape as
+          MainScreen.tsx's own Print Reports, plus a checkbox column
+          ("insertion of a checkbox in its own narrow column as is done with
+          the on-screen view," owner) reusing .archcheck's own styling. Prints
+          exactly sortedMatches — the currently visible, filtered-and-sorted
+          set for the active Record Type — same "prints what you see"
+          principle as every other Print button in the app. No filter-
+          criteria summary yet; see this file's Print helpers' own comment. */}
+      {showPrint && (
+        <div className="print-report">
+          <div className="pmast">
+            <span className="pmast-brand">Would You Please</span>
+            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
+          </div>
+          <div className="ptitle">{LIST_TITLE[currentType]}</div>
+          <div className="prows">
+            {sortedMatches.length === 0 && <div className="pempty">No records match.</div>}
+            {sortedMatches.map((r) => {
+              const checked = !currentDeselected.has(r.id)
+              const detail = printDetail[r.id]
+              return (
+                <div key={r.id} className="prow done archprow">
+                  <div className="pr0">
+                    <input className="archcheck" type="checkbox" checked={checked} readOnly disabled />
+                  </div>
+                  <div className="pbody">
+                    {currentType === 'todos' ? (
+                      <div className="pr2">
+                        <span className="pdesc">
+                          {r.priLabel ? `${r.priLabel} — ` : ''}
+                          {r.desc}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="pr1">
+                          <span className="pnm">{r.name ?? '—'}</span>
+                          <span className="pdt">{r.date}</span>
+                          <span className="pdue">{r.due}</span>
+                          <span className="pdn">{r.doneDisp}</span>
+                        </div>
+                        <div className="pr2">
+                          <span className="pdesc">{r.desc}</span>
+                        </div>
+                      </>
+                    )}
+                    {detail && <PrintDialogList entries={detail.dialog} />}
+                    {detail && (
+                      <PrintAttachmentList entries={detail.attachments} heading={currentType === 'todos' ? 'Locations' : 'Attachments'} />
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

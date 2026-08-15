@@ -6,6 +6,112 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Print Reports rebuilt: full Dialog/Attachments per record, Category prefix, single-item print, Archive print
+
+Owner provided three xlsx mockups ("Main Screen sections - Requests Sent/
+Received/ToDos") with real font sizes for a portrait print layout, plus
+comments embedded in the sheets themselves: sort-arrow header placeholder
+("#"), drop the ToDo Due Date column when the account's own
+`todo_dates_enabled` is off, and prefix the description with `[Category]`
+when Private Category is on ("as it does in the Main Screen"). Colors were
+explicitly left flexible ("designed to follow the app standards and can be
+adjusted accordingly"), so the build maps to existing app tokens/weights
+(Overdue red, Done grey, bold names) rather than the spreadsheet's own
+literal font-weight/color choices.
+
+**Supersedes the 2026-08-13 Print Reports feature** — that version showed a
+Dialog/Attachments *icon* only (count > 0). The new layout expands each
+printed record in place: full Dialog thread (`Kind body`, e.g. "Answer I can
+do it."), and a full Attachments (Sent/Received) or Locations (ToDos) list
+(`.pdlg`/`.patt`, `app/globals.css`). None of the three Main Screen sections'
+own list queries ever loaded full Dialog/Attachment *content* before, only
+`dialog(count)`/`attachment(count)` embeds or their RPC-computed
+equivalents (Received) — switching the always-loaded queries to full content
+would add real payload weight to every ordinary Main Screen load for
+content the on-screen row never shows. Fetched instead only at the moment
+Print is clicked, for just the currently visible (filtered+sorted) ids —
+`loadOwnedPrintDetail()` (Sent/ToDos, plain owner-scoped RLS select) and
+`loadReceivedPrintDetail()` (Received, migration 029's new
+`get_received_print_detail()` RPC — Received rows belong to a different
+owner, so a recipient can't query `dialog`/`attachments` directly the same
+way, parallel to how `get_received_requests()` already handles the
+list-level case). `startPrint()` is now async, awaiting the detail fetch
+before flipping `printSection` (and thus firing `window.print()`), so the
+report never renders against stale/empty detail.
+
+**Category prefix** — implemented per the owner's literal instruction for
+Sent and ToDos, both gated on `categoriesEnabled`. **Flagged, not silently
+followed everywhere**: the same comment appeared verbatim in all three
+sheets, but (1) Main Screen's own Sent row has never shown Category
+anywhere on screen (only ToDos has a `.cat` column) — added a
+`categories(name)` embed to Sent's query specifically for this, so Sent
+print now shows Category for the first time anywhere in the app, on the
+owner's own written instruction, even without an on-screen precedent to
+match; (2) Received print does **not** get a Category prefix — PRD §2.3
+withholds Category from the recipient entirely (already enforced by
+`get_received_requests()`/`get_received_print_detail()` themselves
+returning no category field), so honoring the comment there as literally
+written would leak the sender's private Category to the person it's
+private from.
+
+**ToDos' Due/Done columns** now drop entirely (not just Due, as the owner's
+comment said) when `todoDatesEnabled` is off — both fields are governed by
+the same single toggle (migration 022), so there's nothing for either
+column to show in that state; `.pcolbar.ptdc-nodates` (single-column grid)
+replaces `.pcolbar.ptdc` when off.
+
+**Single-item print** — Request Detail's and ToDo Detail's own Print icons
+now render the same `.print-report`/`.prow` layout for one record instead of
+calling `window.print()` on the live screen directly. **No sort-arrow
+header row** — owner, same session: "Obviously the up/down arrow for a
+selected sort would not be shown for a detail print of a single item." Each
+screen already had its Dialog thread loaded (`dialogList`); Attachments/
+Locations needed a small dedicated fetch each (AttachmentsPanel keeps its
+own list private). Helpers (`formatTime12h`/`formatPrintTimestamp`/
+`categoryPrefix`/`PrintDialogList`/`PrintAttachmentList`) are duplicated per
+file, matching this codebase's established convention for small stateless
+helpers rather than a shared lib.
+
+**Archive print** — a Print icon in `WypHeader`'s action slot (matching
+every other screen's placement), reusing the identical record layout plus
+a narrow checkbox column (`.archprow`/`.pr0`/`.pbody` in `globals.css`) —
+"the same formats would work along with the insertion of a checkbox in its
+own narrow column as is done with the on-screen view" (owner). Prints
+`sortedMatches` — the Record Type's currently filtered-and-sorted visible
+set, same "prints what you see" principle as every other Print button in
+the app. **Deliberately does not show the filter criteria (Recipient/
+Requestor, Before Done Date) anywhere in the printed header** — the owner
+flagged this as its own follow-up mid-session ("the Archive report needs to
+show selection criteria - I will work on that next"), so it's left out here
+rather than guessed at; worth a return pass once he has a design for it.
+
+**Migration 029** (`get_received_print_detail(p_ids uuid[])`,
+`docs/Week6 - SQL history.txt`) — DRAFTED, NOT YET CONFIRMED RUN. Same
+`contacts.email` match against the caller's session email as
+`get_received_requests()`; returns one row per matched id with `dialog` and
+`attachments` each as a `jsonb` array (a plain `create or replace function`
+is safe here — new function, not altering an existing `RETURNS TABLE` row
+shape, so migration 017's drop-first lesson doesn't apply).
+
+**A real lint regression, caught and fixed before shipping**: Main Screen's
+`startPrint()` originally sat beside `printSection`'s own state, *before*
+`sortedSent`/`sortedReceived`/`sortedTodos`'s `useMemo` calls in source
+order — syntactically fine (the closure only runs on a later click, well
+after render), but the React Compiler couldn't preserve those three
+`useMemo`s' memoization with a function defined earlier in the component
+body already referencing them, and failed lint with
+`react-hooks/preserve-manual-memoization`. Fixed by moving `startPrint`'s
+definition to just after `sortedTodos`, no behavior change — a real
+constraint of this codebase's React Compiler setup worth remembering for
+any future closure that reads multiple `useMemo` values from a Main-Screen-
+sized component.
+
+`npx tsc --noEmit`/`npm run lint` clean. **No mockups updated** — none of
+the affected screens' static HTML has real print JS to convert; flagged in
+design/README.md, not silently skipped.
+
+\---
+
 ## 2026-08-14 — Locations empty-state box unified with Attachments/Dialog (dropped the "Note:" band)
 
 Owner, two annotated screenshots (ToDo Detail marked "What I now see," Create

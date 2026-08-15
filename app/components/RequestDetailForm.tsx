@@ -43,6 +43,15 @@ type DialogEntry = {
   replies_to_id: number | null
 }
 
+// Same shape as MainScreen.tsx's own PrintAttachmentEntry (2026-08-15).
+type PrintAttachmentEntry = {
+  id: string
+  kind: 'file' | 'reference'
+  file_name: string | null
+  reference_url: string | null
+  reference_note: string | null
+}
+
 type RequestFormState = {
   dueDate: string
   dueTime: string
@@ -61,8 +70,79 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
+function todayIso(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Same helpers as MainScreen.tsx's own Print Reports (2026-08-13/2026-08-15)
+// — duplicated per this codebase's established convention for small
+// stateless formatters rather than extracted to a shared lib file.
+function formatTime12h(value: string | null): string {
+  if (!value) return ''
+  const [hStr, mStr] = value.split(':')
+  let h = parseInt(hStr, 10)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h}:${mStr} ${ampm}`
+}
+
+function formatPrintTimestamp(d: Date): string {
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const y = String(d.getFullYear()).slice(2)
+  let h = d.getHours()
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
+}
+
 function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 3) + '...' : s
+}
+
+function categoryPrefix(name: string | null | undefined): string {
+  return name ? `[${name}] ` : ''
+}
+
+// Same rendering as MainScreen.tsx's own PrintDialogList/PrintAttachmentList
+// (2026-08-15) — duplicated per this codebase's established convention.
+function PrintDialogList({ entries }: { entries: DialogEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="pdlg">
+      <div className="pdlghead">Dialog</div>
+      {entries.map((e) => {
+        const kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment'
+        return (
+          <div className="pdlgitem" key={e.id}>
+            <span className="pdlgkind">{kindLabel}</span> {e.body}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PrintAttachmentList({ entries }: { entries: PrintAttachmentEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="patt">
+      <div className="patthead">Attachments</div>
+      {entries.map((a) => (
+        <div className="pattitem" key={a.id}>
+          {a.kind === 'file'
+            ? a.file_name
+            : a.reference_note
+              ? `${a.reference_note} — ${a.reference_url ?? ''}`
+              : a.reference_url}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 // Desktop browsers only open a date/time input's native picker when the
@@ -146,6 +226,18 @@ export default function RequestDetailForm() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [authToken, setAuthToken] = useState<string | null>(null)
 
+  // Print (2026-08-15) — reuses the exact per-record layout MainScreen.tsx's
+  // own Print Reports use (.print-report/.prow/.pdlg/.patt), for one Request
+  // instead of a whole section — "the same format can be used for the single
+  // item" (owner). No sort-arrow header row here (owner, same day: "Obviously
+  // the up/down arrow for a selected sort would not be shown for a detail
+  // print of a single item") — nothing to sort when there's only one record.
+  // dialogList above already has everything Dialog needs; Attachments needs
+  // its own small fetch since AttachmentsPanel keeps its own list private.
+  const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
+  const [showPrint, setShowPrint] = useState(false)
+  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
+
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
@@ -159,6 +251,24 @@ export default function RequestDetailForm() {
     setDialogList((data as unknown as DialogEntry[]) ?? [])
   }
 
+  function startPrint() {
+    setPrintGeneratedAt(new Date())
+    setShowPrint(true)
+  }
+
+  useEffect(() => {
+    if (!showPrint) return
+    // Same afterprint-driven pattern as MainScreen.tsx's own Print Reports —
+    // fires after the .print-report JSX below has committed to the DOM.
+    window.print()
+    function handleAfterPrint() {
+      setShowPrint(false)
+      setPrintGeneratedAt(null)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [showPrint])
+
   useEffect(() => {
     if (!requestId) return
     let cancelled = false
@@ -167,7 +277,7 @@ export default function RequestDetailForm() {
       setLoading(true)
       setLoadError(null)
 
-      const [reqRes, catRes, ownerRes] = await Promise.all([
+      const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
           .select('id, description, due_date, due_time, done_date, done_time, category_id, contacts(display_name), categories(name)')
@@ -175,7 +285,19 @@ export default function RequestDetailForm() {
           .single(),
         supabase.from('categories').select('id, name').order('name'),
         supabase.from('profiles').select('display_name, private_category_enabled, request_time_enabled, tier').single(),
+        // Print (2026-08-15) — same owner-scoped RLS access MainScreen.tsx's
+        // own loadOwnedPrintDetail() uses; fetched unconditionally on load
+        // rather than only-on-print-click, since a single Detail screen's
+        // own attachment list is small (unlike Main Screen's whole-section
+        // fetch, which is deliberately deferred to the Print click itself).
+        supabase
+          .from('attachments')
+          .select('id, kind, file_name, reference_url, reference_note')
+          .eq('request_id', requestId)
+          .is('deleted_at', null)
+          .order('created_at'),
       ])
+      if (!cancelled) setPrintAttachments((attRes.data as unknown as PrintAttachmentEntry[]) ?? [])
 
       const { data: sessionData } = await supabase.auth.getSession()
       if (!cancelled) {
@@ -458,14 +580,14 @@ export default function RequestDetailForm() {
 
   return (
     <div className="frame-none">
-      <div className="app">
+      <div className="app no-print">
         <WypHeader
           action={
             <button
               className="iconbtn"
               type="button"
               aria-label="Print Request"
-              onClick={() => window.print()}
+              onClick={startPrint}
               style={{ marginLeft: 'auto' }}
             >
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1022,6 +1144,50 @@ export default function RequestDetailForm() {
           </>
         )}
       </div>
+
+      {/* Single-item print (2026-08-15) — same .print-report/.prow shape
+          MainScreen.tsx's own Print Reports use for a whole section, "the
+          same format... used for the single item" (owner). No column-header
+          row here — nothing to sort with only one record (owner, same day).
+          .no-print/@media print above make this the only thing visible when
+          printing, same mechanism as Main Screen. */}
+      {showPrint && (
+        <div className="print-report">
+          <div className="pmast">
+            <span className="pmast-brand">Would You Please</span>
+            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
+          </div>
+          <div className="ptitle">Request Detail</div>
+          <div className="prows">
+            {(() => {
+              const status = form.doneDate ? 'done' : form.dueDate && form.dueDate < todayIso() ? 'overdue' : 'open'
+              return (
+                <div className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                  <div className="pr1">
+                    <span className="pnm">{recipientName || '—'}</span>
+                    <span className="pdue">
+                      {formatMDY(form.dueDate || null)}
+                      {requestTimeEnabled && form.dueTime && <span className="ptime">{formatTime12h(form.dueTime)}</span>}
+                    </span>
+                    <span className="pdn">
+                      {formatMDY(form.doneDate || null)}
+                      {requestTimeEnabled && form.doneTime && <span className="ptime">{formatTime12h(form.doneTime)}</span>}
+                    </span>
+                  </div>
+                  <div className="pr2">
+                    <span className="pdesc">
+                      {categoriesEnabled && categoryPrefix(form.categoryName)}
+                      {form.description}
+                    </span>
+                  </div>
+                  <PrintDialogList entries={dialogList} />
+                  <PrintAttachmentList entries={printAttachments} />
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

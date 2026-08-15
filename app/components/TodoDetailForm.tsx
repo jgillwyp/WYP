@@ -73,6 +73,71 @@ function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 3) + '...' : s
 }
 
+// Same helpers as MainScreen.tsx's own Print Reports (2026-08-13/2026-08-15)
+// — duplicated per this codebase's established convention.
+function formatPrintTimestamp(d: Date): string {
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const y = String(d.getFullYear()).slice(2)
+  let h = d.getHours()
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
+}
+
+function categoryPrefix(name: string | null | undefined): string {
+  return name ? `[${name}] ` : ''
+}
+
+// Same shape as MainScreen.tsx's own PrintAttachmentEntry — ToDos only ever
+// use kind='reference' (Locations), but the type is shared with
+// RequestDetailForm.tsx's identical duplicate rather than narrowed, so
+// PrintAttachmentList below can be a byte-for-byte copy of the other two.
+type PrintAttachmentEntry = {
+  id: string
+  kind: 'file' | 'reference'
+  file_name: string | null
+  reference_url: string | null
+  reference_note: string | null
+}
+
+function PrintDialogList({ entries }: { entries: DialogEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="pdlg">
+      <div className="pdlghead">Dialog</div>
+      {entries.map((e) => {
+        const kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment'
+        return (
+          <div className="pdlgitem" key={e.id}>
+            <span className="pdlgkind">{kindLabel}</span> {e.body}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PrintAttachmentList({ entries }: { entries: PrintAttachmentEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="patt">
+      <div className="patthead">Locations</div>
+      {entries.map((a) => (
+        <div className="pattitem" key={a.id}>
+          {a.kind === 'file'
+            ? a.file_name
+            : a.reference_note
+              ? `${a.reference_note} — ${a.reference_url ?? ''}`
+              : a.reference_url}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // Local calendar date as "YYYY-MM-DD", matching the native date input's own
 // value format — mirrors CreateTodoForm.tsx's identical helper.
 function todayISODate(): string {
@@ -164,6 +229,14 @@ export default function TodoDetailForm() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [authToken, setAuthToken] = useState<string | null>(null)
 
+  // Print (2026-08-15) — same reasoning/pattern as RequestDetailForm.tsx's
+  // identical addition. dialogList already has everything Dialog needs;
+  // Locations need their own small fetch since AttachmentsPanel keeps its
+  // own list private.
+  const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
+  const [showPrint, setShowPrint] = useState(false)
+  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
+
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
@@ -188,6 +261,22 @@ export default function TodoDetailForm() {
     setDialogList((data as unknown as DialogEntry[]) ?? [])
   }
 
+  function startPrint() {
+    setPrintGeneratedAt(new Date())
+    setShowPrint(true)
+  }
+
+  useEffect(() => {
+    if (!showPrint) return
+    window.print()
+    function handleAfterPrint() {
+      setShowPrint(false)
+      setPrintGeneratedAt(null)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [showPrint])
+
   useEffect(() => {
     if (!todoId) return
     let cancelled = false
@@ -196,7 +285,7 @@ export default function TodoDetailForm() {
       setLoading(true)
       setLoadError(null)
 
-      const [todoRes, catRes, ownerRes] = await Promise.all([
+      const [todoRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
           .select('id, description, priority, due_date, done_date, category_id, categories(name)')
@@ -204,7 +293,16 @@ export default function TodoDetailForm() {
           .single(),
         supabase.from('categories').select('id, name').order('name'),
         supabase.from('profiles').select('display_name, private_category_enabled, todo_dates_enabled, tier').single(),
+        // Print (2026-08-15) — same reasoning as RequestDetailForm.tsx's
+        // identical addition.
+        supabase
+          .from('attachments')
+          .select('id, kind, file_name, reference_url, reference_note')
+          .eq('request_id', todoId)
+          .is('deleted_at', null)
+          .order('created_at'),
       ])
+      if (!cancelled) setPrintAttachments((attRes.data as unknown as PrintAttachmentEntry[]) ?? [])
 
       const { data: sessionData } = await supabase.auth.getSession()
       if (!cancelled) {
@@ -491,14 +589,14 @@ export default function TodoDetailForm() {
 
   return (
     <div className="frame-none">
-      <div className="app">
+      <div className="app no-print">
         <WypHeader
           action={
             <button
               className="iconbtn"
               type="button"
               aria-label="Print ToDo"
-              onClick={() => window.print()}
+              onClick={startPrint}
               style={{ marginLeft: 'auto' }}
             >
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1005,6 +1103,50 @@ export default function TodoDetailForm() {
           </>
         )}
       </div>
+
+      {/* Single-item print (2026-08-15) — same shape as MainScreen.tsx's own
+          ToDos print (no name/date column, Description first, Due/Done
+          second, dropped entirely when todoDatesEnabled is off) and the same
+          "no sort-arrow header row" rule as RequestDetailForm.tsx's own
+          single-item print — nothing to sort with one record. */}
+      {showPrint && (
+        <div className="print-report">
+          <div className="pmast">
+            <span className="pmast-brand">Would You Please</span>
+            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
+          </div>
+          <div className="ptitle">ToDo Detail</div>
+          <div className="prows">
+            {(() => {
+              const status = todoDatesEnabled
+                ? form.doneDate
+                  ? 'done'
+                  : form.dueDate && form.dueDate < todayISODate()
+                    ? 'overdue'
+                    : 'open'
+                : todoStatus
+              return (
+                <div className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                  <div className="pr2">
+                    <span className="pdesc">
+                      {categoriesEnabled && categoryPrefix(form.categoryName)}
+                      {form.description}
+                    </span>
+                  </div>
+                  {todoDatesEnabled && (
+                    <div className="pr1 ptd">
+                      <span className="pdue">{formatMDY(form.dueDate || null)}</span>
+                      <span className="pdn">{formatMDY(form.doneDate || null)}</span>
+                    </div>
+                  )}
+                  <PrintDialogList entries={dialogList} />
+                  <PrintAttachmentList entries={printAttachments} />
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

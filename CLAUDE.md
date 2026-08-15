@@ -996,6 +996,38 @@ link is built only after the stack is proven on Add Contact.
   persistent — Request links are multi-use, so the same recipient reaching
   the page via the original, unmarked email link still sees the button.
   See the decisions log for the full write-up.
+- **Print Reports rebuilt with full Dialog/Attachments content, Category
+  prefix, single-item print, and Archive print (2026-08-15) — migration 029
+  DRAFTED, NOT YET CONFIRMED RUN.** Owner supplied three xlsx print mockups
+  (Sent/Received/ToDos). Supersedes the 2026-08-13 icon-only Print Reports:
+  each printed record now shows its full Dialog thread and full
+  Attachments/Locations list, not just a count icon, fetched fresh at print
+  time (`loadOwnedPrintDetail()`/`loadReceivedPrintDetail()`) rather than
+  added to the always-loaded Main Screen queries — Received's fetch depends
+  on **migration 029** (`get_received_print_detail()`,
+  `docs/Week6 - SQL history.txt`), **not yet run**, so Received print will
+  fail until the owner confirms it. Sent print gains a Category prefix
+  (new `categories(name)` embed) per the owner's instruction, even though
+  Sent has never shown Category on screen; Received print deliberately does
+  not, since PRD §2.3 withholds Category from the recipient (already
+  enforced by `get_received_requests()`/`get_received_print_detail()`
+  returning no category field) — flagged as a literal-instruction-vs-PRD
+  conflict, resolved in the PRD's favor. ToDos' print now drops both Due
+  and Done columns together when `todo_dates_enabled` is off (previously
+  only Due). Request Detail's and ToDo Detail's own Print icons now render
+  the same detailed single-item report instead of `window.print()` on the
+  live screen, with no sort-arrow header row (owner: "the up/down arrow for
+  a selected sort would not be shown for a detail print of a single item").
+  Archive gained its own Print icon, reusing the `.archcheck` checkbox in a
+  new print-only column (`.archprow`) — **deliberately excludes selection
+  criteria** (Recipient/Requestor, Before Done Date) from the printed
+  header, since the owner flagged that as his own follow-up design task
+  ("I will work on that next"), not built here. `npx tsc --noEmit`/`npm run
+  lint` clean. No mockups updated. See the decisions log's 2026-08-15 entry
+  for the full write-up, including a React Compiler
+  memoization-preservation lint fix (`startPrint` had to move after the
+  `sortedSent`/`sortedReceived`/`sortedTodos` `useMemo` calls in
+  `MainScreen.tsx`).
 - **Landing page is now the live, unauthenticated `/` route (2026-08-13,
   `app/components/LandingPage.tsx`, `app/components/landing.css`,
   `app/page.tsx`).** Owner: a new/signed-out visitor was being bounced

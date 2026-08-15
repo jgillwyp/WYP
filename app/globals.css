@@ -2354,6 +2354,14 @@ body {
   grid-template-columns: 1fr 70px 70px;
 }
 
+/* ToDos print header with Due/Done dropped entirely (2026-08-15) — the
+   account's own todo_dates_enabled (migration 022) is off, so there is no
+   due_date/done_date to show a column for. Single-column grid, Description
+   fills the full width. */
+.pcolbar.ptdc-nodates {
+  grid-template-columns: 1fr;
+}
+
 .pcolbar .c-dt,
 .pcolbar .c-due,
 .pcolbar .c-dn {
@@ -2448,29 +2456,75 @@ body {
   line-height: 1.32;
 }
 
-.pii {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  margin-right: 5px;
-  padding-top: 1px;
-  color: var(--icon-grey);
+/* Archive print's checkbox column (2026-08-15) — ".prow" everywhere else is
+   a single block; Archive needs a narrow checkbox column beside the
+   record's own content, matching the on-screen .archrow/.archcheck/
+   .archbody split (design/README.md §6.36). .archcheck itself is already
+   styled for the on-screen view; only the print-specific two-column
+   wrapper is new here. */
+.prow.archprow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.pii .iico {
-  width: 13px;
-  height: 13px;
-  display: block;
+.prow.archprow .pr0 {
+  flex: 0 0 auto;
+  padding-top: 2px;
+}
+
+.prow.archprow .pbody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Full Dialog thread and Attachments/Locations list per record (2026-08-15,
+   the owner's own xlsx print mockups) — supersedes the old icon-only
+   summary (.pii/.pii .iico, removed here; a record's own presence/absence
+   of Dialog or Attachments is now obvious from whether these blocks render
+   at all, so a separate indicator icon is redundant). Indented under the
+   description, matching the mockup's own leading-spaces convention;
+   heading bold, entries plain — "Dialog" / "Attachments" (Sent, Received) /
+   "Locations" (ToDos), each entry as "Kind body text" (Question/Answer/
+   Comment) or a filename/reference. */
+.pdlg,
+.patt {
+  margin: 5px 0 0 16px;
+}
+
+.pdlghead,
+.patthead {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pdlgitem,
+.pattitem {
+  font-size: 11px;
+  color: var(--ink);
+  line-height: 1.34;
+  margin-top: 1px;
+}
+
+.pdlgkind {
+  font-weight: 700;
 }
 
 /* Overdue/Done rows render entirely in red/grey — same design constant as
-   the live .row.overdue/.row.done rules above. */
+   the live .row.overdue/.row.done rules above. Extends to the Dialog/
+   Attachments sub-blocks too (2026-08-15) so a record's whole print block
+   reads as one color, not just its name/date/description line. */
 .prow.overdue .pnm,
 .prow.overdue .pdt,
 .prow.overdue .pdue,
 .prow.overdue .ptime,
 .prow.overdue .pdn,
-.prow.overdue .pdesc {
+.prow.overdue .pdesc,
+.prow.overdue .pdlghead,
+.prow.overdue .pdlgitem,
+.prow.overdue .patthead,
+.prow.overdue .pattitem {
   color: var(--alert-red);
 }
 
@@ -2479,7 +2533,11 @@ body {
 .prow.done .pdue,
 .prow.done .ptime,
 .prow.done .pdn,
-.prow.done .pdesc {
+.prow.done .pdesc,
+.prow.done .pdlghead,
+.prow.done .pdlgitem,
+.prow.done .patthead,
+.prow.done .pattitem {
   color: var(--ink-soft);
   font-weight: 500;
 }

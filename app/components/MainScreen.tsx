@@ -86,6 +86,13 @@ type SentRow = {
   // Week 5 Priority 3 (Attachments, 2026-08-14) — same PostgREST count-embed
   // technique as dialog(count) above.
   attachments: { count: number }[] | null
+  // categories(name) added 2026-08-15 for the Print Reports Category-prefix
+  // feature below — Requests have always had a category_id (same as ToDos,
+  // gated by the same categoriesEnabled toggle), but Main Screen's own Sent
+  // row has never surfaced it on screen, unlike ToDos' .cat column. Fetched
+  // here only because Print now needs it; the on-screen Sent row is
+  // unchanged and still shows no Category.
+  categories: { name: string } | null
   // archived_at added by migration 028 (Archive, 2026-08-14) — the row's own
   // owner archived it via /archive. Deliberately still selected/fetched here
   // rather than filtered out server-side: PRD §9.5 keeps an archived record
@@ -145,6 +152,39 @@ type ReceivedRow = {
   // filteredReceived below.
   received_archived_at: string | null
 }
+
+// Print Reports detail (2026-08-15) — the owner's own xlsx print mockups
+// (Main Screen sections - Sent/Received/ToDos) show each record's full
+// Dialog thread and full Attachments/Locations list, not just an icon
+// indicating either exists. None of the three sections' own Main Screen
+// list queries load that content today — Sent and ToDos only fetch
+// dialog(count)/attachments(count) PostgREST embeds, Received only fetches
+// dialog_count/attachment_count from get_received_requests() — since the
+// on-screen rows only ever needed a count for the icon, not the text.
+// Deliberately not switching the main list queries to load full content by
+// default (that would add real payload weight to every ordinary Main
+// Screen load for content the screen itself never shows) — instead this is
+// fetched only once, at the moment a Print button is actually clicked, for
+// just the ids currently on screen. See loadOwnedPrintDetail/
+// loadReceivedPrintDetail and startPrint below.
+type PrintDialogEntry = {
+  id: string
+  kind: string
+  body: string
+  who: string | null
+  replies_to_id: string | null
+}
+
+type PrintAttachmentEntry = {
+  id: string
+  kind: 'file' | 'reference'
+  file_name: string | null
+  reference_url: string | null
+  reference_note: string | null
+}
+
+type PrintDetail = { dialog: PrintDialogEntry[]; attachments: PrintAttachmentEntry[] }
+type PrintDetailMap = Record<string, PrintDetail>
 
 const PRIORITY_LABEL: Record<number, string> = { 1: 'ASAP', 2: 'SOON', 3: 'LATER' }
 
@@ -252,6 +292,54 @@ function dialogCount(dialog: { count: number }[] | null): number {
 // (Week 5 Priority 3, 2026-08-14).
 function attachmentCount(attachments: { count: number }[] | null): number {
   return attachments?.[0]?.count ?? 0
+}
+
+// Sent/ToDos are both rows in the same `requests` table the signed-in owner
+// already has plain RLS SELECT access to (migration 025: "SELECT is
+// owner-only" on dialog/attachments) — no RPC needed, unlike Received below.
+// Field lists match RequestDetailForm.tsx's own dialog select and the
+// attachments API route's own select (see PrintDialogEntry/
+// PrintAttachmentEntry's own comments) — no new fields invented.
+async function loadOwnedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
+  const map: PrintDetailMap = {}
+  for (const id of ids) map[id] = { dialog: [], attachments: [] }
+  if (ids.length === 0) return map
+
+  const [dlgRes, attRes] = await Promise.all([
+    supabase.from('dialog').select('id, request_id, kind, body, who, replies_to_id').in('request_id', ids).order('id'),
+    supabase
+      .from('attachments')
+      .select('id, request_id, kind, file_name, reference_url, reference_note')
+      .in('request_id', ids)
+      .is('deleted_at', null)
+      .order('created_at'),
+  ])
+
+  for (const d of (dlgRes.data as unknown as (PrintDialogEntry & { request_id: string })[]) ?? []) {
+    map[d.request_id]?.dialog.push(d)
+  }
+  for (const a of (attRes.data as unknown as (PrintAttachmentEntry & { request_id: string })[]) ?? []) {
+    map[a.request_id]?.attachments.push(a)
+  }
+  return map
+}
+
+// Received rows belong to a different owner — Dialog/Attachments RLS is
+// owner-only, so the recipient can't query those tables directly the same
+// way Sent/ToDos can. Migration 029's get_received_print_detail() is the
+// parallel to get_received_requests() itself: same contacts.email match
+// against the caller's own session email, just returning full content
+// instead of counts, only for the ids actually being printed right now.
+async function loadReceivedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
+  const map: PrintDetailMap = {}
+  for (const id of ids) map[id] = { dialog: [], attachments: [] }
+  if (ids.length === 0) return map
+
+  const { data } = await supabase.rpc('get_received_print_detail', { p_ids: ids })
+  for (const row of (data as { request_id: string; dialog: PrintDialogEntry[]; attachments: PrintAttachmentEntry[] }[]) ?? []) {
+    map[row.request_id] = { dialog: row.dialog ?? [], attachments: row.attachments ?? [] }
+  }
+  return map
 }
 
 // Column-header sorting (2026-08-11) — owner: "Main screen sorting was
@@ -478,6 +566,65 @@ function AttachmentIcon() {
   )
 }
 
+// Category prefix (2026-08-15, owner's own xlsx print mockups, comment #3:
+// "If a Private Category is used, it would prefix the description text as
+// it does in the Main Screen"). Applied literally to print only — on
+// screen, ToDos show Category as its own .cat column, never a description
+// prefix, and Sent has never shown Category anywhere on Main Screen at all
+// (only ToDos' row has a Category column today), so this print behavior is
+// new rather than matching an existing on-screen pattern in either case;
+// flagged rather than silently done. Deliberately NOT applied to Received —
+// PRD §2.3 withholds Category from the recipient entirely (already enforced
+// inside get_received_requests()/get_received_print_detail() themselves,
+// which return no category field to prefix with), so honoring comment #3 on
+// the Received sheet as literally written would leak the sender's private
+// Category to the recipient it's private from.
+function categoryPrefix(name: string | null | undefined): string {
+  return name ? `[${name}] ` : ''
+}
+
+// Full Dialog thread for one printed record (2026-08-15) — see PrintDetail's
+// own comment above. No sort-arrow/column-header row here, since this only
+// ever renders inside a single record's block, never a list.
+function PrintDialogList({ entries }: { entries: PrintDialogEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="pdlg">
+      <div className="pdlghead">Dialog</div>
+      {entries.map((e) => {
+        const kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment'
+        return (
+          <div className="pdlgitem" key={e.id}>
+            <span className="pdlgkind">{kindLabel}</span> {e.body}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Attachments (Sent/Received, kind='file') or Locations (ToDos, kind=
+// 'reference') for one printed record — same component, caller supplies the
+// heading text ("Attachments" vs. "Locations") matching each object type's
+// own on-screen wording.
+function PrintAttachmentList({ entries, heading }: { entries: PrintAttachmentEntry[]; heading: string }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="patt">
+      <div className="patthead">{heading}</div>
+      {entries.map((a) => (
+        <div className="pattitem" key={a.id}>
+          {a.kind === 'file'
+            ? a.file_name
+            : a.reference_note
+              ? `${a.reference_note} — ${a.reference_url ?? ''}`
+              : a.reference_url}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function PrintIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -547,11 +694,14 @@ export default function MainScreen() {
   // Print was clicked, not whatever instant React happens to next re-render.
   const [printSection, setPrintSection] = useState<'sent' | 'received' | 'todos' | null>(null)
   const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
-
-  function startPrint(section: 'sent' | 'received' | 'todos') {
-    setPrintGeneratedAt(new Date())
-    setPrintSection(section)
-  }
+  // Full Dialog/Attachments content for whatever's currently being printed
+  // (2026-08-15) — see loadOwnedPrintDetail/loadReceivedPrintDetail above
+  // for why this is a print-time fetch rather than part of the main list
+  // queries. Keyed by request id; printSection only flips (triggering the
+  // print effect below) once this has actually resolved, so the report
+  // never renders — and window.print() never fires — against stale/empty
+  // detail.
+  const [printDetail, setPrintDetail] = useState<PrintDetailMap>({})
 
   useEffect(() => {
     if (!printSection) return
@@ -741,7 +891,7 @@ export default function MainScreen() {
       const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), archived_at')
+          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at')
           .not('contact_id', 'is', null)
           .order('due_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
@@ -878,6 +1028,21 @@ export default function MainScreen() {
     })
     return list
   }, [filteredTodos, todoSort])
+
+  // Placed after sortedSent/sortedReceived/sortedTodos above (not beside
+  // printSection/printDetail's own state, further up) — the React Compiler
+  // couldn't preserve those three useMemo's memoization when this closure
+  // referencing them was defined earlier in the component body.
+  async function startPrint(section: 'sent' | 'received' | 'todos') {
+    const ids =
+      section === 'sent' ? sortedSent.map((r) => r.id) :
+      section === 'received' ? sortedReceived.map((r) => r.id) :
+      sortedTodos.map((t) => t.id)
+    const detail = section === 'received' ? await loadReceivedPrintDetail(ids) : await loadOwnedPrintDetail(ids)
+    setPrintDetail(detail)
+    setPrintGeneratedAt(new Date())
+    setPrintSection(section)
+  }
 
   function sortSent(key: ReqSortKey) {
     setSentSort((s) => toggleSort(s, key, REQ_SORT_DEFAULT_DIR))
@@ -1270,6 +1435,7 @@ export default function MainScreen() {
                 {sortedSent.length === 0 && <div className="pempty">No Sent Requests match this report.</div>}
                 {sortedSent.map((r) => {
                   const status = sentStatus(r)
+                  const detail = printDetail[r.id]
                   return (
                     <div key={r.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
                       <div className="pr1">
@@ -1287,10 +1453,13 @@ export default function MainScreen() {
                         <span className="pdn">{formatMDY(r.done_date)}</span>
                       </div>
                       <div className="pr2">
-                        {dialogCount(r.dialog) > 0 && <span className="pii"><DialogIcon /></span>}
-                        {attachmentCount(r.attachments) > 0 && <span className="pii"><AttachmentIcon /></span>}
-                        <span className="pdesc">{r.description}</span>
+                        <span className="pdesc">
+                          {categoriesEnabled && categoryPrefix(r.categories?.name)}
+                          {r.description}
+                        </span>
                       </div>
+                      {detail && <PrintDialogList entries={detail.dialog} />}
+                      {detail && <PrintAttachmentList entries={detail.attachments} heading="Attachments" />}
                     </div>
                   )
                 })}
@@ -1311,6 +1480,7 @@ export default function MainScreen() {
                 {sortedReceived.length === 0 && <div className="pempty">No Received Requests match this report.</div>}
                 {sortedReceived.map((r) => {
                   const status = receivedStatus(r)
+                  const detail = printDetail[r.id]
                   return (
                     <div key={r.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
                       <div className="pr1">
@@ -1328,11 +1498,14 @@ export default function MainScreen() {
                         </span>
                         <span className="pdn">{formatMDY(r.done_date)}</span>
                       </div>
+                      {/* No Category prefix here — PRD §2.3 withholds Category
+                          from the recipient entirely; see categoryPrefix's own
+                          comment above. */}
                       <div className="pr2">
-                        {r.dialog_count > 0 && <span className="pii"><DialogIcon /></span>}
-                        {r.attachment_count > 0 && <span className="pii"><AttachmentIcon /></span>}
                         <span className="pdesc">{r.description}</span>
                       </div>
+                      {detail && <PrintDialogList entries={detail.dialog} />}
+                      {detail && <PrintAttachmentList entries={detail.attachments} heading="Attachments" />}
                     </div>
                   )
                 })}
@@ -1343,25 +1516,44 @@ export default function MainScreen() {
           {printSection === 'todos' && (
             <>
               <div className="ptitle">ToDos — {CHIP_LABEL[todoFilter]}</div>
-              <div className="pcolbar ptdc">
+              <div className={`pcolbar ${todoDatesEnabled ? 'ptdc' : 'ptdc-nodates'}`}>
                 <span className="c-desc">Description</span>
-                <span className="c-due">Due</span>
-                <span className="c-dn">Done</span>
+                {/* Due/Done columns dropped entirely when the account's own
+                    todo_dates_enabled (migration 022) is off — a ToDo has no
+                    due_date/done_date to show in that state (Create ToDo/ToDo
+                    Detail collapse to the Open/Done Status chip pair
+                    instead), so there's nothing for these columns to display.
+                    Owner's own comment #2 only mentioned dropping Due; Done
+                    is dropped along with it here since both fields are governed
+                    by the same single toggle. */}
+                {todoDatesEnabled && (
+                  <>
+                    <span className="c-due">Due</span>
+                    <span className="c-dn">Done</span>
+                  </>
+                )}
               </div>
               <div className="prows">
                 {sortedTodos.length === 0 && <div className="pempty">No ToDos match this report.</div>}
                 {sortedTodos.map((t) => {
-                  const status = todoStatus(t)
+                  const status = todoDatesEnabled ? todoStatus(t) : 'open'
+                  const detail = printDetail[t.id]
                   return (
                     <div key={t.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
                       <div className="pr2">
-                        {dialogCount(t.dialog) > 0 && <span className="pii"><DialogIcon /></span>}
-                        <span className="pdesc">{t.description}</span>
+                        <span className="pdesc">
+                          {categoriesEnabled && categoryPrefix(t.categories?.name)}
+                          {t.description}
+                        </span>
                       </div>
-                      <div className="pr1 ptd">
-                        <span className="pdue">{formatMDY(t.due_date)}</span>
-                        <span className="pdn">{formatMDY(t.done_date)}</span>
-                      </div>
+                      {todoDatesEnabled && (
+                        <div className="pr1 ptd">
+                          <span className="pdue">{formatMDY(t.due_date)}</span>
+                          <span className="pdn">{formatMDY(t.done_date)}</span>
+                        </div>
+                      )}
+                      {detail && <PrintDialogList entries={detail.dialog} />}
+                      {detail && <PrintAttachmentList entries={detail.attachments} heading="Locations" />}
                     </div>
                   )
                 })}
