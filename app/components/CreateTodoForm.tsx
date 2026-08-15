@@ -781,16 +781,19 @@ export default function CreateTodoForm() {
                 "the Create ToDo and the ToDo Detail should have the Add
                 Location behave like the Add Dialog to include erasing the
                 'placeholder' box and explanation... when a Location is
-                added") — the note+box shows only while nothing is staged
+                added") — the box+button shows only while nothing is staged
                 yet and the inline form isn't open; once a Location exists,
-                only a bare Add Location button remains. */}
+                only a bare Add Location button remains. Empty-state box is
+                the same bordered .actlabel treatment as Add Dialog's own
+                (2026-08-14, second report, owner screenshots comparing this
+                screen's own rendering, annotated "Preferred method", against
+                ToDo Detail's tinted "Note:" band) — not .donerow/.donenote,
+                which stays reserved for the locked (free-tier) case below. */}
             {tier === 'subscriber' ? (
               <div className="fgroup">
                 {stagedLocations.length === 0 && !locationFormOpen && (
-                  <div className="donerow">
-                    <span className="donenote">
-                      <b>Note:</b> Locations are URLs or File paths.
-                    </span>
+                  <div className="frow">
+                    <span className="actlabel">Locations are URLs or File paths.</span>
                     <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
                       Add Location
                     </button>

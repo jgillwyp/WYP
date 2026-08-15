@@ -6,6 +6,41 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Locations empty-state box unified with Attachments/Dialog (dropped the "Note:" band)
+
+Owner, two annotated screenshots (ToDo Detail marked "What I now see," Create
+ToDo marked "Preferred method"): wanted Locations' empty state to look like
+the plain bordered box Add Dialog uses, not the tinted "Note:" band.
+
+Tracing it: `AttachmentsPanel.tsx`'s `mode = 'file'` (real Attachments)
+empty state has always used a `.frow` + `.actlabel` bordered box — the exact
+same component Dialog's own empty state uses. `mode = 'reference'`
+(Locations) was routed through a separate `showReferenceNote` branch instead,
+rendering `.donerow`/`.donenote` (a tinted strip with a bold "Note:" prefix)
+— a leftover from earlier the same day, when the note was still meant to
+stay permanently visible even once populated; the later empty/populated
+split (also earlier today) kept that donerow *styling* even after making it
+conditional, so Locations' unlocked empty state ended up looking different
+from Attachments' own, with no one having asked for that difference.
+
+Fixed by deleting `showReferenceNote` and its donerow branch entirely —
+`mode = 'reference'` now falls through the exact same `.frow`/`.actlabel`
+branch `mode = 'file'` already used, just with different text inside the
+box: file mode keeps its short "Attachments (optional)" label, reference
+mode shows the fuller descriptive `referenceNote` ("Locations are URLs or
+File paths.") un-bolded, matching Dialog's own plain-descriptive-copy
+register rather than a "Note:"-prefixed callout. `CreateTodoForm.tsx`'s own
+separate, bespoke Locations markup (staged client-side, no real id yet) got
+the identical treatment for consistency — its empty-state `.donerow` swapped
+for `.frow`/`.actlabel` with the same text. The locked/free-tier state is
+unchanged in both files — `.donerow`/`.donenote` stays exactly right there,
+this was only ever about the unlocked empty state.
+
+`npx tsc --noEmit`/`npm run lint` clean. No mockup change — same already-
+flagged gap as the rest of the Locations/Attachments build.
+
+\---
+
 ## 2026-08-14 — Create ToDo's Locations empty/populated split (the piece left undone earlier)
 
 Owner re-reported, with a Create ToDo screenshot: "the Create ToDo and the

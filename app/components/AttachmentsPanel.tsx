@@ -257,16 +257,6 @@ export default function AttachmentsPanel({
 
   if (loading) return null // avoid a flash of the empty state while the first fetch resolves
 
-  // mode = 'reference' now matches mode = 'file's own empty/populated split
-  // (2026-08-14, owner-reported: "the Add Location behave like the Add
-  // Dialog to include erasing the 'placeholder' box... when a Location is
-  // added" — reversing the earlier same-day decision that kept this note
-  // permanently visible). The note+button shows only while nothing is
-  // staged yet and the inline form isn't open; once a Location exists, only
-  // a bare Add Location button remains (the .fieldact case below), matching
-  // Add Dialog's own populated state.
-  const showReferenceNote = mode === 'reference' && canAdd && items.length === 0 && !refFormOpen
-
   // Screens with no `.form` wrapper (Request Response, Response Detail) need
   // each row's own horizontal inset — see the `standalone` prop comment.
   // `.frow`/`.fieldact` are plain flex rows (padding insets their content
@@ -287,11 +277,29 @@ export default function AttachmentsPanel({
 
   return (
     <div className="fgroup">
-      {items.length === 0 && !refFormOpen && !showReferenceNote ? (
+      {items.length === 0 && !refFormOpen ? (
         canAdd ? (
+          // Same bordered .actlabel box for both modes now (2026-08-14,
+          // owner-reported, screenshots comparing ToDo Detail's tinted
+          // "Note:" band against Create ToDo's own bordered-box rendering,
+          // annotated "Preferred method") — mode='reference' previously
+          // routed through a separate .donerow/.donenote treatment here,
+          // the only place Locations' empty state actually looked different
+          // from Attachments' own (which has always used this same box).
+          // Attachments keeps its short "Attachments (optional)" label;
+          // Locations shows the fuller descriptive referenceNote text
+          // instead, un-bolded — plain descriptive copy, same register as
+          // Dialog's own "Questions, Answers, Comments" box, not a "Note:"-
+          // prefixed callout.
           <div className="frow" style={emptyRowStyle}>
             <span className="actlabel">
-              {label} <span className="subnote">(optional)</span>
+              {mode === 'file' ? (
+                <>
+                  {label} <span className="subnote">(optional)</span>
+                </>
+              ) : (
+                referenceNote
+              )}
             </span>
             <button
               className="btn"
@@ -317,16 +325,6 @@ export default function AttachmentsPanel({
         )
       ) : (
         <>
-          {showReferenceNote && (
-            <div className="donerow">
-              <span className="donenote">
-                <b>Note:</b> {referenceNote}
-              </span>
-              <button className="btn" type="button" onClick={() => setRefFormOpen(true)}>
-                {addText}
-              </button>
-            </div>
-          )}
           {canAdd && mode === 'file' && (
             <div className="fieldact" style={rowPad}>
               <button
