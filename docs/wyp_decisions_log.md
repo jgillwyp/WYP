@@ -6,6 +6,37 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Request Response / Response Detail: donerow wording for a Request already Done on load
+
+Owner-reported: opening either screen for a Request that was **already**
+marked Done before this visit showed "This Request is now marked as Done,
+just click Send." — worded as if the visitor had just taken an action that
+still needs sending, when in fact nothing had changed yet in this session.
+
+Fixed by capturing a new `alreadyDoneOnLoad` flag, set once from the RPC
+payload's own `done_date` at load time and never touched again (not by
+quick-Done, not by a manual edit, not by Send). The donerow's existing
+three-way reactive message (empty / filled-not-sent / sent-this-session)
+gains a fourth branch, checked between "sent this session" and "filled,
+not yet sent":
+
+- Done Date empty — "Note: For a quick response, click Done and Send."
+- Filled, `sendConfirmed` this session — "This Request is now marked as Done
+  and has been Sent." (unchanged, 2026-08-11)
+- Filled, not sent this session, **and already Done on load** — "This
+  Request is reported as completed." (new)
+- Filled, not sent this session, not already Done on load (i.e. quick-Done
+  or a manual edit just now) — "This Request is now marked as Done, just
+  click Send." (unchanged)
+
+Applied identically to `RequestResponseForm.tsx` (anonymous `/r/[token]`)
+and `ResponseDetailForm.tsx` (signed-in `/requests/[id]/respond`) — same
+donerow, same fix, matching every other instance of this pair being kept in
+lockstep. No mockup change — neither mockup's static HTML demonstrates this
+reactive state. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-15 — Print reports: real Archive blank-page bug found, stuck-print-state bug fixed everywhere, missing column headers added to Request Detail/ToDo Detail
 
 Fifth round of print-report feedback the same day. Font size is still
@@ -86,6 +117,21 @@ taken at different times regardless of the real point value — a screenshot
 comparison alone can't confirm or rule out a genuine size change; only an
 actual printed page, or a saved PDF opened and measured/zoomed outside the
 preview pane, can.
+
+**Resolved, same day: it was the Scale field, exactly as suspected.** Owner
+checked the print dialog directly and found Scale set to "Custom, 75%" —
+independent of anything WYP controls, and unrelated to his normal printer
+use. Setting it to 100% fixed both the preview and the actual printed
+output immediately, no code change needed. Notably, after signing out and
+back in, the next print's Scale was already 100% — confirming this is a
+setting the browser/print driver (Chrome or the OS's HP driver) persists
+per-printer across sessions, not a WYP or per-account setting, and most
+likely got set to 75% during the earlier half-page-width bug (2026-08-15,
+below) as an automatic or manual attempt to make oversized content fit the
+page. The three rounds of px/pt font-size changes earlier the same day were
+real, correct fixes to genuine (if much smaller) sizing issues, but were
+never going to be visible against a 75%-scaled print regardless of the CSS
+value used — which is also why none of those three passes ever "worked."
 
 `npx tsc --noEmit`/`npm run lint` clean.
 

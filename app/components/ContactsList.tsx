@@ -29,21 +29,43 @@ type Contact = {
   email: string
   phone: string | null
   send_by: 'email' | 'text'
+  time_zone: string | null
+  notes: string | null
 }
+
+// get_contact_request_counts() (migration 030, drafted 2026-08-15, not yet
+// confirmed run) — one row per contact, Sent (my own Requests to them) and
+// Rec'd (Requests they've sent me, matched via their real login email
+// against this contact's stored email). See that migration's own header
+// comment in docs/Week6 - SQL history.txt for the full reasoning. If the
+// function isn't live yet, the .rpc() call below fails silently and counts
+// just render blank — same defensive posture as every other
+// not-yet-confirmed migration in this app.
+type ContactCounts = { contact_id: string; sent_count: number; received_count: number }
+
+// Print (2026-08-15) — new, from the owner's own "Contacts list.xlsx"
+// mockup. Same afterprint-driven pattern as every other print report in
+// the app (MainScreen.tsx/ArchiveForm.tsx/RequestDetailForm.tsx/
+// TodoDetailForm.tsx), including the printTick fix from the start this
+// time — see those files' own comments for the full "stuck print state"
+// write-up this avoids by construction.
 
 export default function ContactsList() {
   const router = useRouter()
 
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [counts, setCounts] = useState<Record<string, ContactCounts>>({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [showPrint, setShowPrint] = useState(false)
+  const [printTick, setPrintTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
 
     supabase
       .from('contacts')
-      .select('id, display_name, email, phone, send_by')
+      .select('id, display_name, email, phone, send_by, time_zone, notes')
       .order('display_name')
       .then(({ data, error }) => {
         if (cancelled) return
@@ -55,15 +77,57 @@ export default function ContactsList() {
         setLoading(false)
       })
 
+    supabase
+      .rpc('get_contact_request_counts')
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return
+        const map: Record<string, ContactCounts> = {}
+        for (const row of data as ContactCounts[]) {
+          map[row.contact_id] = row
+        }
+        setCounts(map)
+      })
+
     return () => {
       cancelled = true
     }
   }, [])
 
+  function startPrint() {
+    setShowPrint(true)
+    setPrintTick((t) => t + 1)
+  }
+
+  useEffect(() => {
+    if (printTick === 0) return
+    window.print()
+    function handleAfterPrint() {
+      setShowPrint(false)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [printTick])
+
   return (
     <div className="frame-none">
-      <div className="app">
-        <WypHeader />
+      <div className="app no-print">
+        <WypHeader
+          action={
+            <button
+              className="iconbtn"
+              type="button"
+              aria-label="Print Contacts"
+              onClick={startPrint}
+              style={{ marginLeft: 'auto' }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M7 8V3h10v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+                <path d="M7 14h10v7H7v-7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              </svg>
+            </button>
+          }
+        />
 
         <div className="band">
           <span className="glabel">Contacts</span>
@@ -107,6 +171,48 @@ export default function ContactsList() {
           )}
         </div>
       </div>
+
+      {/* Print (2026-08-15) — from the owner's own "Contacts list.xlsx"
+          mockup. Title reads "Contacts", not the xlsx's own "My Contacts" —
+          this screen dropped "My" app-wide back on 2026-08-09 (see
+          CLAUDE.md/decisions log), so the print title matches the screen's
+          actual, current name rather than reproducing the mockup's literal
+          text; flagged here rather than silently decided. Sent/Rec'd counts
+          come from get_contact_request_counts() (migration 030, drafted,
+          not yet confirmed run) — render blank until it's live. */}
+      {showPrint && (
+        <div className="print-report">
+          <div className="ptitle">Contacts</div>
+          <div className="pcon-legend">(Asterisks indicate communication method.)</div>
+          <div className="pcon-colbar">
+            <span>Contact Name</span>
+            <span>Email</span>
+            <span>Phone</span>
+            <span>Time Zone</span>
+            <span className="pcon-c-count">Sent</span>
+            <span className="pcon-c-count">Rec&apos;d</span>
+          </div>
+          <div className="pcon-rows">
+            {contacts.length === 0 && <div className="pempty">No Contacts to print.</div>}
+            {contacts.map((c) => {
+              const emailText = c.send_by === 'email' ? `${c.email} *` : c.email
+              const phoneText = c.phone ? (c.send_by === 'text' ? `${c.phone} *` : c.phone) : ''
+              const cnt = counts[c.id]
+              return (
+                <div key={c.id} className="pcon-row">
+                  <span className="pcon-name">{c.display_name}</span>
+                  <span className="pcon-email">{emailText}</span>
+                  <span className="pcon-phone">{phoneText}</span>
+                  <span className="pcon-tz">{c.time_zone ?? ''}</span>
+                  <span className="pcon-count">{cnt ? cnt.sent_count : ''}</span>
+                  <span className="pcon-count">{cnt ? cnt.received_count : ''}</span>
+                  {c.notes && <div className="pcon-notes">{c.notes}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

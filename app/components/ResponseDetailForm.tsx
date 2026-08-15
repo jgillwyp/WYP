@@ -162,6 +162,10 @@ export default function ResponseDetailForm() {
   const [doneDate, setDoneDate] = useState('')
   const [doneTime, setDoneTime] = useState('')
 
+  // Owner-reported, 2026-08-15 — see RequestResponseForm.tsx's identical
+  // comment; this screen mirrors that fix verbatim.
+  const [alreadyDoneOnLoad, setAlreadyDoneOnLoad] = useState(false)
+
   const [dialogList, setDialogList] = useState<DialogEntry[]>([])
 
   const [dialogModalOpen, setDialogModalOpen] = useState(false)
@@ -216,6 +220,7 @@ export default function ResponseDetailForm() {
       setData(payload)
       setDoneDate(payload.done_date ?? '')
       setDoneTime(payload.done_time ?? '')
+      setAlreadyDoneOnLoad(!!payload.done_date)
       setDialogList(payload.dialog ?? [])
 
       const { data: sessionData } = await supabase.auth.getSession()
@@ -471,6 +476,8 @@ export default function ResponseDetailForm() {
                   <><b>Note:</b> For a quick response, click Done and Send.</>
                 ) : sendConfirmed ? (
                   'This Request is now marked as Done and has been Sent.'
+                ) : alreadyDoneOnLoad ? (
+                  'This Request is reported as completed.'
                 ) : (
                   'This Request is now marked as Done, just click Send.'
                 )}

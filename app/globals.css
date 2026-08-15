@@ -2597,3 +2597,92 @@ body {
   color: var(--ink-soft);
   font-weight: 500;
 }
+
+/* Contacts print report (2026-08-15) — new, from the owner's own xlsx
+   mockup ("Contacts list.xlsx"). Deliberately smaller than every other
+   print report's 11pt/14pt scale: fitting Name/Email/Phone/Time Zone/Sent/
+   Rec'd on one line without wrapping needed a tighter type scale, per the
+   owner's own numbers extracted from the file. Namespaced .pcon- rather
+   than reusing .pnm/.pdt/etc. — this report's column set and proportions
+   don't match any existing .pr1/.pcolbar grid. */
+.pcon-legend {
+  font-size: 9pt;
+  font-style: italic;
+  color: var(--ink-soft);
+  text-align: right;
+  margin: -6px 0 8px;
+}
+
+.pcon-colbar {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 150px 40px 46px;
+  column-gap: 10px;
+  background: var(--strip);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pcon-colbar .pcon-c-count {
+  font-size: 9pt;
+  font-style: italic;
+  text-align: center;
+}
+
+.pcon-rows {
+  margin-top: 4px;
+}
+
+/* One row per contact — alternating Row Tint applies to the whole block
+   (name/email/phone/tz/counts line plus an optional Notes line beneath),
+   matching the owner's own xlsx, which shades by contact record, not by
+   individual grid row. */
+.pcon-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 150px 40px 46px;
+  column-gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.pcon-row:last-child {
+  border-bottom: none;
+}
+
+.pcon-row:nth-of-type(even) {
+  background: var(--row-tint);
+}
+
+.pcon-name {
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pcon-email,
+.pcon-phone,
+.pcon-tz {
+  font-size: 10pt;
+  color: var(--ink);
+}
+
+.pcon-count {
+  font-size: 10pt;
+  font-style: italic;
+  color: var(--ink);
+  text-align: center;
+}
+
+/* Indented Notes line, own full-width row beneath the contact's main line
+   — matches the owner's own leading-spaces convention (Dialog entries use
+   the same indent-under-description idea). */
+.pcon-notes {
+  grid-column: 1 / -1;
+  margin: 3px 0 0 16px;
+  font-size: 10pt;
+  color: var(--ink-soft);
+  line-height: 1.34;
+}

@@ -105,3 +105,103 @@ commit;
 --   where routine_name = 'get_received_print_detail';
 --        -> should show authenticated / EXECUTE
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 030 — get_contact_request_counts(): per-contact Sent/Rec'd
+-- counts for the new Contacts print report.
+-- DRAFTED 2026-08-15 — NOT YET CONFIRMED RUN.
+--
+-- Owner, asked to pick between two readings of "Sent"/"Rec'd" on his own
+-- Contacts print mockup: "Sent = requests I sent them; Rec'd = requests
+-- they sent me" — the same vocabulary the app's own Main Screen Sent/
+-- Received sections already use, not "how many of my Sent requests to them
+-- are Done."
+--
+-- Sent is trivial and needs no new privilege — a plain count of my own
+-- requests grouped by contact_id, already fully covered by existing RLS
+-- (requests: owner-only). Rec'd is the hard half: get_received_requests()
+-- (migration 012) already knows how to match "a Request sent to me" via
+-- contacts.email on the *sender's* own contacts table equaling my session
+-- email, but it never needed to know the sender's own real account email,
+-- only their display name (owner_name). To attribute a Received Request
+-- back to *which one of my own contacts* sent it, this function looks up
+-- the sender's auth.users.email (their actual login email, not a display
+-- name) and matches it against my own contacts.email. Reads auth.users
+-- directly inside a SECURITY DEFINER function — same precedent and
+-- reasoning as can_create_account() (migration 015): only this function's
+-- owner role can see auth.users; a caller only ever gets integer counts
+-- back, never anyone's raw email address.
+--
+-- Returns one row per one of the caller's own contacts (zero-filled counts
+-- where there's no match), scoped entirely to the caller via auth.uid()/
+-- auth.jwt() — nothing here is reachable by anon.
+-- ============================================================================
+
+begin;
+
+create or replace function public.get_contact_request_counts()
+returns table (
+  contact_id uuid,
+  sent_count bigint,
+  received_count bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_uid is null then
+    return; -- no session; nothing to compute
+  end if;
+
+  return query
+    select
+      c.id as contact_id,
+      coalesce(sent.cnt, 0) as sent_count,
+      coalesce(recv.cnt, 0) as received_count
+    from public.contacts c
+    left join (
+      select r.contact_id, count(*) as cnt
+      from public.requests r
+      where r.owner_id = v_uid
+      group by r.contact_id
+    ) sent on sent.contact_id = c.id
+    left join (
+      -- Every Request actually received by me, then rolled up by the real
+      -- sender email — mirrors get_received_requests()'s own match, plus
+      -- one extra join to auth.users to get an email worth matching against
+      -- my own contacts.email (owner_name/profiles alone isn't unique or
+      -- guaranteed to match how I saved this person).
+      select lower(trim(au.email)) as sender_email, count(*) as cnt
+      from public.requests r2
+      join public.contacts c2 on c2.id = r2.contact_id
+      join auth.users au on au.id = r2.owner_id
+      where v_email <> '' and lower(trim(c2.email)) = v_email
+      group by lower(trim(au.email))
+    ) recv on recv.sender_email = lower(trim(c.email))
+    where c.owner_id = v_uid;
+end;
+$$;
+
+revoke all on function public.get_contact_request_counts() from public;
+grant execute on function public.get_contact_request_counts() to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select prosrc from pg_proc where proname = 'get_contact_request_counts';
+--
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name = 'get_contact_request_counts';
+--        -> should show authenticated / EXECUTE
+--
+-- Real test (as the owner, signed in): open Contacts, print. A contact who
+-- has sent the owner Requests through their own WYP account (matched by
+-- their login email equaling this contact's stored email) should show a
+-- non-zero Rec'd count.
+-- ============================================================================

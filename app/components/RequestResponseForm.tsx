@@ -150,6 +150,17 @@ export default function RequestResponseForm() {
   const [savedDoneDate, setSavedDoneDate] = useState('')
   const [savedDoneTime, setSavedDoneTime] = useState('')
 
+  // Owner-reported, 2026-08-15: opening a Request that was ALREADY marked
+  // Done before this visit showed "This Request is now marked as Done, just
+  // click Send." — worded as if the visitor had just done something that
+  // still needs sending, when in fact nothing has changed yet. Set once,
+  // from the payload as first loaded, and never touched again — a Send in
+  // this session (sendConfirmed) still takes priority in the donerow below,
+  // and quick-Done/manual edits during this same visit still fall through
+  // to the original "just click Send" wording, since only the load-time
+  // snapshot means "already done before I got here."
+  const [alreadyDoneOnLoad, setAlreadyDoneOnLoad] = useState(false)
+
   const [dialogList, setDialogList] = useState<DialogEntry[]>([])
 
   const [dialogModalOpen, setDialogModalOpen] = useState(false)
@@ -205,6 +216,7 @@ export default function RequestResponseForm() {
       setDoneTime(payload.done_time ?? '')
       setSavedDoneDate(payload.done_date ?? '')
       setSavedDoneTime(payload.done_time ?? '')
+      setAlreadyDoneOnLoad(!!payload.done_date)
       setDialogList(payload.dialog ?? [])
       setLoading(false)
     }
@@ -525,6 +537,8 @@ export default function RequestResponseForm() {
                   <><b>Note:</b> For a quick response, click Done and Send.</>
                 ) : sendConfirmed ? (
                   'This Request is now marked as Done and has been Sent.'
+                ) : alreadyDoneOnLoad ? (
+                  'This Request is reported as completed.'
                 ) : (
                   'This Request is now marked as Done, just click Send.'
                 )}
