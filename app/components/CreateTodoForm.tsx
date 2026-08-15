@@ -775,17 +775,34 @@ export default function CreateTodoForm() {
                 "Attachment References": a typed path or URL plus an
                 optional Description, staged here and inserted once Save
                 has a real id. Subscriber-gated, same as a Request's real
-                Attachments; free-tier keeps the original locked row. */}
+                Attachments; free-tier keeps the original locked row.
+                Empty/populated split matches Add Dialog and AttachmentsPanel.tsx's
+                own mode='reference' behavior (2026-08-14, owner-reported:
+                "the Create ToDo and the ToDo Detail should have the Add
+                Location behave like the Add Dialog to include erasing the
+                'placeholder' box and explanation... when a Location is
+                added") — the note+box shows only while nothing is staged
+                yet and the inline form isn't open; once a Location exists,
+                only a bare Add Location button remains. */}
             {tier === 'subscriber' ? (
               <div className="fgroup">
-                <div className="donerow">
-                  <span className="donenote">
-                    <b>Note:</b> Locations are URLs or File paths.
-                  </span>
-                  <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
-                    Add Location
-                  </button>
-                </div>
+                {stagedLocations.length === 0 && !locationFormOpen && (
+                  <div className="donerow">
+                    <span className="donenote">
+                      <b>Note:</b> Locations are URLs or File paths.
+                    </span>
+                    <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
+                      Add Location
+                    </button>
+                  </div>
+                )}
+                {stagedLocations.length > 0 && !locationFormOpen && (
+                  <div className="fieldact">
+                    <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
+                      Add Location
+                    </button>
+                  </div>
+                )}
                 {(stagedLocations.length > 0 || locationFormOpen) && (
                   <>
                     {locationFormOpen && (

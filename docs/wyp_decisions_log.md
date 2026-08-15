@@ -6,6 +6,39 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Create ToDo's Locations empty/populated split (the piece left undone earlier)
+
+Owner re-reported, with a Create ToDo screenshot: "the Create ToDo and the
+ToDo Detail should have the Add Location behave like the Add Dialog to
+include erasing the 'placeholder' box and explanation... when a Location is
+added" — the exact ask from earlier the same day. `AttachmentsPanel.tsx`
+(used by ToDo Detail, mode='reference') already got this split at the time;
+`CreateTodoForm.tsx`'s own separate, bespoke Locations markup — staged
+client-side since Create ToDo has no real id yet, so it never went through
+`AttachmentsPanel.tsx` at all — was the piece that got missed, still always
+rendering the `.donerow` note+button regardless of `stagedLocations.length`.
+
+Fixed by splitting `CreateTodoForm.tsx`'s Locations block the same way:
+the `.donerow` note+button now renders only when `stagedLocations.length
+=== 0 && !locationFormOpen`; once a Location is staged, only a bare
+`.fieldact` Add Location button remains, matching `AttachmentsPanel.tsx`'s
+own `mode='reference'` branches exactly. `TodoDetailForm.tsx`'s own
+`<AttachmentsPanel mode="reference" .../>` call was re-checked and is
+already correct — no code change needed there; if it still isn't showing
+the fix live, the most likely explanation is a deploy that hasn't picked up
+today's earlier `AttachmentsPanel.tsx` change yet, not a code gap.
+
+**Mockup not updated** — `WYP_create_todo_palette1.html`'s Attachments
+segment still shows the pre-Locations locked "Subscription feature" state
+from before real Attachments/Locations existed; converting it to a real
+subscriber-tier demo (staged form, staged list, empty/populated toggle) is
+a larger lift than this fix and wasn't asked for — same already-flagged gap
+as the rest of the Locations/Attachments build (`design/README.md`).
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-14 — Archive filter persistence, Attachments alignment fix, ToDos Overdue chip gating
 
 Three more owner-reported items, same day as column-header sorting above.
