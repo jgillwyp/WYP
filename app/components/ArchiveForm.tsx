@@ -1124,6 +1124,25 @@ export default function ArchiveForm() {
           <div className="pcriteria">
             <b>Selection Criteria:</b> {criteriaText}
           </div>
+          {/* Column-header row, added 2026-08-15 — was missing entirely
+              (owner-reported: "the Archive reports all do not show the
+              column heading"), unlike Main Screen's own Sent/Received/ToDos
+              print reports, which this screen's print layout otherwise
+              mirrors. Static text with the current sort's arrow, matching
+              Main Screen's print pcolbar convention — not interactive
+              buttons, since nothing on a printed page can be clicked. */}
+          {currentType === 'todos' ? (
+            <div className="pcolbar ptdc-nodates">
+              <span>Description{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+            </div>
+          ) : (
+            <div className="pcolbar psr">
+              <span className="c-nm">{COL[currentType]}{currentReqSort.key === 'name' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              <span className="c-dt">Date{currentReqSort.key === 'date' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              <span className="c-due">Due{currentReqSort.key === 'due' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              <span className="c-dn">Done{currentReqSort.key === 'done' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+            </div>
+          )}
           <div className="prows">
             {sortedMatches.length === 0 && <div className="pempty">No records match.</div>}
             {sortedMatches.map((r) => {
