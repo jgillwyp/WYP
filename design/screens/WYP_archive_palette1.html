@@ -227,14 +227,20 @@ html,body{margin:0;height:100%;background:#fff;}
    (that's for an empty-list message, not a form instruction). */
 .archnote{padding:10px var(--pad) 2px;font-size:12.5px;line-height:1.45;color:var(--ink);}
 
-/* Record Type chip row */
+/* Record Type heading + chip row */
 /* Strip background (2026-08-14, owner-reported: "a blue background is
    missing for the chips row") — every other chip row in the app sits on a
    tinted Strip surface (.subhead on Main Screen, .sendrow/.chiprow
    elsewhere); this one didn't, so the semi-transparent-white resting chips
    had nothing to contrast against and read as flat/unstyled. */
-.archtyperow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+/* Stacked (2026-08-15, owner-reported: the third chip wrapped onto its own
+   line on a phone, hanging off the right edge) — heading on its own line,
+   chips in their own row below, so the set always wraps together starting
+   from the same left edge as the heading. Colon dropped from "Record Type"
+   at the same time, same report. */
+.archtyperow{display:flex;flex-direction:column;align-items:flex-start;gap:8px;
   background:var(--strip);padding:9px var(--pad);border-bottom:1px solid var(--rule);}
+.archtypechips{display:flex;gap:8px;flex-wrap:wrap;}
 .archtypelabel{font-size:12.5px;font-weight:700;color:var(--ink);}
 
 /* Confirmation strip after Archive Selected — reuses .donerow's shape. */
@@ -271,10 +277,12 @@ html,body{margin:0;height:100%;background:#fff;}
   <div class="scroll">
 
     <div class="archtyperow">
-      <span class="archtypelabel">Record Type:</span>
-      <button class="chip sel" type="button" data-type="sent">Sent Requests</button>
-      <button class="chip" type="button" data-type="received">Received Requests</button>
-      <button class="chip" type="button" data-type="todos">ToDos</button>
+      <span class="archtypelabel">Record Type</span>
+      <div class="archtypechips">
+        <button class="chip sel" type="button" data-type="sent">Sent Requests</button>
+        <button class="chip" type="button" data-type="received">Received Requests</button>
+        <button class="chip" type="button" data-type="todos">ToDos</button>
+      </div>
     </div>
 
     <p class="archnote"><b id="archNoteLead">Select records to Archive by Recipient and/or Before Done Date.</b>

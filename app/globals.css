@@ -1829,17 +1829,29 @@ body {
   color: var(--ink);
 }
 
-/* Record Type chip row — Strip background, matching every other chip row in
-   the app (.subhead on Main Screen, .sendrow/.chiprow elsewhere) so the
-   semi-transparent-white resting chips have something to contrast against. */
+/* Record Type heading + chip row — Strip background, matching every other
+   chip row in the app (.subhead on Main Screen, .sendrow/.chiprow elsewhere)
+   so the semi-transparent-white resting chips have something to contrast
+   against. Stacked (heading on its own line, chips in their own row below,
+   2026-08-15) rather than a single inline row — a phone-width viewport was
+   wrapping the third chip ("ToDos") onto its own line, hanging off the
+   right edge; the label now heads a left-aligned block so the three chips
+   always wrap together as a set, starting from the same left edge as the
+   heading above them. */
 .archtyperow {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
-  flex-wrap: wrap;
   background: var(--strip);
   padding: 9px var(--pad);
   border-bottom: 1px solid var(--rule);
+}
+
+.archtypechips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .archtypelabel {

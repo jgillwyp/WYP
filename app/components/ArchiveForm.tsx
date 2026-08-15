@@ -675,28 +675,30 @@ export default function ArchiveForm() {
 
         <div className="scroll">
           <div className="archtyperow">
-            <span className="archtypelabel">Record Type:</span>
-            <button
-              className={`chip${currentType === 'sent' ? ' sel' : ''}`}
-              type="button"
-              onClick={() => selectType('sent')}
-            >
-              Sent Requests
-            </button>
-            <button
-              className={`chip${currentType === 'received' ? ' sel' : ''}`}
-              type="button"
-              onClick={() => selectType('received')}
-            >
-              Received Requests
-            </button>
-            <button
-              className={`chip${currentType === 'todos' ? ' sel' : ''}`}
-              type="button"
-              onClick={() => selectType('todos')}
-            >
-              ToDos
-            </button>
+            <span className="archtypelabel">Record Type</span>
+            <div className="archtypechips">
+              <button
+                className={`chip${currentType === 'sent' ? ' sel' : ''}`}
+                type="button"
+                onClick={() => selectType('sent')}
+              >
+                Sent Requests
+              </button>
+              <button
+                className={`chip${currentType === 'received' ? ' sel' : ''}`}
+                type="button"
+                onClick={() => selectType('received')}
+              >
+                Received Requests
+              </button>
+              <button
+                className={`chip${currentType === 'todos' ? ' sel' : ''}`}
+                type="button"
+                onClick={() => selectType('todos')}
+              >
+                ToDos
+              </button>
+            </div>
           </div>
 
           <p className="archnote">
