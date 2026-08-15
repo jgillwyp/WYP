@@ -595,6 +595,18 @@ export default function MainScreen() {
   // (migration 021) — a different sender may have this on or off.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
 
+  // Show Due/Done Dates (ToDos) is also opt-in (migration 022, 2026-08-14,
+  // off by default) — see AccountForm.tsx. When off, Create ToDo/ToDo
+  // Detail collapse to the simple Open/Done Status chip pair and never
+  // touch due_date, so a ToDo's Overdue status is meaningless in that mode
+  // (owner, 2026-08-14: "the Overdue chip for ToDos should not be shown for
+  // either the Main or the Archive screen" when this is off). Governs only
+  // whether the Overdue chip itself renders — statusFor() below still
+  // computes a real status off whatever due_date happens to already be in
+  // the database (nothing is cleared by toggling this off), so a ToDo
+  // switched back to All/Open/Done still sorts/filters correctly either way.
+  const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+
   const [sentSort, setSentSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
     readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
   )
@@ -634,13 +646,22 @@ export default function MainScreen() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('main_chip_prefs, private_category_enabled, request_time_enabled')
+        .select('main_chip_prefs, private_category_enabled, request_time_enabled, todo_dates_enabled')
         .eq('id', uid)
         .single()
       if (cancelled) return
 
       setCategoriesEnabled(data?.private_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? true)
+      const datesEnabled = data?.todo_dates_enabled ?? false
+      setTodoDatesEnabled(datesEnabled)
+      // A stale sessionStorage/main_chip_prefs value of 'overdue' from
+      // before this was turned off would otherwise silently show an empty
+      // ToDos list with no visible way back to All — fall back to All
+      // rather than leave an unreachable filter selected.
+      if (!datesEnabled) {
+        setTodoFilter((f) => (f === 'overdue' ? 'all' : f))
+      }
 
       const prefs = (data?.main_chip_prefs ?? {}) as MainChipPrefs
       if (prefs.sentFilter && (FILTER_VALUES as readonly string[]).includes(prefs.sentFilter)) {
@@ -1034,7 +1055,9 @@ export default function MainScreen() {
               <div className="chips">
                 <button className={`chip${todoFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('all')}>All</button>
                 <button className={`chip${todoFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('open')}>Open</button>
-                <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('overdue')}>Overdue</button>
+                {todoDatesEnabled && (
+                  <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('overdue')}>Overdue</button>
+                )}
                 <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
               </div>
               <span className="subicons">

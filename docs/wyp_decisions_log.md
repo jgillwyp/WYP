@@ -6,6 +6,63 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-14 — Archive filter persistence, Attachments alignment fix, ToDos Overdue chip gating
+
+Three more owner-reported items, same day as column-header sorting above.
+
+1. **Archive Recipient/Requestor query and Before Done Date now persist
+   across Record Type chip switches within a session** — the follow-up to
+   item 5 from the previous batch, actually implemented this round.
+   `selectType()` no longer resets `recipientQuery`/`beforeDone`; both keep
+   whatever the user last typed regardless of which chip is active, only
+   clearing when the user edits or clears them directly. `confirmMessage`/
+   `archiveError` still reset on a chip switch — those are action feedback
+   tied to whatever was just archived, not a filter, and go stale the
+   moment the underlying list changes. Owner confirmed working live
+   ("I now see the criteria persistence in the Archive session!").
+
+2. **Add Attachment button/box alignment fix, second pass.** The first pass
+   (this same day, `standalone` prop on `AttachmentsPanel.tsx`) carried over
+   only the horizontal padding from Dialog's own matching empty-state row
+   on Request Response/Response Detail, not its `marginBottom: 12`. Split
+   into two style objects: `rowPad` (horizontal padding only, still used by
+   the populated-state `.fieldact` Add Attachment row, which already has
+   its own `margin-bottom` baked into that CSS class) and a new
+   `emptyRowStyle` (`padding: '0 var(--pad)', marginBottom: 12`, byte-for-
+   byte matching Dialog's own inline style) applied only to the zero-
+   entries `.actlabel` + button row. The locked/subscription-note branch
+   (`.donerow`) needed no change — that class already carries its own
+   `margin: 4px var(--pad) 14px`, baked in regardless of `standalone`.
+
+3. **ToDos' Overdue chip now hidden on Main Screen when Show Due/Done
+   Dates (ToDos) is off** (migration 022, `profiles.todo_dates_enabled`,
+   default false) — owner: "the Overdue chip for ToDos should not be shown
+   for either the Main or the Archive screens" when that preference is
+   off, since Create ToDo/ToDo Detail collapse to the simple Open/Done
+   Status chip pair in that mode and never touch `due_date` at all, making
+   an Overdue reading meaningless. `MainScreen.tsx` didn't read
+   `todo_dates_enabled` anywhere before this — added to the existing
+   `profiles` round trip (alongside `private_category_enabled`/
+   `request_time_enabled`) and used to conditionally render the Overdue
+   chip only. `statusFor()`/`todoStatus()` are unchanged — they still
+   compute a real status off whatever `due_date` already exists in the
+   database (toggling the preference off never clears it), so a ToDo
+   switched back to All/Open/Done keeps sorting/filtering correctly either
+   way; only the Overdue chip's own visibility is gated. Also resets
+   `todoFilter` away from `'overdue'` on load if a stale `sessionStorage`/
+   `main_chip_prefs` value had it selected from before the preference was
+   turned off, so the ToDos list can't get stuck showing an empty list with
+   no visible way back to All. **Archive needed no change** — `ArchiveForm.tsx`
+   only ever lists Done records and has no Overdue chip or Overdue row
+   styling anywhere in it to begin with, so the owner's ask was already
+   satisfied there; noted rather than silently skipped.
+
+`npx tsc --noEmit`/`npm run lint` clean for all three fixes. No mockup
+changes — none of the affected behavior has a drawn precedent to update
+(the Archive mockup never had an Overdue chip either).
+
+\---
+
 ## 2026-08-14 — Archive column-header sorting
 
 Owner: "the sorting does not work for column headings in the displayed

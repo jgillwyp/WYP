@@ -615,6 +615,7 @@ export default function ResponseDetailForm() {
                 isOwner={false}
                 currentUserId={currentUserId}
                 ownerLabel="You"
+                standalone
               />
             )}
 

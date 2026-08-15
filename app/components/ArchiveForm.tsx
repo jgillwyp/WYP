@@ -549,10 +549,18 @@ export default function ArchiveForm() {
     ? nameOptions
     : nameOptions.filter((n) => n.toLowerCase().includes(query.toLowerCase()))
 
+  // Recipient/Requestor query and Before Done Date deliberately do NOT reset
+  // here (2026-08-14, owner: "it would be useful to make entries for
+  // contact name (Recipient or Requestor) and the Before Done Date remain
+  // until changed within a session of the Archive screen being open
+  // regardless of which chip is selected") — a user filtering for a
+  // particular contact or cutoff date across Sent/Received/ToDos shouldn't
+  // have to re-type either on every chip click; they persist until the user
+  // explicitly edits or clears them. confirmMessage/archiveError still
+  // reset — those are action feedback tied to whatever was just archived,
+  // not a filter, and are stale the moment the list underneath changes.
   function selectType(type: RecordType) {
     setCurrentType(type)
-    setRecipientQuery('')
-    setBeforeDone('')
     setConfirmMessage(null)
     setArchiveError(null)
   }

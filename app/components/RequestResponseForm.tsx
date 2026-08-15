@@ -682,6 +682,7 @@ export default function RequestResponseForm() {
                 isOwner={false}
                 currentUserId={null}
                 ownerLabel="Recipient"
+                standalone
               />
             )}
 

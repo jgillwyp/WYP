@@ -273,13 +273,23 @@ export default function AttachmentsPanel({
   // directly); `.dlgstaged` is a bordered/background card, so it needs
   // margin instead — padding would shrink the box rather than shift it.
   const rowPad = standalone ? { paddingLeft: 'var(--pad)', paddingRight: 'var(--pad)' } : undefined
+  // The zero-entries unlocked row (.actlabel + button) matches Dialog's own
+  // empty-state row on these same two screens exactly, inline style and
+  // all (`padding: '0 var(--pad)', marginBottom: 12`) — the first pass of
+  // this fix only carried the horizontal padding over, not the bottom
+  // margin, which the owner's own follow-up screenshots still showed as a
+  // misalignment against the Dialog row above it (2026-08-14, second
+  // report). Scoped to this one row, not folded into rowPad above — rowPad
+  // is shared with the populated-state .fieldact row, which already has
+  // its own margin-bottom baked into that CSS class and would double up.
+  const emptyRowStyle = standalone ? { padding: '0 var(--pad)', marginBottom: 12 } : undefined
   const cardMargin = standalone ? { marginLeft: 'var(--pad)', marginRight: 'var(--pad)' } : undefined
 
   return (
     <div className="fgroup">
       {items.length === 0 && !refFormOpen && !showReferenceNote ? (
         canAdd ? (
-          <div className="frow" style={rowPad}>
+          <div className="frow" style={emptyRowStyle}>
             <span className="actlabel">
               {label} <span className="subnote">(optional)</span>
             </span>
