@@ -234,6 +234,7 @@ export default function RequestDetailForm() {
   // its own small fetch since AttachmentsPanel keeps its own list private.
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
+  const [printTick, setPrintTick] = useState(0)
 
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -250,10 +251,22 @@ export default function RequestDetailForm() {
 
   function startPrint() {
     setShowPrint(true)
+    // Always bump printTick so the effect below re-fires even if showPrint
+    // was already true (owner-reported 2026-08-15: clicking the same Print
+    // icon a second time in a row did nothing, but it worked again after
+    // printing from a different screen and coming back — that navigation
+    // remounted this component, resetting showPrint to false; without it,
+    // a second click here set showPrint(true) again while it was still
+    // true from the first click, which is a no-op for React — same value,
+    // no re-render, effect never re-runs. Root cause: 'afterprint' doesn't
+    // fire reliably in every browser/print-flow, so showPrint can get stuck
+    // true. printTick strictly increases on every click, guaranteeing a
+    // real dependency change regardless of whether 'afterprint' ever fired.
+    setPrintTick((t) => t + 1)
   }
 
   useEffect(() => {
-    if (!showPrint) return
+    if (printTick === 0) return
     // Same afterprint-driven pattern as MainScreen.tsx's own Print Reports —
     // fires after the .print-report JSX below has committed to the DOM.
     window.print()
@@ -262,7 +275,7 @@ export default function RequestDetailForm() {
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
-  }, [showPrint])
+  }, [printTick])
 
   useEffect(() => {
     if (!requestId) return
@@ -1142,19 +1155,28 @@ export default function RequestDetailForm() {
 
       {/* Single-item print (2026-08-15) — same .print-report/.prow shape
           MainScreen.tsx's own Print Reports use for a whole section, "the
-          same format... used for the single item" (owner). No column-header
-          row here — nothing to sort with only one record (owner, same day).
-          .no-print/@media print above make this the only thing visible when
-          printing, same mechanism as Main Screen. */}
+          same format... used for the single item" (owner). Column-header
+          row added same day (owner-reported missing entirely) — plain
+          static labels, no sort arrow, since there's nothing to sort with
+          only one record. Uses .detail3 (To/Due/Done, no separate Date
+          column) rather than .pcolbar.psr's 4-column template — see that
+          class's own comment in globals.css for the layout bug this also
+          fixed. .no-print/@media print above make this the only thing
+          visible when printing, same mechanism as Main Screen. */}
       {showPrint && (
         <div className="print-report">
           <div className="ptitle">Request Detail</div>
+          <div className="pcolbar detail3">
+            <span className="c-nm">To</span>
+            <span className="c-due">Due</span>
+            <span className="c-dn">Done</span>
+          </div>
           <div className="prows">
             {(() => {
               const status = form.doneDate ? 'done' : form.dueDate && form.dueDate < todayIso() ? 'overdue' : 'open'
               return (
                 <div className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
-                  <div className="pr1">
+                  <div className="pr1 detail3">
                     <span className="pnm">{recipientName || '—'}</span>
                     <span className="pdue">
                       {formatMDYSlash(form.dueDate || null)}

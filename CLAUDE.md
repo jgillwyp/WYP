@@ -1530,3 +1530,30 @@ link is built only after the stack is proven on Add Contact.
   `--strip` already match his Excel colors exactly, so this should be
   mechanical once the font-size fix is confirmed against a real printout.
   See the decisions log's three 2026-08-15 entries for the full sequence.
+- **Print reports, round two: a real Archive blank-page bug, a stuck-print-
+  state bug everywhere, missing column headers on Request Detail/ToDo
+  Detail (2026-08-15).** `ArchiveForm.tsx` had a second, never-wired-up
+  Print icon in its record-type band calling bare `window.print()` — the
+  actual cause of the owner's original "blank page" report, not the
+  empty-until-filtered explanation offered at the time; removed. All four
+  print reports (`MainScreen.tsx`, `ArchiveForm.tsx`,
+  `RequestDetailForm.tsx`, `TodoDetailForm.tsx`) had a second bug: clicking
+  the same Print icon twice in a row did nothing, since the effect
+  triggering `window.print()` was keyed on a value (`showPrint`/
+  `printSection`) that doesn't change on a repeat click, and `afterprint`
+  doesn't reliably fire to reset it — fixed with a strictly-incrementing
+  `printTick` counter as the actual effect dependency everywhere. Request
+  Detail and ToDo Detail's single-item prints gained the column-header row
+  they'd been missing since the original redesign (that batch's "no
+  sort-arrow" design call had been implemented as "no header row at all");
+  fixing Request Detail's surfaced a real, separate layout bug — its
+  3-field print row (To/Due/Done, no Date column) was silently misaligned
+  in the shared 4-column `.pr1` grid, new `.pcolbar.detail3`/`.pr1.detail3`
+  fixes it. **Font size remains unresolved** — confirmed via the Vercel MCP
+  that the `pt`-unit fix was live in production ~13 minutes before the
+  owner's "still unchanged" report, ruling out a stale deploy; current
+  leading suspect is the print dialog's own Scale setting (not yet
+  confirmed by the owner), since Chrome's Print Preview auto-fits the whole
+  page to its pane regardless of point size, so a screenshot-to-screenshot
+  comparison can't actually confirm or rule out a real change. See the
+  decisions log's newest 2026-08-15 entry for the full write-up.

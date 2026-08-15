@@ -221,6 +221,7 @@ export default function TodoDetailForm() {
   // own list private.
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
+  const [printTick, setPrintTick] = useState(0)
 
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -248,17 +249,22 @@ export default function TodoDetailForm() {
 
   function startPrint() {
     setShowPrint(true)
+    // See RequestDetailForm.tsx's identical fix for the full write-up —
+    // printTick guarantees a real dependency change on every click, even
+    // when showPrint was already stuck true from a previous print whose
+    // 'afterprint' never fired.
+    setPrintTick((t) => t + 1)
   }
 
   useEffect(() => {
-    if (!showPrint) return
+    if (printTick === 0) return
     window.print()
     function handleAfterPrint() {
       setShowPrint(false)
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
-  }, [showPrint])
+  }, [printTick])
 
   useEffect(() => {
     if (!todoId) return
@@ -1089,12 +1095,23 @@ export default function TodoDetailForm() {
 
       {/* Single-item print (2026-08-15) — same shape as MainScreen.tsx's own
           ToDos print (no name/date column, Description first, Due/Done
-          second, dropped entirely when todoDatesEnabled is off) and the same
-          "no sort-arrow header row" rule as RequestDetailForm.tsx's own
-          single-item print — nothing to sort with one record. */}
+          second, dropped entirely when todoDatesEnabled is off). Column-
+          header row added same day (owner-reported missing app-wide) —
+          reuses Main Screen's own .pcolbar.ptdc/.ptdc-nodates classes
+          verbatim, just without a sort arrow (nothing to sort with one
+          record, same reasoning as RequestDetailForm.tsx's own header). */}
       {showPrint && (
         <div className="print-report">
           <div className="ptitle">ToDo Detail</div>
+          <div className={`pcolbar ${todoDatesEnabled ? 'ptdc' : 'ptdc-nodates'}`}>
+            <span className="c-desc">Description</span>
+            {todoDatesEnabled && (
+              <>
+                <span className="c-due">Due</span>
+                <span className="c-dn">Done</span>
+              </>
+            )}
+          </div>
           <div className="prows">
             {(() => {
               const status = todoDatesEnabled

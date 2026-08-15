@@ -468,6 +468,7 @@ export default function ArchiveForm() {
   // "repeated... in reverse order" per the owner's own report comparing a
   // real printout against the design.
   const [showPrint, setShowPrint] = useState(false)
+  const [printTick, setPrintTick] = useState(0)
   const [printDetail, setPrintDetail] = useState<PrintDetailMap>({})
 
   useEffect(() => {
@@ -698,17 +699,25 @@ export default function ArchiveForm() {
     const detail = currentType === 'received' ? await loadReceivedPrintDetail(ids) : await loadOwnedPrintDetail(ids)
     setPrintDetail(detail)
     setShowPrint(true)
+    // See RequestDetailForm.tsx's identical fix (2026-08-15) for the full
+    // write-up — printTick guarantees a real dependency change on every
+    // click, even when showPrint was already stuck true from a previous
+    // print whose 'afterprint' never fired (owner-reported: a second click
+    // on the same Print icon did nothing, but worked again after printing
+    // from a different screen and back — that navigation remounted this
+    // component, resetting showPrint to false, which is what "fixed" it).
+    setPrintTick((t) => t + 1)
   }
 
   useEffect(() => {
-    if (!showPrint) return
+    if (printTick === 0) return
     window.print()
     function handleAfterPrint() {
       setShowPrint(false)
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
-  }, [showPrint])
+  }, [printTick])
 
   async function handleArchiveSelected() {
     const toArchive = matches.filter((r) => !currentDeselected.has(r.id))
@@ -976,17 +985,19 @@ export default function ArchiveForm() {
             </div>
           </div>
 
+          {/* Stray duplicate Print icon removed 2026-08-15 — this band had its
+              own leftover `onClick={() => window.print()}` button, never
+              wired to startPrint()/showPrint at all. Clicking it opened the
+              print dialog while .print-report was never mounted (showPrint
+              stayed false) and everything else was hidden by .no-print,
+              producing a genuinely blank page — almost certainly the exact
+              bug the owner first reported ("the Archive report first
+              printed a blank page"). WypHeader's own "Print Archive" icon
+              (above, wired to the real startPrint) is the only Print
+              control this screen needs; this one was a confusing, broken
+              duplicate, not a second intentional entry point. */}
           <div className="band" style={{ marginTop: 0 }}>
             <span className="glabel" style={{ fontSize: 17 }}>{LIST_TITLE[currentType]}</span>
-            <span className="bandcluster">
-              <button className="iconbtn" type="button" aria-label="Print" onClick={() => window.print()}>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path d="M7 8V3h10v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
-                  <path d="M7 14h10v7H7v-7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </span>
           </div>
 
           <div style={{ padding: '8px var(--pad) 0' }}>

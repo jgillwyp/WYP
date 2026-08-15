@@ -6,6 +6,91 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Print reports: real Archive blank-page bug found, stuck-print-state bug fixed everywhere, missing column headers added to Request Detail/ToDo Detail
+
+Fifth round of print-report feedback the same day. Font size is still
+unresolved (see the end of this entry) but three concrete, reproducible bugs
+were found and fixed.
+
+**Archive's actual blank-page bug, found while investigating a second
+report ("the second attempt to print anything with a specific print icon
+does not respond... If I print with a different icon and come back to the
+original icon, it works once again").** `ArchiveForm.tsx` had two Print
+icons, not one: the real one in `WypHeader`'s action slot (wired to
+`startPrint()`, the whole print-report pipeline), and a second, leftover
+one in the record-type band, calling a bare `onClick={() => window.print()}`
+— never wired to `showPrint`/`printDetail` at all. Clicking it opened the
+print dialog while `.print-report` was never mounted (`showPrint` stayed
+`false`) and everything else was hidden by `.no-print`, producing a
+genuinely blank page. This is almost certainly the exact bug from the
+owner's very first Archive print report, well before the font-size
+investigation started — not the "empty until filtered" explanation offered
+at the time. Removed the stray button entirely; `WypHeader`'s own Print
+Archive icon is the only Print control this screen needs.
+
+**Stuck-print-state bug, all four print reports.** Each screen's print
+trigger followed the same pattern: a piece of state (`showPrint` boolean, or
+`printSection: 'sent' | 'received' | 'todos' | null`) flips on click, a
+`useEffect` keyed on that state calls `window.print()`, and the browser's
+`afterprint` event resets it back to hide the report. Clicking the *same*
+print icon twice in a row set the state to the value it already held — no
+real change, so React never re-ran the effect, and the second click did
+nothing. `afterprint` doesn't fire reliably in every browser/print flow
+(a known cross-browser quirk, more common with "Save as PDF" or a cancelled
+dialog than a real printer), so the state could get stuck in its "already
+printing" value indefinitely — explaining why navigating to a different
+screen's Print icon and back "fixed" it: that navigation remounts the
+component, resetting the state fresh. Fixed with a new `printTick` counter
+in all four files (`MainScreen.tsx`, `ArchiveForm.tsx`,
+`RequestDetailForm.tsx`, `TodoDetailForm.tsx`) that strictly increments on
+every `startPrint()` call and is what the effect is actually keyed on now —
+guarantees a real dependency change every time, regardless of whether the
+previous print's `afterprint` ever fired.
+
+**Column headers added to Request Detail and ToDo Detail's own single-item
+prints, not just Archive.** Owner: "The Request Detail print does not have
+a column heading... please check to make sure they all have column
+headings." The original 2026-08-15 design call ("no sort-arrow header row —
+nothing to sort with one record") had been implemented as *no header row at
+all*, not just no arrow — overreaching the owner's own stated reasoning.
+Both screens now show plain, static (arrow-less) labels: Request Detail
+gets "To / Due / Done", ToDo Detail reuses Main Screen's own
+`.pcolbar.ptdc`/`.ptdc-nodates` verbatim ("Description" alone, or
+"Description / Due / Done" when `todoDatesEnabled`). Fixing Request Detail's
+header surfaced a real, separate layout bug: its print row has only three
+fields (To/Due/Done, no separate Date/created_at column) but was reusing
+`.pr1`'s shared 4-column template built for Main Screen's Sent/Received rows
+(Name/Date/Due/Done) — the three spans were silently shifting one column
+left, squeezing Due into Date's 92px slot and Done into Due's 150px slot,
+with Date's own 150px slot going unused. New `.pcolbar.detail3`/`.pr1.detail3`
+(`1fr 150px 150px`) fixes both the header and the body row.
+
+**Font size: still unresolved, and the owner's newest screenshot doesn't
+settle it either way.** Confirmed via the Vercel MCP that the commit with
+the `pt`-unit fix (`a5e4241`) was READY in production roughly 13 minutes
+before the owner's "still unchanged" report — not a stale-deploy or caching
+issue. The owner then asked a sharp diagnostic question: does WYP specify a
+print width, and could the printer be scaling to fit margins? Answer given:
+no `size:` is set on `@page` (only `margin: 0.5in`), so page dimensions come
+from whatever the print dialog's own paper size is; no CSS `zoom`/`transform`
+is applied anywhere. That leaves the print dialog's own **Scale** control —
+separate from both CSS and paper size — as the most likely remaining
+explanation, especially since some browsers/drivers persist a per-printer
+Scale setting across print jobs, and this printer's Scale may have gotten
+set below 100% back when the report was printing at half-width (before that
+bug was fixed) and never reset. **Not yet confirmed either way** — the owner
+has not reported back on the actual Scale field. Separately worth noting for
+next time: Chrome's Print Preview pane auto-fits the whole page to the
+preview window, so relative font size *looks* similar across screenshots
+taken at different times regardless of the real point value — a screenshot
+comparison alone can't confirm or rule out a genuine size change; only an
+actual printed page, or a saved PDF opened and measured/zoomed outside the
+preview pane, can.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-15 — Print reports: pt units for font size, white page background, Due/Done Time inline
 
 Fourth round of print-report feedback the same day, following the 19px/15px

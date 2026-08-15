@@ -695,6 +695,7 @@ export default function MainScreen() {
   // "repeated... in reverse order" per the owner's own report, comparing a
   // real printout against the design.
   const [printSection, setPrintSection] = useState<'sent' | 'received' | 'todos' | null>(null)
+  const [printTick, setPrintTick] = useState(0)
   // Full Dialog/Attachments content for whatever's currently being printed
   // (2026-08-15) — see loadOwnedPrintDetail/loadReceivedPrintDetail above
   // for why this is a print-time fetch rather than part of the main list
@@ -705,7 +706,7 @@ export default function MainScreen() {
   const [printDetail, setPrintDetail] = useState<PrintDetailMap>({})
 
   useEffect(() => {
-    if (!printSection) return
+    if (printTick === 0) return
     // Fires after the .print-report JSX below has actually committed to the
     // DOM (effects run post-paint), so window.print() sees the real report,
     // not a stale one-render-behind version. 'afterprint' — not a timeout —
@@ -717,7 +718,7 @@ export default function MainScreen() {
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
-  }, [printSection])
+  }, [printTick])
 
   // Cross-session, per-account chip persistence (2026-08-13, migration
   // 016) — see the comment above MAIN_CHIP_PREFS' storage-key block for
@@ -1041,6 +1042,17 @@ export default function MainScreen() {
     const detail = section === 'received' ? await loadReceivedPrintDetail(ids) : await loadOwnedPrintDetail(ids)
     setPrintDetail(detail)
     setPrintSection(section)
+    // Owner-reported 2026-08-15: clicking the same Print icon twice in a
+    // row (e.g. Print Sent, then Print Sent again) did nothing the second
+    // time, but worked again after printing a different section first. Root
+    // cause: the effect above keyed on printSection alone — 'sent' -> 'sent'
+    // is not a value change, so React never re-runs it, and 'afterprint'
+    // doesn't reliably fire in every browser/print-flow to reset printSection
+    // back to null in between. printTick strictly increases on every click,
+    // guaranteeing the effect always re-fires regardless of section repeats
+    // or afterprint reliability. Same fix as ArchiveForm.tsx/
+    // RequestDetailForm.tsx/TodoDetailForm.tsx's identical prints.
+    setPrintTick((t) => t + 1)
   }
 
   function sortSent(key: ReqSortKey) {

@@ -2442,6 +2442,18 @@ body {
   align-items: baseline;
 }
 
+/* Request Detail's single-item print (2026-08-15) — only three fields
+   (To/Due/Done, no separate Date/created_at column), so it can't reuse
+   .pr1's own 4-column template: without this modifier, its 3 spans were
+   silently shifting one column left (Due landing in Date's 92px slot, Done
+   in Due's 150px slot, and Date's own 150px slot going unused) — a real
+   layout bug surfaced while adding this screen's missing column-header row
+   (owner-reported). `.pcolbar.detail3` is the matching header. */
+.pcolbar.detail3,
+.pr1.detail3 {
+  grid-template-columns: 1fr 150px 150px;
+}
+
 .pr1.ptd {
   grid-template-columns: 92px 92px;
   justify-content: end;
