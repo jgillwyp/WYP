@@ -6,6 +6,84 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Print reports: pt units for font size, white page background, Due/Done Time inline
+
+Fourth round of print-report feedback the same day, following the 19px/15px
+retuning below. Owner supplied a side-by-side screenshot ("WYP App printed"
+vs. "Excel printed") showing WYP's text still visibly, dramatically smaller
+than Excel's own 11pt Arial, "even with the 1.333 conversion multiplier" —
+past what any rounding difference could explain — plus three new xlsx
+mockups with an Arial-based design (previously Aptos Display) and a fuller
+formatting spec: white page background, Brand Blue title/column-header text,
+alternating Row Tint record shading, and rule lines above/below the column
+header. He explicitly sequenced the work: get the font size right on one
+report first, hold off on the color/banding/rule-line treatment.
+
+**Switched every print font-size from px to pt.** Rather than chase another
+round of px conversion, `.ptitle` and the ten body-text print classes now
+specify `11pt`/`14pt` directly — the same physical unit Excel's own
+font-size picker uses, removing any px/DPI/rounding step for a browser or
+printer to get wrong. If this still prints small, the cause isn't a unit
+conversion and needs a different diagnosis (a stale deploy is the leading
+suspect — this batch hasn't been tested against a live printout yet).
+Verified no unrelated rule was touched: grepped `font-size: 15px;` before
+editing, confirmed the only non-print hit was `.attremove` (untouched),
+edited the ten print classes individually rather than with `replace_all`,
+then re-grepped to confirm a clean split.
+
+**Page background forced white in print.** `html, body`'s own `@media
+(min-width: 520px) { background: #eef1f5 }` rule (the on-screen
+desktop-frame letterboxing color) was never scoped away from print, and a
+printed page is wide enough to match that breakpoint — so a browser with
+"Background graphics" enabled would tint the whole page grey. Added `html,
+body { background: #fff !important; }` inside the existing `@media print`
+block, alongside the `.frame-none` width override from the batch below.
+
+**Due/Done Time now renders inline, same line as the date, not stacked
+beneath it.** Owner, mid-turn: "In my examples, the date/time is shown as
+7/15/2026 8:30:00 AM" — then self-corrected twice, to "7/15/2026 8:30 AM"
+(no seconds) and finally "7/15/26 8:30 AM" (2-digit year). New
+`formatMDYSlash` helper (duplicated in `MainScreen.tsx` and
+`RequestDetailForm.tsx`, this codebase's usual convention for small
+formatters) produces exactly that shape — no zero-padding, slash-separated,
+2-digit year — **scoped to just the Due/Done columns that can carry a
+Time**, not applied to the plain Date (`created_at`) column or to
+Archive/ToDo Detail's date-only columns, which keep the existing
+`formatMDY` dash convention. Flagging this asymmetry rather than silently
+generalizing it: a row's Date and Due columns now use two different
+punctuation styles (`08-15-26` vs. `8/15/26`) side by side. `.ptime` dropped
+its `display: block` (the CLAUDE.md on-screen convention, "the time renders
+beneath the date," is untouched — this only affects print) and a
+two-space-prefixed `<span>` supplies the gap between date and time.
+Touched: Main Screen's Sent and Received print rows, and Request Detail's
+single-item print (its Done Date can also carry a Time; Main Screen's own
+Done column never does, but shares the same CSS).
+
+**Due and Done columns widened, not just Due.** Owner separately noted (same
+turn) that he'd widened the date columns in his own mockup "because of the
+option to also show a time" — his three new xlsx files didn't show an
+explicit width for those columns to copy exactly, so this widens `.pr1`/
+`.pcolbar.psr`'s Due and Done columns from 92px to 150px each (Date stays
+92px, it never carries a time) rather than guess a precise figure from the
+mockup. Worth re-checking against a real printout once deployed.
+
+**Explicitly not done this batch, per the owner's own sequencing request**:
+Brand Blue title/column-header color, alternating Row Tint record shading,
+and the above/below rule lines on the column header. `--brand-blue`
+(`#2A5FC8`) and `--row-tint` (`#F6F7F9`) already match his Excel colors
+exactly, and `--strip` (`#E5ECF7`, already used for `.pcolbar`'s background)
+matches his column-header fill too — so implementing the color/banding pass
+should be mechanical once the font-size fix is confirmed working, no new
+tokens needed. Also unresolved: since all four print reports share one CSS
+class system, this change (and the pending color/banding pass) necessarily
+applies to every report at once — there's no way to test "just Archive
+Requests Sent" in isolation without duplicating classes under new names,
+which hasn't been requested and wasn't done here.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-15 — Print reports: dropped the duplicate masthead, bumped and differentiated font sizes
 
 Owner tested a real printout (Sent Requests) after the width fix below landed

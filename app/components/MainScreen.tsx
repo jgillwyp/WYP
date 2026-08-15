@@ -217,6 +217,20 @@ function formatTime12h(value: string | null): string {
   return `${h}:${mStr} ${ampm}`
 }
 
+// Print-only Due/Done date format (2026-08-15) — the owner's own xlsx
+// example shows a combined date+time on one line, "7/15/26  8:30 AM": no
+// zero-padding on month/day, slash-separated, 2-digit year. Deliberately
+// different from formatMDY's dash/zero-padded convention used everywhere
+// else (Date column here, and every on-screen row app-wide) — scoped to
+// just the Due/Done columns that can also carry a Time, so a row with a
+// time reads as one plain sentence instead of mixing two date-punctuation
+// styles. Flagged to the owner as an asymmetry, not silently generalized.
+function formatMDYSlash(value: string | null): string {
+  if (!value) return ''
+  const [y, m, d] = value.slice(0, 10).split('-')
+  return `${parseInt(m, 10)}/${parseInt(d, 10)}/${y.slice(2)}`
+}
+
 
 const CHIP_LABEL: Record<FilterValue, string> = {
   all: 'All',
@@ -1422,12 +1436,14 @@ export default function MainScreen() {
                         <span className="pnm">{r.contacts?.display_name ?? '—'}</span>
                         <span className="pdt">{formatMDY(r.created_at)}</span>
                         <span className="pdue">
-                          {formatMDY(r.due_date)}
-                          {/* Due Time sub-line — gated by the signed-in
-                              owner's own request_time_enabled (migration 019),
-                              since every Sent row is this account's own. */}
+                          {formatMDYSlash(r.due_date)}
+                          {/* Due Time, inline on the same line as the date
+                              (2026-08-15, was a stacked sub-line) — gated by
+                              the signed-in owner's own request_time_enabled
+                              (migration 019), since every Sent row is this
+                              account's own. */}
                           {requestTimeEnabled && r.due_time && (
-                            <span className="ptime">{formatTime12h(r.due_time)}</span>
+                            <span className="ptime">{'  '}{formatTime12h(r.due_time)}</span>
                           )}
                         </span>
                         <span className="pdn">{formatMDY(r.done_date)}</span>
@@ -1467,13 +1483,14 @@ export default function MainScreen() {
                         <span className="pnm">{r.owner_name ?? '—'}</span>
                         <span className="pdt">{formatMDY(r.created_at)}</span>
                         <span className="pdue">
-                          {formatMDY(r.due_date)}
-                          {/* Gated per-row by that row's own sender's setting
+                          {formatMDYSlash(r.due_date)}
+                          {/* Inline, same line as the date (2026-08-15) —
+                              gated per-row by that row's own sender's setting
                               (migration 021) — Received rows can come from
                               different accounts, each with its own
                               request_time_enabled. */}
                           {r.owner_request_time_enabled && r.due_time && (
-                            <span className="ptime">{formatTime12h(r.due_time)}</span>
+                            <span className="ptime">{'  '}{formatTime12h(r.due_time)}</span>
                           )}
                         </span>
                         <span className="pdn">{formatMDY(r.done_date)}</span>

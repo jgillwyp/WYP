@@ -1501,3 +1501,32 @@ link is built only after the stack is proven on Add Contact.
   runs in a way `merge_runs.py` doesn't fully coalesce, making a safe edit
   slower than the rest of the batch. Do on explicit owner go-ahead. See the
   decisions log's 2026-08-14 entry for the full write-up.
+- **Print reports: three more iterations the same day (2026-08-15), each
+  from the owner testing a real printout.** (1) Duplicate masthead removed
+  — Chrome's own default print header already shows a date/time and page
+  title, so `.pmast` (this app's own copy) was a literal duplicate; deleted
+  from all four print reports along with the now-dead `printGeneratedAt`
+  state and `formatPrintTimestamp` helper in each. (2) Font size went
+  through three px-based passes (14/11 → 18/13 → 19/15, the last matching
+  the owner's own Excel-pt-to-px conversion table) before switching to
+  **`pt` units outright** — `.ptitle` 14pt, every other print class 11pt,
+  the same physical unit Excel's own font picker uses, removing any
+  px/DPI/rounding step entirely. A `replace_all` mid-sequence briefly
+  corrupted 14 unrelated live-app rules to 13px — caught before shipping by
+  grep-verifying occurrence counts; see the decisions log for the full
+  incident writeup and the safer pattern used afterward. (3) Page
+  background forced white in print (`html, body { background: #fff
+  !important }`) — the on-screen desktop-frame letterboxing color was never
+  scoped away from `@media print`, so a wide-enough printed page could tint
+  grey. (4) Due/Done Time now renders **inline on the same line as the
+  date** ("7/15/26  8:30 AM", new `formatMDYSlash` helper, print-only)
+  instead of stacked beneath it — scoped to just the Due/Done columns that
+  can carry a Time; the plain Date column and Archive/ToDo Detail's
+  date-only columns keep the existing dash `MM-DD-YY` format, a flagged
+  asymmetry, not resolved. Due/Done columns widened 92px → 150px to fit.
+  **Deferred, per the owner's own explicit sequencing request**: Brand Blue
+  title/column-header color, alternating Row Tint record shading, and rule
+  lines above/below the column header — `--brand-blue`/`--row-tint`/
+  `--strip` already match his Excel colors exactly, so this should be
+  mechanical once the font-size fix is confirmed against a real printout.
+  See the decisions log's three 2026-08-15 entries for the full sequence.

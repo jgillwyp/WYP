@@ -88,6 +88,16 @@ function formatTime12h(value: string | null): string {
   return `${h}:${mStr} ${ampm}`
 }
 
+// Print-only Due/Done date format (2026-08-15) — see MainScreen.tsx's own
+// copy of this helper for the full write-up. "7/15/26  8:30 AM", the
+// owner's own xlsx example, vs. formatMDY's dash convention used everywhere
+// else on this screen.
+function formatMDYSlash(value: string | null): string {
+  if (!value) return ''
+  const [y, m, d] = value.slice(0, 10).split('-')
+  return `${parseInt(m, 10)}/${parseInt(d, 10)}/${y.slice(2)}`
+}
+
 function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 3) + '...' : s
 }
@@ -1147,12 +1157,12 @@ export default function RequestDetailForm() {
                   <div className="pr1">
                     <span className="pnm">{recipientName || '—'}</span>
                     <span className="pdue">
-                      {formatMDY(form.dueDate || null)}
-                      {requestTimeEnabled && form.dueTime && <span className="ptime">{formatTime12h(form.dueTime)}</span>}
+                      {formatMDYSlash(form.dueDate || null)}
+                      {requestTimeEnabled && form.dueTime && <span className="ptime">{'  '}{formatTime12h(form.dueTime)}</span>}
                     </span>
                     <span className="pdn">
-                      {formatMDY(form.doneDate || null)}
-                      {requestTimeEnabled && form.doneTime && <span className="ptime">{formatTime12h(form.doneTime)}</span>}
+                      {formatMDYSlash(form.doneDate || null)}
+                      {requestTimeEnabled && form.doneTime && <span className="ptime">{'  '}{formatTime12h(form.doneTime)}</span>}
                     </span>
                   </div>
                   <div className="pr2">
