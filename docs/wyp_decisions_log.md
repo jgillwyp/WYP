@@ -67,6 +67,18 @@ Flagged rather than guessed at further — needs the owner to confirm
 whether a filter was applied before printing, or share another screenshot,
 before changing anything.
 
+**Update, same day**: Archive's print turned out fine once a filter was
+applied (owner's next screenshot showed real Received rows) — no bug, just
+the empty-until-filtered design doing exactly what it's supposed to. That
+same screenshot flagged the 18px/13px pass as still too small. The owner
+looked up the actual conversion he needed: he'd been thinking in Excel font
+points, not CSS pixels — Excel 14pt (his title size) is 18.67px, Excel 11pt
+(his body size) is 14.67px, both round differently than a naive 1:1
+pt-to-px reading would suggest. Retuned to `.ptitle` 19px / everything else
+15px to match his exact numbers; `.pcolbar.psr`/`.ptdc` and `.pr1`/
+`.pr1.ptd`'s fixed date-column widths widened again, 78px → 92px, to keep
+"MM-DD-YY" comfortable at the larger size.
+
 `npx tsc --noEmit`/`npm run lint` clean.
 
 \---
