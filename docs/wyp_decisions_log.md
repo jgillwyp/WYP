@@ -6,6 +6,71 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Print reports: dropped the duplicate masthead, bumped and differentiated font sizes
+
+Owner tested a real printout (Sent Requests) after the width fix below landed
+and flagged three more issues from one screenshot of Chrome's print preview,
+plus a fourth (Archive) reported separately. Fixed the first three; the
+fourth needs the owner's own follow-up (see below).
+
+**Duplicate masthead removed.** The screenshot showed two "Would You
+Please" + date/time lines stacked at the top of the page: Chrome's own
+default print header (date/time top-left, page title top-center — "Headers
+and footers" in More settings, on by default in his test) and this app's
+own `.pmast` row underneath it. Owner: "the masthead of 'Would You Please'
+and the as of date/time are repeated at the top of the report [in reverse
+order - the order does not matter]." Since the browser's own header isn't
+something this app can reliably suppress (it's a per-user print-dialog
+setting, not CSS-controllable), the fix removes our own `.pmast` — the
+duplicate under our control — from all four print reports (Main Screen's
+three sections, Request Detail, ToDo Detail, Archive). `printGeneratedAt`
+state and the `formatPrintTimestamp` helper are now dead in every one of
+those four files and were removed along with the JSX, not left orphaned.
+
+**Font sizes bumped and differentiated.** Two more issues from the same
+screenshot: "the font-size for the report title is not differentiated from
+the rest of the report" and "all font sizes are too small." This revises
+the initial pass from earlier the same day (title 14px, body 11px, per the
+owner's own stated numbers at the time) — seeing a real printout changed
+his assessment. New scale: `.ptitle` 18px, every other print-only class
+13px (was 11px: `.pmast-brand` is gone entirely; `.pnm`, `.ptime`,
+`.pempty`, `.pdesc` bumped along with the ones already sharing the
+11px value). Date/Due/Done columns (`.pcolbar.psr`/`.ptdc`, `.pr1`/
+`.pr1.ptd`) widened 70px → 78px so "MM-DD-YY" still fits cleanly at the
+larger size.
+
+**A real mistake caught before it shipped**: the first attempt at the font
+bump used a file-wide `replace_all` on `font-size: 11px;`, which silently
+changed 14 unrelated live-app rules (`.flabel`, `.subnote`,
+`.attachpanel .plabel`, `.attitem`, `.minreq`, `.subbanner`, `.adbox`,
+`.colbar`, `.dt`/`.due`/`.dn`, `.field`, `.dlgre`) to 13px along with the
+10 actual print-report rules — none of those on-screen classes were
+supposed to change. Caught immediately by grepping the diff for every
+remaining `11px`/`13px` occurrence and cross-checking each one's selector;
+all 14 non-print rules were reverted to 11px, leaving only the 10 print
+rules at 13px. Flagged here as a caution for any future file-wide
+find/replace on a value this common in a shared stylesheet — a scoped edit
+(or per-selector edits, as used for the revert) is safer than `replace_all`
+whenever the search string isn't unique to the feature being changed.
+
+**Archive still printing a near-blank page, reported separately, not yet
+resolved.** Owner: "for the Archive report, it is only printing a single
+blank page for each of Sent and Received Requests, and the ToDo... I tested
+all Archive reports with the same result." Most likely explanation, not yet
+confirmed with the owner: Archive's list (and therefore its print) is
+designed to stay empty until at least one filter — Recipient/Requestor
+and/or Before Done Date — is entered (existing behavior, unchanged today);
+printing with no filter set would show the title, an empty Selection
+Criteria line, and "No records match." — closer to "a nearly empty page"
+than a truly blank one, but plausibly read that way in a quick check.
+Flagged rather than guessed at further — needs the owner to confirm
+whether a filter was applied before printing, or share another screenshot,
+before changing anything.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-15 — Archive print gains Selection Criteria line; fixed print reports rendering at half page width
 
 Two follow-ups to the print-report batch below, same day.

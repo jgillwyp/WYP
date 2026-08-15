@@ -139,18 +139,6 @@ function formatMDY(value: string | null): string {
 // mockups supplied its exact wording/format) — see criteriaText() below,
 // built from this component's own noun/query/beforeDone state, the same
 // values driving the on-screen filter.
-function formatPrintTimestamp(d: Date): string {
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const y = String(d.getFullYear()).slice(2)
-  let h = d.getHours()
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  h = h % 12
-  if (h === 0) h = 12
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
-}
-
 type PrintDialogEntry = { id: string; kind: string; body: string; who: string | null; replies_to_id: string | null }
 type PrintAttachmentEntry = {
   id: string
@@ -474,9 +462,12 @@ export default function ArchiveForm() {
 
   // Print (2026-08-15) — same afterprint-driven pattern as MainScreen.tsx's
   // own Print Reports; printDetail is fetched fresh for whichever Record
-  // Type's currently visible matches are being printed.
+  // Type's currently visible matches are being printed. No own masthead/
+  // timestamp is rendered (dropped the same day it shipped) — the browser's
+  // own print header already shows one, so ours was a literal duplicate,
+  // "repeated... in reverse order" per the owner's own report comparing a
+  // real printout against the design.
   const [showPrint, setShowPrint] = useState(false)
-  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
   const [printDetail, setPrintDetail] = useState<PrintDetailMap>({})
 
   useEffect(() => {
@@ -706,7 +697,6 @@ export default function ArchiveForm() {
     const ids = sortedMatches.map((r) => r.id)
     const detail = currentType === 'received' ? await loadReceivedPrintDetail(ids) : await loadOwnedPrintDetail(ids)
     setPrintDetail(detail)
-    setPrintGeneratedAt(new Date())
     setShowPrint(true)
   }
 
@@ -715,7 +705,6 @@ export default function ArchiveForm() {
     window.print()
     function handleAfterPrint() {
       setShowPrint(false)
-      setPrintGeneratedAt(null)
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
@@ -1125,14 +1114,12 @@ export default function ArchiveForm() {
           the on-screen view," owner) reusing .archcheck's own styling. Prints
           exactly sortedMatches — the currently visible, filtered-and-sorted
           set for the active Record Type — same "prints what you see"
-          principle as every other Print button in the app. No filter-
-          criteria summary yet; see this file's Print helpers' own comment. */}
+          principle as every other Print button in the app. Selection
+          Criteria line below the title (criteriaText, added same day). No
+          own masthead — see the comment above the removed pmast/
+          printGeneratedAt state further up this file. */}
       {showPrint && (
         <div className="print-report">
-          <div className="pmast">
-            <span className="pmast-brand">Would You Please</span>
-            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
-          </div>
           <div className="ptitle">{LIST_TITLE[currentType]}</div>
           <div className="pcriteria">
             <b>Selection Criteria:</b> {criteriaText}

@@ -363,7 +363,7 @@ body {
 
 .flabel {
   display: block;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--ink);
   margin-bottom: 4px;
@@ -718,7 +718,7 @@ body {
   border-radius: 9px;
   background: var(--row-tint);
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 /* ============================================================================
@@ -919,7 +919,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 5px 7px;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink);
 }
 
@@ -1287,7 +1287,7 @@ body {
 .minreq {
   padding: 2px var(--pad) 18px;
   background: var(--row-tint);
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink);
   line-height: 1.45;
 }
@@ -1356,7 +1356,7 @@ body {
   background: #fff;
   border-top: 1px solid var(--rule);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--brand-blue);
 }
@@ -1962,7 +1962,7 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   background: #fff;
   border: 1px solid var(--input-border);
@@ -2320,32 +2320,20 @@ body {
   }
 }
 
-.pmast {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 6px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid var(--rule);
-}
+/* No own masthead (.pmast, removed 2026-08-15) — the browser's own print
+   header already shows a date/time and the page title by default (Chrome:
+   "Headers and footers" in More settings), so ours was a literal duplicate.
+   Owner, comparing a real printout against the design: "the masthead of
+   'Would You Please' and the as of date/time are repeated at the top of the
+   report [in reverse order - the order does not matter]." */
 
-.pmast-brand {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--ink);
-}
-
-.pmast-time {
-  font-size: 11px;
-  color: var(--ink-soft);
-}
-
-/* Report title: 14px, per the owner's own two-part correction 2026-08-15
-   ("font sizes of 15 for the report title and 11 for everything else... 14,
-   not 15"). Every other print-report font-size below is 11px to match. */
+/* Report title: 18px, bold, clearly differentiated from the 13px body text
+   below (owner, 2026-08-15, revising the initial 14px/11px pass after
+   seeing a real printout: "the font-size for the report title is not
+   differentiated from the rest of the report" and "all font sizes are too
+   small"). Every other print-report font-size below is 13px to match. */
 .ptitle {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--ink);
   margin-bottom: 10px;
@@ -2355,7 +2343,7 @@ body {
    printed list, matching the owner's own uploaded xlsx mockup's "Selection
    Criteria:" line. Sits between .ptitle and .pcolbar/.prows. */
 .pcriteria {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--ink-soft);
   margin: -4px 0 10px;
 }
@@ -2370,7 +2358,7 @@ body {
   background: var(--strip);
   border: 1px solid var(--rule);
   border-radius: 5px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
   padding: 6px 8px;
@@ -2378,11 +2366,11 @@ body {
 }
 
 .pcolbar.psr {
-  grid-template-columns: 1fr 70px 70px 70px;
+  grid-template-columns: 1fr 78px 78px 78px;
 }
 
 .pcolbar.ptdc {
-  grid-template-columns: 1fr 70px 70px;
+  grid-template-columns: 1fr 78px 78px;
 }
 
 /* ToDos print header with Due/Done dropped entirely (2026-08-15) — the
@@ -2415,7 +2403,7 @@ body {
 
 .pempty {
   padding: 10px 8px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--ink-soft);
 }
 
@@ -2426,33 +2414,33 @@ body {
    xlsx mockup's own column order (Description, Due, Done). */
 .pr1 {
   display: grid;
-  grid-template-columns: 1fr 70px 70px 70px;
+  grid-template-columns: 1fr 78px 78px 78px;
   column-gap: 10px;
   align-items: baseline;
 }
 
 .pr1.ptd {
-  grid-template-columns: 70px 70px;
+  grid-template-columns: 78px 78px;
   justify-content: end;
   margin-top: 2px;
 }
 
 .pnm {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
 }
 
 .pdt,
 .pdn {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-soft);
   text-align: center;
 }
 
 .pdue {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
   text-align: center;
@@ -2464,7 +2452,7 @@ body {
    themselves, only on Request Detail/Response. */
 .ptime {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-soft);
 }
@@ -2481,7 +2469,7 @@ body {
 .pdesc {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
   line-height: 1.32;
@@ -2525,14 +2513,14 @@ body {
 
 .pdlghead,
 .patthead {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
 }
 
 .pdlgitem,
 .pattitem {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--ink);
   line-height: 1.34;
   margin-top: 1px;

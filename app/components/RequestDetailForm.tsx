@@ -88,18 +88,6 @@ function formatTime12h(value: string | null): string {
   return `${h}:${mStr} ${ampm}`
 }
 
-function formatPrintTimestamp(d: Date): string {
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const y = String(d.getFullYear()).slice(2)
-  let h = d.getHours()
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  h = h % 12
-  if (h === 0) h = 12
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
-}
-
 function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 3) + '...' : s
 }
@@ -236,7 +224,6 @@ export default function RequestDetailForm() {
   // its own small fetch since AttachmentsPanel keeps its own list private.
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
-  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
 
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -252,7 +239,6 @@ export default function RequestDetailForm() {
   }
 
   function startPrint() {
-    setPrintGeneratedAt(new Date())
     setShowPrint(true)
   }
 
@@ -263,7 +249,6 @@ export default function RequestDetailForm() {
     window.print()
     function handleAfterPrint() {
       setShowPrint(false)
-      setPrintGeneratedAt(null)
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
@@ -1153,10 +1138,6 @@ export default function RequestDetailForm() {
           printing, same mechanism as Main Screen. */}
       {showPrint && (
         <div className="print-report">
-          <div className="pmast">
-            <span className="pmast-brand">Would You Please</span>
-            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
-          </div>
           <div className="ptitle">Request Detail</div>
           <div className="prows">
             {(() => {

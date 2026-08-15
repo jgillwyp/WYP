@@ -73,20 +73,6 @@ function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 3) + '...' : s
 }
 
-// Same helpers as MainScreen.tsx's own Print Reports (2026-08-13/2026-08-15)
-// — duplicated per this codebase's established convention.
-function formatPrintTimestamp(d: Date): string {
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const y = String(d.getFullYear()).slice(2)
-  let h = d.getHours()
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  h = h % 12
-  if (h === 0) h = 12
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
-}
-
 function categoryPrefix(name: string | null | undefined): string {
   return name ? `[${name}] ` : ''
 }
@@ -235,7 +221,6 @@ export default function TodoDetailForm() {
   // own list private.
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
-  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
 
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -262,7 +247,6 @@ export default function TodoDetailForm() {
   }
 
   function startPrint() {
-    setPrintGeneratedAt(new Date())
     setShowPrint(true)
   }
 
@@ -271,7 +255,6 @@ export default function TodoDetailForm() {
     window.print()
     function handleAfterPrint() {
       setShowPrint(false)
-      setPrintGeneratedAt(null)
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
@@ -1111,10 +1094,6 @@ export default function TodoDetailForm() {
           single-item print — nothing to sort with one record. */}
       {showPrint && (
         <div className="print-report">
-          <div className="pmast">
-            <span className="pmast-brand">Would You Please</span>
-            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
-          </div>
           <div className="ptitle">ToDo Detail</div>
           <div className="prows">
             {(() => {

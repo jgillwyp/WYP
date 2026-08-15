@@ -217,20 +217,6 @@ function formatTime12h(value: string | null): string {
   return `${h}:${mStr} ${ampm}`
 }
 
-// m/d/yy h:mm AM/PM, matching this app's existing 12-hour-with-AM/PM
-// convention (formatTime12h above) rather than the xlsx mockup's raw Excel
-// number format, which had no explicit AM/PM of its own to match.
-function formatPrintTimestamp(d: Date): string {
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const y = String(d.getFullYear()).slice(2)
-  let h = d.getHours()
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  h = h % 12
-  if (h === 0) h = 12
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${m}/${day}/${y} ${h}:${min} ${ampm}`
-}
 
 const CHIP_LABEL: Record<FilterValue, string> = {
   all: 'All',
@@ -689,11 +675,12 @@ export default function MainScreen() {
   // user" (owner, confirmed) — sourced from sortedSent/sortedReceived/
   // sortedTodos below, the same already-filtered-and-sorted arrays the
   // on-screen rows themselves render from, so no separate filtering logic
-  // is needed here. printGeneratedAt is captured once per click (not
-  // computed at render time) so the masthead timestamp reflects the moment
-  // Print was clicked, not whatever instant React happens to next re-render.
+  // is needed here. No own masthead/timestamp is rendered (2026-08-15,
+  // dropped — see below): the browser's own print header already shows a
+  // date/time and the page title, so ours was a literal duplicate,
+  // "repeated... in reverse order" per the owner's own report, comparing a
+  // real printout against the design.
   const [printSection, setPrintSection] = useState<'sent' | 'received' | 'todos' | null>(null)
-  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null)
   // Full Dialog/Attachments content for whatever's currently being printed
   // (2026-08-15) — see loadOwnedPrintDetail/loadReceivedPrintDetail above
   // for why this is a print-time fetch rather than part of the main list
@@ -713,7 +700,6 @@ export default function MainScreen() {
     window.print()
     function handleAfterPrint() {
       setPrintSection(null)
-      setPrintGeneratedAt(null)
     }
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
@@ -1040,7 +1026,6 @@ export default function MainScreen() {
       sortedTodos.map((t) => t.id)
     const detail = section === 'received' ? await loadReceivedPrintDetail(ids) : await loadOwnedPrintDetail(ids)
     setPrintDetail(detail)
-    setPrintGeneratedAt(new Date())
     setPrintSection(section)
   }
 
@@ -1417,11 +1402,6 @@ export default function MainScreen() {
           slot to reserve here beyond the Dialog one already present. */}
       {printSection && (
         <div className="print-report">
-          <div className="pmast">
-            <span className="pmast-brand">Would You Please</span>
-            <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
-          </div>
-
           {printSection === 'sent' && (
             <>
               <div className="ptitle">Requests Sent — {CHIP_LABEL[sentFilter]}</div>
