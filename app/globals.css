@@ -2295,6 +2295,20 @@ body {
 }
 
 @media print {
+  /* .print-report always renders as a descendant of .frame-none (§6.8) —
+     the same 480px mobile-first shell every screen sits inside — so without
+     this override the printed report inherited .frame-none's max-width:480px
+     and printed centered at roughly half the page's actual width (owner-
+     reported 2026-08-15, comparing against his own full-width Excel mockup
+     printout). .no-print already hides .app, so nothing on-screen is
+     affected by widening .frame-none here — this rule only ever applies
+     while printing. */
+  .frame-none {
+    max-width: none;
+    margin: 0;
+    height: auto;
+    box-shadow: none;
+  }
   .no-print {
     display: none !important;
   }
@@ -2317,7 +2331,7 @@ body {
 }
 
 .pmast-brand {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--ink);
 }
@@ -2327,11 +2341,28 @@ body {
   color: var(--ink-soft);
 }
 
+/* Report title: 14px, per the owner's own two-part correction 2026-08-15
+   ("font sizes of 15 for the report title and 11 for everything else... 14,
+   not 15"). Every other print-report font-size below is 11px to match. */
 .ptitle {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--ink);
   margin-bottom: 10px;
+}
+
+/* Archive print only (2026-08-15) — the filter criteria that produced the
+   printed list, matching the owner's own uploaded xlsx mockup's "Selection
+   Criteria:" line. Sits between .ptitle and .pcolbar/.prows. */
+.pcriteria {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin: -4px 0 10px;
+}
+
+.pcriteria b {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .pcolbar {
@@ -2384,7 +2415,7 @@ body {
 
 .pempty {
   padding: 10px 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 
@@ -2407,7 +2438,7 @@ body {
 }
 
 .pnm {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -2433,7 +2464,7 @@ body {
    themselves, only on Request Detail/Response. */
 .ptime {
   display: block;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--ink-soft);
 }
@@ -2450,7 +2481,7 @@ body {
 .pdesc {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink);
   line-height: 1.32;

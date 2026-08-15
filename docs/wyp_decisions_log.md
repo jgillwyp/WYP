@@ -6,6 +6,66 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Archive print gains Selection Criteria line; fixed print reports rendering at half page width
+
+Two follow-ups to the print-report batch below, same day.
+
+**Selection Criteria line** — owner supplied three more xlsx mockups
+("Archive - Requests Received/Recipient/ToDos") for the Archive print
+report specifically, fulfilling his own stated follow-up from the batch
+below ("the Archive report needs to show selection criteria - I will work
+on that next"). Format taken verbatim: `Selection Criteria:  <Noun> <value
+or (blank)>     Before Done Date <value or (blank)>` for Sent/Received,
+`Selection Criteria:  Before Done Date <value or (blank)>` alone for ToDos
+(no name field to filter by). New `.pcriteria` (`app/globals.css`) sits
+between `.ptitle` and `.prows`; `criteriaText` (`ArchiveForm.tsx`) is built
+from the same `noun`/`query`/`beforeDone` state already driving the
+on-screen filter, so the printed line always matches what actually produced
+the list.
+
+**Flagged and resolved via AskUserQuestion**: the "Requests Received" and
+"Requests Recipient" xlsx uploads were byte-identical — both titled
+"Archive Requests Sent" and both headed "Recipient." The live Archive
+screen already labels this field "Requestor" for Received, not "Recipient"
+(`NOUN`, existing convention). Rather than guess whether the owner wanted
+"Recipient" on both regardless, or hit a duplicate-upload mistake, asked
+directly — owner confirmed "Requestor" for Received, matching the existing
+convention (no code change needed there; `NOUN` already resolves correctly,
+only the new criteria line needed to read it).
+
+**Print reports rendering at roughly half the page's width** — owner,
+comparing his own printed Excel mockup (full page width) against a live
+Sent Requests printout: "it still is centered on the page and only takes up
+approximately half of the available portrait width... is it a font-size
+change? — it seems to be..." Not a font-size issue: `.print-report` renders
+as a descendant of `.frame-none` (§6.8's 480px mobile-first app shell,
+`max-width: 480px`), and nothing had ever overridden that for print, so the
+printed report inherited the same 480px cap the on-screen app uses and
+printed centered in roughly the left half of a Letter-width page. Fixed
+with an `@media print` override on `.frame-none` itself (`max-width: none`,
+`margin: 0`, `height: auto`, `box-shadow: none`) — safe to apply
+unconditionally since `.no-print` already hides `.app` during print, so
+nothing on-screen is affected; the rule only ever takes effect while
+printing. Applies to every screen's print report (Main Screen's three
+sections, Request/ToDo Detail's single-item print, and Archive), not just
+Sent, since all of them render inside the same `.frame-none` shell. Not
+visually confirmed in this sandbox (no headless browser reachable, same
+limitation noted elsewhere in this project) — worth a quick owner
+confirmation on the next printout.
+
+**Font sizes normalized to the owner's exact spec, same day**: "font sizes
+of 15 for the report title and 11 for everything else... 14, not 15."
+`.ptitle` (the one large heading per report — "Sent Requests (Done)",
+"Request Detail," etc.) is now 14px; every other print-only class that
+wasn't already 11px (`.pmast-brand`, `.pnm`, `.ptime`, `.pempty`, `.pdesc`)
+dropped to match. `.pmast-time`, `.pcolbar`, `.pdt`/`.pdn`/`.pdue`,
+`.pcriteria`, `.pdlghead`/`.pdlgitem`/`.patthead`/`.pattitem` were already
+11px.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-15 — Print Reports rebuilt: full Dialog/Attachments per record, Category prefix, single-item print, Archive print
 
 Owner provided three xlsx mockups ("Main Screen sections - Requests Sent/

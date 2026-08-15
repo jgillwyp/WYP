@@ -69,10 +69,14 @@ import { supabase } from '@/lib/supabaseClient'
  * action exists yet; an archived record simply drops out of this screen's
  * own eligible list once archived_at/received_archived_at is set.
  *
- * Print is a plain window.print() (matching the pre-Print-Reports precedent
- * elsewhere in this app) rather than a dedicated print-report layout —
- * Main Screen's own Print Reports feature (2026-08-13) was scoped to Sent/
- * Received/ToDos specifically and was not asked to extend here.
+ * Print (2026-08-15) reuses Main Screen's own detailed print-report layout
+ * verbatim — full Dialog thread, full Attachments/Locations list per
+ * record, not just an icon — plus a Selection Criteria line built from this
+ * screen's own filter state, and the .archcheck checkbox reused in a
+ * dedicated narrow print column. See the Print helpers and criteriaText
+ * further down this file. (Originally scoped as a plain window.print() when
+ * this screen first went live 2026-08-14 — superseded the next day once the
+ * owner asked for the same detailed layout here too.)
  *
  * Column-header sorting (2026-08-14, owner-reported: "the sorting does not
  * work for column headings in the displayed search results... it would be
@@ -130,12 +134,11 @@ function formatMDY(value: string | null): string {
 // same formats would work along with the insertion of a checkbox in its own
 // narrow column as is done with the on-screen view" — reuses the identical
 // .print-report/.prow/.pdlg/.patt layout, with .archcheck's own checkbox
-// added as a fourth column. Deliberately does NOT yet show the filter
-// criteria (Recipient/Requestor and Before Done Date) anywhere in the
-// printed header — the owner flagged that as its own follow-up ("the
-// Archive report needs to show selection criteria - I will work on that
-// next") while this batch was in progress, so it's left out here rather
-// than guessed at.
+// added as a fourth column. The printed header now also shows the Selection
+// Criteria line (added same day, once the owner's own three follow-up xlsx
+// mockups supplied its exact wording/format) — see criteriaText() below,
+// built from this component's own noun/query/beforeDone state, the same
+// values driving the on-screen filter.
 function formatPrintTimestamp(d: Date): string {
   const m = d.getMonth() + 1
   const day = d.getDate()
@@ -594,6 +597,19 @@ export default function ArchiveForm() {
   const noun = NOUN[currentType]
   const query = recipientQuery.trim()
   const noFilters = currentType === 'todos' ? beforeDone === '' : query === '' && beforeDone === ''
+
+  // Selection Criteria print line (2026-08-15) — exact wording/format from
+  // the owner's own "Archive - ..." xlsx mockups: "Recipient <value or
+  // (blank)>     Before Done Date <value or (blank)>" for Sent/Received
+  // ("Requestor" in place of "Recipient" for Received, via NOUN — the
+  // owner confirmed via AskUserQuestion that the two uploaded xlsx files
+  // being byte-identical was a mistaken duplicate, not an intent to use
+  // "Recipient" for both), "Before Done Date <value or (blank)>" alone for
+  // ToDos, which has no name field to filter by at all.
+  const criteriaText =
+    currentType === 'todos'
+      ? `Before Done Date ${beforeDone ? formatMDY(beforeDone) : '(blank)'}`
+      : `${noun} ${query || '(blank)'}     Before Done Date ${beforeDone ? formatMDY(beforeDone) : '(blank)'}`
 
   const matches = useMemo(() => {
     if (noFilters) return []
@@ -1118,6 +1134,9 @@ export default function ArchiveForm() {
             <span className="pmast-time">{printGeneratedAt ? formatPrintTimestamp(printGeneratedAt) : ''}</span>
           </div>
           <div className="ptitle">{LIST_TITLE[currentType]}</div>
+          <div className="pcriteria">
+            <b>Selection Criteria:</b> {criteriaText}
+          </div>
           <div className="prows">
             {sortedMatches.length === 0 && <div className="pempty">No records match.</div>}
             {sortedMatches.map((r) => {
