@@ -1160,6 +1160,55 @@ body {
 }
 
 /* ============================================================================
+   REMINDER CHECKBOX — §6.37 PROPOSED, 2026-08-15 (Create Request/Request
+   Detail). Owner's own design: a .checkrow ("Reminder - send on the morning
+   before unless it is marked Done.") shown in one of two places depending on
+   whether the account has Due/Done Time turned on (profiles.
+   request_time_enabled) — beside Due Date when Due Time is off (there's
+   width to spare in that .frow, .checkrow-inline below), or as its own
+   standalone .checkrow row further down the form when Due Time is on (the
+   Due row is full by then). This is NOT a subscription gate, so it
+   deliberately does not use .is-locked (§6.22, padlock + "what would unlock
+   this" — reserved for tier-gated controls): a plain disabled .checkrow,
+   greyed by .checkrow-disabled below, with the reason given as a native
+   title tooltip on the row itself rather than inline text, since the
+   unavailability here is transient (a data dependency, not an entitlement)
+   and the row would otherwise need to reflow to make room for an
+   explanation. See CreateRequestForm.tsx/RequestDetailForm.tsx for the
+   three-state disabled logic (no Contact/Due Date yet; Due Date too soon —
+   isReminderEligible(), app/src/lib/email.ts; eligible). */
+.checkrow-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.checkrow-disabled input,
+.checkrow-disabled .checktext {
+  cursor: not-allowed;
+}
+
+/* Inline placement beside Due Date (Due Time off) — a second flex item in
+   the same .frow as the Due Date .ffloat, not its own full-width row.
+   .checkrow's base width:100%/margin-bottom:14px are both wrong for this
+   placement, overridden here. */
+.frow > .checkrow.checkrow-inline {
+  width: auto;
+  flex: 1 1 auto;
+  margin-bottom: 0;
+  padding: 8px 10px;
+}
+
+/* Due Date's own §6.33 :only-child cap (flex: 0 1 220px, 2026-08-13,
+   Safari's spelled-out date format at wider widths) no longer applies once
+   the Reminder checkbox joins the row as a sibling — this rule reproduces
+   the identical cap for that specific pairing, via a class set only when
+   CreateRequestForm.tsx/RequestDetailForm.tsx actually render the checkbox
+   beside it, rather than loosening :only-child's own selector. */
+.frow > .ffloat.picker.native.due-with-reminder {
+  flex: 0 1 220px;
+}
+
+/* ============================================================================
    SEND-BY CHIP ROW (§6.2 form variant) — Add Contact
    Compressed full-width strip: chips left, gating notice right. Chips choose
    an either/or value, unlike .checkrow above (a single persistent toggle).

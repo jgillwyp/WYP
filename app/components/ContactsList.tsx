@@ -33,14 +33,11 @@ type Contact = {
   notes: string | null
 }
 
-// get_contact_request_counts() (migration 030, drafted 2026-08-15, not yet
-// confirmed run) — one row per contact, Sent (my own Requests to them) and
+// get_contact_request_counts() (migration 030, confirmed run by the owner
+// 2026-08-15) — one row per contact, Sent (my own Requests to them) and
 // Rec'd (Requests they've sent me, matched via their real login email
 // against this contact's stored email). See that migration's own header
-// comment in docs/Week6 - SQL history.txt for the full reasoning. If the
-// function isn't live yet, the .rpc() call below fails silently and counts
-// just render blank — same defensive posture as every other
-// not-yet-confirmed migration in this app.
+// comment in docs/Week6 - SQL history.txt for the full reasoning.
 type ContactCounts = { contact_id: string; sent_count: number; received_count: number }
 
 // Print (2026-08-15) — new, from the owner's own "Contacts list.xlsx"
@@ -178,8 +175,8 @@ export default function ContactsList() {
           CLAUDE.md/decisions log), so the print title matches the screen's
           actual, current name rather than reproducing the mockup's literal
           text; flagged here rather than silently decided. Sent/Rec'd counts
-          come from get_contact_request_counts() (migration 030, drafted,
-          not yet confirmed run) — render blank until it's live. */}
+          come from get_contact_request_counts() (migration 030, confirmed
+          run by the owner 2026-08-15). */}
       {showPrint && (
         <div className="print-report">
           <div className="ptitle">Contacts</div>

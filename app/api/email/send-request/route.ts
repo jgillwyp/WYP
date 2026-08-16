@@ -7,7 +7,7 @@ import {
   buildRequestEmailBody,
   buildRequestEmailFromName,
   buildRequestEmailSubject,
-  isTightWindow,
+  isReminderEligible,
 } from '@/lib/email'
 
 // nodemailer needs Node's net/tls modules — not available on Next's Edge
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
   // convention (CLAUDE.md, Database section).
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
-    .select('id, description, due_date, due_time, contacts(email)')
+    .select('id, description, due_date, due_time, reminder_enabled, contacts(email)')
     .eq('id', requestId)
     .single()
 
@@ -138,6 +138,7 @@ export async function POST(request: Request) {
     description: string
     due_date: string | null
     due_time: string | null
+    reminder_enabled: boolean
     contacts: { email: string } | null
   }
   const reqRow = reqRes as unknown as Row | null
@@ -158,14 +159,20 @@ export async function POST(request: Request) {
   const ownerName = profile?.display_name ?? null
   const ownerEmail = userData.user.email ?? ''
 
-  const tightWindow = isTightWindow(reqRow.due_date, reqRow.due_time)
+  // A reminder is only ever promised in this email when it's both possible
+  // (isReminderEligible — Due Date more than two calendar days out) AND the
+  // sender left the Reminder checkbox on (reminder_enabled, migration 031,
+  // default true). The actual day-before send itself is still unbuilt — see
+  // CLAUDE.md's Known gaps — so this only governs whether the Initial
+  // email's own "a reminder will arrive" sentence is honest.
+  const reminderPromised = isReminderEligible(reqRow.due_date) && reqRow.reminder_enabled
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
 
   const subject = buildRequestEmailSubject('initial', ownerName, reqRow.due_date, reqRow.due_time)
   const text = buildRequestEmailBody({
     description: reqRow.description,
     link,
-    tightWindow,
+    reminderPromised,
     siteUrl,
   })
 

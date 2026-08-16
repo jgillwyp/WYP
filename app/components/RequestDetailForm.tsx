@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
 import { supabase } from '@/lib/supabaseClient'
+import { isReminderEligible } from '@/lib/email'
 
 /**
  * Request Detail (§9.3) — converted from
@@ -25,6 +26,18 @@ import { supabase } from '@/lib/supabaseClient'
  * HARD DEPENDENCY: this screen's Dialog panel selects `dialog.replies_to_id`
  * (migration 006). If migration 006 hasn't been run yet, the dialog fetch
  * below will error — see CLAUDE.md Known gaps.
+ *
+ * Reminder checkbox (§6.37 PROPOSED, migration 031, 2026-08-15) — same
+ * control and eligibility rules as CreateRequestForm.tsx's own (see that
+ * file's header comment for the full reasoning), persisted/reloaded here on
+ * Save. Placement differs from Create Request, though: that screen can
+ * place the checkbox beside a lone Due Date field once Due Time is off,
+ * because it has no Done Date/Time yet. This screen always shows Done
+ * Date alongside Due Date (requestTimeEnabled or not — the collapsed row
+ * pairs Due Date with Done Date, never leaves Due Date alone), so there is
+ * never spare row width to place the checkbox inline — it always renders as
+ * its own standalone row here, after Attachments, regardless of
+ * requestTimeEnabled.
  */
 
 type Kind = 'question' | 'answer' | 'comment'
@@ -59,6 +72,7 @@ type RequestFormState = {
   doneTime: string
   categoryName: string
   description: string
+  reminderEnabled: boolean
 }
 
 const CATEGORY_CAP = 20
@@ -180,6 +194,7 @@ export default function RequestDetailForm() {
     doneTime: '',
     categoryName: '',
     description: '',
+    reminderEnabled: true,
   })
 
   // Private Category is now an opt-in account preference (migration 018,
@@ -288,7 +303,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, due_time, done_date, done_time, category_id, contacts(display_name), categories(name)')
+          .select('id, description, due_date, due_time, done_date, done_time, category_id, reminder_enabled, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -328,6 +343,7 @@ export default function RequestDetailForm() {
         done_date: string | null
         done_time: string | null
         category_id: string | null
+        reminder_enabled: boolean
         contacts: { display_name: string } | null
         categories: { name: string } | null
       }
@@ -341,6 +357,7 @@ export default function RequestDetailForm() {
         doneTime: row.done_time ?? '',
         categoryName: row.categories?.name ?? '',
         description: row.description ?? '',
+        reminderEnabled: row.reminder_enabled,
       })
       if (row.category_id && row.categories) {
         setSelectedCategory({ id: row.category_id, name: row.categories.name })
@@ -524,6 +541,37 @@ export default function RequestDetailForm() {
     return hasDesc
   }
 
+  // Reminder checkbox availability — same rule as CreateRequestForm.tsx's
+  // own (see this file's header comment for why placement differs). The
+  // Contact prerequisite from that screen doesn't apply here — Recipient is
+  // already fixed and always present on an existing Request — so only the
+  // Due Date itself gates state 1.
+  const reminderPrereqsMissing = form.dueDate.trim() === ''
+  const reminderIneligible = !reminderPrereqsMissing && !isReminderEligible(form.dueDate)
+  const reminderDisabled = reminderPrereqsMissing || reminderIneligible
+  const reminderTooltip = reminderPrereqsMissing
+    ? 'Please select Contact and Due Date before modifying the Reminder.'
+    : reminderIneligible
+      ? 'A Reminder is not available due to the short lead time.'
+      : undefined
+
+  function reminderCheckbox() {
+    return (
+      <label className={`checkrow${reminderDisabled ? ' checkrow-disabled' : ''}`} title={reminderTooltip}>
+        <input
+          type="checkbox"
+          checked={form.reminderEnabled}
+          disabled={reminderDisabled}
+          onChange={(e) => set('reminderEnabled', e.target.checked)}
+        />
+        <span className="checktext">
+          Reminder
+          <span className="checknote">Send on the morning before unless it is marked Done.</span>
+        </span>
+      </label>
+    )
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -540,6 +588,7 @@ export default function RequestDetailForm() {
         done_time: form.doneTime.trim() === '' ? null : form.doneTime,
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
+        reminder_enabled: form.reminderEnabled,
       })
       .eq('id', requestId)
 
@@ -973,6 +1022,12 @@ export default function RequestDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
             />
+
+            {/* Reminder checkbox — always the standalone-row placement on
+                this screen; see the file-level comment for why (Done Date
+                is always paired with Due Date here, unlike Create
+                Request). */}
+            {reminderCheckbox()}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

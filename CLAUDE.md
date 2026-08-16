@@ -1557,3 +1557,67 @@ link is built only after the stack is proven on Add Contact.
   page to its pane regardless of point size, so a screenshot-to-screenshot
   comparison can't actually confirm or rule out a real change. See the
   decisions log's newest 2026-08-15 entry for the full write-up.
+  **Resolved, same day**: not a WYP bug at all — the owner's Chrome print
+  dialog had Scale stuck at "Custom, 75%" (confirmed by his own screenshot),
+  unrelated to any code here. Setting it to 100% fixed both the preview and
+  the actual printout immediately. All three font-size CSS passes above were
+  real, correct fixes — they were simply invisible against a 75%-scaled
+  page. See the decisions log's resolution note on its "stuck-print-state"
+  entry.
+- **Contacts print report + migration 030, both confirmed, 2026-08-15.** A
+  Print icon on `ContactsList.tsx` (`/contacts`), built from the owner's own
+  "Contacts list.xlsx": Name/Email/Phone/Time Zone plus italicized Sent/Rec'd
+  counts, new `.pcon-` CSS namespace (six columns — doesn't reuse `.pr1`).
+  Sent/Rec'd come from new `get_contact_request_counts()` — **migration 030,
+  confirmed run by the owner 2026-08-15**. Sent is a plain owner-scoped
+  count; Rec'd required joining `auth.users` inside the `SECURITY DEFINER`
+  function to match a sender's real login email against the caller's own
+  `contacts.email` (same `auth.users`-reading precedent as
+  `can_create_account()`, migration 015) — `get_received_requests()`'s own
+  email-match pattern had never needed the sender's actual account email
+  before, only their display name. "Sent"/"Rec'd" meaning confirmed via
+  `AskUserQuestion`: same vocabulary as Main Screen's own Sent/Received.
+  Built with the `printTick` fix from the start, so this report never had
+  the stuck-print-state bug above. No mockup change. See the decisions
+  log's 2026-08-15 entry for the full write-up.
+- **Request Response / Response Detail: donerow now distinguishes "already
+  Done before this visit" from "just marked Done this session," 2026-08-15.**
+  Owner-reported: opening a Request that was already Done showed "This
+  Request is now marked as Done, just click Send." — worded as if the
+  visitor had just taken an action. New `alreadyDoneOnLoad` flag, captured
+  once from the RPC payload's `done_date` at load time, adds a fourth
+  donerow branch: "This Request is reported as completed." when filled,
+  not sent this session, and already Done on load. The existing "just click
+  Send" wording is now reserved for quick-Done/manual edits made *during*
+  the current visit. Applied identically to both screens. See the decisions
+  log's 2026-08-15 entry.
+- **Reminder checkbox on Create Request/Request Detail — migration 031
+  DRAFTED, NOT YET CONFIRMED RUN (2026-08-15).** Owner's own design,
+  reviewed in chat before building: a `.checkrow` ("Reminder - send on the
+  morning before unless it is marked Done.") persisting a new
+  `requests.reminder_enabled` column, replacing the old passive Tight-window
+  advisory paragraph outright. Supersedes `isTightWindow`/
+  `TIGHT_WINDOW_HOURS` (clock-precise, PRD's own "proposed default, not yet
+  confirmed" 24-hour figure) with `isReminderEligible()`/
+  `MIN_DAYS_FOR_REMINDER` (`app/src/lib/email.ts`) — pure calendar-day
+  arithmetic, Due Date must be more than two days out. Not a subscription
+  gate — plain disabled `.checkrow-disabled`, never `.is-locked`; default
+  checked. Disabled with a native title tooltip in one of two states: no
+  Contact/Due Date yet ("Please select Contact and Due Date before
+  modifying the Reminder." — Create Request only, Request Detail's
+  Recipient is already fixed), or Due Date too soon ("A Reminder is not
+  available due to the short lead time."). Placement diverges: Create
+  Request puts it beside a lone Due Date field when Due Time is off
+  (`.checkrow-inline`, `.due-with-reminder` reproducing the §6.33 220px
+  Safari cap `:only-child` can no longer supply once the checkbox joins as
+  a sibling) or standalone after Attachments when Due Time is on; Request
+  Detail always uses the standalone placement, since its Due Date row is
+  never alone (Done Date is always paired with it). **Nothing reads
+  `reminder_enabled` to gate an actual send yet** — the day-before Reminder
+  job itself remains the unbuilt piece flagged elsewhere in this section;
+  `app/api/email/send-request/route.ts`'s own `reminderPromised` only
+  governs whether the Initial email's "a reminder will arrive" sentence is
+  honest. New §6.37 PROPOSED component, not drawn in any mockup. `npx tsc
+  --noEmit`/`npm run lint` clean. See the decisions log's 2026-08-15 entry
+  for the full write-up, including the five review questions the owner
+  resolved before this was built.

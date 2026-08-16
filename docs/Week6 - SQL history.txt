@@ -109,7 +109,7 @@ commit;
 -- ============================================================================
 -- WYP migration 030 — get_contact_request_counts(): per-contact Sent/Rec'd
 -- counts for the new Contacts print report.
--- DRAFTED 2026-08-15 — NOT YET CONFIRMED RUN.
+-- DRAFTED 2026-08-15 — CONFIRMED RUN by the owner 2026-08-15.
 --
 -- Owner, asked to pick between two readings of "Sent"/"Rec'd" on his own
 -- Contacts print mockup: "Sent = requests I sent them; Rec'd = requests
@@ -204,4 +204,65 @@ commit;
 -- has sent the owner Requests through their own WYP account (matched by
 -- their login email equaling this contact's stored email) should show a
 -- non-zero Rec'd count.
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 031 — requests.reminder_enabled: per-Request Reminder opt-out
+-- DRAFTED 2026-08-15 — CONFIRMED RUN by the owner 2026-08-15.
+--
+-- New Reminder checkbox on Create Request/Request Detail ("Reminder - send
+-- on the morning before unless it is marked Done."), owner's own design,
+-- reviewed and refined in chat 2026-08-15. Persists the sender's own
+-- preference for whether a day-before Reminder should go out for this
+-- Request — independent of whether one is even POSSIBLE right now
+-- (isReminderEligible, app/src/lib/email.ts: Due Date must be more than two
+-- calendar days out). Eligibility and preference are two different
+-- questions this single boolean does NOT conflate: reminder_enabled just
+-- records what the sender wants; app/api/email/send-request/route.ts's own
+-- reminderPromised combines this with isReminderEligible() at send time to
+-- decide whether the Initial email's "a reminder will arrive" sentence is
+-- honest.
+--
+-- default true, matching the checkbox's own default-checked state in the
+-- owner's mockup and this app's existing default-on precedent
+-- (request_time_enabled's ORIGINAL default before migration 023 flipped it,
+-- for the identical "don't silently change pre-existing behavior" reason —
+-- except here there IS no pre-existing Reminder behavior yet, since the
+-- day-before send itself was never built; true is simply what the owner's
+-- own mockup shows).
+--
+-- No column-level grant needed, unlike profiles.tier/time_zone — "requests:
+-- owners update own" (migration 002) is a full row-level UPDATE policy with
+-- no column restriction, same reason archived_at (migration 028) needed
+-- none either. Plain-RLS-writable the moment the column exists.
+--
+-- Nothing reads this column's actual value to gate sending yet, by design —
+-- the day-before Reminder send is still the unbuilt piece (CLAUDE.md's
+-- Known gaps: "the Reminder email's own day-before scheduled job... Vercel
+-- Cron vs. pg_cron, undecided"). This migration and the checkbox UI ship
+-- ahead of that job, same as Attachments and the ToDo Status chip both
+-- shipped ahead of their own backends in this app — owner confirmed this
+-- sequencing directly ("yes to cron later").
+-- ============================================================================
+
+begin;
+
+alter table public.requests
+  add column if not exists reminder_enabled boolean not null default true;
+
+comment on column public.requests.reminder_enabled is
+  'Sender''s own preference for whether a day-before Reminder email should go out for this Request. Independent of isReminderEligible() (app/src/lib/email.ts) — that''s whether a Reminder is even possible right now (Due Date > 2 calendar days out); this is what the sender wants if/when it is. Combined at send time by the (still-unbuilt) day-before job and by send-request/route.ts''s own Initial-email reminderPromised check. Plain-RLS-writable via "requests: owners update own" — no column grant needed, same as archived_at.';
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name, is_nullable, column_default
+--   from information_schema.columns
+--   where table_schema = 'public' and table_name = 'requests'
+--     and column_name = 'reminder_enabled';
+--
+-- Real test (as the owner, signed in): open Create Request, confirm the
+-- Reminder checkbox saves on Send and reloads correctly on Request Detail;
+-- toggle it off, re-open, confirm it stayed off.
 -- ============================================================================

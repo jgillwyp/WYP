@@ -6,6 +6,119 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Reminder checkbox on Create Request/Request Detail, migration 031, replaces the Tight-window advisory
+
+Owner mocked up a user-facing Reminder opt-in checkbox ("Reminder - send on
+the morning before unless it is marked Done.") on Create Request and asked
+for a review before building it. Reviewed against the existing PRD §7.3
+Tight-window infrastructure (`isTightWindow`, the passive advisory
+paragraph on Create Request, and the still-unbuilt day-before scheduled
+job); five open items were flagged and resolved by the owner directly:
+
+1. The old passive advisory paragraph ("This Due Date is less than 24 hours
+   away...") is removed, not kept alongside the new checkbox.
+2. The actual day-before send remains unbuilt — this batch ships the
+   checkbox and its persisted preference ahead of that job, same sequencing
+   this app already used for Attachments and the ToDo Status chip.
+3. The checkbox appears on both Create Request and Request Detail, not
+   Create Request alone.
+4. Not a subscription gate — plain disabled `.checkrow`, not `.is-locked`.
+   Default checked.
+5. "Whose morning" (for the eventual day-before job) is the Request
+   recipient's own stored Contact Time Zone, not the sender's. Owner added a
+   refinement on top: the checkbox itself can't be usefully set until a
+   Contact and Due Date both exist (Create Request only — Request Detail's
+   Recipient is already fixed), and separately greys out again if the Due
+   Date is too soon for a Reminder to have a real day to send on. Each state
+   gets its own native `title` tooltip: "Please select Contact and Due Date
+   before modifying the Reminder." and "A Reminder is not available due to
+   the short lead time." (owner's exact wording, corrected once from an
+   earlier draft — "A Reminder is..." not "Reminders are...").
+
+**Rule change, not just a UI addition**: the owner explicitly rejected
+trying to hit a precise 24-hour window ("a day-before would suffice... if a
+Request is set for the next day, no reminder is needed"), extended one step
+further to grey the checkbox out through the day after tomorrow too, not
+just tomorrow. `isTightWindow`/`TIGHT_WINDOW_HOURS` (clock-precise, PRD's
+own "proposed default, not yet confirmed" 24-hour figure) is removed
+outright and replaced with `isReminderEligible()`/`MIN_DAYS_FOR_REMINDER`
+(app/src/lib/email.ts) — pure calendar-day arithmetic, Due Date must be
+more than two calendar days out (i.e. at least 3 days away). This also
+retires Due Time from the calculation entirely, matching the owner's own
+"the wording... could be used for requests either without a Due Time or if
+there was a Due Time set."
+
+**Migration 031** — `requests.reminder_enabled boolean not null default
+true`, confirmed run by the owner 2026-08-15. No column-level grant needed, same
+as `archived_at` (migration 028) — "requests: owners update own" (migration
+002) is a full row-level UPDATE policy with no column restriction. Nothing
+reads this column's value to gate an actual send yet (the day-before job
+doesn't exist); `app/api/email/send-request/route.ts`'s own
+`reminderPromised` combines `isReminderEligible()` with this column to
+decide whether the Initial Request email's "a reminder will arrive"
+sentence is honest, same purpose the old `tightWindow` param served, now
+correctly named.
+
+**Placement diverges between the two screens, flagged rather than forced to
+match**: Create Request can place the checkbox beside a lone Due Date field
+when Due Time is off (`.checkrow-inline`, a new `.frow` modifier, and a
+paired `.ffloat.picker.native.due-with-reminder` class reproducing the
+existing §6.33 220px Safari-format cap that `:only-child` alone can no
+longer supply once the checkbox joins as a sibling) — or as its own
+standalone row after Attachments when Due Time is on. Request Detail always
+uses the standalone placement regardless of Due Time, since its Due Date
+row is never alone — Done Date is always paired with it, on or off. New CSS
+section in `app/globals.css` (`.checkrow-disabled`, `.checkrow-inline`,
+`.due-with-reminder`) documents the reasoning inline. New component
+identifier §6.37 PROPOSED — not drawn in any mockup yet, flagged in
+`design/README.md`. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-08-15 — Contacts print report (icon, migration 030, `.pcon-` CSS)
+
+Owner uploaded his own "Contacts list.xlsx" mockup and asked for a matching
+Print icon on the Contacts screen. Styling pulled from the xlsx via
+`openpyxl` inspection rather than his prose description, where the two
+differed: his message said the body font was reduced from 11pt to 9pt: the
+xlsx itself measured body text at 10pt, with only the Sent/Rec'd column
+headers and their values actually at 9pt, italicized. Went with the
+measured file.
+
+**Sent/Rec'd definition, clarified via `AskUserQuestion`** (three options
+offered: "Sent = requests I sent them, Rec'd = requests they sent me";
+"Sent = requests I sent them, Rec'd = how many of those they've completed";
+free text) — owner picked the first, matching Main Screen's own existing
+Sent/Received vocabulary.
+
+**Migration 030 — `get_contact_request_counts()`, confirmed run by the
+owner 2026-08-15.** Sent is trivial (owner-scoped count of `requests`
+grouped by `contact_id`, no new privilege). Rec'd needed one join beyond
+`get_received_requests()`'s (migration 012) existing pattern: that function
+matches a Request's own Contact email against the caller's session email,
+but has only ever needed the sender's display name for output, never their
+real account email. Attributing a Received Request back to *which contact
+row* sent it means knowing the sender's actual login email — added via a
+join to `auth.users` inside this new `SECURITY DEFINER` function, reading
+`auth.users` directly, the same precedent already established by
+`can_create_account()` (migration 015): only the function's owner role can
+see that table; a caller only ever gets integer counts back.
+
+**New `.pcon-` CSS namespace**, not a reuse of `.pr1`/`.pcolbar` — this
+report has six columns (Name/Email/Phone/Time Zone/Sent/Rec'd) where every
+other print report has three or four, and the two count columns need their
+own smaller italic treatment the others don't. Print title reads
+"Contacts", not the xlsx's own "My Contacts" — flagged rather than silently
+decided, since this screen dropped "My" app-wide on 2026-08-09 and the
+print should match the screen's current name.
+
+Built with the `printTick`-counter pattern from the start (see the
+"stuck-print-state" entry below), so this report never had the bug the
+other four did. `npx tsc --noEmit`/`npm run lint` clean. No mockup change
+— `WYP_contacts_list_palette1.html` has no print JS to convert.
+
+\---
+
 ## 2026-08-15 — Request Response / Response Detail: donerow wording for a Request already Done on load
 
 Owner-reported: opening either screen for a Request that was **already**

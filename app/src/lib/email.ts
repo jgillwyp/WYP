@@ -18,35 +18,37 @@
  * time — see the route handler.
  */
 
-import { ICS_DEFAULT_DUE_TIME } from './ics'
-
 // ----------------------------------------------------------------------------
-// Tight-window rule (PRD §7.3): "if a Request's Due Date leaves less than 24
-// hours between Send and Due, no day-before Reminder email is possible: the
-// sender is advised of this at Send time, and the Initial Request email's
-// reminder sentence is omitted." The PRD's own text flags the 24-hour figure
-// itself as "a proposed default, not yet confirmed against a specific
-// requirement" — still open, see docs/WYP_Week5_Plan.md.
+// Reminder eligibility (PRD §7.3, revised 2026-08-15) — supersedes the
+// original "less than 24 hours between Send and Due" Tight-window rule
+// (isTightWindow/TIGHT_WINDOW_HOURS, now removed). The PRD's own text had
+// already flagged that 24-hour figure as "a proposed default, not yet
+// confirmed against a specific requirement"; the owner's replacement is
+// simpler and calendar-based rather than clock-precise: "trying to hit a
+// precisely 24-hour preceding time to a Request Due is not necessary — a
+// day-before would suffice... if a Request is set for the next day, no
+// reminder is needed." Extended one step further at the owner's own
+// instruction (the Reminder checkbox should grey out until there's a real
+// day-before day available to send on): a Reminder is only possible when
+// the Due Date is MORE than two calendar days out — i.e. Due Date <= the
+// day after tomorrow is ineligible, Due Date >= three days from now is
+// eligible. Pure calendar-day arithmetic (both dates truncated to local
+// midnight), not hours — a Request due at 11:59 PM three days out is exactly
+// as eligible as one due at 12:01 AM the same calendar day.
 //
-// A missing Due Time falls back to ICS_DEFAULT_DUE_TIME (9:00 AM) — the same
-// default the .ics attachment already uses for an unspecified time, rather
-// than inventing a second convention for the same ambiguity.
+// ICS_DEFAULT_DUE_TIME is no longer needed here — Due Time never enters this
+// calculation at all, per the owner's own "the wording... could be used for
+// requests either without a Due Time or if there was a Due Time set."
 // ----------------------------------------------------------------------------
-export const TIGHT_WINDOW_HOURS = 24
+export const MIN_DAYS_FOR_REMINDER = 3
 
-export function isTightWindow(
-  dueDate: string | null,
-  dueTime: string | null,
-  now: Date = new Date()
-): boolean {
+export function isReminderEligible(dueDate: string | null, now: Date = new Date()): boolean {
   if (!dueDate) return false
   const [y, m, d] = dueDate.slice(0, 10).split('-').map(Number)
-  const [hh, mm] = (dueTime && dueTime.trim() !== '' ? dueTime : ICS_DEFAULT_DUE_TIME)
-    .split(':')
-    .map(Number)
-  const due = new Date(y, m - 1, d, hh, mm)
-  const hoursUntilDue = (due.getTime() - now.getTime()) / (1000 * 60 * 60)
-  return hoursUntilDue < TIGHT_WINDOW_HOURS
+  const due = new Date(y, m - 1, d)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const daysUntilDue = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  return daysUntilDue >= MIN_DAYS_FOR_REMINDER
 }
 
 // ----------------------------------------------------------------------------
@@ -92,10 +94,13 @@ export function buildRequestEmailSubject(
 // ----------------------------------------------------------------------------
 // Body — PRD's four required parts, in order: the Request Description; a
 // "Click the following link." sentence with the secure response link; a
-// note that a reminder arrives the day before Due Date (omitted under the
-// Tight-window rule); a note that Dialog can be added via the same link;
-// and a closing link to the Would You Please product page ("destination
-// not yet built" per the PRD's own text) for setting up a Free Account.
+// note that a reminder arrives the day before Due Date (omitted unless the
+// Request is both Reminder-eligible AND the sender left the Reminder
+// checkbox on — see isReminderEligible above and the Reminder checkbox on
+// Create Request/Request Detail); a note that Dialog can be added via the
+// same link; and a closing link to the Would You Please product page
+// ("destination not yet built" per the PRD's own text) for setting up a
+// Free Account.
 //
 // Destination for that closing link: /login, not a marketing product page —
 // "there is no sign-up screen... /login serves both" (CLAUDE.md's Auth
@@ -106,12 +111,12 @@ export function buildRequestEmailSubject(
 export function buildRequestEmailBody(fields: {
   description: string
   link: string
-  tightWindow: boolean
+  reminderPromised: boolean
   siteUrl: string
 }): string {
   const lines = [fields.description, '', 'Click the following link.', fields.link]
 
-  if (!fields.tightWindow) {
+  if (fields.reminderPromised) {
     lines.push('', 'A reminder email will arrive the day before the Due Date.')
   }
 

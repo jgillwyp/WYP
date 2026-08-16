@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
-import { isTightWindow } from '@/lib/email'
+import { isReminderEligible } from '@/lib/email'
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_ITEM,
@@ -55,10 +55,25 @@ import {
  * to surface an error, since the Request itself is already saved by that
  * point. The route no-ops safely with RESEND_API_KEY unset, which is the
  * case until Jim's wouldyouplease.com domain DNS and Resend account are
- * ready — see docs/WYP_Week5_Plan.md. tightWindow (isTightWindow, @/lib/email)
- * drives the inline advisory note near Due Date/Time, computed the same way
- * the send-request route itself decides whether to omit the Reminder
- * sentence, so the two can never disagree.
+ * ready — see docs/WYP_Week5_Plan.md.
+ *
+ * Reminder checkbox (§6.37 PROPOSED, migration 031, 2026-08-15) — owner's
+ * own design, reviewed and refined in chat: "Reminder - send on the morning
+ * before unless it is marked Done." Persists reminder_enabled on the new
+ * Request; supersedes the old passive Tight-window advisory paragraph
+ * (isTightWindow, removed) with an actual sender-controllable preference.
+ * Placed beside Due Date when requestTimeEnabled is off (there's width to
+ * spare in that .frow) or as its own standalone row after Attachments when
+ * it's on. Disabled — plain greyed .checkrow-disabled, not .is-locked, this
+ * isn't a subscription gate — until a Contact and Due Date are both
+ * entered, then again if the Due Date is too soon for a day-before Reminder
+ * to have a real day to send on (isReminderEligible, @/lib/email); a native
+ * title tooltip on the row explains which. The actual day-before send is
+ * still unbuilt (CLAUDE.md's Known gaps) — this only records the sender's
+ * preference for whenever that job exists, and gates the Initial email's
+ * own "a reminder will arrive" sentence (send-request/route.ts) in the
+ * meantime, same as the two never being able to disagree that the old
+ * tightWindow note relied on.
  */
 
 type Contact = {
@@ -78,6 +93,7 @@ type RequestFormState = {
   dueTime: string
   categoryName: string
   description: string
+  reminderEnabled: boolean
 }
 
 const initialState: RequestFormState = {
@@ -86,6 +102,9 @@ const initialState: RequestFormState = {
   dueTime: '',
   categoryName: '',
   description: '',
+  // Default checked, matching the owner's own mockup — see the file-level
+  // comment on the Reminder checkbox.
+  reminderEnabled: true,
 }
 
 const CATEGORY_CAP = 20
@@ -345,13 +364,41 @@ export default function CreateRequestForm() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  // Tight-window advisory (PRD §7.3, Week 5 Priority 1) — a Request due in
-  // under 24 hours gets no day-before Reminder email; this note tells the
-  // sender that at Send time rather than leaving it a silent gap. Purely
-  // informational — isTightWindow is also what the send-request route
-  // itself uses to decide whether to omit the Initial email's own reminder
-  // sentence, so this note and that behavior can never disagree.
-  const tightWindow = form.dueDate.trim() !== '' && isTightWindow(form.dueDate, form.dueTime || null)
+  // Reminder checkbox availability (PRD §7.3, revised 2026-08-15) — three
+  // states: (1) no Contact and/or Due Date yet, so there's nothing to
+  // evaluate eligibility against; (2) both present but the Due Date is too
+  // soon (isReminderEligible, @/lib/email — more than two calendar days out
+  // required); (3) available. Only state 3 lets the checkbox be toggled;
+  // states 1 and 2 grey it out with a different native title tooltip each,
+  // per the owner's own exact wording.
+  const reminderPrereqsMissing = !selectedContact || form.dueDate.trim() === ''
+  const reminderIneligible = !reminderPrereqsMissing && !isReminderEligible(form.dueDate)
+  const reminderDisabled = reminderPrereqsMissing || reminderIneligible
+  const reminderTooltip = reminderPrereqsMissing
+    ? 'Please select Contact and Due Date before modifying the Reminder.'
+    : reminderIneligible
+      ? 'A Reminder is not available due to the short lead time.'
+      : undefined
+
+  function reminderCheckbox(inline: boolean) {
+    return (
+      <label
+        className={`checkrow${inline ? ' checkrow-inline' : ''}${reminderDisabled ? ' checkrow-disabled' : ''}`}
+        title={reminderTooltip}
+      >
+        <input
+          type="checkbox"
+          checked={form.reminderEnabled}
+          disabled={reminderDisabled}
+          onChange={(e) => set('reminderEnabled', e.target.checked)}
+        />
+        <span className="checktext">
+          Reminder
+          <span className="checknote">Send on the morning before unless it is marked Done.</span>
+        </span>
+      </label>
+    )
+  }
 
   const contactQueryEmpty = form.recipientName.trim() === ''
   const contactsBrowsable = contacts.length < LOOKUP_BROWSE_THRESHOLD
@@ -488,6 +535,7 @@ export default function CreateRequestForm() {
         description: form.description.trim(),
         due_date: form.dueDate,
         due_time: form.dueTime.trim() === '' ? null : form.dueTime,
+        reminder_enabled: form.reminderEnabled,
       })
       .select('id')
       .single()
@@ -709,7 +757,7 @@ export default function CreateRequestForm() {
 
             {/* Due row (§9.2.2 / §6.16) */}
             <div className="fgroup frow">
-              <span className={`ffloat picker native${dueDateInvalid ? ' is-invalid' : ''}`}>
+              <span className={`ffloat picker native${dueDateInvalid ? ' is-invalid' : ''}${!requestTimeEnabled ? ' due-with-reminder' : ''}`}>
                 <input
                   className="finput req"
                   id="dd"
@@ -747,8 +795,10 @@ export default function CreateRequestForm() {
                   one-line two-value presentation of Due Date and Done
                   Date." (Create Request has no Done Date/Time fields at
                   all — those only exist once a Request has been sent — so
-                  here the effect is simply dropping Due Time.) */}
-              {requestTimeEnabled && (
+                  here the effect is simply dropping Due Time.) When Due
+                  Time is off, the Reminder checkbox (below) takes this
+                  row's spare width instead — see the file-level comment. */}
+              {requestTimeEnabled ? (
                 <span className="ffloat picker native">
                   <input
                     className={`finput${form.dueTime.trim() === '' ? ' opt' : ''}`}
@@ -782,18 +832,11 @@ export default function CreateRequestForm() {
                     </button>
                   )}
                 </span>
+              ) : (
+                reminderCheckbox(true)
               )}
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
-            {/* Tight-window advisory (PRD §7.3, Week 5 Priority 1, 2026-08-12) —
-                a Due Date under 24 hours away gets no day-before Reminder
-                email; told here at compose time rather than left a silent
-                gap. Not an error — doesn't block Send. */}
-            {tightWindow && !dueDateInvalid && (
-              <p className="subnote" style={{ marginTop: -8 }}>
-                This Due Date is less than 24 hours away — no day-before Reminder email will be sent.
-              </p>
-            )}
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). Off by default:
@@ -1002,6 +1045,11 @@ export default function CreateRequestForm() {
                 </button>
               </div>
             )}
+
+            {/* Reminder checkbox, standalone-row placement — only when Due
+                Time is on (the inline placement above already covers the
+                off case; see the file-level comment). */}
+            {requestTimeEnabled && reminderCheckbox(false)}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>
