@@ -360,10 +360,33 @@ const DETAIL_LABEL: Record<RecordType, string> = {
 // fix, same sessionStorage-not-localStorage reasoning as Main Screen's own
 // 2026-08-09 chip-persistence fix: a within-session view/selection state,
 // not a durable account setting.
+//
+// Narrowed 2026-08-16 (owner-reported): the fix above unintentionally also
+// persisted the Recipient/Requestor query, Before Done Date, and checkbox
+// selection across a full Close-to-Main-Screen-and-back round trip, later
+// in the same login session — the owner's own example: filter to a
+// Recipient + Before Done Date, hand-deselect a few matching rows, Close,
+// come back to Archive later, and find the same records shown but no
+// longer checked, which he judged illogical ("they should be [selected]... Or,
+// the Archive 'Session' could be just for the duration of having the
+// Archive screen open... reset the selection criteria variables and show
+// nothing selected — this would be my preference"). Took the stated
+// preference: filters and selection now reset to empty on any fresh visit
+// to /archive, and only survive the one round trip this section's original
+// fix was built for — opening a single record's own Detail screen and
+// coming straight back via router.back(). ARCHIVE_ROUNDTRIP_KEY is the
+// marker distinguishing the two: openDetail() sets it immediately before
+// navigating away; the mount effect below consumes (reads and clears) it —
+// present means "this mount is that same return trip, keep what's stored,"
+// absent means "this is a fresh arrival at Archive, reset to blank." Record
+// Type (ARCHIVE_TYPE_KEY) is untouched by this — the owner's report was
+// about the filter fields and selection only, and an empty filter already
+// shows nothing regardless of which Record Type chip is active.
 const ARCHIVE_TYPE_KEY = 'wyp.archiveType'
 const ARCHIVE_QUERY_KEY = 'wyp.archiveRecipientQuery'
 const ARCHIVE_BEFORE_KEY = 'wyp.archiveBeforeDone'
 const ARCHIVE_DESELECTED_KEY = 'wyp.archiveDeselected'
+const ARCHIVE_ROUNDTRIP_KEY = 'wyp.archiveDetailRoundTrip'
 
 function readStoredType(): RecordType {
   if (typeof window === 'undefined') return 'sent'
@@ -393,6 +416,19 @@ function readStoredDeselected(): Record<RecordType, Set<string>> {
   }
 }
 
+// Read-only check of the round-trip marker openDetail() sets — used by the
+// three useState lazy initializers below to decide whether to read the
+// stored filters/selection or start blank. Deliberately checked inside each
+// initializer (which React guarantees runs exactly once per mount, before
+// first paint) rather than via a setState call in a useEffect — the latter
+// would cause an extra render and trips this codebase's
+// react-hooks/set-state-in-effect lint rule for no benefit here, since the
+// value is already known synchronously at mount time.
+function isArchiveRoundTrip(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.sessionStorage.getItem(ARCHIVE_ROUNDTRIP_KEY) === '1'
+}
+
 export default function ArchiveForm() {
   const router = useRouter()
 
@@ -404,12 +440,18 @@ export default function ArchiveForm() {
   const [todoData, setTodoData] = useState<TodoCandidate[]>([])
 
   const [currentType, setCurrentType] = useState<RecordType>(readStoredType)
-  const [recipientQuery, setRecipientQuery] = useState(() => readStoredString(ARCHIVE_QUERY_KEY))
+  const [recipientQuery, setRecipientQuery] = useState(() =>
+    isArchiveRoundTrip() ? readStoredString(ARCHIVE_QUERY_KEY) : ''
+  )
   const [recipientBrowsing, setRecipientBrowsing] = useState(false)
   const [showRecipientResults, setShowRecipientResults] = useState(false)
-  const [beforeDone, setBeforeDone] = useState(() => readStoredString(ARCHIVE_BEFORE_KEY))
+  const [beforeDone, setBeforeDone] = useState(() => (isArchiveRoundTrip() ? readStoredString(ARCHIVE_BEFORE_KEY) : ''))
 
-  const [deselected, setDeselected] = useState<Record<RecordType, Set<string>>>(readStoredDeselected)
+  const [deselected, setDeselected] = useState<Record<RecordType, Set<string>>>(() =>
+    isArchiveRoundTrip()
+      ? readStoredDeselected()
+      : { sent: new Set<string>(), received: new Set<string>(), todos: new Set<string>() }
+  )
 
   useEffect(() => {
     window.sessionStorage.setItem(ARCHIVE_TYPE_KEY, currentType)
@@ -433,6 +475,15 @@ export default function ArchiveForm() {
       })
     )
   }, [deselected])
+
+  // The three useState initializers above already read isArchiveRoundTrip()
+  // synchronously at mount to decide whether to restore stored state or
+  // start blank — this effect just consumes (clears) the marker afterward,
+  // so the *next* mount defaults to "fresh" unless openDetail() sets it
+  // again. No setState call here, so no cascading extra render.
+  useEffect(() => {
+    window.sessionStorage.removeItem(ARCHIVE_ROUNDTRIP_KEY)
+  }, [])
 
   const [sentSort, setSentSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
     readStoredSort(ARCHIVE_SENT_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
@@ -774,6 +825,10 @@ export default function ArchiveForm() {
   }
 
   function openDetail(id: string) {
+    // Marks this as the one round trip whose filters/selection should
+    // survive the remount on the way back — see ARCHIVE_ROUNDTRIP_KEY's
+    // own comment above.
+    window.sessionStorage.setItem(ARCHIVE_ROUNDTRIP_KEY, '1')
     if (currentType === 'sent') router.push(`/requests/${id}`)
     else if (currentType === 'received') router.push(`/requests/${id}/respond`)
     else router.push(`/todos/${id}`)

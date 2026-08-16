@@ -1655,6 +1655,18 @@ link is built only after the stack is proven on Add Contact.
   to login after two minutes on the same test, unconfirmed root cause,
   owner separately testing a full hour of laptop-closed time. See the
   decisions log's 2026-08-15 entry.
+- **Archive: filters and checkbox selection reset on a fresh visit, but survive the
+  Detail round trip (2026-08-16).** Owner-reported: after filtering to a Recipient +
+  Before Done Date, hand-deselecting a few rows, closing back to Main Screen, and
+  reopening Archive later in the same login session, the same filtered rows reappeared
+  but none were checked — his stated preference was that Archive's filters/selection
+  reset on a fresh visit, surviving only the single round trip into a row's own Detail
+  screen and back. `ArchiveForm.tsx` gained `ARCHIVE_ROUNDTRIP_KEY`, set by `openDetail()`
+  right before `router.push`, checked by the `recipientQuery`/`beforeDone`/`deselected`
+  `useState` lazy initializers (present → restore from `sessionStorage`, absent → start
+  blank) and cleared by a mount effect afterward. Record Type and sort order are
+  untouched — the report was about the filter fields and selection only. `npx tsc
+  --noEmit`/`npm run lint` clean.
 - **Request Detail Date: line; `.ftextarea` fields drop floating labels app-wide; Dialog
   cap lowered to 500 with live `.charcount` feedback; Initial Request email and `.ics`
   redesigned (2026-08-16).** Request Detail now shows "Date: `<long date>`" above Recipient,
