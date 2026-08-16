@@ -4,9 +4,10 @@ import nodemailer from 'nodemailer'
 import { buildIcsContent, type IcsRequestFields } from '@/lib/ics'
 import {
   EMAIL_FROM_ADDRESS,
-  buildRequestEmailBody,
   buildRequestEmailFromName,
+  buildRequestEmailHtml,
   buildRequestEmailSubject,
+  buildRequestEmailText,
   isReminderEligible,
 } from '@/lib/email'
 
@@ -169,12 +170,9 @@ export async function POST(request: Request) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
 
   const subject = buildRequestEmailSubject('initial', ownerName, reqRow.due_date, reqRow.due_time)
-  const text = buildRequestEmailBody({
-    description: reqRow.description,
-    link,
-    reminderPromised,
-    siteUrl,
-  })
+  const emailBodyFields = { description: reqRow.description, link, reminderPromised, siteUrl }
+  const html = buildRequestEmailHtml(emailBodyFields)
+  const text = buildRequestEmailText(emailBodyFields)
 
   const icsFields: IcsRequestFields = {
     id: reqRow.id,
@@ -183,7 +181,7 @@ export async function POST(request: Request) {
     due_time: reqRow.due_time,
     owner_name: ownerName,
   }
-  const icsContent = buildIcsContent(icsFields, link)
+  const icsContent = buildIcsContent(icsFields, link, { reminderPromised })
 
   const transporter = getSmtpTransport()
   if (!transporter) {
@@ -197,6 +195,7 @@ export async function POST(request: Request) {
       replyTo: ownerEmail || undefined,
       subject,
       text,
+      html,
       attachments: [
         {
           filename: 'request.ics',

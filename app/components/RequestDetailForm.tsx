@@ -78,6 +78,12 @@ type RequestFormState = {
 const CATEGORY_CAP = 20
 const LOOKUP_BROWSE_THRESHOLD = 12
 
+// See CreateRequestForm.tsx's identical constants for the full reasoning
+// (globals.css's ftextarea-plain/.charcount comment; owner request
+// 2026-08-16).
+const DESCRIPTION_MAX = 500
+const DIALOG_MAX = 500
+
 function formatMDY(value: string | null): string {
   if (!value) return ''
   const [y, m, d] = value.slice(0, 10).split('-')
@@ -110,6 +116,20 @@ function formatMDYSlash(value: string | null): string {
   if (!value) return ''
   const [y, m, d] = value.slice(0, 10).split('-')
   return `${parseInt(m, 10)}/${parseInt(d, 10)}/${y.slice(2)}`
+}
+
+// created_at is a real timestamptz — new Date(iso) is correct here, unlike
+// the date-only due_date/done_date fields above (formatMDY/formatMDYSlash),
+// which build the Date from its own Y/M/D components to avoid a UTC-parsing
+// day-early bug. Same helper as ResponseDetailForm.tsx/RequestResponseForm.tsx.
+function formatLongDateTime(iso: string | null): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
 }
 
 function truncate(s: string, n = 60): string {
@@ -186,6 +206,10 @@ export default function RequestDetailForm() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [recipientName, setRecipientName] = useState('')
+  // Issuance date (owner request, 2026-08-16) — matches the "Date:" metarow
+  // Request Response/Response Detail already show; Request Detail never had
+  // one, so created_at was never even fetched here before now.
+  const [createdAt, setCreatedAt] = useState<string | null>(null)
 
   const [form, setForm] = useState<RequestFormState>({
     dueDate: '',
@@ -303,7 +327,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, due_time, done_date, done_time, category_id, reminder_enabled, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -338,6 +362,7 @@ export default function RequestDetailForm() {
 
       type Row = {
         description: string
+        created_at: string
         due_date: string | null
         due_time: string | null
         done_date: string | null
@@ -350,6 +375,7 @@ export default function RequestDetailForm() {
       const row = reqRes.data as unknown as Row
 
       setRecipientName(row.contacts?.display_name ?? '—')
+      setCreatedAt(row.created_at)
       setForm({
         dueDate: row.due_date ?? '',
         dueTime: row.due_time ?? '',
@@ -675,6 +701,7 @@ export default function RequestDetailForm() {
           <form className="form" id="request-detail-form" onSubmit={handleSubmit} noValidate>
 
             <div className="fgroup">
+              <div className="metarow"><span className="mlabel">Date:</span><span className="mval">{formatLongDateTime(createdAt)}</span></div>
               <div className="metarow"><span className="mlabel">Recipient:</span><span className="mval">{recipientName}</span></div>
             </div>
 
@@ -943,22 +970,23 @@ export default function RequestDetailForm() {
               </div>
             )}
 
-            <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>
+            <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
               <textarea
-                className="ftextarea req"
+                className="ftextarea ftextarea-plain req"
                 id="desc"
-                maxLength={500}
-                placeholder=" "
+                maxLength={DESCRIPTION_MAX}
+                placeholder="Request Description"
+                aria-label="Request Description"
                 value={form.description}
                 onChange={(e) => {
                   set('description', e.target.value)
                   if (descInvalid) setDescInvalid(false)
                 }}
               />
-              <label className="flabel" htmlFor="desc">
-                Request Description
-              </label>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
+              <p className={`charcount${form.description.length >= DESCRIPTION_MAX ? ' limit' : ''}`}>
+                {form.description.length} / {DESCRIPTION_MAX}
+              </p>
             </div>
 
             {/* Dialog — existing thread, read live from the database. Add
@@ -1184,13 +1212,14 @@ export default function RequestDetailForm() {
                 </div>
               )}
 
-              <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
+              <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
                 <textarea
                   ref={dialogTextRef}
-                  className="ftextarea"
+                  className="ftextarea ftextarea-plain"
                   id="dlgtext"
-                  maxLength={1000}
-                  placeholder=" "
+                  maxLength={DIALOG_MAX}
+                  placeholder="Dialog Text"
+                  aria-label="Dialog Text"
                   value={dialogModalBody}
                   onChange={(e) => {
                     setDialogModalBody(e.target.value)
@@ -1198,9 +1227,9 @@ export default function RequestDetailForm() {
                   }}
                   autoFocus
                 />
-                <label className="flabel" htmlFor="dlgtext">
-                  Dialog Text
-                </label>
+                <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
+                  {dialogModalBody.length} / {DIALOG_MAX}
+                </p>
               </div>
               {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
             </div>

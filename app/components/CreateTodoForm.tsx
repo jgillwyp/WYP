@@ -84,6 +84,13 @@ const initialState: TodoFormState = {
 const CATEGORY_CAP = 20
 const LOOKUP_BROWSE_THRESHOLD = 12
 
+// See CreateRequestForm.tsx's identical constants for the full reasoning
+// (globals.css's ftextarea-plain/.charcount comment; owner request
+// 2026-08-16 to drop the floating label on scrollable text boxes and cap
+// Dialog Text to match Description).
+const DESCRIPTION_MAX = 500
+const DIALOG_MAX = 500
+
 // Local calendar date as "YYYY-MM-DD", matching the native date input's own
 // value format — built from Y/M/D components (not toISOString(), which is
 // UTC and can land on the wrong day near midnight in most US time zones).
@@ -708,23 +715,26 @@ export default function CreateTodoForm() {
               </div>
             )}
 
-            {/* ToDo Description (§6.10): 500-char limit, the only required field */}
-            <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>
+            {/* ToDo Description (§6.10): 500-char limit, the only required
+                field. Plain placeholder, not a floating label — see
+                globals.css's ftextarea-plain comment. */}
+            <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
               <textarea
-                className="ftextarea ftextarea-desc req"
+                className="ftextarea ftextarea-desc ftextarea-plain req"
                 id="desc"
-                maxLength={500}
-                placeholder=" "
+                maxLength={DESCRIPTION_MAX}
+                placeholder="ToDo Description"
+                aria-label="ToDo Description"
                 value={form.description}
                 onChange={(e) => {
                   set('description', e.target.value)
                   if (descInvalid) setDescInvalid(false)
                 }}
               />
-              <label className="flabel" htmlFor="desc">
-                ToDo Description
-              </label>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
+              <p className={`charcount${form.description.length >= DESCRIPTION_MAX ? ' limit' : ''}`}>
+                {form.description.length} / {DESCRIPTION_MAX}
+              </p>
             </div>
 
             {/* Dialog — Add Dialog modal, Answer always locked (empty
@@ -1021,13 +1031,14 @@ export default function CreateTodoForm() {
                 </div>
               </div>
 
-              <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
+              <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
                 <textarea
                   ref={dialogTextRef}
-                  className="ftextarea"
+                  className="ftextarea ftextarea-plain"
                   id="dlgtext"
-                  maxLength={1000}
-                  placeholder=" "
+                  maxLength={DIALOG_MAX}
+                  placeholder="Dialog Text"
+                  aria-label="Dialog Text"
                   value={dialogModalBody}
                   onChange={(e) => {
                     setDialogModalBody(e.target.value)
@@ -1035,9 +1046,9 @@ export default function CreateTodoForm() {
                   }}
                   autoFocus
                 />
-                <label className="flabel" htmlFor="dlgtext">
-                  Dialog Text
-                </label>
+                <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
+                  {dialogModalBody.length} / {DIALOG_MAX}
+                </p>
               </div>
               {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
             </div>

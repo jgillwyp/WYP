@@ -1640,4 +1640,58 @@ link is built only after the stack is proven on Add Contact.
   address (`wyp.lastEmail`, `localStorage`), tied to the same "Keep me
   signed in" checkbox rather than a separate toggle, so an unchecked box
   still means "leave no trace." `npx tsc --noEmit`/`npm run lint` clean.
-  See the decisions log's 2026-08-15 entry.
+  **Follow-up, same day**: the owner's own screenshot of Supabase's
+  Authentication → Sessions page narrows cause #2 to a specific setting —
+  "Detect and revoke potentially compromised refresh tokens" (refresh
+  token rotation/reuse detection) is ON with only a 10-second reuse
+  interval, which is known to false-positive and kill the whole session
+  when a browser reopens more than one previously-open tab at once (a
+  common browser "restore tabs" default) and two tabs race their own
+  token-refresh timers. Not a code fix — a Supabase dashboard setting;
+  recommended the owner raise the reuse interval (e.g. 30–60s) and/or
+  check his browser's tab-restore setting. **Owner raised it to 60s and
+  confirmed it fixed his laptop** (closed the browser, reopened two
+  minutes later, landed straight on Main Screen); his phone still bounced
+  to login after two minutes on the same test, unconfirmed root cause,
+  owner separately testing a full hour of laptop-closed time. See the
+  decisions log's 2026-08-15 entry.
+- **Request Detail Date: line; `.ftextarea` fields drop floating labels app-wide; Dialog
+  cap lowered to 500 with live `.charcount` feedback; Initial Request email and `.ics`
+  redesigned (2026-08-16).** Request Detail now shows "Date: `<long date>`" above Recipient,
+  matching Request Response/Response Detail — pulled from a new `created_at` select and the
+  same `formatLongDateTime()` helper those two already had. Every `.ftextarea` field (12
+  usages, 8 files — Description, Dialog Text, Notes) dropped its `.ffloat` wrapper/`<label>`
+  for a plain `placeholder`+`aria-label` — the owner's own fix for a real bug: a floated
+  label can't track a `<textarea>`'s internal scroll region, so long text scrolled up under
+  and overlapped it. New `.ftextarea-plain` CSS class (10px top padding, no longer needs room
+  for a label) and `.charcount` (persistent "N / MAX" under every capped textarea, red+bold at
+  the cap) — the latter answers the owner's separate report that a paste past the limit
+  silently truncated and typing at the limit silently stopped, neither with any feedback.
+  Dialog Text's cap dropped from 999 to 500 everywhere it appears. `app/src/lib/email.ts`'s
+  `buildRequestEmailBody` (plain-text, link-last) replaced by `buildRequestEmailHtml`/
+  `buildRequestEmailText`, both call-to-action-link-first (a same-day owner correction — the
+  first draft had Description first) then Description then conditional Reminder note then
+  attachments/Dialog note then a closing signup link now pointing at the bare site root, not
+  `/login`. `app/src/lib/ics.ts`'s `buildIcsDescription` mirrors the same order/content in
+  plain TEXT; `buildIcsContent` gained an optional `{ reminderPromised }` param (only the
+  server-side email route has a real value; the two client-side Add-to-Calendar call sites
+  default to `false`) and now derives `siteUrl` from the link's own origin. `npx tsc --noEmit`/
+  `npm run lint` clean.
+- **PRD v12.10 — §9.6 My Phrases added to the Future Features Roadmap
+  (owner request, 2026-08-15). Spec only; nothing built.** Up to 12
+  reusable text-snippet phrases (optional Description + up to
+  150-character Phrase Text, same two-field pattern as a ToDo's own
+  Locations); a Housekeeping Phrases Task manages the list (same pattern
+  as the Contacts Task); an optional per-phrase button above and to the
+  right of Create Request's Description field copies the phrase's text to
+  the clipboard — deliberately Copy, not auto-insert, after the owner
+  simplified his own original cursor-position-insertion idea mid-thread —
+  rather than the app guessing where to place it. "Not yet phased," same
+  precedent as §9.5 Archive; base-subscription-vs-add-on packaging left
+  open in the PRD text, though added to the Monetization-direction
+  paragraph's own business-style-feature examples. `docs/
+  WouldYouPlease_PRD_v12_9.docx` → `docs/WouldYouPlease_PRD_v12_10.docx`
+  (old file kept alongside, same as v12.8/v12.9). **The Project's own
+  Canonical-sources setting is confirmed updated to v12.10 by the owner,
+  2026-08-15.** See the decisions log's 2026-08-15 entry for the full
+  write-up.

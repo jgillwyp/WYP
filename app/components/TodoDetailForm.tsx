@@ -63,6 +63,12 @@ type TodoFormState = {
 const CATEGORY_CAP = 20
 const LOOKUP_BROWSE_THRESHOLD = 12
 
+// See CreateRequestForm.tsx's identical constants for the full reasoning
+// (globals.css's ftextarea-plain/.charcount comment; owner request
+// 2026-08-16).
+const DESCRIPTION_MAX = 500
+const DIALOG_MAX = 500
+
 function formatMDY(value: string | null): string {
   if (!value) return ''
   const [y, m, d] = value.slice(0, 10).split('-')
@@ -836,22 +842,23 @@ export default function TodoDetailForm() {
               </div>
             )}
 
-            <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>
+            <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
               <textarea
-                className="ftextarea ftextarea-desc req"
+                className="ftextarea ftextarea-desc ftextarea-plain req"
                 id="desc"
-                maxLength={500}
-                placeholder=" "
+                maxLength={DESCRIPTION_MAX}
+                placeholder="ToDo Description"
+                aria-label="ToDo Description"
                 value={form.description}
                 onChange={(e) => {
                   set('description', e.target.value)
                   if (descInvalid) setDescInvalid(false)
                 }}
               />
-              <label className="flabel" htmlFor="desc">
-                ToDo Description
-              </label>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
+              <p className={`charcount${form.description.length >= DESCRIPTION_MAX ? ' limit' : ''}`}>
+                {form.description.length} / {DESCRIPTION_MAX}
+              </p>
             </div>
 
             {/* Simplified empty-state row (§6.32, 2026-08-11): with no
@@ -1069,13 +1076,14 @@ export default function TodoDetailForm() {
                 </div>
               )}
 
-              <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
+              <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
                 <textarea
                   ref={dialogTextRef}
-                  className="ftextarea"
+                  className="ftextarea ftextarea-plain"
                   id="dlgtext"
-                  maxLength={1000}
-                  placeholder=" "
+                  maxLength={DIALOG_MAX}
+                  placeholder="Dialog Text"
+                  aria-label="Dialog Text"
                   value={dialogModalBody}
                   onChange={(e) => {
                     setDialogModalBody(e.target.value)
@@ -1083,9 +1091,9 @@ export default function TodoDetailForm() {
                   }}
                   autoFocus
                 />
-                <label className="flabel" htmlFor="dlgtext">
-                  Dialog Text
-                </label>
+                <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
+                  {dialogModalBody.length} / {DIALOG_MAX}
+                </p>
               </div>
               {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
             </div>

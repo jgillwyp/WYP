@@ -86,24 +86,52 @@ export function foldIcsLine(line: string): string {
   return out
 }
 
-// Owner's ask, 2026-08-10: the bolded text in his mockup is the Request's
-// own Description, verbatim; everything else — the "A Would You Please
-// Request from <name>:" opener and the "To mark it completed, click:"
-// closer — is fixed boilerplate around it. Hardcoded here for now:
-// "there will need to be a Would You Please administrative interface where
-// such standard text can be modified... that can just be a 'will be done'
-// item at this point" — flagged, not built; no admin surface or schema for
-// editable boilerplate strings exists yet anywhere in the app.
-// Owner-reported, 2026-08-10: with no owner_name (a test-data gap that
-// "once the app is fully implemented could not happen" — see
-// profiles.display_name in CLAUDE.md's Known gaps), the old fallback of
-// 'Would You Please' produced "A Would You Please Request from Would You
-// Please". Omit the "from <name>" clause entirely instead when the name is
-// unknown, rather than papering over it with a value that reads as
-// nonsensical.
-export function buildIcsDescription(ownerName: string | null, description: string, link: string): string {
-  const from = ownerName ? `A Would You Please Request from ${ownerName}: ` : 'A Would You Please Request: '
-  return `${from}${description} To mark it completed, click: ${link}`
+// Rewritten 2026-08-16 (owner request) — matches
+// buildRequestEmailHtml/buildRequestEmailText's new structure in
+// app/src/lib/email.ts (call-to-action link first, then the Description,
+// then the conditional Reminder note, then one combined attachments/Dialog
+// note, then a closing signup link). The old layout put the link at the
+// very end, after the full Description — a mobile mail app's own
+// calendar-event preview truncates a long DESCRIPTION field with an
+// ellipsis, and the link (the whole point of a "click here" invitation)
+// could disappear into that truncation before the recipient ever saw it.
+// Putting the link first, ahead of the Description, gives it the best
+// realistic chance of surviving a short preview (the owner's own
+// follow-up correction, after an initial draft that put Description
+// first — matches buildRequestEmailHtml/Text's own ordering exactly).
+//
+// Drops the old "A Would You Please Request from <name>:" opener entirely,
+// matching the owner's own literal example (his email template has no name
+// attribution in the body — that information already lives in the email's
+// own Subject line and From header). RFC 5545 TEXT has no markup, so the
+// link renders as a bare URL here, unlike the HTML email's real anchor —
+// most calendar/mail clients auto-linkify a bare URL in an event
+// description on their own.
+//
+// reminderPromised defaults to false — the two client-side "Add to
+// Calendar" call sites (RequestResponseForm.tsx, ResponseDetailForm.tsx)
+// only know a Request's due_date, never the sender's own reminder_enabled
+// preference, so they can't honestly promise a reminder either way; only
+// the emailed .ics (built server-side in send-request/route.ts, which has
+// already computed the real reminderPromised value) passes it explicitly.
+export function buildIcsDescription(
+  description: string,
+  link: string,
+  siteUrl: string,
+  reminderPromised = false
+): string {
+  const parts = [`Click to respond or mark as completed: ${link}`, description]
+
+  if (reminderPromised) {
+    parts.push('A reminder email will arrive the day before the Due Date.')
+  }
+
+  parts.push(
+    'You can also see any attachments and add questions or comments to this Request with the above link.',
+    `New to Would You Please? click to set up a free account: ${siteUrl}`
+  )
+
+  return parts.join(' ')
 }
 
 // Minimal shape either ResponsePayload (RequestResponseForm.tsx) or
@@ -159,7 +187,20 @@ export function cameFromCalendarLink(search: string): boolean {
   return new URLSearchParams(search).get('src') === 'calendar'
 }
 
-export function buildIcsContent(payload: IcsRequestFields, link: string): string {
+// options.reminderPromised is passed through to buildIcsDescription — only
+// the server-side send-request route has a real value to give it (it
+// already computes reminderPromised for the email body); the two
+// client-side "Add to Calendar" call sites (RequestResponseForm.tsx,
+// ResponseDetailForm.tsx) omit it and get the function's own false default,
+// same reasoning as buildIcsDescription's own doc comment above. siteUrl is
+// derived from the response link's own origin rather than threaded through
+// as a required parameter, since every caller already has a full link and
+// none currently has a separate site-root value handy.
+export function buildIcsContent(
+  payload: IcsRequestFields,
+  link: string,
+  options?: { reminderPromised?: boolean }
+): string {
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
   const hasTime = payload.due_time != null && payload.due_time.trim() !== ''
 
@@ -212,7 +253,7 @@ export function buildIcsContent(payload: IcsRequestFields, link: string): string
     dtstartLine,
     dtendLine,
     `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
-    `DESCRIPTION:${icsEscapeText(buildIcsDescription(payload.owner_name, payload.description, calendarLinkFor(link)))}`,
+    `DESCRIPTION:${icsEscapeText(buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, options?.reminderPromised))}`,
     `URL:${calendarLinkFor(link)}`,
     'END:VEVENT',
     'END:VCALENDAR',

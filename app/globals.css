@@ -754,6 +754,52 @@ body {
 }
 
 /* ============================================================================
+   PLAIN (NON-FLOATING) TEXTAREAS — 2026-08-16
+   Owner-reported: a long Description scrolled inside its own box left the
+   floating .flabel — an absolutely-positioned sibling pinned to the top of
+   the .ffloat wrapper, not part of the textarea's own scrolling content —
+   overlapping real text once the user scrolled past it. A floating label
+   can't be fixed for a *scrolling* box the way it works for a single-line
+   .finput: there's no way to keep an ordinary DOM label "inside" a native
+   textarea's own scroll region. Owner's own proposed fix, adopted as-is:
+   drop the floating label for every .ftextarea field and use a plain,
+   ordinary placeholder instead — exactly the ", not utilize a floating
+   label" the owner asked for. Applies to all three multi-line fields in the
+   app (Description, Dialog Text, Notes) — every .ftextarea usage, so the
+   .ffloat/.flabel pattern above is now .finput-only in practice, though the
+   combined selectors are left in place rather than split, since they're
+   harmless no-ops for a .ftextarea that no longer sits inside a .ffloat
+   wrapper.
+   .ftextarea-plain restores ordinary top padding — the base .ftextarea's
+   20px top padding exists solely to leave room for the floated label's
+   risen position, which no longer applies once there's no label to float. */
+.ftextarea.ftextarea-plain {
+  padding-top: 10px;
+}
+
+/* Live character counter for capped .ftextarea fields (2026-08-16) —
+   companion to the plain-placeholder change above. maxLength alone gives no
+   feedback: typing at the cap silently stops accepting keystrokes, and a
+   paste that would exceed it is silently clipped. A persistent small count
+   answers both cases before the owner has to ask "why didn't that work" —
+   normally muted, switching to --alert-red and bold only once the field is
+   actually at its cap (a pasted block landing at "500 / 500" is immediate,
+   unambiguous confirmation that something got cut). Not shown only near the
+   limit — always-on avoids a "sudden appearance" jump and lets a user see
+   the cap coming before they hit it. */
+.charcount {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: right;
+  margin: 4px 2px 0;
+}
+.charcount.limit {
+  color: var(--alert-red);
+  font-weight: 700;
+}
+
+/* ============================================================================
    SMALL PARENTHETICAL LABEL TEXT (2026-08-07)
    "(optional)" was crowding or overflowing narrow fields on Android
    (Category, Due Time); Dialog's "(Questions, Answers, Comments)" needed to

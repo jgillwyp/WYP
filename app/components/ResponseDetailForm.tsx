@@ -58,6 +58,11 @@ import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@
 
 type Kind = 'question' | 'answer' | 'comment'
 
+// See CreateRequestForm.tsx's identical constant for the full reasoning
+// (globals.css's ftextarea-plain/.charcount comment; owner request
+// 2026-08-16).
+const DIALOG_MAX = 500
+
 type DialogEntry = {
   id: number
   kind: Kind
@@ -720,13 +725,14 @@ export default function ResponseDetailForm() {
                 </div>
               )}
 
-              <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
+              <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
                 <textarea
                   ref={dialogTextRef}
-                  className="ftextarea"
+                  className="ftextarea ftextarea-plain"
                   id="dlgtext"
-                  maxLength={1000}
-                  placeholder=" "
+                  maxLength={DIALOG_MAX}
+                  placeholder="Dialog Text"
+                  aria-label="Dialog Text"
                   value={dialogModalBody}
                   onChange={(e) => {
                     setDialogModalBody(e.target.value)
@@ -734,9 +740,9 @@ export default function ResponseDetailForm() {
                   }}
                   autoFocus
                 />
-                <label className="flabel" htmlFor="dlgtext">
-                  Dialog Text
-                </label>
+                <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
+                  {dialogModalBody.length} / {DIALOG_MAX}
+                </p>
               </div>
               {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
             </div>

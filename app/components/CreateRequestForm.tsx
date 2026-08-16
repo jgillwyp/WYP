@@ -109,6 +109,16 @@ const initialState: RequestFormState = {
 
 const CATEGORY_CAP = 20
 
+// Character caps for the two free-text boxes on this screen — kept as named
+// constants (2026-08-16) so the maxLength attribute and the .charcount
+// display always agree; see globals.css's ftextarea-plain/.charcount
+// comment for why these fields dropped the floating-label pattern.
+// DIALOG_MAX lowered from 1000 to match DESCRIPTION_MAX, owner request
+// 2026-08-16 ("I think it was supposed to be limited to 150 - but having it
+// be 500 would be alright").
+const DESCRIPTION_MAX = 500
+const DIALOG_MAX = 500
+
 // §6.24 lookup fields (2026-08-07): with a short list, making the user type
 // before seeing anything is friction for no reason — show the whole list on
 // focus instead, and only fall back to type-to-search once there are enough
@@ -914,23 +924,26 @@ export default function CreateRequestForm() {
               </div>
             )}
 
-            {/* Request Description (§6.10): 500-char limit */}
-            <div className={`fgroup ffloat${descInvalid ? ' is-invalid' : ''}`}>
+            {/* Request Description (§6.10): 500-char limit. Plain
+                placeholder, not a floating label — see globals.css's
+                ftextarea-plain comment. */}
+            <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
               <textarea
-                className="ftextarea ftextarea-desc req"
+                className="ftextarea ftextarea-desc ftextarea-plain req"
                 id="desc"
-                maxLength={500}
-                placeholder=" "
+                maxLength={DESCRIPTION_MAX}
+                placeholder="Request Description"
+                aria-label="Request Description"
                 value={form.description}
                 onChange={(e) => {
                   set('description', e.target.value)
                   if (descInvalid) setDescInvalid(false)
                 }}
               />
-              <label className="flabel" htmlFor="desc">
-                Request Description
-              </label>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
+              <p className={`charcount${form.description.length >= DESCRIPTION_MAX ? ' limit' : ''}`}>
+                {form.description.length} / {DESCRIPTION_MAX}
+              </p>
             </div>
 
             {/* Dialog — Add Dialog opens a modal (2026-08-07, see file-level
@@ -1178,13 +1191,14 @@ export default function CreateRequestForm() {
                 </div>
               </div>
 
-              <div className={`fgroup ffloat${dialogModalError ? ' is-invalid' : ''}`}>
+              <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
                 <textarea
                   ref={dialogTextRef}
-                  className="ftextarea"
+                  className="ftextarea ftextarea-plain"
                   id="dlgtext"
-                  maxLength={1000}
-                  placeholder=" "
+                  maxLength={DIALOG_MAX}
+                  placeholder="Dialog Text"
+                  aria-label="Dialog Text"
                   value={dialogModalBody}
                   onChange={(e) => {
                     setDialogModalBody(e.target.value)
@@ -1192,9 +1206,9 @@ export default function CreateRequestForm() {
                   }}
                   autoFocus
                 />
-                <label className="flabel" htmlFor="dlgtext">
-                  Dialog Text
-                </label>
+                <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
+                  {dialogModalBody.length} / {DIALOG_MAX}
+                </p>
               </div>
               {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
             </div>

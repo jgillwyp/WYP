@@ -26,6 +26,11 @@ import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// See CreateRequestForm.tsx's identical constant for the full reasoning
+// (globals.css's ftextarea-plain/.charcount comment; owner request
+// 2026-08-16).
+const NOTES_MAX = 500
+
 type ContactFormState = {
   name: string
   email: string
@@ -383,18 +388,19 @@ export default function ContactDetailForm() {
               </div>
             </div>
 
-            <div className="fgroup ffloat">
+            <div className="fgroup">
               <textarea
-                className="ftextarea opt"
+                className="ftextarea ftextarea-plain opt"
                 id="nt"
-                maxLength={500}
-                placeholder=" "
+                maxLength={NOTES_MAX}
+                placeholder="Notes (optional)"
+                aria-label="Notes (optional)"
                 value={form.notes}
                 onChange={(e) => set('notes', e.target.value)}
               />
-              <label className="flabel" htmlFor="nt">
-                Notes (optional)
-              </label>
+              <p className={`charcount${form.notes.length >= NOTES_MAX ? ' limit' : ''}`}>
+                {form.notes.length} / {NOTES_MAX}
+              </p>
             </div>
 
             {error && (

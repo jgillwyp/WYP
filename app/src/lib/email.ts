@@ -92,29 +92,80 @@ export function buildRequestEmailSubject(
 }
 
 // ----------------------------------------------------------------------------
-// Body — PRD's four required parts, in order: the Request Description; a
-// "Click the following link." sentence with the secure response link; a
-// note that a reminder arrives the day before Due Date (omitted unless the
-// Request is both Reminder-eligible AND the sender left the Reminder
-// checkbox on — see isReminderEligible above and the Reminder checkbox on
-// Create Request/Request Detail); a note that Dialog can be added via the
-// same link; and a closing link to the Would You Please product page
-// ("destination not yet built" per the PRD's own text) for setting up a
-// Free Account.
+// Body — redesigned 2026-08-16 (owner request), replacing the original PRD
+// §7.3 plain-text layout. Owner: showing the bare response link was meant to
+// build confidence the recipient wasn't being sent somewhere untrusted, but
+// with the link sitting at the very end of the Request Description (the old
+// layout), a mobile mail app's own calendar-event preview — which truncates
+// a long description with an ellipsis — could hide the link entirely,
+// leaving the recipient unaware a link was ever offered. New order,
+// corrected same day per the owner's own follow-up (his first example had
+// Description before the link; he then asked for the two reversed so the
+// link is the very first thing in the body): the call-to-action link
+// ("Click to respond or mark as completed") first, then the Description,
+// then the conditional Reminder note, then one combined note about
+// attachments/Dialog, then a closing "New to Would You Please?" signup
+// link. The link text itself is now a real HTML anchor (see
+// buildRequestEmailHtml) rather than a bare URL the recipient has to trust
+// on sight — a clickable, labeled link plus the existing Reply-To (set to
+// the sender's own account email, not a spoofed From) already gives more
+// confidence than pasting the raw URL ever did.
 //
-// Destination for that closing link: /login, not a marketing product page —
-// "there is no sign-up screen... /login serves both" (CLAUDE.md's Auth
-// section). This is the one live account-creation entry point that exists
-// anywhere in the app today; wouldyouplease.com's own homepage/product page
-// isn't built.
+// Closing link destination changed from /login to the bare site root
+// (fields.siteUrl, no path) — owner's own example uses "WYP URL, currently
+// https://wyp-three.vercel.app" verbatim. The original 2026-08-11 reasoning
+// for linking straight to /login predates the real marketing landing page
+// (LandingPage.tsx, shipped 2026-08-13) — the root URL now serves a proper
+// sales-first page with its own Start Free Account / Sign In CTAs, so
+// sending a new recipient there first is no longer a dead end the way it
+// would have been when /login was the only thing living at "/".
 // ----------------------------------------------------------------------------
-export function buildRequestEmailBody(fields: {
+type RequestEmailBodyFields = {
   description: string
   link: string
   reminderPromised: boolean
   siteUrl: string
-}): string {
-  const lines = [fields.description, '', 'Click the following link.', fields.link]
+}
+
+// Minimal HTML-escaping for the one piece of this email that's real user
+// text (the sender's own Description) — everything else here is a fixed
+// string this module itself wrote. Order matters: & first, so the escapes
+// just added for the other four characters don't get re-escaped.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
+  const parts = [
+    `<p><a href="${fields.link}">Click to respond or mark as completed</a></p>`,
+    `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+  ]
+
+  if (fields.reminderPromised) {
+    parts.push('<p>A reminder email will arrive the day before the Due Date.</p>')
+  }
+
+  parts.push(
+    '<p>You can also see any attachments and add questions or comments to this Request with the above link.</p>',
+    `<p>New to <a href="${fields.siteUrl}">Would You Please</a>? click to set up a free account.</p>`
+  )
+
+  return parts.join('\n')
+}
+
+// Plain-text alternative part — not something the owner asked for by name,
+// but standard multipart/alternative practice alongside an HTML body: some
+// mail clients and spam filters weight a text-only message more favorably,
+// and a few older/text-only clients can't render the HTML part at all.
+// Same content and order as buildRequestEmailHtml, bare URLs instead of
+// anchors.
+export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
+  const lines = ['Click to respond or mark as completed:', fields.link, '', fields.description]
 
   if (fields.reminderPromised) {
     lines.push('', 'A reminder email will arrive the day before the Due Date.')
@@ -122,10 +173,10 @@ export function buildRequestEmailBody(fields: {
 
   lines.push(
     '',
-    'You can add questions or comments to this Request as Dialog using the same link.',
+    'You can also see any attachments and add questions or comments to this Request with the above link.',
     '',
-    'New to Would You Please? Set up a free account:',
-    `${fields.siteUrl}/login`
+    'New to Would You Please? click to set up a free account:',
+    fields.siteUrl
   )
 
   return lines.join('\n')
