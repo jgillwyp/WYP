@@ -6,6 +6,51 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-15 — Sign-in session persistence investigated; remembered-email fallback shipped
+
+Owner: "I need to Sign In to the App more often than I expect. After I have logged-in and close
+the browser and later re-open it, I go to wyp-three.vercel.app. Instead of still being logged-in
+on the same device as I expect, I am provided the landing page and need to go through the login
+and click the link in an email." Asked whether that's expected, and, if so, for at least a
+remembered-email fallback.
+
+**Investigation found this app's own session-persistence code is already correct, not the
+cause.** Read through the full chain again end to end: `supabaseClient.ts`'s `hybridStorage`
+routes the actual Supabase session token to `localStorage` (survives a full browser close)
+whenever `shouldRemember()` is true — the default, and "Keep me signed in on this device" is
+checked by default on `/login` — with `persistSession: true`/`autoRefreshToken: true` on the
+client config; `app/page.tsx` and `RequireAuth.tsx` both already use `getSession()`, not
+`getUser()` (the 2026-08-13 fix for a *related but different* bug — a live round-trip to
+Supabase's Auth server misread as "signed out" on a transient network hiccup right after
+reopening); `/auth/callback/page.tsx` establishes the session the same way. No bug found in any
+of these — the architecture is sound for the scenario as described.
+
+**Given that, the two most likely explanations are both outside this codebase, and neither is
+fixable from here:**
+1. A browser (or browser extension/privacy setting) configured to clear cookies and site data —
+   which includes `localStorage` — when all windows close. Common in Chrome/Firefox privacy
+   settings, Brave's default shields, or if the tab in question was ever opened in a private/
+   incognito window.
+2. A Supabase project-level Auth session setting (Authentication → Sessions in the Supabase
+   dashboard — inactivity timeout / time-boxed sessions) forcing re-authentication on a schedule
+   independent of anything this app's own code controls.
+
+Neither can be confirmed or ruled out from this session — there's no Supabase dashboard access
+here, and no way to inspect the owner's own browser settings. Flagged for the owner to check
+directly: Supabase dashboard → Authentication → Sessions, and the browser's own cookie/
+site-data-on-close setting for wyp-three.vercel.app specifically.
+
+**Shipped the owner's own requested fallback regardless of root cause**: `/login`'s Email field
+now remembers the last-used address (`wyp.lastEmail` in `localStorage`), pre-filling on return —
+tied to the *same* "Keep me signed in" checkbox rather than a separate toggle, since an unchecked
+box already promises "leave no trace on this device," and remembering just the email while
+otherwise leaving nothing behind would quietly break that promise on a shared/public computer.
+Saved (or cleared, if unchecked) at the same point `setRememberMe()` already runs, in
+`sendLink()`. Doesn't reduce how often a magic-link click is needed — only saves re-typing the
+address each time. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-15 — Reminder checkbox on Create Request/Request Detail, migration 031, replaces the Tight-window advisory
 
 Owner mocked up a user-facing Reminder opt-in checkbox ("Reminder - send on
@@ -72,6 +117,10 @@ section in `app/globals.css` (`.checkrow-disabled`, `.checkrow-inline`,
 `.due-with-reminder`) documents the reasoning inline. New component
 identifier §6.37 PROPOSED — not drawn in any mockup yet, flagged in
 `design/README.md`. `npx tsc --noEmit`/`npm run lint` clean.
+
+**Confirmed working, live-tested by the owner 2026-08-15** — presentation
+and interaction on both screens, including the too-soon-Due-Date disabled
+state, behave as designed.
 
 \---
 

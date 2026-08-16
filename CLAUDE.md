@@ -1592,7 +1592,7 @@ link is built only after the stack is proven on Add Contact.
   the current visit. Applied identically to both screens. See the decisions
   log's 2026-08-15 entry.
 - **Reminder checkbox on Create Request/Request Detail — migration 031
-  DRAFTED, NOT YET CONFIRMED RUN (2026-08-15).** Owner's own design,
+  confirmed run by the owner 2026-08-15.** Owner's own design,
   reviewed in chat before building: a `.checkrow` ("Reminder - send on the
   morning before unless it is marked Done.") persisting a new
   `requests.reminder_enabled` column, replacing the old passive Tight-window
@@ -1621,3 +1621,23 @@ link is built only after the stack is proven on Add Contact.
   --noEmit`/`npm run lint` clean. See the decisions log's 2026-08-15 entry
   for the full write-up, including the five review questions the owner
   resolved before this was built.
+- **Sign-in session persistence investigated, 2026-08-15 — no app bug
+  found; remembered-email fallback shipped instead.** Owner-reported:
+  closing the browser after signing in, then reopening it later, sometimes
+  lands on the landing page rather than Main Screen, requiring a fresh
+  magic-link click. Re-verified the entire chain — `supabaseClient.ts`'s
+  `hybridStorage` (session persisted to `localStorage` whenever "Keep me
+  signed in," checked by default, is on), `app/page.tsx` and
+  `RequireAuth.tsx` (both already on `getSession()`, the 2026-08-13 fix for
+  a related-but-different bug), `/auth/callback/page.tsx` — all correct as
+  written. The likely causes are both outside this codebase and not
+  fixable from here: a browser/extension setting that clears cookies and
+  site data (which includes `localStorage`) on close, or a Supabase
+  project-level Auth session setting (dashboard → Authentication →
+  Sessions) time-boxing sessions independent of this app's own code.
+  Flagged for the owner to check both directly. Shipped the fallback he
+  asked for regardless: `/login`'s Email field now remembers the last-used
+  address (`wyp.lastEmail`, `localStorage`), tied to the same "Keep me
+  signed in" checkbox rather than a separate toggle, so an unchecked box
+  still means "leave no trace." `npx tsc --noEmit`/`npm run lint` clean.
+  See the decisions log's 2026-08-15 entry.

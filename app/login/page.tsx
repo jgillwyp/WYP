@@ -11,6 +11,24 @@ const RESEND_COOLDOWN_SECONDS = 60
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// Remembered email address, 2026-08-15 — owner asked for this as a
+// fallback while investigating why a signed-in session doesn't always
+// survive a full browser close/reopen (see the decisions log's 2026-08-15
+// entry for the full diagnosis — this app's own session-persistence code
+// was found to already be correct; the likely causes are outside this
+// codebase, e.g. a browser's own "clear cookies/site data on close"
+// setting or Supabase's own session/refresh-token expiry, neither of which
+// this fix touches). Tied to the same "Keep me signed in" checkbox the app
+// already has, not a separate toggle — an unchecked box already means
+// "leave no trace on this device," so remembering the email too when it's
+// unchecked would contradict that promise on a shared/public computer.
+const LAST_EMAIL_KEY = 'wyp.lastEmail'
+
+function getLastEmail(): string {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(LAST_EMAIL_KEY) ?? ''
+}
+
 // Bug fix, 2026-08-13 — owner-reported, screenshot of the address bar
 // showing /login?intent=signup while the band still read plain "Sign In".
 // The original fix (same day, earlier) read `?intent=signup` once via a
@@ -40,7 +58,7 @@ function LoginScreen() {
   const searchParams = useSearchParams()
   const isSignupIntent = searchParams.get('intent') === 'signup'
 
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(getLastEmail)
   const [remember, setRemember] = useState(true)
   const [sent, setSent] = useState(false)
   const [gated, setGated] = useState(false)
@@ -76,6 +94,14 @@ function LoginScreen() {
     // Record the preference before the request, so the storage adapter routes
     // the session correctly when the user returns via the emailed link.
     setRememberMe(remember)
+
+    // Remember (or forget) the email address itself, in step with the same
+    // checkbox — see this file's LAST_EMAIL_KEY comment above.
+    if (remember) {
+      window.localStorage.setItem(LAST_EMAIL_KEY, address)
+    } else {
+      window.localStorage.removeItem(LAST_EMAIL_KEY)
+    }
 
     const { error: sendError } = await supabase.auth.signInWithOtp({
       email: address,
