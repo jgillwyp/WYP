@@ -1671,6 +1671,20 @@ body {
   border-radius: 4px;
 }
 
+/* Done column, Sent/Received only — not sortable while the Open or Overdue
+   chip is selected, 2026-08-17 (owner-reported): those two filters never
+   show a Done item, so a sort-by-Done indicator was colorizing and toggling
+   direction against a column that couldn't actually be sorted. The button
+   itself stays in the DOM (keeps the grid's four-column alignment with the
+   row data below it) but goes inert — dimmed and non-interactive — via the
+   native `disabled` attribute; ColSort also suppresses its own .pill/arrow
+   rendering while disabled, even if a Done sort is still the stored key
+   underneath (it resumes, unchanged, the moment All or Done is reselected). */
+.colbar button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
 .pill {
   background: var(--sort);
   color: var(--ink);

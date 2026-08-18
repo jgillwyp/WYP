@@ -61,6 +61,14 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .panel.soon li::before{background:var(--ink-soft);}
 .panel .note{font-size:11px;color:var(--ink-soft);margin-top:7px;line-height:1.45;}
 
+/* Who benefits — owner request, 2026-08-17, inserted directly before the
+   Coming-with-a-subscription/soon .cols block. Kept deliberately compact
+   (smaller than .lede's 12.5px) since this is a fixed one-page letter
+   layout with no room to spare — not visually re-verified against a real
+   print in this session (no headless browser/Chrome extension reachable);
+   flagged for the owner to confirm it still fits one page. */
+.who{font-size:11.5px;line-height:1.5;color:var(--ink);max-width:7.4in;}
+
 /* Footer CTA */
 .cta{margin-top:auto;padding-top:14px;}
 .ctabar{background:var(--brand-blue);border-radius:11px;padding:13px 16px;display:flex;align-items:center;gap:14px;}
@@ -96,6 +104,9 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
     <div class="card"><div class="ct">Dialog Threads</div><div class="cb">Questions, answers, and comments stay attached to the item itself &#8212; a clear, auditable record, never lost in chat.</div></div>
     <div class="card"><div class="ct">One Dashboard &amp; Search</div><div class="cb">Sent, Received, and My ToDos on one screen &#8212; filter, sort, print, and expand. Find anything by person, category, or date.</div></div>
   </div>
+
+  <div class="slabel"><span class="t">Who benefits from Would You Please?</span><span class="rule"></span></div>
+  <div class="who">Busy people who assign tasks &#8212; across business, professional, community, religious, government, and political organizations, as well as individuals.</div>
 
   <div class="cols">
     <div>

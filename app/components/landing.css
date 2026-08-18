@@ -222,6 +222,9 @@
 .wyp-landing .badge.sub { background: var(--sort); color: var(--ink); }
 .wyp-landing .badge.soon { background: var(--band); color: var(--ink-soft); }
 
+/* Who benefits — plain paragraph under a bare .slabel (no badge), 2026-08-17 */
+.wyp-landing .benefits { font-size: 14.5px; line-height: 1.55; color: var(--ink); max-width: 760px; }
+
 /* Feature cards */
 .wyp-landing .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .wyp-landing .card {
@@ -269,8 +272,12 @@
   padding: 22px 18px;
   text-align: center;
 }
-.wyp-landing .ctaband .big { font-size: 19px; font-weight: 800; color: #fff; line-height: 1.25; }
-.wyp-landing .ctaband .sub { font-size: 13px; color: #DCE6FA; margin-top: 6px; }
+/* .lead replaces the old single .big headline + .sub sub-line, 2026-08-17 —
+   owner dropped "Start free today at wouldyouplease.com" (redundant, since
+   this band is only ever seen already on the site) in favor of two equal-
+   weight bold lines, per his own reference image. */
+.wyp-landing .ctaband .lead { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.35; }
+.wyp-landing .ctaband .lead + .lead { margin-top: 2px; }
 .wyp-landing .ctaband .price { margin-top: 14px; color: #fff; }
 .wyp-landing .ctaband .price .amt { font-size: 17px; font-weight: 800; }
 .wyp-landing .ctaband .price .per { font-size: 11.5px; color: #DCE6FA; margin-top: 2px; }

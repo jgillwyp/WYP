@@ -258,6 +258,9 @@ img, svg { display: block; max-width: 100%; }
 .badge.sub { background: var(--sort); color: var(--ink); }
 .badge.soon { background: var(--band); color: var(--ink-soft); }
 
+/* Who benefits — plain paragraph under a bare .slabel (no badge), 2026-08-17 */
+.benefits { font-size: 14.5px; line-height: 1.55; color: var(--ink); max-width: 760px; }
+
 /* ----------------------------------------------------------------------
    Feature cards — single column on a phone, 2 then 3 columns as width
    allows (see @media).
@@ -313,8 +316,10 @@ img, svg { display: block; max-width: 100%; }
   padding: 22px 18px;
   text-align: center;
 }
-.ctaband .big { font-size: 19px; font-weight: 800; color: #fff; line-height: 1.25; }
-.ctaband .sub { font-size: 13px; color: #DCE6FA; margin-top: 6px; }
+/* .lead replaces the old single .big headline + .sub sub-line, 2026-08-17 —
+   see landing.css's identical comment (this mockup stays hand-synced). */
+.ctaband .lead { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.35; }
+.ctaband .lead + .lead { margin-top: 2px; }
 .ctaband .price { margin-top: 14px; color: #fff; }
 .ctaband .price .amt { font-size: 17px; font-weight: 800; }
 .ctaband .price .per { font-size: 11.5px; color: #DCE6FA; margin-top: 2px; }
@@ -550,6 +555,19 @@ footer .wrap {
     </div>
   </section>
 
+  <!-- Who benefits — owner request, 2026-08-17; see landing.css/LandingPage.tsx's
+       identical comment for the copy-tightening note. -->
+  <section class="section">
+    <div class="wrap">
+      <div class="slabel">
+        <span class="t">Who benefits from Would You Please?</span>
+      </div>
+      <div class="benefits">
+        Busy people who assign tasks — across business, professional, community, religious, government, and political organizations, as well as individuals.
+      </div>
+    </div>
+  </section>
+
   <!-- Subscription / Coming soon -->
   <section class="section alt">
     <div class="wrap">
@@ -591,12 +609,12 @@ footer .wrap {
     <div class="wrap">
       <div class="ctaband">
         <div>
-          <div class="big">Start free today at wouldyouplease.com</div>
-          <div class="sub">No download. No setup. Send your first request in under a minute.</div>
+          <div class="lead">No credit card. No download. No setup.</div>
+          <div class="lead">Send your first request in under a minute.</div>
         </div>
         <div class="price">
           <div class="amt">Free</div>
-          <div class="per">for advanced features, subscription $17.95/yr</div>
+          <div class="per">Advanced features with subscription $17.95/yr.</div>
         </div>
         <a class="btn-white" href="/login?intent=signup">Start Free Account</a>
       </div>

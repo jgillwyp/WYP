@@ -1655,6 +1655,28 @@ link is built only after the stack is proven on Add Contact.
   to login after two minutes on the same test, unconfirmed root cause,
   owner separately testing a full hour of laptop-closed time. See the
   decisions log's 2026-08-15 entry.
+- **Main Screen: Done column header no longer sortable/colorized on Sent/Received
+  unless All or Done chip is selected (2026-08-17).** Owner-reported: Open/Overdue
+  never show a Done row, so the Done column's `.pill`/▲▼ indicator and click-to-
+  toggle were describing an ordering nothing in the visible list could show.
+  `ColSort` gained a `disabled` prop — renders inert plain text, native
+  `disabled` button, no active-pill — passed as
+  `disabled={<sentFilter|receivedFilter> !== 'all' && !== 'done'}`. The stored
+  sort key itself is untouched (resumes when All/Done is reselected); new
+  `.colbar button:disabled { opacity: .55 }` CSS.
+- **Landing page final CTA band revised; new "Who benefits" section added to
+  landing page and sales one-pager (2026-08-17).** Owner-supplied reference image
+  and Word doc. `.ctaband`'s old "Start free today at wouldyouplease.com" headline
+  dropped (redundant on the page that already is wouldyouplease.com) for two bold
+  `.lead` lines ("No credit card. No download. No setup." / "Send your first
+  request in under a minute."); price line reworded to match. New "Who benefits
+  from Would You Please?" section added directly before Subscription/Coming soon
+  on both the live landing page (`.benefits`, 14.5px) and `docs/WYP onepager.html`
+  (`.who`, 11.5px — a fixed one-page print layout, sized compact on purpose). The
+  one-pager's own CTA band is unchanged — the owner's "read at the site" reasoning
+  doesn't apply to a printed piece. **Not visually re-verified** — no headless
+  browser or Chrome extension reachable in this sandbox; flagged for the owner to
+  confirm the one-pager still fits one printed page.
 - **Archive: filters and checkbox selection reset on a fresh visit, but survive the
   Detail round trip (2026-08-16).** Owner-reported: after filtering to a Recipient +
   Before Done Date, hand-deselecting a few rows, closing back to Main Screen, and

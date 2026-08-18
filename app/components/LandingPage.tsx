@@ -249,6 +249,25 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Who benefits — owner request, 2026-08-17. Placed directly before
+            Subscription/Coming soon per his own instruction. Copy is his
+            own, lightly tightened ("including for a wide range of" ->
+            "across") to read more naturally — meaning and the deliberate
+            "implied, not claimed" framing (categories of people the product
+            could serve, not an assertion of who currently uses it) are
+            unchanged; flagged for his review rather than silently kept as
+            typed. */}
+        <section className="section">
+          <div className="wrap">
+            <div className="slabel">
+              <span className="t">Who benefits from Would You Please?</span>
+            </div>
+            <div className="benefits">
+              Busy people who assign tasks — across business, professional, community, religious, government, and political organizations, as well as individuals.
+            </div>
+          </div>
+        </section>
+
         {/* Subscription / Coming soon */}
         <section className="section alt">
           <div className="wrap">
@@ -285,17 +304,22 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Final CTA */}
+        {/* Final CTA — owner request, 2026-08-17: dropped "Start free today at
+            wouldyouplease.com" (this band is only ever seen already at
+            wouldyouplease.com, so naming the site was redundant) and
+            replaced it with the "No credit card..." line promoted to equal
+            weight with "Send your first request...", both now bold — see
+            the owner's own reference image and landing.css's .lead rule. */}
         <section className="section">
           <div className="wrap">
             <div className="ctaband">
               <div>
-                <div className="big">Start free today at wouldyouplease.com</div>
-                <div className="sub">No download. No setup. Send your first request in under a minute.</div>
+                <div className="lead">No credit card. No download. No setup.</div>
+                <div className="lead">Send your first request in under a minute.</div>
               </div>
               <div className="price">
                 <div className="amt">Free</div>
-                <div className="per">for advanced features, subscription $17.95/yr</div>
+                <div className="per">Advanced features with subscription $17.95/yr.</div>
               </div>
               <Link className="btn-white" href="/login?intent=signup">Start Free Account</Link>
             </div>

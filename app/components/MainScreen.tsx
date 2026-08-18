@@ -440,27 +440,35 @@ function ColSort({
   active,
   dir,
   onClick,
+  disabled = false,
 }: {
   className: string
   label: string
   active: boolean
   dir: SortDir
   onClick: () => void
+  // Done column, Sent/Received only, 2026-08-17 — see the caller's own
+  // comment. When true, this cell renders as plain inert text: no .pill,
+  // no arrow, no click, regardless of whether it's still the stored sort
+  // key underneath.
+  disabled?: boolean
 }) {
   // aria-sort is only valid on elements with role="columnheader"/"rowheader"
   // (or a native <th>) per jsx-a11y/role-supports-aria-props — this is a
   // plain <button> (implicit role="button"), so the sort state is conveyed
   // via aria-label instead. The visible ▲/▼ inside .pill already carries
   // the same information sighted users get.
-  const stateLabel = active ? `, currently sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''
+  const showActive = active && !disabled
+  const stateLabel = showActive ? `, currently sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''
   return (
     <button
       type="button"
       className={className}
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       aria-label={`Sort by ${label}${stateLabel}`}
     >
-      {active ? <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span> : label}
+      {showActive ? <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span> : label}
     </button>
   )
 }
@@ -1104,7 +1112,14 @@ export default function MainScreen() {
                 <ColSort className="c-nm" label="To" active={sentSort.key === 'name'} dir={sentSort.dir} onClick={() => sortSent('name')} />
                 <ColSort className="c-dt" label="Date" active={sentSort.key === 'date'} dir={sentSort.dir} onClick={() => sortSent('date')} />
                 <ColSort className="c-due" label="Due" active={sentSort.key === 'due'} dir={sentSort.dir} onClick={() => sortSent('due')} />
-                <ColSort className="c-dn" label="Done" active={sentSort.key === 'done'} dir={sentSort.dir} onClick={() => sortSent('done')} />
+                <ColSort
+                  className="c-dn"
+                  label="Done"
+                  active={sentSort.key === 'done'}
+                  dir={sentSort.dir}
+                  onClick={() => sortSent('done')}
+                  disabled={sentFilter !== 'all' && sentFilter !== 'done'}
+                />
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
@@ -1175,7 +1190,14 @@ export default function MainScreen() {
                 <ColSort className="c-nm" label="From" active={receivedSort.key === 'name'} dir={receivedSort.dir} onClick={() => sortReceived('name')} />
                 <ColSort className="c-dt" label="Date" active={receivedSort.key === 'date'} dir={receivedSort.dir} onClick={() => sortReceived('date')} />
                 <ColSort className="c-due" label="Due" active={receivedSort.key === 'due'} dir={receivedSort.dir} onClick={() => sortReceived('due')} />
-                <ColSort className="c-dn" label="Done" active={receivedSort.key === 'done'} dir={receivedSort.dir} onClick={() => sortReceived('done')} />
+                <ColSort
+                  className="c-dn"
+                  label="Done"
+                  active={receivedSort.key === 'done'}
+                  dir={receivedSort.dir}
+                  onClick={() => sortReceived('done')}
+                  disabled={receivedFilter !== 'all' && receivedFilter !== 'done'}
+                />
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
