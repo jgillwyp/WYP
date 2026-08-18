@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { usePWAInstall } from './PWAProvider'
 
 /**
  * Main Screen (§6.7) — converted from
@@ -676,6 +677,7 @@ function VoiceSearchIcon() {
 
 export default function MainScreen() {
   const router = useRouter()
+  const { canInstall, promptInstall } = usePWAInstall()
 
   const [sent, setSent] = useState<SentRow[]>([])
   const [received, setReceived] = useState<ReceivedRow[]>([])
@@ -1419,9 +1421,35 @@ export default function MainScreen() {
                   >
                     <span className="hktext">
                       <span className="hktitle">Archive</span>
-                      <span className="hknote"> — remove completed items from these lists</span>
+                      <span className="hknote"> — remove completed items from the above lists</span>
                     </span>
                   </div>
+                  {/* Owner-reported, 2026-08-18: accepted the browser's own
+                      one-shot install offer during a magic-link sign-in and
+                      couldn't find the resulting icon afterward — see
+                      PWAProvider.tsx's own header comment for the full
+                      diagnosis (Android's "Install" adds to the app drawer,
+                      not directly to the home screen, and the browser's own
+                      prompt only ever appears once, opportunistically).
+                      This row is the deliberate, findable, repeatable
+                      alternative — only rendered when canInstall is true, so
+                      it's never a dead control on a browser that doesn't
+                      support installation or a device that already has it
+                      installed. */}
+                  {canInstall && (
+                    <div
+                      className="hkrow"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { promptInstall() }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') promptInstall() }}
+                    >
+                      <span className="hktext">
+                        <span className="hktitle">Install</span>
+                        <span className="hknote"> — add a Would You Please icon to your home screen</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (

@@ -6,6 +6,64 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-18 — Findable Install control; Archive wording fix; expired magic-link error surfaced
+
+Same-day follow-up after the owner tried the new manifest/PWA batch for real.
+
+**"Install" Housekeeping row.** Owner: he accepted the browser's own
+install offer during a magic-link sign-in and then couldn't find the
+resulting icon anywhere on his phone — Android's "Install" typically adds
+the app to the app drawer like any other installed app, not directly to
+the home screen, and the two are easy to conflate; the browser's own
+install banner is also a one-shot, opportunistic prompt with no way to
+bring it back. `ServiceWorkerRegister.tsx` (same-day, never pushed, so
+renamed rather than deprecated) became `PWAProvider.tsx`: still registers
+`public/sw.js`, and now also captures the `beforeinstallprompt` event and
+exposes it via a `usePWAInstall()` hook (`canInstall`/`promptInstall`),
+wrapping `{children}` in `app/layout.tsx` instead of sitting beside them so
+the captured event is reachable from any descendant. `MainScreen.tsx`
+gained a new Housekeeping row, "Install — add a Would You Please icon to
+your home screen," only rendered when `canInstall` is true — never a dead
+control on a browser that doesn't support installation or a device that
+already has it. Title/note split to match the existing Contacts/Account/
+Archive row convention rather than using the owner's longer sentence
+verbatim as a single string.
+
+**Archive row wording.** Owner's suggested replacement text ("remove
+completed items the above lists") dropped the word "from" — restored it:
+"remove completed items from the above lists." Flagged rather than applied
+silently verbatim, since the original clearly needs "from" grammatically.
+
+**Expired/invalid magic-link error surfaced.** Owner-reported, with the
+exact URL: clicking Sign In sometimes landed him on the *landing page*
+(confirmed directly, not Main Screen) with no visible explanation, address
+bar reading `...vercel.app/#error=access_denied&error_code=otp_expired&
+error_description=Email+link+is+invalid+or+has+expired&sb=`. Root cause:
+Supabase's own redirect-on-failure behavior sends a used/expired/invalid
+OTP link back to the project's Site URL (this root route — not
+`app/auth/callback`, which only ever runs on a *successful* verification)
+with the failure encoded in the URL hash, not a query string or a page
+Supabase renders itself. Nothing here was reading that hash, so the
+failure was real but silent — indistinguishable from "nothing happened,"
+a materially worse experience for a soon-to-be second real user than an
+error he'd at least recognize as one. `app/page.tsx` now parses the hash
+via `parseAuthError()`, called from a lazy `useState` initializer (reads
+`window.location.hash` synchronously on first render, matching the
+existing `cameFromCalendarLink` pattern already used elsewhere in this
+codebase) rather than from inside a `useEffect` that calls `setState` —
+the latter tripped a real lint rule (`react-hooks/set-state-in-effect`,
+flagging an avoidable cascading-render pattern) on first pass; clearing the
+hash afterward via `history.replaceState` is a genuine side effect, so
+that part stayed in a small `useEffect`. `LandingPage.tsx` gained an
+optional `errorMessage` prop (no default required, per this app's own
+no-required-props convention), rendered as a `.noticeband` near the top of
+the hero — reusing the same banner component other screens already use for
+confirmation messages, since this app has no bright-red banner precedent
+anywhere and inline `.ferror` text doesn't fit a whole sentence. `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-18 — Real web app manifest + service worker + cross-window auth sync fix
 
 Traced from a live bug report while the owner was demoing WYP to a second business

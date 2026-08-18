@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
+import PWAProvider from "./components/PWAProvider";
 
 // Palette 1 specifies Inter across every screen. The mockups pull it from
 // Google Fonts via <link>; next/font self-hosts it instead, which removes the
@@ -32,8 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <ServiceWorkerRegister />
-        {children}
+        <PWAProvider>{children}</PWAProvider>
       </body>
     </html>
   );

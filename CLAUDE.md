@@ -1952,3 +1952,24 @@ link is built only after the stack is proven on Add Contact.
   against CLAUDE.md's own magic-link-only decision, not warranted once the
   actual gap turned out to be a missing subscription, not a storage
   architecture problem. `npx tsc --noEmit`/`npm run lint` clean.
+- **Findable Install control; Archive wording fix; expired magic-link
+  error surfaced (2026-08-18, same-day follow-up).** `PWAProvider.tsx`
+  supersedes `ServiceWorkerRegister.tsx` (renamed, never pushed) — still
+  registers `public/sw.js`, and now also captures `beforeinstallprompt`
+  and exposes `usePWAInstall()` (`canInstall`/`promptInstall`) to any
+  descendant via context, since the owner accepted the browser's own
+  one-shot install offer and then couldn't find the resulting icon
+  (Android's "Install" adds to the app drawer, not the home screen — easy
+  to conflate, and the browser's own prompt can't be brought back once
+  used). `MainScreen.tsx`'s Housekeeping now has an "Install" row, shown
+  only when `canInstall` is true. Archive's own Housekeeping row wording
+  fixed to "remove completed items from the above lists" (restored a
+  dropped "from"). Separately, `app/page.tsx` now parses `#error=/
+  error_code=/error_description=` out of the URL hash on mount (Supabase's
+  own OTP-failure redirect target — used/expired/invalid magic links land
+  here, not `app/auth/callback`, with the failure silently sitting in the
+  hash) and surfaces it via a new `errorMessage` prop on `LandingPage.tsx`
+  (rendered as a `.noticeband`), clearing the hash afterward. Computed via
+  a lazy `useState` initializer, not inside a `useEffect` that calls
+  `setState` — the latter tripped `react-hooks/set-state-in-effect` on
+  first pass. `npx tsc --noEmit`/`npm run lint` clean.

@@ -39,7 +39,15 @@ import './landing.css'
 // Free Account. Both CTAs point to `/login`; Start Free Account adds
 // `?intent=signup` so the sign-in screen can show "Sign In for Free
 // Account" instead of a bare "Sign In" — see app/login/page.tsx.
-export default function LandingPage() {
+// errorMessage (2026-08-18, optional, no default required per this app's
+// own no-required-props convention) — surfaces an expired/invalid
+// magic-link failure that app/page.tsx parses out of the URL hash on
+// mount. Rendered as a .noticeband near the top of the hero, the same
+// component other screens already use for banner-style messages (its
+// neutral Strip background, not a new error-banner treatment — this app
+// has no bright-red banner precedent anywhere, only inline .ferror text,
+// which doesn't fit a whole-sentence message here).
+export default function LandingPage({ errorMessage }: { errorMessage?: string | null }) {
   return (
     <div className="wyp-landing">
       <header className="topbar">
@@ -85,6 +93,11 @@ export default function LandingPage() {
       </header>
 
       <main id="top">
+        {errorMessage && (
+          <div className="noticeband" role="alert">
+            <b>Sign-in link problem:</b> {errorMessage}
+          </div>
+        )}
         {/* Hero */}
         <section className="hero">
           <div className="wrap">
