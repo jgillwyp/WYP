@@ -6,6 +6,12 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-18 — Fixed: live screen printing alongside the new print-report on Response Detail and Create Request
+
+Owner, three pasted printout screenshots (Create Request, Response Detail via Archive, Response Detail via Main Screen), all showing the full live on-screen form — header, Send/Cancel buttons, input fields, staged Attachments row and all — printed directly above the new, otherwise-correct `.print-report` block. Root cause: the same-day print-format conversion (previous entry) added the `.print-report` sibling and its `startPrint()`/`printTick` machinery to both files, but never added the `no-print` class to their outer `<div className="app">` — every other working print screen (`RequestDetailForm.tsx`, `TodoDetailForm.tsx`, `MainScreen.tsx`, `ArchiveForm.tsx`, `ContactsList.tsx`) wraps its live content in `<div className="app no-print">`, which globals.css's `@media print { .no-print { display: none !important } }` rule depends on to hide the live screen and show only `.print-report`. Missing that one class meant the browser had nothing telling it to hide the live view, so both rendered on the printed page. Fixed by adding `no-print` to the single live-render `<div className="app">` in each file (their loading/error-only early returns in `ResponseDetailForm.tsx` don't need it — same as `RequestDetailForm.tsx`'s own loading/error returns, which never render a `.print-report` sibling to hide anything from). `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-18 — Response Detail and Create Request converted from raw window.print() to the detailed print-report format
 
 Owner: "Some report formats need to be brought up to the new format (they are doing a screen print instead)- as follows: 1. Response Detail - from main Request Received 2. archive Request Received screen (Request Detail uses the new format) 3. Create Request." `RequestDetailForm.tsx` was confirmed as the reference — its own `.print-report`/`.pcolbar.detail3`/`.pr1.detail3`/`PrintDialogList`/`PrintAttachmentList` shape is the template every conversion below follows.

@@ -1916,3 +1916,10 @@ link is built only after the stack is proven on Add Contact.
   "Request Detail" — a naming call, not an owner instruction, flagged in the
   decisions log rather than assumed uncontroversial. `npx tsc --noEmit`/`npm
   run lint` clean.
+  **Bug in this same batch, caught by the owner from real printouts, fixed
+  same day**: both files' outer `<div className="app">` was missing the
+  `no-print` class every other working print screen carries — without it,
+  `@media print`'s `.no-print { display: none }` rule had nothing to hide,
+  so the live on-screen form printed directly above the new `.print-report`
+  block instead of being replaced by it. Added `no-print` to the one
+  live-render `.app` in each file.

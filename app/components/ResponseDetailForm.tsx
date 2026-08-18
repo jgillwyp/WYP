@@ -521,7 +521,7 @@ export default function ResponseDetailForm() {
 
   return (
     <div className="frame-none">
-      <div className="app">
+      <div className="app no-print">
         <WypHeader
           action={
             <button
