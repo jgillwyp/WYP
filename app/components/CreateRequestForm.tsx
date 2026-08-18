@@ -148,6 +148,67 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
   }
 }
 
+// Print-only Due date format (2026-08-18) — see RequestDetailForm.tsx's own
+// copy of this helper for the full write-up. "7/15/26", the owner's own
+// xlsx example, vs. the plain "YYYY-MM-DD" form.dueDate value used
+// everywhere else on this screen.
+function formatMDYSlash(value: string | null): string {
+  if (!value) return ''
+  const [y, m, d] = value.slice(0, 10).split('-')
+  return `${parseInt(m, 10)}/${parseInt(d, 10)}/${y.slice(2)}`
+}
+
+function formatTime12h(value: string | null): string {
+  if (!value) return ''
+  const [hStr, mStr] = value.split(':')
+  let h = parseInt(hStr, 10)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h}:${mStr} ${ampm}`
+}
+
+function categoryPrefix(name: string): string {
+  return name ? `[${name}] ` : ''
+}
+
+// Print (2026-08-18) — same .pdlg/.pdlghead/.pdlgitem rendering as every
+// other screen's PrintDialogList (RequestDetailForm.tsx etc.), adapted to
+// this screen's own staged, not-yet-saved DialogEntry shape (kind/body
+// only — no id/who/created_at, since nothing has been written to the
+// `dialog` table yet). Keyed by array index for the same reason the staged
+// list below already is.
+function PrintDialogList({ entries }: { entries: { kind: 'question' | 'comment'; body: string }[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="pdlg">
+      <div className="pdlghead">Dialog</div>
+      {entries.map((e, i) => (
+        <div className="pdlgitem" key={i}>
+          <span className="pdlgkind">{e.kind === 'question' ? 'Question' : 'Comment'}</span> {e.body}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Same idea, for staged File objects — nothing has been uploaded yet
+// (upload only happens in handleSubmit, once Send succeeds and a real
+// request id exists), so this just lists the pending file names.
+function PrintAttachmentList({ files }: { files: File[] }) {
+  if (files.length === 0) return null
+  return (
+    <div className="patt">
+      <div className="patthead">Attachments</div>
+      {files.map((f, i) => (
+        <div className="pattitem" key={i}>
+          {f.name}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function CreateRequestForm() {
   const router = useRouter()
 
@@ -207,6 +268,37 @@ export default function CreateRequestForm() {
   const [descInvalid, setDescInvalid] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Print (2026-08-18) — brings this screen up to the detailed
+  // .print-report/.prow shape every other print report in the app now uses,
+  // replacing the old raw window.print() of the live screen. Everything it
+  // needs (form, dialogEntries, stagedFiles) is already local React state —
+  // nothing has been saved to Supabase yet, so unlike every other screen's
+  // print conversion, there is no fetch to do here; startPrint is
+  // synchronous. Uses .detail2 (To/Due only, no Date/Done columns) rather
+  // than Request Detail's .detail3 — an unsaved Request has no created_at
+  // and no Done state yet for either column to show.
+  const [showPrint, setShowPrint] = useState(false)
+  const [printTick, setPrintTick] = useState(0)
+
+  function startPrint() {
+    setShowPrint(true)
+    // See RequestDetailForm.tsx's identical comment for the full reasoning
+    // (afterprint doesn't fire reliably in every browser/print-flow, so
+    // showPrint alone can get stuck true; printTick strictly increases on
+    // every click, guaranteeing a real dependency change regardless).
+    setPrintTick((t) => t + 1)
+  }
+
+  useEffect(() => {
+    if (printTick === 0) return
+    window.print()
+    function handleAfterPrint() {
+      setShowPrint(false)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [printTick])
 
   // Load the owner's own contacts and categories once. RLS already scopes
   // both to owner_id = auth.uid() (migration 002 / 003) — no client-side
@@ -654,7 +746,7 @@ export default function CreateRequestForm() {
               className="iconbtn"
               type="button"
               aria-label="Print Request"
-              onClick={() => window.print()}
+              onClick={startPrint}
               style={{ marginLeft: 'auto' }}
             >
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1215,6 +1307,46 @@ export default function CreateRequestForm() {
           </>
         )}
       </div>
+
+      {/* Single-item print (2026-08-18) — brings this screen up to the same
+          .print-report/.prow shape RequestDetailForm.tsx uses (the
+          confirmed reference — "Request Detail uses the new format,"
+          owner). "Request Preview" rather than "Request Detail" — nothing
+          has actually been saved/sent yet, so this is a preview of what's
+          been filled in so far, not a record of something that exists.
+          .detail2 (To/Due only — see that class's own comment in
+          globals.css) rather than .detail3, since there is no Date/Done to
+          show for an unsaved Request. No sort-arrow header row — nothing to
+          sort with only one record, same as every other single-item print
+          in this app. */}
+      {showPrint && (
+        <div className="print-report">
+          <div className="ptitle">Request Preview</div>
+          <div className="pcolbar detail2">
+            <span className="c-nm">To</span>
+            <span className="c-due">Due</span>
+          </div>
+          <div className="prows">
+            <div className="prow">
+              <div className="pr1 detail2">
+                <span className="pnm">{form.recipientName || '—'}</span>
+                <span className="pdue">
+                  {formatMDYSlash(form.dueDate || null)}
+                  {requestTimeEnabled && form.dueTime && <span className="ptime">{'  '}{formatTime12h(form.dueTime)}</span>}
+                </span>
+              </div>
+              <div className="pr2">
+                <span className="pdesc">
+                  {categoriesEnabled && categoryPrefix(form.categoryName)}
+                  {form.description}
+                </span>
+              </div>
+              <PrintDialogList entries={dialogEntries} />
+              <PrintAttachmentList files={stagedFiles} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

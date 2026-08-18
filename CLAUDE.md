@@ -1884,3 +1884,35 @@ link is built only after the stack is proven on Add Contact.
   `TodoDetailForm.tsx` and `CreateTodoForm.tsx` — owner: the old wording
   read like Save was still needed for the Done status itself. `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Response Detail and Create Request converted off raw `window.print()`
+  onto the detailed print-report format (2026-08-18)** — closes the last
+  three screens still doing a plain screen print instead of the
+  `.print-report`/`PrintDialogList`/`PrintAttachmentList` shape every other
+  print button in the app now uses. `RequestDetailForm.tsx` is the
+  confirmed reference template (owner: "Request Detail uses the new
+  format"). `ResponseDetailForm.tsx` — added the same print infra
+  (`formatMDYSlash`, `PrintAttachmentEntry`, `PrintDialogList`/
+  `PrintAttachmentList`, `printAttachments`/`showPrint`/`printTick`,
+  `startPrint()`) but, unlike the owner-side screens, can't select straight
+  from `attachments` (RLS is owner-only, migration 025) — uses
+  `get_received_print_detail` (migration 029, already granted to
+  `authenticated`, already used by `ArchiveForm.tsx`) instead, fetched
+  eagerly in the existing `load()` effect; `dialogList` needed no new fetch,
+  already populated from `get_received_request`'s own payload. Print uses
+  `.pcolbar.detail3`/`.pr1.detail3` with "From" instead of "To"; Due/Done
+  Time gated by `data.owner_request_time_enabled` (the issuer's setting,
+  never this viewer's — Entitlements section above). Archive's own
+  Received-type print needed **no change** — its list-level report already
+  used the full detailed format (2026-08-15 redesign), and its `openDetail()`
+  already routes a clicked Received row to this same `ResponseDetailForm.tsx`
+  component, so both of the owner's first two list items are now covered by
+  one fix. `CreateRequestForm.tsx` is a different shape of problem — nothing
+  is saved yet, so `startPrint()` is synchronous (no RPC/fetch) and
+  `PrintDialogList`/`PrintAttachmentList` were rebuilt locally against this
+  screen's own staged `dialogEntries`/`stagedFiles` shapes, keyed by array
+  index. New `.pcolbar.detail2`/`.pr1.detail2` CSS (`1fr 150px`, To/Due
+  only) — an unsaved Request has no `created_at` and no Done state for
+  Request Detail's Date/Done columns to show. Titled "Request Preview," not
+  "Request Detail" — a naming call, not an owner instruction, flagged in the
+  decisions log rather than assumed uncontroversial. `npx tsc --noEmit`/`npm
+  run lint` clean.

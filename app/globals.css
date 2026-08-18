@@ -2673,6 +2673,16 @@ body {
   grid-template-columns: 1fr 150px 150px;
 }
 
+/* Create Request's single-item print (2026-08-18) — an unsaved Request has
+   no created_at (Date column) and no Done state yet (nothing to have
+   completed), so its print preview only needs To/Due, not Request Detail's
+   full To/Due/Done .detail3. Same 150px Due column width as .detail3 for
+   visual consistency across the app's single-item prints. */
+.pcolbar.detail2,
+.pr1.detail2 {
+  grid-template-columns: 1fr 150px;
+}
+
 .pr1.ptd {
   grid-template-columns: 92px 92px;
   justify-content: end;

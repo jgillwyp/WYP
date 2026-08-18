@@ -154,6 +154,64 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
   }
 }
 
+// Print-only Due/Done date format (2026-08-15) — see MainScreen.tsx's own
+// copy of this helper for the full write-up. "7/15/26  8:30 AM", the
+// owner's own xlsx example, vs. formatMDY's dash convention used everywhere
+// else on this screen.
+function formatMDYSlash(value: string | null): string {
+  if (!value) return ''
+  const [y, m, d] = value.slice(0, 10).split('-')
+  return `${parseInt(m, 10)}/${parseInt(d, 10)}/${y.slice(2)}`
+}
+
+// Same shape as RequestDetailForm.tsx's/MainScreen.tsx's own
+// PrintAttachmentEntry (2026-08-15).
+type PrintAttachmentEntry = {
+  id: string
+  kind: 'file' | 'reference'
+  file_name: string | null
+  reference_url: string | null
+  reference_note: string | null
+}
+
+// Same rendering as RequestDetailForm.tsx's own PrintDialogList/
+// PrintAttachmentList (2026-08-15) — duplicated per this codebase's
+// established convention for small stateless print helpers.
+function PrintDialogList({ entries }: { entries: DialogEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="pdlg">
+      <div className="pdlghead">Dialog</div>
+      {entries.map((e) => {
+        const kindLabel = e.kind === 'question' ? 'Question' : e.kind === 'answer' ? 'Answer' : 'Comment'
+        return (
+          <div className="pdlgitem" key={e.id}>
+            <span className="pdlgkind">{kindLabel}</span> {e.body}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PrintAttachmentList({ entries }: { entries: PrintAttachmentEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="patt">
+      <div className="patthead">Attachments</div>
+      {entries.map((a) => (
+        <div className="pattitem" key={a.id}>
+          {a.kind === 'file'
+            ? a.file_name
+            : a.reference_note
+              ? `${a.reference_note} — ${a.reference_url ?? ''}`
+              : a.reference_url}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ResponseDetailForm() {
   const params = useParams<{ id: string }>()
   const requestId = params.id
@@ -210,6 +268,40 @@ export default function ResponseDetailForm() {
     typeof window === 'undefined' ? false : cameFromCalendarLink(window.location.search)
   )
 
+  // Print (2026-08-18) — brings this screen up to the detailed
+  // .print-report/.prow/.pdlg/.patt format RequestDetailForm.tsx already
+  // uses, replacing the old raw window.print() of the live screen. dialogList
+  // above already has everything Dialog needs; Attachments needs its own
+  // fetch — but unlike RequestDetailForm.tsx (the owner, plain owner-scoped
+  // RLS SELECT on attachments), this is a signed-in RECIPIENT, and
+  // `attachments` RLS is owner-only (migration 025), so a raw select would
+  // return nothing here. Uses get_received_print_detail (migration 029,
+  // granted to `authenticated`) instead — the same recipient-safe RPC
+  // ArchiveForm.tsx's own loadReceivedPrintDetail() already calls, here for
+  // a single id.
+  const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
+  const [showPrint, setShowPrint] = useState(false)
+  const [printTick, setPrintTick] = useState(0)
+
+  function startPrint() {
+    setShowPrint(true)
+    // Always bump printTick so the effect below re-fires even if showPrint
+    // was already true — see RequestDetailForm.tsx's identical comment for
+    // the full reasoning (afterprint doesn't fire reliably in every
+    // browser/print-flow, so showPrint alone can get stuck true).
+    setPrintTick((t) => t + 1)
+  }
+
+  useEffect(() => {
+    if (printTick === 0) return
+    window.print()
+    function handleAfterPrint() {
+      setShowPrint(false)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [printTick])
+
   useEffect(() => {
     if (!requestId) return
     let cancelled = false
@@ -240,6 +332,18 @@ export default function ResponseDetailForm() {
       setAlreadyDoneOnLoad(!!payload.done_date)
       setDialogList(payload.dialog ?? [])
       setReceivedArchivedAt(payload.received_archived_at)
+
+      // Print (2026-08-18) — fetched alongside the main RPC, same
+      // eager-on-load convention RequestDetailForm.tsx uses for its own
+      // owner-scoped attachments fetch.
+      const { data: printDetailData } = await supabase.rpc('get_received_print_detail', {
+        p_ids: [requestId],
+      })
+      if (!cancelled) {
+        type PrintDetailRow = { request_id: string; attachments: PrintAttachmentEntry[] }
+        const rows = (printDetailData as unknown as PrintDetailRow[]) ?? []
+        setPrintAttachments(rows[0]?.attachments ?? [])
+      }
 
       const { data: sessionData } = await supabase.auth.getSession()
       if (!cancelled) {
@@ -424,7 +528,7 @@ export default function ResponseDetailForm() {
               className="iconbtn"
               type="button"
               aria-label="Print Request"
-              onClick={() => window.print()}
+              onClick={startPrint}
               style={{ marginLeft: 'auto' }}
             >
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -775,6 +879,60 @@ export default function ResponseDetailForm() {
           </>
         )}
       </div>
+
+      {/* Single-item print (2026-08-18) — brings this screen up to the same
+          .print-report/.prow shape RequestDetailForm.tsx already uses (that
+          screen is the confirmed reference — "Request Detail uses the new
+          format," owner). "From" replaces "To" (this is the recipient's own
+          view of who sent it); Due/Done Time gated by the issuer's own
+          owner_request_time_enabled, never this viewer's own account
+          setting — same Entitlements rule CLAUDE.md's Database section
+          already states (rights on a Request come from its issuer). No
+          sort-arrow header row — nothing to sort with only one record, same
+          as every other single-item print in this app. */}
+      {showPrint && (
+        <div className="print-report">
+          <div className="ptitle">Response Detail</div>
+          <div className="pcolbar detail3">
+            <span className="c-nm">From</span>
+            <span className="c-due">Due</span>
+            <span className="c-dn">Done</span>
+          </div>
+          <div className="prows">
+            {(() => {
+              const status = doneDate
+                ? 'done'
+                : data.due_date && data.due_date < todayISODate()
+                  ? 'overdue'
+                  : 'open'
+              return (
+                <div className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                  <div className="pr1 detail3">
+                    <span className="pnm">{data.owner_name || '—'}</span>
+                    <span className="pdue">
+                      {formatMDYSlash(data.due_date)}
+                      {data.owner_request_time_enabled && data.due_time && (
+                        <span className="ptime">{'  '}{formatTime12h(data.due_time)}</span>
+                      )}
+                    </span>
+                    <span className="pdn">
+                      {formatMDYSlash(doneDate || null)}
+                      {data.owner_request_time_enabled && doneTime && (
+                        <span className="ptime">{'  '}{formatTime12h(doneTime)}</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="pr2">
+                    <span className="pdesc">{data.description}</span>
+                  </div>
+                  <PrintDialogList entries={dialogList} />
+                  <PrintAttachmentList entries={printAttachments} />
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
