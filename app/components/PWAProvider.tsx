@@ -72,6 +72,39 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
     }
   }, [])
 
+  // Default standalone-window width (2026-08-18, owner-reported) — the
+  // manifest itself has no field for a preferred launch size (confirmed via
+  // web.dev's own PWA documentation: "There is no way to define your PWA's
+  // preferred size and position within the manifest"); Chrome's own default
+  // for a freshly-installed desktop PWA is "a percentage of the current
+  // screen, with a maximum resolution of 1920x1080," which is far wider
+  // than this app's own 480px .frame-none content column and left most of
+  // the window as bare grey letterboxing on the owner's laptop. Chrome does
+  // remember whatever size the user last leaves the window at (already
+  // true before this change — the owner's own report confirmed it, "the
+  // next time the WYP app is opened... it remembers the page width"), so a
+  // one-time window.resizeTo() call on standalone launch is exactly the
+  // sanctioned mechanism here, not a workaround — it just does automatically
+  // what the owner was already doing by hand. 552×968 matches the pulled-in
+  // size the owner's own screenshot demonstrated as comfortable, rather
+  // than an arbitrary guess. Effect deps are `[]`, not re-run per route —
+  // PWAProvider wraps the whole app in layout.tsx and only truly remounts
+  // on a fresh window launch, so this fires once per open, the same moment
+  // Chrome would otherwise apply its own oversized default. No-ops
+  // harmlessly on mobile (resizeTo has no effect there, per the same
+  // web.dev documentation) and inside a normal browser tab (gated on
+  // display-mode: standalone) — never touches the tabbed, non-installed
+  // experience most visitors still use.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.matchMedia('(display-mode: standalone)').matches) return
+    try {
+      window.resizeTo(552, 968)
+    } catch {
+      // Some platforms refuse resizeTo outright — harmless to skip.
+    }
+  }, [])
+
   const promptInstall = useCallback(async () => {
     if (!deferredPrompt) return
     await deferredPrompt.prompt()

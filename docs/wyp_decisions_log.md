@@ -6,6 +6,76 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-18 — Default standalone-window size on desktop PWA launch
+
+Owner: the installed desktop icon opens Would You Please in a very wide
+standalone window — most of it bare grey letterboxing around the app's own
+480px-capped content column — and asked whether the window width can be
+controlled. He'd also independently discovered that manually pulling the
+window narrower persists across future opens.
+
+**Confirmed via current documentation, not assumed** (web.dev's own PWA
+Window Management guide, fetched live): there is no manifest field for a
+preferred launch size — "There is no way to define your PWA's preferred
+size and position within the manifest." Chrome's own default for a
+freshly-installed desktop PWA is "a percentage of the current screen, with
+a maximum resolution of 1920x1080," which is exactly the oversized window
+the owner described. The documented, sanctioned mechanism is
+`window.resizeTo()`, called once on launch — the same page confirms
+Chrome remembers whatever size the window is left at afterward, matching
+what the owner had already found by hand.
+
+**Implementation**: `PWAProvider.tsx` (already the root-level component
+handling install/service-worker setup) gained a second `useEffect`,
+`[]` deps, gated on `matchMedia('(display-mode: standalone)').matches` so
+it never touches a normal browser tab and is a no-op on mobile (where
+`resizeTo` has no effect at all, per the same documentation). Target size,
+552×968, isn't an arbitrary guess — it's the exact dimensions of the
+pulled-in window the owner's own screenshot demonstrated as comfortable.
+Since this now runs on every standalone launch rather than relying on the
+owner's own manual resize, it also means a fresh install (or a second
+device) opens at the right size from the first launch, not just after
+someone notices and fixes it by hand. `npx tsc --noEmit`/`npm run lint`
+clean.
+
+\---
+
+## 2026-08-18 — Fixed: raw "JWT issued at future" error rendered in place of Main Screen's three lists
+
+Owner-reported: periodically, on app start, all three Main Screen sections
+(Sent/Received/ToDos) showed the literal phrase "JWT issued at future"
+instead of their rows, and it stayed that way until he scrolled.
+
+**Root cause traced, not assumed.** `MainScreen.tsx`'s one-shot `load()`
+effect ran all three queries once on mount and, on any error, rendered
+`error.message` — the raw string Supabase's API returned — directly as
+each section's entire content, with no retry and nothing else in the app
+that would ever re-trigger the fetch (confirmed: no visibility/focus
+listener anywhere touches this effect, so "scrolling fixed it" was very
+likely coincidental timing, not causal). "JWT issued at future"
+specifically is a known, previously-documented Supabase-infrastructure
+symptom: the access token's own `iat` claim is validated against the
+clock of whichever edge/Postgrest node happens to handle a given request,
+and those nodes aren't perfectly synced — a request landing on a node a
+moment behind another can see a token's `iat` as "not yet" valid,
+self-correcting on any later retry. Nothing in this app's own code sets
+or checks `iat`; this isn't a client device clock problem, and it isn't
+fixable by changing when or how WYP mints or stores a session.
+
+**Fix**: the load effect now retries up to two more times (600ms, then
+1600ms after the first attempt) before giving up, absorbing the
+transient case invisibly in the vast majority of real occurrences. If
+every attempt still fails — a real outage, not clock skew — the raw
+error text is replaced with a generic "Could not load your Requests and
+ToDos. Check your connection and try again." plus a Try Again button
+(new `reloadTick` state, bumped by the button, added to the effect's own
+dependency array) — a raw backend error string should never have been
+user-facing regardless of what caused it, so this fixes the display
+problem even in the rare case the retries don't. `npx tsc --noEmit`/`npm
+run lint` clean.
+
+\---
+
 ## 2026-08-18 — contacts.phone_ext (migration 034, drafted, not yet confirmed run)
 
 Owner: "unless the company provides direct phone numbers, the phone number

@@ -2000,3 +2000,24 @@ link is built only after the stack is proven on Add Contact.
   column, per the owner's explicit instruction that this needs a database
   column but not a separate printed column. `npx tsc --noEmit`/`npm run
   lint` clean.
+- **Default standalone-window size on desktop PWA launch (2026-08-18).**
+  No manifest field controls a PWA's preferred launch size (confirmed via
+  web.dev's own docs) — Chrome's own default opens a freshly-installed
+  desktop app very wide, mostly grey letterboxing around this app's
+  480px-capped content. `PWAProvider.tsx` now calls `window.resizeTo(552,
+  968)` once on launch, gated on `display-mode: standalone` (no-ops on a
+  normal tab and on mobile). 552×968 matches the pulled-in size the owner
+  demonstrated as comfortable, not a guess. Chrome remembers the size a
+  window is left at afterward, so this just does automatically what manual
+  resizing already achieved. `npx tsc --noEmit`/`npm run lint` clean.
+- **Fixed: raw "JWT issued at future" Supabase error rendered as Main
+  Screen list content (2026-08-18).** A known, previously-documented
+  Supabase-infra clock-skew symptom (an access token's `iat` validated
+  against a Postgrest edge node's own clock, self-correcting on retry —
+  not an app-code or device-clock issue) was surfacing as the literal
+  content of all three Main Screen sections, indefinitely, since the
+  one-shot load effect had no retry and nothing else in the app ever
+  re-triggered it. Now retries twice (600ms/1600ms) before giving up;
+  persistent failure shows a generic message plus a Try Again button
+  (`reloadTick` state) instead of the raw error text. `npx tsc --noEmit`/
+  `npm run lint` clean.

@@ -684,6 +684,10 @@ export default function MainScreen() {
   const [todos, setTodos] = useState<TodoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Bumped by the loadError block's own "Try Again" button (2026-08-18) —
+  // see the main load() effect's own header comment for why a manual retry
+  // needed to exist at all.
+  const [reloadTick, setReloadTick] = useState(0)
   const [hkTab, setHkTab] = useState<'tasks' | 'videos'>(() =>
     readStoredChip(HK_TAB_KEY, ['tasks', 'videos'] as const, 'tasks')
   )
@@ -902,14 +906,26 @@ export default function MainScreen() {
   }, [loading])
 
 
+  // Retry-with-backoff (2026-08-18, owner-reported) — a bare Postgrest/
+  // GoTrue error, "JWT issued at future," was showing up as the literal
+  // content of all three lists, indefinitely, with no way to recover short
+  // of a full reload. That specific message is a known, well-documented
+  // Supabase-infra clock-skew symptom (the access token's own `iat`
+  // momentarily reads as later than the node validating it — nodes across
+  // Supabase's edge aren't perfectly clock-synced, and a request can land on
+  // one a beat behind another) — self-correcting within a second or two on
+  // a retry, not something fixable from this app's own code, and not
+  // something worth telling the person about by name; they don't have a
+  // JWT to check. Two retries (600ms, then 1600ms) before giving up
+  // silently absorb the transient case; if every attempt still fails (a
+  // real outage, not clock skew), a generic message plus a manual Try Again
+  // control replaces the raw error text, which should never have been
+  // user-facing regardless of what caused it.
   useEffect(() => {
     let cancelled = false
 
-    async function load() {
-      setLoading(true)
-      setLoadError(null)
-
-      const [sentRes, receivedRes, todoRes] = await Promise.all([
+    async function attempt() {
+      return Promise.all([
         supabase
           .from('requests')
           .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at')
@@ -928,26 +944,42 @@ export default function MainScreen() {
           .is('contact_id', null)
           .order('priority', { ascending: true, nullsFirst: false }),
       ])
+    }
 
-      if (cancelled) return
+    async function load() {
+      setLoading(true)
+      setLoadError(null)
 
-      if (sentRes.error || receivedRes.error || todoRes.error) {
-        setLoadError(
-          (sentRes.error ?? receivedRes.error ?? todoRes.error)?.message ?? 'Could not load requests.'
-        )
-      } else {
-        setSent((sentRes.data as unknown as SentRow[]) ?? [])
-        setReceived((receivedRes.data as unknown as ReceivedRow[]) ?? [])
-        setTodos((todoRes.data as unknown as TodoRow[]) ?? [])
+      const delaysMs = [0, 600, 1600]
+      for (let i = 0; i < delaysMs.length; i++) {
+        if (delaysMs[i] > 0) await new Promise((r) => setTimeout(r, delaysMs[i]))
+        if (cancelled) return
+
+        const [sentRes, receivedRes, todoRes] = await attempt()
+        if (cancelled) return
+
+        const firstError = sentRes.error ?? receivedRes.error ?? todoRes.error
+        if (!firstError) {
+          setSent((sentRes.data as unknown as SentRow[]) ?? [])
+          setReceived((receivedRes.data as unknown as ReceivedRow[]) ?? [])
+          setTodos((todoRes.data as unknown as TodoRow[]) ?? [])
+          setLoading(false)
+          return
+        }
+
+        console.error(`Main Screen load attempt ${i + 1} failed:`, firstError.message)
+        if (i === delaysMs.length - 1) {
+          setLoadError('Could not load your Requests and ToDos. Check your connection and try again.')
+          setLoading(false)
+        }
       }
-      setLoading(false)
     }
 
     load()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadTick])
 
   async function handleLogOut() {
     setSigningOut(true)
@@ -1144,7 +1176,15 @@ export default function MainScreen() {
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
-                {!loading && loadError && <div className="subempty">{loadError}</div>}
+                {!loading && loadError && (
+                  <div className="subempty">
+                    {loadError}
+                    <br />
+                    <button className="btn-secondary" type="button" onClick={() => setReloadTick((t) => t + 1)} style={{ marginTop: 8 }}>
+                      Try Again
+                    </button>
+                  </div>
+                )}
                 {!loading && !loadError && sent.length === 0 && (
                   <div className="subempty">No Sent Requests yet.</div>
                 )}
@@ -1225,7 +1265,15 @@ export default function MainScreen() {
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
-                {!loading && loadError && <div className="subempty">{loadError}</div>}
+                {!loading && loadError && (
+                  <div className="subempty">
+                    {loadError}
+                    <br />
+                    <button className="btn-secondary" type="button" onClick={() => setReloadTick((t) => t + 1)} style={{ marginTop: 8 }}>
+                      Try Again
+                    </button>
+                  </div>
+                )}
                 {!loading && !loadError && received.length === 0 && (
                   <div className="subempty">No Received Requests yet.</div>
                 )}
@@ -1307,7 +1355,15 @@ export default function MainScreen() {
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
-                {!loading && loadError && <div className="subempty">{loadError}</div>}
+                {!loading && loadError && (
+                  <div className="subempty">
+                    {loadError}
+                    <br />
+                    <button className="btn-secondary" type="button" onClick={() => setReloadTick((t) => t + 1)} style={{ marginTop: 8 }}>
+                      Try Again
+                    </button>
+                  </div>
+                )}
                 {!loading && !loadError && todos.length === 0 && (
                   <div className="subempty">No ToDos yet.</div>
                 )}
