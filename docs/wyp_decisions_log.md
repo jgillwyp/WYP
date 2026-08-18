@@ -6,6 +6,80 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-18 — Real web app manifest + service worker + cross-window auth sync fix
+
+Traced from a live bug report while the owner was demoing WYP to a second business
+contact: clicking the magic-link email on Android Chrome started showing a
+system dialog — *"wyp-three.vercel.app wants to open the external app 'Would
+You Please'"* — with no such native app or manifest anywhere in this
+codebase. Root cause: Android Chrome can "install" any site as a lightweight
+shortcut using just the page's `<title>` (which is literally "Would You
+Please," matching the dialog exactly) even with zero manifest present, and
+once that happens the OS registers it as a link-handling target for that
+origin. The owner independently confirmed a home-screen icon existed.
+
+**Diagnosis, via live testing.** Tapping that icon opened a standalone
+window showing the landing page (not signed in); clicking the magic link
+and cancelling the "open in app" dialog kept the flow in a regular Chrome
+tab, which did complete sign-in. The owner separately did his own research
+(attached doc, an AI-assistant transcript) that named the real mechanism
+correctly on its second pass, after an internally-contradictory first
+pass: **"Standalone Window Isolation."** localStorage genuinely is shared
+between a standalone "installed" window and a regular tab of the same
+origin (both are the same browser, same origin-scoped storage) — supabase-js
+even broadcasts `SIGNED_IN`/`SIGNED_OUT` across tabs of the same origin via
+an internal `BroadcastChannel`, confirmed via Supabase's own GitHub issue
+tracker. What isn't shared is *awareness*: `app/page.tsx` and
+`RequireAuth.tsx` both only ever called `getSession()` once, at mount, so a
+window already sitting on the landing page before a sign-in completed
+elsewhere had nothing telling it to re-check.
+
+**Fix 1 — real web app manifest, replacing Chrome's ad hoc guess with a
+deliberate one.** `app/manifest.ts` (Next.js's native manifest route
+convention — auto-generates `/manifest.webmanifest` and its own `<link
+rel="manifest">`, no manual `<head>` edit): name/short_name "Would You
+Please", `start_url: '/'`, `display: 'standalone'`, `theme_color:
+'#2A5FC8'`. Icons (`public/icons/icon-192.png`/`icon-512.png`) are
+rasterized (ImageMagick) from a new `public/icons/icon-source.svg` — not a
+new design, a recolored, recentered version of the existing "checked
+request" brandmark already used in `LandingPage.tsx`'s header (same shape,
+same brand blue), placed on a full-bleed rounded-square background with the
+glyph kept inside a ~66%-of-canvas safe zone so the same 512px file can
+serve both `purpose: "any"` and `purpose: "maskable"` manifest entries
+without a second image. `app/layout.tsx`'s `metadata.icons` also points at
+these for the plain favicon/apple-touch-icon case.
+
+**Fix 2 — minimal service worker.** `public/sw.js`, registered from new
+`app/components/ServiceWorkerRegister.tsx` (a side-effect-only client
+component mounted once in `app/layout.tsx`, since the root layout itself is
+a server component). Android Chrome won't offer a real install prompt
+without an active service worker — this one deliberately does no offline
+caching (`fetch` handler just passes every request straight through),
+since WYP has no offline story yet and a caching layer here would be a
+much bigger, separate feature with real risk of accidentally serving stale
+auth state.
+
+**Fix 3 — the actual cross-window desync bug.** `app/page.tsx` and
+`RequireAuth.tsx` both gained a `supabase.auth.onAuthStateChange`
+subscription alongside their existing one-time `getSession()`/`getUser()`
+checks (not replacing them) — `page.tsx` updates `authed`/`anon` status
+live so an already-open window picks up a sign-in that happened elsewhere;
+`RequireAuth.tsx` redirects to `/login` immediately on a live sign-out
+instead of only at the next remount. This is the fix that actually closes
+the bug the icon/manifest work merely made more visible.
+
+**Explicitly not done, per the owner's own conversation with the AI tool
+he consulted:** switching from magic link to a 6-digit email OTP. That
+would sidestep cross-window issues entirely, but it's a real UX/architecture
+change — CLAUDE.md documents magic-link-only as a deliberate decision — and
+wasn't warranted once the actual gap (a missing subscription, not a
+storage-architecture problem) was identified. Revisit only if window-isolation
+symptoms persist after this batch.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-18 — Fixed: live screen printing alongside the new print-report on Response Detail and Create Request
 
 Owner, three pasted printout screenshots (Create Request, Response Detail via Archive, Response Detail via Main Screen), all showing the full live on-screen form — header, Send/Cancel buttons, input fields, staged Attachments row and all — printed directly above the new, otherwise-correct `.print-report` block. Root cause: the same-day print-format conversion (previous entry) added the `.print-report` sibling and its `startPrint()`/`printTick` machinery to both files, but never added the `no-print` class to their outer `<div className="app">` — every other working print screen (`RequestDetailForm.tsx`, `TodoDetailForm.tsx`, `MainScreen.tsx`, `ArchiveForm.tsx`, `ContactsList.tsx`) wraps its live content in `<div className="app no-print">`, which globals.css's `@media print { .no-print { display: none !important } }` rule depends on to hide the live screen and show only `.print-report`. Missing that one class meant the browser had nothing telling it to hide the live view, so both rendered on the printed page. Fixed by adding `no-print` to the single live-render `<div className="app">` in each file (their loading/error-only early returns in `ResponseDetailForm.tsx` don't need it — same as `RequestDetailForm.tsx`'s own loading/error returns, which never render a `.print-report` sibling to hide anything from). `npx tsc --noEmit`/`npm run lint` clean.

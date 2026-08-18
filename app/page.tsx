@@ -33,6 +33,18 @@ import LandingPage from './components/LandingPage'
 // UI-routing decision only, not a security boundary — every actual data
 // read/write still goes through Supabase's own RLS/JWT verification
 // server-side regardless of which check picks the screen to render.
+//
+// onAuthStateChange subscription (2026-08-18) — added on top of the
+// one-time getSession() check above/below, not instead of it. Owner-
+// reported cross-window bug: signing in via a magic link in a regular
+// Chrome tab, while an already-open standalone "installed" WYP window (see
+// CLAUDE.md's Known gaps, same-day manifest/PWA batch) was still sitting on
+// this page from before — the standalone window kept showing LandingPage
+// indefinitely, since its own getSession() check only ever ran once, at
+// its original mount. supabase-js already broadcasts SIGNED_IN/SIGNED_OUT
+// across same-origin tabs/windows via a BroadcastChannel internally — the
+// gap was that this component never listened for it. Same fix applied to
+// RequireAuth.tsx.
 export default function Home() {
   const [status, setStatus] = useState<'checking' | 'authed' | 'anon'>('checking')
 
@@ -42,8 +54,15 @@ export default function Home() {
       if (cancelled) return
       setStatus(data.session ? 'authed' : 'anon')
     })
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return
+      setStatus(session ? 'authed' : 'anon')
+    })
     return () => {
       cancelled = true
+      subscription.unsubscribe()
     }
   }, [])
 

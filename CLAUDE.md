@@ -1923,3 +1923,32 @@ link is built only after the stack is proven on Add Contact.
   so the live on-screen form printed directly above the new `.print-report`
   block instead of being replaced by it. Added `no-print` to the one
   live-render `.app` in each file.
+- **Real web app manifest, service worker, and a cross-window auth-sync fix
+  (2026-08-18)** — traced from Android Chrome showing an "open external app
+  'Would You Please'" dialog on the magic-link click, which turned out to be
+  Chrome's own ad hoc install of the site (using just the page `<title>`,
+  no manifest existed) rather than anything this codebase built. New
+  `app/manifest.ts` (Next.js's native manifest-route convention — no manual
+  `<head>` edit needed) with a real name/icon/`display: "standalone"`;
+  icons (`public/icons/icon-192.png`/`icon-512.png`, rasterized from
+  `public/icons/icon-source.svg`) are a recolored, recentered version of
+  the existing "checked request" brandmark already used in
+  `LandingPage.tsx`'s header, not a new design. New minimal
+  `public/sw.js` (no offline caching — deliberately just satisfies Android's
+  install-prompt criterion), registered from new
+  `app/components/ServiceWorkerRegister.tsx`, mounted once in
+  `app/layout.tsx`. **The actual bug**, found via live testing (tapping the
+  home-screen icon showed the landing page; the magic link completed
+  correctly in a regular tab): `app/page.tsx` and `RequireAuth.tsx` both
+  only ever checked `getSession()`/`getUser()` once, at mount — an
+  already-open standalone window sitting on the landing page had nothing
+  telling it a sign-in had completed elsewhere, even though supabase-js
+  already broadcasts `SIGNED_IN`/`SIGNED_OUT` across same-origin tabs/windows
+  internally (confirmed against Supabase's own GitHub issues, not assumed).
+  Both files gained a `supabase.auth.onAuthStateChange` subscription
+  alongside their existing one-time checks. **Explicitly rejected**:
+  switching from magic link to a 6-digit email OTP (raised by an AI tool the
+  owner consulted) — sidesteps the symptom but is a real architecture change
+  against CLAUDE.md's own magic-link-only decision, not warranted once the
+  actual gap turned out to be a missing subscription, not a storage
+  architecture problem. `npx tsc --noEmit`/`npm run lint` clean.

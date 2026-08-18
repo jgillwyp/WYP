@@ -15,6 +15,13 @@ import { supabase } from '@/lib/supabaseClient'
 // already-signed-in check. UI-routing only, not a security boundary — the
 // real access control is Supabase's RLS/JWT verification on every actual
 // data call, unaffected by which check picks the screen to render.
+//
+// onAuthStateChange subscription (2026-08-18) — same cross-window fix as
+// app/page.tsx (see that file's comment for the full write-up). Here it
+// matters for the opposite transition: if a sign-out happens in another
+// tab/window of the same origin while this screen is still mounted, redirect
+// immediately instead of leaving a screen with no valid session on it until
+// the next navigation happens to remount this component.
 export default function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -30,6 +37,17 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
       setLoading(false)
     }
     check()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace('/login')
+      }
+    })
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [router])
 
   if (loading) return <div>Loading…</div>
