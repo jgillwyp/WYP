@@ -6,6 +6,43 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-18 — contacts.phone_ext (migration 034, drafted, not yet confirmed run)
+
+Owner: "unless the company provides direct phone numbers, the phone number
+by itself is not enough information to be useful" — a real, recurring
+frustration entering his own company's contact info elsewhere with no
+extension field. Raised while scoping Request Texting (see that same-day
+answer): E.164, the normalized digits-only format an SMS provider like
+Twilio requires, has no room for a post-connect extension, so `phone`
+itself was never a place an extension could live.
+
+New `contacts.phone_ext text` column, plain free text (not numeric — org
+PBX extensions sometimes carry a leading zero or a short alpha prefix,
+same posture as `phone` itself). New field in `AddContactForm.tsx` and
+`ContactDetailForm.tsx`: a narrow `flex: 0 0 84px` `.ffloat` immediately
+after Phone inside the existing `.phone-row`, rather than `flex: 1 1 auto`
+like Phone itself — an extension is a handful of digits, not a full
+field's worth. Shares Phone's own Row-Tint-while-Email-is-the-channel
+rule (`sendBy === 'email' ? ' opt' : ''`) verbatim, same reasoning as
+Phone.
+
+**Owner's own instruction on display**: "only as a space and the
+extension at the end of the phone number... would not need a separate
+column on the printed report." New `phoneWithExt()` helper in
+`ContactsList.tsx` — `${phone} ${ext}`, no "ext"/"x" label, appended
+literally as instructed — used both in the on-screen Contacts list row's
+existing `Text: <phone>` note and the print report's existing Phone
+column. Applying it to the on-screen row too (only the print report was
+explicitly requested) is a scoping call, flagged rather than silently
+assumed: an extension is exactly as useful on screen as on paper, and
+`phoneWithExt()` was going to exist regardless, so reusing it in both
+places rather than only print seemed like the obviously-intended reading
+of "not enough information to be useful" — revisit if the owner wants the
+on-screen note to stay phone-only. `npx tsc --noEmit`/`npm run lint`
+clean.
+
+\---
+
 ## 2026-08-18 — Description column heading added to every print report, centered
 
 Owner: several printed reports were missing the "Description" column

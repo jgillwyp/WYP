@@ -28,9 +28,20 @@ type Contact = {
   display_name: string
   email: string
   phone: string | null
+  phone_ext: string | null
   send_by: 'email' | 'text'
   time_zone: string | null
   notes: string | null
+}
+
+// phoneWithExt (2026-08-18) — owner: the extension should append to the
+// phone number itself, "only as a space and the extension," rather than
+// its own column anywhere it's displayed (on-screen row or print) — a new
+// contacts.phone_ext column (migration 034) exists only because E.164
+// itself has no room for one, not because this needs its own presentation
+// slot.
+function phoneWithExt(phone: string, ext: string | null): string {
+  return ext ? `${phone} ${ext}` : phone
 }
 
 // get_contact_request_counts() (migration 030, confirmed run by the owner
@@ -62,7 +73,7 @@ export default function ContactsList() {
 
     supabase
       .from('contacts')
-      .select('id, display_name, email, phone, send_by, time_zone, notes')
+      .select('id, display_name, email, phone, phone_ext, send_by, time_zone, notes')
       .order('display_name')
       .then(({ data, error }) => {
         if (cancelled) return
@@ -146,7 +157,7 @@ export default function ContactsList() {
             <div className="hkrows">
               {contacts.map((c) => {
                 const note = c.send_by === 'text'
-                  ? `Text: ${c.phone ?? '—'}`
+                  ? `Text: ${c.phone ? phoneWithExt(c.phone, c.phone_ext) : '—'}`
                   : `Email: ${c.email}`
                 return (
                   <div
@@ -193,7 +204,8 @@ export default function ContactsList() {
             {contacts.length === 0 && <div className="pempty">No Contacts to print.</div>}
             {contacts.map((c) => {
               const emailText = c.send_by === 'email' ? `${c.email} *` : c.email
-              const phoneText = c.phone ? (c.send_by === 'text' ? `${c.phone} *` : c.phone) : ''
+              const phoneRaw = c.phone ? phoneWithExt(c.phone, c.phone_ext) : ''
+              const phoneText = c.phone ? (c.send_by === 'text' ? `${phoneRaw} *` : phoneRaw) : ''
               const cnt = counts[c.id]
               return (
                 <div key={c.id} className="pcon-row">

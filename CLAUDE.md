@@ -1988,3 +1988,15 @@ link is built only after the stack is proven on Add Contact.
   label instead — scoped under `.pcolbar` so the on-screen Main Screen
   colbars this component was originally built for are unaffected. `npx
   tsc --noEmit`/`npm run lint` clean.
+- **`contacts.phone_ext` — migration 034, DRAFTED, NOT YET CONFIRMED RUN**
+  (2026-08-18, `docs/Week6 - SQL history.txt`). E.164 (required by any SMS
+  provider, raised while scoping Request Texting) has no room for a
+  post-connect extension, so it was never possible to store one inside
+  `contacts.phone`. New narrow Ext. field on `AddContactForm.tsx`/
+  `ContactDetailForm.tsx`, immediately after Phone in the existing
+  `.phone-row`. `ContactsList.tsx`'s new `phoneWithExt()` helper appends it
+  to the phone number with a single space (owner's own wording — no "ext"/
+  "x" label) in both the on-screen row note and the print report's Phone
+  column, per the owner's explicit instruction that this needs a database
+  column but not a separate printed column. `npx tsc --noEmit`/`npm run
+  lint` clean.

@@ -599,3 +599,37 @@ commit;
 -- Real test: covered by the cron route's own manual-trigger test once
 -- CRON_SECRET is set — see app/api/cron/tick/route.ts's own header comment.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 034 — contacts.phone_ext (2026-08-18)
+-- ============================================================================
+-- Owner: "We need to add an 'Ext.' data field for contacts since the E.164
+-- format does not support keeping an extension... unless the company
+-- provides direct phone numbers, the phone number by itself is not enough
+-- information to be useful." E.164 (the format an SMS provider like Twilio
+-- requires — see Request Texting scoping discussion, 2026-08-18) is a
+-- normalized-digits-only representation with no room for post-connect DTMF
+-- digits, so an extension has never fit inside `contacts.phone` itself and
+-- needs its own column rather than being appended to the stored number.
+-- Plain text, not numeric — extensions are sometimes written with a leading
+-- 0, a letter prefix, or a short alpha code depending on the org's own PBX,
+-- so this stays a free-text field, same posture as `phone` itself.
+-- ============================================================================
+
+begin;
+
+alter table public.contacts
+  add column if not exists phone_ext text;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser):
+--   select column_name, data_type from information_schema.columns
+--   where table_name = 'contacts' and column_name = 'phone_ext';
+--        -> should show phone_ext / text
+--
+-- No RLS change needed — phone_ext is just another plain column on a table
+-- whose existing "contacts: owners select/update/delete own" policies
+-- (migration 002) already cover every column equally.
+-- ============================================================================

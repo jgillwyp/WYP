@@ -35,6 +35,7 @@ type ContactFormState = {
   name: string
   email: string
   phone: string
+  phoneExt: string
   notes: string
   timeZone: string
 }
@@ -47,7 +48,7 @@ export default function ContactDetailForm() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', notes: '', timeZone: '' })
+  const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', phoneExt: '', notes: '', timeZone: '' })
   const [sendBy] = useState<'email'>('email')
 
   const [nameInvalid, setNameInvalid] = useState(false)
@@ -71,7 +72,7 @@ export default function ContactDetailForm() {
 
       const { data, error: fetchError } = await supabase
         .from('contacts')
-        .select('display_name, email, phone, notes, time_zone')
+        .select('display_name, email, phone, phone_ext, notes, time_zone')
         .eq('id', contactId)
         .single()
 
@@ -88,6 +89,7 @@ export default function ContactDetailForm() {
           name: data.display_name ?? '',
           email: data.email ?? '',
           phone: data.phone ?? '',
+          phoneExt: data.phone_ext ?? '',
           notes: data.notes ?? '',
           timeZone: data.time_zone,
         })
@@ -110,6 +112,7 @@ export default function ContactDetailForm() {
         name: data.display_name ?? '',
         email: data.email ?? '',
         phone: data.phone ?? '',
+        phoneExt: data.phone_ext ?? '',
         notes: data.notes ?? '',
         timeZone: fallbackZone,
       })
@@ -170,6 +173,7 @@ export default function ContactDetailForm() {
         display_name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim() || null,
+        phone_ext: form.phoneExt.trim() || null,
         send_by: sendBy,
         notes: form.notes.trim() || null,
         time_zone: selectedTimeZone,
@@ -298,6 +302,26 @@ export default function ContactDetailForm() {
                   />
                   <label className="flabel" htmlFor="ph">
                     Phone
+                  </label>
+                </span>
+                {/* Ext. (2026-08-18) — see AddContactForm.tsx's identical
+                    field for the full E.164/migration-034 reasoning. */}
+                <span
+                  className="ffloat"
+                  style={{ flex: '0 0 84px', minWidth: 0, display: 'block' }}
+                >
+                  <input
+                    className={`finput${sendBy === 'email' ? ' opt' : ''}`}
+                    id="pext"
+                    type="text"
+                    autoComplete="off"
+                    inputMode="numeric"
+                    placeholder=" "
+                    value={form.phoneExt}
+                    onChange={(e) => set('phoneExt', e.target.value)}
+                  />
+                  <label className="flabel" htmlFor="pext">
+                    Ext.
                   </label>
                 </span>
               </div>

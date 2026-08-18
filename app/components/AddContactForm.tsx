@@ -59,6 +59,7 @@ type ContactFormState = {
   name: string
   email: string
   phone: string
+  phoneExt: string
   notes: string
   timeZone: string
 }
@@ -67,6 +68,7 @@ const initialState: ContactFormState = {
   name: '',
   email: '',
   phone: '',
+  phoneExt: '',
   notes: '',
   timeZone: '',
 }
@@ -189,6 +191,7 @@ export default function AddContactForm() {
         display_name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim() || null,
+        phone_ext: form.phoneExt.trim() || null,
         send_by: sendBy,
         notes: form.notes.trim() || null,
         time_zone: selectedTimeZone,
@@ -346,6 +349,34 @@ export default function AddContactForm() {
                   />
                   <label className="flabel" htmlFor="ph">
                     Phone
+                  </label>
+                </span>
+                {/* Ext. (2026-08-18) — its own field, not appended to Phone.
+                    E.164 (the normalized digits-only format an SMS provider
+                    like Twilio requires) has no room for a post-connect
+                    extension, so it was never possible to keep one inside
+                    `phone` itself; new contacts.phone_ext column (migration
+                    034). Narrow fixed width rather than flex:1 1 auto like
+                    Phone — an extension is a handful of digits, not a full
+                    field's worth of content. Row Tint follows the same
+                    sendBy === 'email' rule as Phone: neither is required
+                    until Text is the actual delivery channel. */}
+                <span
+                  className="ffloat"
+                  style={{ flex: '0 0 84px', minWidth: 0, display: 'block' }}
+                >
+                  <input
+                    className={`finput${sendBy === 'email' ? ' opt' : ''}`}
+                    id="pext"
+                    type="text"
+                    autoComplete="off"
+                    inputMode="numeric"
+                    placeholder=" "
+                    value={form.phoneExt}
+                    onChange={(e) => set('phoneExt', e.target.value)}
+                  />
+                  <label className="flabel" htmlFor="pext">
+                    Ext.
                   </label>
                 </span>
               </div>
