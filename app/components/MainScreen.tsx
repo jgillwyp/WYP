@@ -360,7 +360,7 @@ async function loadReceivedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
 type SortDir = 'asc' | 'desc'
 type ReqSortKey = 'name' | 'date' | 'due' | 'done'
 // 'category' retired 2026-08-17 — Category is no longer a colbar heading on
-// ToDos (see the .colbar.tdd redesign in globals.css); 'date'/'due'/'done'
+// ToDos (see the .colbar.dcols redesign in globals.css); 'date'/'due'/'done'
 // added, matching Sent/Received's own three date-column sort keys.
 type TodoSortKey = 'priority' | 'date' | 'due' | 'done'
 
@@ -1285,7 +1285,7 @@ export default function MainScreen() {
               </span>
             </div>
             <div className="subbody">
-              <div className={`colbar tdd${todoDatesEnabled ? ' wide' : ''}`}>
+              <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}`}>
                 <span className="namecell">
                   <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
                   <span className="c-desc">Description</span>
@@ -1585,22 +1585,27 @@ export default function MainScreen() {
           {printSection === 'todos' && (
             <>
               <div className="ptitle">ToDos — {CHIP_LABEL[todoFilter]}</div>
-              <div className={`pcolbar ${todoDatesEnabled ? 'ptdc' : 'ptdc-nodates'}`}>
-                <span className="c-desc">Description</span>
-                {/* Due/Done columns dropped entirely when the account's own
-                    todo_dates_enabled (migration 022) is off — a ToDo has no
-                    due_date/done_date to show in that state (Create ToDo/ToDo
-                    Detail collapse to the Open/Done Status chip pair
-                    instead), so there's nothing for these columns to display.
-                    Owner's own comment #2 only mentioned dropping Due; Done
-                    is dropped along with it here since both fields are governed
-                    by the same single toggle. */}
+              {/* Redesigned 2026-08-17 — owner-reported: the old report was
+                  "missing the Priority value for each item" and asked for
+                  "the Priority value and the appropriate dates on a first
+                  line... to match the on-screen view" (.trd's own Priority/
+                  Date/[Due]/Done row). .pcolbar.pdcols/.pr1.pdcols mirror
+                  that grid, with .namecell/.c-desc reused verbatim for the
+                  same muted "Description" heading the screen now shows.
+                  Superseded the old .pcolbar.ptdc/.ptdc-nodates single-
+                  column-plus-Due/Done shape, which never had a Priority
+                  column at all — TodoDetailForm.tsx's own single-item print
+                  still uses that older shape unchanged, see CLAUDE.md. */}
+              <div className={`pcolbar pdcols${todoDatesEnabled ? ' wide' : ''}`}>
+                <span className="namecell">
+                  <span>Priority{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                  <span className="c-desc">Description</span>
+                </span>
+                <span className="c-dt">Date{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 {todoDatesEnabled && (
-                  <>
-                    <span className="c-due">Due</span>
-                    <span className="c-dn">Done</span>
-                  </>
+                  <span className="c-due">Due{todoSort.key === 'due' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 )}
+                <span className="c-dn">Done{todoSort.key === 'done' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               </div>
               <div className="prows">
                 {sortedTodos.length === 0 && <div className="pempty">No ToDos match this report.</div>}
@@ -1609,18 +1614,18 @@ export default function MainScreen() {
                   const detail = printDetail[t.id]
                   return (
                     <div key={t.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                      <div className={`pr1 pdcols${todoDatesEnabled ? ' wide' : ''}`}>
+                        <span className="ppri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>
+                        <span className="pdt">{formatMDY(t.created_at)}</span>
+                        {todoDatesEnabled && <span className="pdue">{formatMDY(t.due_date)}</span>}
+                        <span className="pdn">{formatMDY(t.done_date)}</span>
+                      </div>
                       <div className="pr2">
                         <span className="pdesc">
                           {categoriesEnabled && categoryPrefix(t.categories?.name)}
                           {t.description}
                         </span>
                       </div>
-                      {todoDatesEnabled && (
-                        <div className="pr1 ptd">
-                          <span className="pdue">{formatMDY(t.due_date)}</span>
-                          <span className="pdn">{formatMDY(t.done_date)}</span>
-                        </div>
-                      )}
                       {detail && <PrintDialogList entries={detail.dialog} />}
                       {detail && <PrintAttachmentList entries={detail.attachments} heading="Locations" />}
                     </div>

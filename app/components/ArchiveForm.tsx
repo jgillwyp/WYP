@@ -117,7 +117,9 @@ type TodoCandidate = {
   id: string
   description: string
   priority: number | null
+  due_date: string | null
   done_date: string | null
+  created_at: string
   archived_at: string | null
 }
 
@@ -247,7 +249,10 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
 // no second sortable column.
 type SortDir = 'asc' | 'desc'
 type ReqSortKey = 'name' | 'date' | 'due' | 'done'
-type TodoSortKey = 'priority'
+// Extended 2026-08-17 from 'priority' alone — Archive's ToDos header now
+// mirrors Main Screen's own Priority/Date/[Due]/Done column set (see
+// TodoCandidate/Row above), so it needs the same four sort keys.
+type TodoSortKey = 'priority' | 'date' | 'due' | 'done'
 
 const REQ_SORT_DEFAULT_DIR: Record<ReqSortKey, SortDir> = {
   name: 'asc',
@@ -258,6 +263,9 @@ const REQ_SORT_DEFAULT_DIR: Record<ReqSortKey, SortDir> = {
 
 const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
   priority: 'asc',
+  date: 'desc',
+  due: 'desc',
+  done: 'desc',
 }
 
 function toggleSort<K extends string>(
@@ -439,6 +447,33 @@ export default function ArchiveForm() {
   const [receivedData, setReceivedData] = useState<ReceivedCandidate[]>([])
   const [todoData, setTodoData] = useState<TodoCandidate[]>([])
 
+  // Show Due/Done Dates (ToDos) — profiles.todo_dates_enabled, 2026-08-17.
+  // Archive's ToDos view previously never read this at all (it only ever
+  // showed Priority — Description, Done Date always). Owner: "Both the
+  // screen presentation and the report should follow the new ToDos view and
+  // related changes based on the related Account option" — Archive's ToDos
+  // column layout now mirrors Main Screen's own, so it needs the same
+  // account toggle. One-time read on mount, matching MainScreen.tsx's own
+  // loadPrefs() pattern (this screen has no other reason yet to know the
+  // signed-in user's id).
+  const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPrefs() {
+      const { data: userData } = await supabase.auth.getUser()
+      const uid = userData.user?.id ?? null
+      if (cancelled || !uid) return
+      const { data } = await supabase.from('profiles').select('todo_dates_enabled').eq('id', uid).single()
+      if (cancelled) return
+      setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+    }
+    loadPrefs()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const [currentType, setCurrentType] = useState<RecordType>(readStoredType)
   const [recipientQuery, setRecipientQuery] = useState(() =>
     isArchiveRoundTrip() ? readStoredString(ARCHIVE_QUERY_KEY) : ''
@@ -492,7 +527,7 @@ export default function ArchiveForm() {
     readStoredSort(ARCHIVE_RECEIVED_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
   )
   const [todoSort, setTodoSort] = useState<{ key: TodoSortKey; dir: SortDir }>(() =>
-    readStoredSort(ARCHIVE_TODO_SORT_KEY, ['priority'] as const, { key: 'priority', dir: 'asc' })
+    readStoredSort(ARCHIVE_TODO_SORT_KEY, ['priority', 'date', 'due', 'done'] as const, { key: 'priority', dir: 'asc' })
   )
 
   useEffect(() => {
@@ -542,7 +577,7 @@ export default function ArchiveForm() {
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, done_date, archived_at')
+          .select('id, description, priority, due_date, done_date, created_at, archived_at')
           .is('contact_id', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
       ])
@@ -620,16 +655,20 @@ export default function ArchiveForm() {
           priority: null,
         }))
     }
+    // 2026-08-17 — due/date populated (previously always null): Archive's
+    // ToDos header/rows now mirror Main Screen's own Priority/Date/[Due]/
+    // Done layout, so the same Row fields Sent/Received already use for
+    // sorting/display carry ToDo's created_at/due_date too.
     return todoData
       .filter((t) => t.done_date && !t.archived_at)
       .map((t) => ({
         id: t.id,
         name: null,
         desc: t.description,
-        due: null,
-        date: null,
-        dueISO: null,
-        dateISO: null,
+        due: formatMDY(t.due_date),
+        date: formatMDY(t.created_at),
+        dueISO: t.due_date ? t.due_date.slice(0, 10) : null,
+        dateISO: t.created_at ? t.created_at.slice(0, 10) : null,
         doneDisp: formatMDY(t.done_date),
         doneISO: (t.done_date ?? '').slice(0, 10),
         priLabel: t.priority ? PRIORITY_LABEL[t.priority] : '',
@@ -670,7 +709,18 @@ export default function ArchiveForm() {
   const sortedMatches = useMemo(() => {
     const list = [...matches]
     if (currentType === 'todos') {
-      list.sort((a, b) => compareNullable(a.priority, b.priority, todoSort.dir, compareNumbers))
+      list.sort((a, b) => {
+        switch (todoSort.key) {
+          case 'priority':
+            return compareNullable(a.priority, b.priority, todoSort.dir, compareNumbers)
+          case 'date':
+            return compareNullable(a.dateISO, b.dateISO, todoSort.dir, compareStrings)
+          case 'due':
+            return compareNullable(a.dueISO, b.dueISO, todoSort.dir, compareStrings)
+          case 'done':
+            return compareNullable(a.doneISO, b.doneISO, todoSort.dir, compareStrings)
+        }
+      })
       return list
     }
     const sort = currentType === 'received' ? receivedSort : sentSort
@@ -1060,15 +1110,40 @@ export default function ArchiveForm() {
               <span className="archspacer" aria-hidden="true" />
               <div className="archbody">
                 {currentType === 'todos' ? (
-                  <div className="colbar td">
+                  <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}`}>
+                    <span className="namecell">
+                      <ColSort
+                        className="c-pri"
+                        label="Priority"
+                        active={todoSort.key === 'priority'}
+                        dir={todoSort.dir}
+                        onClick={() => sortTodoColumn('priority')}
+                      />
+                      <span className="c-desc">Description</span>
+                    </span>
                     <ColSort
-                      className="c-pri"
-                      label="Priority"
-                      active={todoSort.key === 'priority'}
+                      className="c-dt"
+                      label="Date"
+                      active={todoSort.key === 'date'}
                       dir={todoSort.dir}
-                      onClick={() => sortTodoColumn('priority')}
+                      onClick={() => sortTodoColumn('date')}
                     />
-                    <span>Description</span>
+                    {todoDatesEnabled && (
+                      <ColSort
+                        className="c-due"
+                        label="Due"
+                        active={todoSort.key === 'due'}
+                        dir={todoSort.dir}
+                        onClick={() => sortTodoColumn('due')}
+                      />
+                    )}
+                    <ColSort
+                      className="c-dn"
+                      label="Done"
+                      active={todoSort.key === 'done'}
+                      dir={todoSort.dir}
+                      onClick={() => sortTodoColumn('done')}
+                    />
                   </div>
                 ) : (
                   <div className="colbar sr">
@@ -1140,15 +1215,14 @@ export default function ArchiveForm() {
                     >
                       {currentType === 'todos' ? (
                         <>
-                          <div className="t1">
-                            <span className="tdc">
-                              <span className="pri">{r.priLabel}</span> — {r.desc}
-                            </span>
+                          <div className={`trd${todoDatesEnabled ? ' wide' : ''}`}>
+                            <span className="pri">{r.priLabel}</span>
+                            <span className="dt">{r.date}</span>
+                            {todoDatesEnabled && <span className="due">{r.due}</span>}
+                            <span className="dn">{r.doneDisp}</span>
                           </div>
-                          <div className="t1" style={{ marginTop: 2 }}>
-                            <span className="tdc" style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                              Done {r.doneDisp}
-                            </span>
+                          <div className="r2">
+                            <span className="desc">{r.desc}</span>
                           </div>
                         </>
                       ) : (
@@ -1198,8 +1272,16 @@ export default function ArchiveForm() {
               Main Screen's print pcolbar convention — not interactive
               buttons, since nothing on a printed page can be clicked. */}
           {currentType === 'todos' ? (
-            <div className="pcolbar ptdc-nodates">
-              <span>Description{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+            <div className={`pcolbar pdcols${todoDatesEnabled ? ' wide' : ''}`}>
+              <span className="namecell">
+                <span>Priority{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-desc">Description</span>
+              </span>
+              <span className="c-dt">Date{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              {todoDatesEnabled && (
+                <span className="c-due">Due{todoSort.key === 'due' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              )}
+              <span className="c-dn">Done{todoSort.key === 'done' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
             </div>
           ) : (
             <div className="pcolbar psr">
@@ -1221,12 +1303,17 @@ export default function ArchiveForm() {
                   </div>
                   <div className="pbody">
                     {currentType === 'todos' ? (
-                      <div className="pr2">
-                        <span className="pdesc">
-                          {r.priLabel ? `${r.priLabel} — ` : ''}
-                          {r.desc}
-                        </span>
-                      </div>
+                      <>
+                        <div className={`pr1 pdcols${todoDatesEnabled ? ' wide' : ''}`}>
+                          <span className="ppri">{r.priLabel}</span>
+                          <span className="pdt">{r.date}</span>
+                          {todoDatesEnabled && <span className="pdue">{r.due}</span>}
+                          <span className="pdn">{r.doneDisp}</span>
+                        </div>
+                        <div className="pr2">
+                          <span className="pdesc">{r.desc}</span>
+                        </div>
+                      </>
                     ) : (
                       <>
                         <div className="pr1">

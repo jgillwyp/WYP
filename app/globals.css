@@ -1647,13 +1647,23 @@ body {
    above — ArchiveForm.tsx's own ToDos header still uses .colbar.td's
    original 2-column (Priority | Description) shape and must stay
    unaffected. .wide adds the Due column (todo_dates_enabled on); without
-   it, only Date and Done show. */
-.colbar.tdd {
+   it, only Date and Done show.
+   Named .dcols, not .tdd — 2026-08-17 bugfix. The header modifier was
+   originally named .tdd ("ToDo Dates"), which collides with the
+   pre-existing, unrelated .tdd class (ToDo Description text inside the old
+   .tdc-wrapped row, still used by ArchiveForm.tsx and by .row.overdue
+   .tdd/.row.done .tdd's row-state coloring below). Both .colbar and .tdd
+   have equal specificity (one class each), so the later-declared .tdd rule
+   (color: var(--ink), further down this file) won the cascade tie and
+   silently painted the header black instead of white — Jim-reported,
+   2026-08-17. Renamed to a class with no other meaning anywhere in this
+   file. */
+.colbar.dcols {
   grid-template-columns: 1fr 58px 58px;
   column-gap: 10px;
 }
 
-.colbar.tdd.wide {
+.colbar.dcols.wide {
   grid-template-columns: 1fr 58px 58px 58px;
 }
 
@@ -1688,7 +1698,7 @@ body {
   flex: 0 0 auto;
 }
 
-/* ToDos' new date-values row (2026-08-17) — pairs with .colbar.tdd above;
+/* ToDos' new date-values row (2026-08-17) — pairs with .colbar.dcols above;
    .pri/.dt/.due/.dn are the same typographic classes Sent/Received rows
    already use (row-state red/grey rules already apply to them generically,
    no new CSS needed there). A second, separate .r2/.desc line below (reused
@@ -2582,6 +2592,37 @@ body {
   grid-template-columns: 1fr;
 }
 
+/* ToDos print header/row, redesigned 2026-08-17 to follow the on-screen
+   Priority/Date/[Due]/Done layout (Main Screen's own .colbar.dcols/.trd) —
+   supersedes .ptdc/.ptdc-nodates above for Main Screen's and Archive's own
+   ToDos print reports (both still used, unchanged, by TodoDetailForm.tsx's
+   single-item print, which this batch didn't touch — flagged as a related,
+   not-yet-fixed gap in CLAUDE.md). Owner: the old report was "missing the
+   Priority value for each item" and asked for "Priority value and the
+   appropriate dates on a first line... to match the on-screen view" —
+   .pr1.pdcols is that first line (mirrors .trd's own grid, 92px date
+   columns instead of .trd's 58px, matching Sent/Received's own print
+   convention of wider date columns than the screen uses); .pr2/.pdesc below
+   it, unchanged, carries the description on its own line. .namecell/
+   .c-desc are reused verbatim in the header — same muted-label treatment as
+   the on-screen colbar, opacity alone works here too since .pcolbar's own
+   color (var(--ink)) plays the same role .colbar's white does on screen. */
+.pcolbar.pdcols,
+.pr1.pdcols {
+  grid-template-columns: 1fr 92px 92px;
+}
+
+.pcolbar.pdcols.wide,
+.pr1.pdcols.wide {
+  grid-template-columns: 1fr 92px 92px 92px;
+}
+
+.ppri {
+  font-size: 11pt;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 .pcolbar .c-dt,
 .pcolbar .c-due,
 .pcolbar .c-dn {
@@ -2750,6 +2791,7 @@ body {
    Attachments sub-blocks too (2026-08-15) so a record's whole print block
    reads as one color, not just its name/date/description line. */
 .prow.overdue .pnm,
+.prow.overdue .ppri,
 .prow.overdue .pdt,
 .prow.overdue .pdue,
 .prow.overdue .ptime,
@@ -2763,6 +2805,7 @@ body {
 }
 
 .prow.done .pnm,
+.prow.done .ppri,
 .prow.done .pdt,
 .prow.done .pdue,
 .prow.done .ptime,

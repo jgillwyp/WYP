@@ -678,7 +678,7 @@ export default function TodoDetailForm() {
                     {form.doneDate.trim() === '' ? (
                       <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
                     ) : (
-                      'This ToDo is now marked as Done, just click Save.'
+                      'This ToDo is now marked as Done.'
                     )}
                   </span>
                   <button

@@ -38,8 +38,11 @@ import { urlLocationHref } from '@/lib/attachments'
  * that fills Done Date with today, purely reactive to whether Done Date
  * already holds a value however it got there. Owner's own wording, used
  * verbatim: active "Note: To quickly complete this ToDo, click Done and
- * Save." / inactive "This ToDo is now marked as Done, just click Save." Sets
- * Done Date only — there's no Done Time on a ToDo to touch.
+ * Save." / inactive "This ToDo is now marked as Done." (reworded 2026-08-17
+ * — owner-reported, "just click Save" read as if the user still needed to
+ * take a Save-related action; the state is already saved once Done Date
+ * holds a value). Sets Done Date only — there's no Done Time on a ToDo to
+ * touch.
  *
  * profiles.todo_dates_enabled (migration 022, 2026-08-14) — off by default,
  * continuing the "Keep It as Simple as Possible" path started by migrations
@@ -532,7 +535,7 @@ export default function CreateTodoForm() {
                     {form.doneDate.trim() === '' ? (
                       <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
                     ) : (
-                      'This ToDo is now marked as Done, just click Save.'
+                      'This ToDo is now marked as Done.'
                     )}
                   </span>
                   <button

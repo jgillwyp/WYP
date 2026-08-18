@@ -1825,7 +1825,7 @@ link is built only after the stack is proven on Add Contact.
   ToDos' colbar and rows were reworked to mirror Sent/Received's own column
   grid exactly: Priority + Date(created) + Done always show; Due shows
   additionally when the Account screen's "Show Due/Done Dates (ToDos)"
-  toggle is on (`.colbar.tdd`/`.colbar.tdd.wide`, `.trd`/`.trd.wide`, same
+  toggle is on (`.colbar.dcols`/`.colbar.dcols.wide`, `.trd`/`.trd.wide`, same
   `1fr 58px 58px(.58px)`/`10px`-gap grid as Sent/Received, so the columns
   line up pixel-for-pixel across sections). ToDo rows changed from the old
   single-flowing-line shape to a two-line shape (a `.trd` date-value row
@@ -1839,13 +1839,42 @@ link is built only after the stack is proven on Add Contact.
   Private Category toggle is on) and gained `'date'`/`'due'`/`'done'`;
   `TodoRow`/the Supabase query gained `created_at`, since the Date-created
   column is now always shown regardless of the ToDo-Dates toggle. **`.colbar.
-  td`/`.t1`/`.tdc`/`.pri`/`.cat`/`.tdd` were deliberately left untouched** —
-  `ArchiveForm.tsx` independently reuses these exact class names for its own
-  differently-shaped ToDos display; all new CSS uses non-colliding names
-  instead. Archive's own ToDos presentation is unchanged, out of scope for
-  this batch (owner's request was scoped to "the main screen"). Account
-  screen's "Show Due/Done Dates (ToDos)" checknote updated to the owner's own
-  new wording, ending with "Date created and Date Done are always captured
-  and shown in the ToDos list view." **No mockups updated** — flagged in
-  `design/README.md`, not silently skipped. `npx tsc --noEmit`/`npm run lint`
+  td`/`.t1`/`.tdc`/`.pri`/`.cat` were deliberately left untouched** in this
+  batch — `ArchiveForm.tsx` independently reused these exact class names for
+  its own differently-shaped ToDos display at the time; all new CSS used
+  non-colliding names instead. **Superseded the same day, see the entry
+  below** — Archive's ToDos view was itself rebuilt onto the new pattern a
+  few hours later, once the owner asked for the two screens to match; those
+  old classes are now unused by any live screen (kept in `globals.css`
+  rather than deleted, in case a future screen wants the plain flowing-line
+  shape). Account screen's "Show Due/Done Dates (ToDos)" checknote updated
+  to the owner's own new wording, ending with "Date created and Date Done
+  are always captured and shown in the ToDos list view." **No mockups
+  updated** — flagged in `design/README.md`, not silently skipped. `npx tsc
+  --noEmit`/`npm run lint` clean.
+- **ToDos colbar black-text bug; Archive matched to Main Screen's new ToDos
+  layout; both print reports redesigned; Done-band wording (2026-08-17,
+  same-day follow-up to the batch above).** The new colbar modifier class
+  was accidentally named `.tdd`, colliding with a pre-existing, unrelated
+  `.tdd` class (`color: var(--ink)`, ToDo row description text) — equal
+  specificity, later source order won, silently painting the ToDos header
+  black instead of white. Renamed to `.dcols` everywhere (code and docs).
+  `ArchiveForm.tsx`'s ToDos view — colbar, rows, and print — was rebuilt
+  onto this same `.colbar.dcols`/`.namecell`/`.c-desc`/`.trd` pattern,
+  reading `profiles.todo_dates_enabled` for the first time (added a
+  `loadPrefs()` effect, matching `MainScreen.tsx`'s own), so Archive's
+  ToDos header/rows are now the literal same classes as Main Screen's, not
+  just visually similar. `TodoSortKey` in `ArchiveForm.tsx` extended from
+  `'priority'` alone to the same four keys Main Screen uses. Both ToDos
+  print reports (Main Screen and Archive) gained a Priority column on their
+  own first print line (`.pcolbar.pdcols`/`.pr1.pdcols`, new `.ppri` class),
+  superseding the old `.pcolbar.ptdc`/`.ptdc-nodates` shape, which never
+  showed Priority at all. **`TodoDetailForm.tsx`'s own single-item ToDo
+  print still uses the old, Priority-less `.ptdc`/`.ptdc-nodates` shape** —
+  out of scope for this batch (owner named Main Screen and Archive
+  specifically), flagged as a known, fixable-on-request gap rather than
+  silently left inconsistent. Done-band wording ("...just click Save.")
+  changed to "This ToDo is now marked as Done." in both `TodoDetailForm.tsx`
+  and `CreateTodoForm.tsx` — owner: the old wording read like Save was still
+  needed for the Done status itself. `npx tsc --noEmit`/`npm run lint`
   clean.
