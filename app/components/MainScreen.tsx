@@ -108,6 +108,11 @@ type TodoRow = {
   priority: number | null
   due_date: string | null
   done_date: string | null
+  // created_at added 2026-08-17 — the ToDos colbar now shows a Date column
+  // (creation date) matching Sent/Received's own, always present regardless
+  // of todo_dates_enabled (owner: "Date created and Date Done are always
+  // captured and shown in the ToDos list view").
+  created_at: string
   categories: { name: string } | null
   dialog: { count: number }[] | null
   // archived_at — same reasoning as SentRow above. A ToDo has no recipient,
@@ -354,7 +359,10 @@ async function loadReceivedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
 // re-query per click isn't worth the complexity.
 type SortDir = 'asc' | 'desc'
 type ReqSortKey = 'name' | 'date' | 'due' | 'done'
-type TodoSortKey = 'priority' | 'category'
+// 'category' retired 2026-08-17 — Category is no longer a colbar heading on
+// ToDos (see the .colbar.tdd redesign in globals.css); 'date'/'due'/'done'
+// added, matching Sent/Received's own three date-column sort keys.
+type TodoSortKey = 'priority' | 'date' | 'due' | 'done'
 
 // Each column's own sensible starting direction the first time it's
 // clicked — matching the defaults this screen already had (Due descending,
@@ -370,7 +378,9 @@ const REQ_SORT_DEFAULT_DIR: Record<ReqSortKey, SortDir> = {
 
 const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
   priority: 'asc',
-  category: 'asc',
+  date: 'desc',
+  due: 'desc',
+  done: 'desc',
 }
 
 function toggleSort<K extends string>(
@@ -773,7 +783,7 @@ export default function MainScreen() {
     readStoredSort(RECEIVED_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
   )
   const [todoSort, setTodoSort] = useState<{ key: TodoSortKey; dir: SortDir }>(() =>
-    readStoredSort(TODO_SORT_KEY, ['priority', 'category'] as const, { key: 'priority', dir: 'asc' })
+    readStoredSort(TODO_SORT_KEY, ['priority', 'date', 'due', 'done'] as const, { key: 'priority', dir: 'asc' })
   )
 
   useEffect(() => {
@@ -912,7 +922,7 @@ export default function MainScreen() {
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, categories(name), dialog(count), archived_at')
+          .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at')
           .is('contact_id', null)
           .order('priority', { ascending: true, nullsFirst: false }),
       ])
@@ -1030,10 +1040,16 @@ export default function MainScreen() {
   const sortedTodos = useMemo(() => {
     const list = [...filteredTodos]
     list.sort((a, b) => {
-      if (todoSort.key === 'priority') {
-        return compareNullable(a.priority, b.priority, todoSort.dir, compareNumbers)
+      switch (todoSort.key) {
+        case 'priority':
+          return compareNullable(a.priority, b.priority, todoSort.dir, compareNumbers)
+        case 'date':
+          return compareNullable(a.created_at, b.created_at, todoSort.dir, compareStrings)
+        case 'due':
+          return compareNullable(a.due_date, b.due_date, todoSort.dir, compareStrings)
+        case 'done':
+          return compareNullable(a.done_date, b.done_date, todoSort.dir, compareStrings)
       }
-      return compareNullable(a.categories?.name ?? null, b.categories?.name ?? null, todoSort.dir, compareStrings)
     })
     return list
   }, [filteredTodos, todoSort])
@@ -1109,7 +1125,10 @@ export default function MainScreen() {
             </div>
             <div className="subbody">
               <div className="colbar sr">
-                <ColSort className="c-nm" label="To" active={sentSort.key === 'name'} dir={sentSort.dir} onClick={() => sortSent('name')} />
+                <span className="namecell">
+                  <ColSort className="c-nm" label="To" active={sentSort.key === 'name'} dir={sentSort.dir} onClick={() => sortSent('name')} />
+                  <span className="c-desc">Description</span>
+                </span>
                 <ColSort className="c-dt" label="Date" active={sentSort.key === 'date'} dir={sentSort.dir} onClick={() => sortSent('date')} />
                 <ColSort className="c-due" label="Due" active={sentSort.key === 'due'} dir={sentSort.dir} onClick={() => sortSent('due')} />
                 <ColSort
@@ -1187,7 +1206,10 @@ export default function MainScreen() {
             </div>
             <div className="subbody">
               <div className="colbar sr">
-                <ColSort className="c-nm" label="From" active={receivedSort.key === 'name'} dir={receivedSort.dir} onClick={() => sortReceived('name')} />
+                <span className="namecell">
+                  <ColSort className="c-nm" label="From" active={receivedSort.key === 'name'} dir={receivedSort.dir} onClick={() => sortReceived('name')} />
+                  <span className="c-desc">Description</span>
+                </span>
                 <ColSort className="c-dt" label="Date" active={receivedSort.key === 'date'} dir={receivedSort.dir} onClick={() => sortReceived('date')} />
                 <ColSort className="c-due" label="Due" active={receivedSort.key === 'due'} dir={receivedSort.dir} onClick={() => sortReceived('due')} />
                 <ColSort
@@ -1263,13 +1285,23 @@ export default function MainScreen() {
               </span>
             </div>
             <div className="subbody">
-              <div className="colbar td">
-                <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
-                {categoriesEnabled ? (
-                  <ColSort className="c-cat" label="Category — Description" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
-                ) : (
-                  <span className="c-cat">Description</span>
+              <div className={`colbar tdd${todoDatesEnabled ? ' wide' : ''}`}>
+                <span className="namecell">
+                  <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
+                  <span className="c-desc">Description</span>
+                </span>
+                <ColSort className="c-dt" label="Date" active={todoSort.key === 'date'} dir={todoSort.dir} onClick={() => sortTodos('date')} />
+                {todoDatesEnabled && (
+                  <ColSort className="c-due" label="Due" active={todoSort.key === 'due'} dir={todoSort.dir} onClick={() => sortTodos('due')} />
                 )}
+                <ColSort
+                  className="c-dn"
+                  label="Done"
+                  active={todoSort.key === 'done'}
+                  dir={todoSort.dir}
+                  onClick={() => sortTodos('done')}
+                  disabled={todoFilter !== 'all' && todoFilter !== 'done'}
+                />
               </div>
               <div className="rows">
                 {loading && <div className="subempty">Loading…</div>}
@@ -1291,18 +1323,24 @@ export default function MainScreen() {
                       onClick={() => router.push(`/todos/${t.id}`)}
                       onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/todos/${t.id}`) }}
                     >
-                      <div className="t1">
+                      <div className={`trd${todoDatesEnabled ? ' wide' : ''}`}>
+                        <span className="pri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>
+                        <span className="dt">{formatMDY(t.created_at)}</span>
+                        {todoDatesEnabled && <span className="due">{formatMDY(t.due_date)}</span>}
+                        <span className="dn">{formatMDY(t.done_date)}</span>
+                      </div>
+                      <div className="r2">
                         {dialogCount(t.dialog) > 0 && (
                           <span className="ii"><DialogIcon /></span>
                         )}
-                        <span className="tdc">
-                          <span className="pri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>{' '}
+                        <span className="desc">
                           {categoriesEnabled && (
                             <>
-                              <span className="cat">{t.categories?.name ?? '—'}</span>{' '}
+                              <span className="cat">{t.categories?.name ?? '—'}</span>
+                              {' — '}
                             </>
                           )}
-                          — <span className="tdd">{t.description}</span>
+                          {t.description}
                         </span>
                       </div>
                     </div>

@@ -1790,3 +1790,62 @@ link is built only after the stack is proven on Add Contact.
   (`curl -X POST .../api/cron/tick -H "Authorization: Bearer
   $CRON_SECRET"`) both have to happen on the owner's own machine. `npx tsc
   --noEmit`/`npm run lint` clean.
+  **Live, confirmed working, 2026-08-17** — supersedes the paragraph
+  above. The push carrying this batch never actually deployed on Vercel
+  at first: `vercel.json`'s hourly schedule is rejected outright on the
+  Hobby plan, which silently failed the deployment (visible only as a
+  1/2 GitHub commit-status check, no entry in the Deployments list even
+  with every status filter on) — not a code bug. **Owner upgraded to
+  Vercel Pro**, then an empty-commit push triggered a clean
+  Ready/Production build. `CRON_SECRET` was added to Vercel's
+  Environment Variables, and a manual `Invoke-WebRequest ... -Method
+  POST -Headers @{Authorization="Bearer $CRON_SECRET"} -UseBasicParsing`
+  from the owner's own PowerShell returned `{"ok":true,"counts":{...all
+  zero...}}` — a clean run confirming auth, the service-role DB queries,
+  and SMTP are all correctly wired in production (all-zero counts are
+  expected outside the exact local hour a row is actually due). The
+  hourly `vercel.json` schedule is now live and unattended.
+  **No bounce handling or suppression list anywhere in this system** —
+  flagged, not built. `nodemailer.sendMail()` only confirms the SMTP
+  server accepted a message for relay, not that it was actually
+  delivered, so a send to an invalid address (most of the owner's own
+  test Contacts are made-up, per his own 2026-08-17 note) still marks
+  `reminder_sent_at`/`overdue_notified_at` as sent and counts as success
+  — harmless during personal testing, but repeated hard bounces from a
+  real send volume can damage a sending domain's reputation with its own
+  mailbox provider (Hostinger here) over time. Revisit before any real
+  second user exists — same "flag, don't silently build" posture as
+  migration 024's testing-only tier toggle above.
+- **Main Screen: greyed "Description" column heading + ToDos Date/Due/Done
+  columns aligned with Requests (2026-08-17).** Two-part owner request with
+  pasted mockups. All three colbars (Sent/Received/ToDos) now show a plain,
+  non-interactive "Description" label — 55%-opacity, matching the existing
+  disabled-Done-column look — right-aligned against the sortable To/From/
+  Priority label on the left (`.namecell`/`.c-desc`, `app/globals.css`).
+  ToDos' colbar and rows were reworked to mirror Sent/Received's own column
+  grid exactly: Priority + Date(created) + Done always show; Due shows
+  additionally when the Account screen's "Show Due/Done Dates (ToDos)"
+  toggle is on (`.colbar.tdd`/`.colbar.tdd.wide`, `.trd`/`.trd.wide`, same
+  `1fr 58px 58px(.58px)`/`10px`-gap grid as Sent/Received, so the columns
+  line up pixel-for-pixel across sections). ToDo rows changed from the old
+  single-flowing-line shape to a two-line shape (a `.trd` date-value row
+  above a `.r2` description line), reusing Sent/Received's existing
+  `.pri`/`.dt`/`.due`/`.dn`/`.r2`/`.desc`/`.cat` classes verbatim — the
+  existing overdue/done red/grey row-state CSS already applies with no new
+  rules needed. The Done column header greys out (via the existing
+  `ColSort` `disabled` prop) unless All or Done is selected, matching
+  Sent/Received. `TodoSortKey` dropped `'category'` (no longer a header
+  column — Category still shows inline on the description line when the
+  Private Category toggle is on) and gained `'date'`/`'due'`/`'done'`;
+  `TodoRow`/the Supabase query gained `created_at`, since the Date-created
+  column is now always shown regardless of the ToDo-Dates toggle. **`.colbar.
+  td`/`.t1`/`.tdc`/`.pri`/`.cat`/`.tdd` were deliberately left untouched** —
+  `ArchiveForm.tsx` independently reuses these exact class names for its own
+  differently-shaped ToDos display; all new CSS uses non-colliding names
+  instead. Archive's own ToDos presentation is unchanged, out of scope for
+  this batch (owner's request was scoped to "the main screen"). Account
+  screen's "Show Due/Done Dates (ToDos)" checknote updated to the owner's own
+  new wording, ending with "Date created and Date Done are always captured
+  and shown in the ToDos list view." **No mockups updated** — flagged in
+  `design/README.md`, not silently skipped. `npx tsc --noEmit`/`npm run lint`
+  clean.

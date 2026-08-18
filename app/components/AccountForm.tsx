@@ -275,8 +275,10 @@ export default function AccountForm() {
             <span className="checktext">
               Show Due/Done Dates (ToDos)
               <span className="checknote">
-                Adds Due Date and Done Date for ToDos instead of just a Status of Open
-                and Done. Off by default. Turn it on for more precise ToDo tracking.
+                Adds Due Date and Done Date for creating and editing ToDos instead of
+                just a Status of Open and Done. Off by default. Turn it on for more
+                precise ToDo tracking. Date created and Date Done are always captured
+                and shown in the ToDos list view.
               </span>
             </span>
           </label>

@@ -1639,10 +1639,79 @@ body {
   column-gap: 10px;
 }
 
+/* Main Screen's own ToDos header (2026-08-17) — replaces the old flowing
+   "Priority — Category — Description" single line with a Priority/Date/
+   [Due]/Done grid matching Sent/Received's own .colbar.sr, so all three
+   sections' Date/Due/Done columns line up at the same horizontal position
+   on the page. Deliberately a new class, not a redefinition of .colbar.td
+   above — ArchiveForm.tsx's own ToDos header still uses .colbar.td's
+   original 2-column (Priority | Description) shape and must stay
+   unaffected. .wide adds the Due column (todo_dates_enabled on); without
+   it, only Date and Done show. */
+.colbar.tdd {
+  grid-template-columns: 1fr 58px 58px;
+  column-gap: 10px;
+}
+
+.colbar.tdd.wide {
+  grid-template-columns: 1fr 58px 58px 58px;
+}
+
 .colbar .c-dt,
 .colbar .c-due,
 .colbar .c-dn {
   text-align: center;
+  white-space: nowrap;
+}
+
+/* "Description" label (2026-08-17) — a plain, non-interactive column
+   heading added to the leftmost cell of Sent/Received's and ToDos'
+   colbars, greyed the same way a disabled Done column already is
+   (owner: "all three sections should have the word Description greyed
+   out as a non-selectable column heading"). .namecell wraps the existing
+   sortable ColSort button (To/From/Priority) and this label together so
+   they share one grid cell — space-between naturally left-aligns the
+   sortable label and right-aligns Description, matching the existing
+   flex layout precedent (.donerow, .sendrow) rather than a new pattern. */
+.namecell {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.c-desc {
+  opacity: .55;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* ToDos' new date-values row (2026-08-17) — pairs with .colbar.tdd above;
+   .pri/.dt/.due/.dn are the same typographic classes Sent/Received rows
+   already use (row-state red/grey rules already apply to them generically,
+   no new CSS needed there). A second, separate .r2/.desc line below (reused
+   unchanged) carries the description text, same two-line shape as Sent/
+   Received rows. */
+.trd {
+  display: grid;
+  grid-template-columns: 1fr 58px 58px;
+  column-gap: 10px;
+  align-items: baseline;
+}
+
+.trd.wide {
+  grid-template-columns: 1fr 58px 58px 58px;
+}
+
+/* Priority had no explicit font-size before — it inherited 12.5px from the
+   now-retired .tdc wrapper. Matched to .nm's 12px so it sits comfortably
+   beside the 11px Date/Due/Done columns in the new grid row. Shared with
+   ArchiveForm.tsx's own .pri usage (still under the old .tdc, 12.5px) —
+   the 0.5px difference there is not perceptible. */
+.pri {
+  font-size: 12px;
   white-space: nowrap;
 }
 
