@@ -894,7 +894,10 @@ export default function ResponseDetailForm() {
         <div className="print-report">
           <div className="ptitle">Response Detail</div>
           <div className="pcolbar detail3">
-            <span className="c-nm">From</span>
+            <span className="namecell">
+              <span className="c-nm">From</span>
+              <span className="c-desc">Description</span>
+            </span>
             <span className="c-due">Due</span>
             <span className="c-dn">Done</span>
           </div>

@@ -1323,7 +1323,10 @@ export default function CreateRequestForm() {
         <div className="print-report">
           <div className="ptitle">Request Preview</div>
           <div className="pcolbar detail2">
-            <span className="c-nm">To</span>
+            <span className="namecell">
+              <span className="c-nm">To</span>
+              <span className="c-desc">Description</span>
+            </span>
             <span className="c-due">Due</span>
           </div>
           <div className="prows">

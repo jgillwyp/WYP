@@ -1973,3 +1973,18 @@ link is built only after the stack is proven on Add Contact.
   a lazy `useState` initializer, not inside a `useEffect` that calls
   `setState` — the latter tripped `react-hooks/set-state-in-effect` on
   first pass. `npx tsc --noEmit`/`npm run lint` clean.
+- **Description column heading added to every print report, centered
+  (2026-08-18).** Owner: several print reports had no "Description"
+  heading at all, and where present it read right-aligned against the
+  Date column rather than centered between the To/From and Date columns.
+  `.namecell`/`.c-desc` (2026-08-17) had only reached 3 of the app's 8
+  print colbars; added to the other 5 (`MainScreen.tsx` Sent/Received,
+  `ArchiveForm.tsx`'s combined Sent/Received, `CreateRequestForm.tsx`'s
+  `.detail2`, `RequestDetailForm.tsx`'s `.detail3`,
+  `ResponseDetailForm.tsx`'s `.detail3`), preserving each colbar's own
+  sort-arrow logic where present. New print-scoped CSS,
+  `.pcolbar .namecell`/`.pcolbar .c-desc` (`app/globals.css`), overrides
+  the on-screen `space-between` alignment with an absolutely-centered
+  label instead — scoped under `.pcolbar` so the on-screen Main Screen
+  colbars this component was originally built for are unaffected. `npx
+  tsc --noEmit`/`npm run lint` clean.

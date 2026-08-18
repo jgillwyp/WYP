@@ -1520,7 +1520,10 @@ export default function MainScreen() {
             <>
               <div className="ptitle">Requests Sent — {CHIP_LABEL[sentFilter]}</div>
               <div className="pcolbar psr">
-                <span className="c-nm">To</span>
+                <span className="namecell">
+                  <span className="c-nm">To</span>
+                  <span className="c-desc">Description</span>
+                </span>
                 <span className="c-dt">Date{sentSort.key === 'date' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-due">Due{sentSort.key === 'due' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-dn">Done{sentSort.key === 'done' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
@@ -1567,7 +1570,10 @@ export default function MainScreen() {
             <>
               <div className="ptitle">Requests Received — {CHIP_LABEL[receivedFilter]}</div>
               <div className="pcolbar psr">
-                <span className="c-nm">From</span>
+                <span className="namecell">
+                  <span className="c-nm">From</span>
+                  <span className="c-desc">Description</span>
+                </span>
                 <span className="c-dt">Date{receivedSort.key === 'date' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-due">Due{receivedSort.key === 'due' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-dn">Done{receivedSort.key === 'done' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>

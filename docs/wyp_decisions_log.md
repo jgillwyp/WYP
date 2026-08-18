@@ -6,6 +6,43 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-18 — Description column heading added to every print report, centered
+
+Owner: several printed reports were missing the "Description" column
+heading entirely, and where present it was right-aligned against the
+Date column instead of "centered between the 'To' or 'From' and the
+'Date' column." Two separate gaps, both fixed.
+
+**Missing entirely — added.** `.namecell`/`.c-desc` (2026-08-17, built for
+Main Screen's on-screen ToDos colbar and later reused on its print
+version) had only ever been ported into 3 of the app's 8 print colbars —
+Main Screen's ToDos, Archive's ToDos, and ToDo Detail's single-item print.
+The other 5 (Main Screen Sent/Received, Archive's combined Sent/Received,
+Create Request's `.detail2` preview, Request Detail's `.detail3`, Response
+Detail's `.detail3`) had no Description label at all. Added identically to
+each: wrap the existing `c-nm` (To/From) span in a `.namecell`, add a
+sibling `.c-desc` span reading "Description" — preserving each colbar's
+own existing sort-arrow logic where present (Main Screen, Archive) rather
+than dropping it.
+
+**Right-aligned where present — recentered.** The existing `.namecell`
+CSS (`justify-content: space-between`) was written for the on-screen
+colbar, where right-aligning Description against the adjacent Due/Done
+columns is correct and unchanged here. A printed colbar's own To/From-to-
+Date/Due gap is a different, usually wider shape, and space-between there
+reads as glued to the Date column rather than centered in its own cell.
+New print-scoped override, `.pcolbar .namecell { position: relative;
+justify-content: flex-start }` + `.pcolbar .c-desc { position: absolute;
+left: 50%; transform: translateX(-50%) }` — left-aligns the sortable
+label as before, then absolutely centers Description within the
+`.namecell` cell's own width, which in every `.pcolbar` variant (`.psr`,
+`.pdcols`, `.detail2`, `.detail3`) already spans exactly the To/From-to-
+Date/Due region the owner described. Scoped under `.pcolbar` specifically
+so Main Screen's own on-screen colbars are untouched. `npx tsc --noEmit`/
+`npm run lint` clean.
+
+\---
+
 ## 2026-08-18 — Findable Install control; Archive wording fix; expired magic-link error surfaced
 
 Same-day follow-up after the owner tried the new manifest/PWA batch for real.

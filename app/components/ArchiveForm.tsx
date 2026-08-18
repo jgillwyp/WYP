@@ -1285,7 +1285,10 @@ export default function ArchiveForm() {
             </div>
           ) : (
             <div className="pcolbar psr">
-              <span className="c-nm">{COL[currentType]}{currentReqSort.key === 'name' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              <span className="namecell">
+                <span className="c-nm">{COL[currentType]}{currentReqSort.key === 'name' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-desc">Description</span>
+              </span>
               <span className="c-dt">Date{currentReqSort.key === 'date' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               <span className="c-due">Due{currentReqSort.key === 'due' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               <span className="c-dn">Done{currentReqSort.key === 'done' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>

@@ -1698,6 +1698,26 @@ body {
   flex: 0 0 auto;
 }
 
+/* Printed reports' own Description heading (2026-08-18) — owner: it should
+   read "centered between the 'To'/'From' and the 'Date' column," not
+   right-aligned against the Date column the way the on-screen colbar's own
+   .namecell correctly right-aligns it against Due/Done. Scoped to
+   .pcolbar .namecell only, so the on-screen Main Screen colbars above are
+   untouched — absolute-positions .c-desc at the midpoint of the (now
+   left-aligned) .namecell cell itself, which in every .pcolbar variant
+   (.psr, .pdcols, .detail2, .detail3) spans exactly the To/From-to-Date/Due
+   gap this label is meant to sit inside. */
+.pcolbar .namecell {
+  position: relative;
+  justify-content: flex-start;
+}
+
+.pcolbar .c-desc {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 /* ToDos' new date-values row (2026-08-17) — pairs with .colbar.dcols above;
    .pri/.dt/.due/.dn are the same typographic classes Sent/Received rows
    already use (row-state red/grey rules already apply to them generically,

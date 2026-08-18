@@ -1276,7 +1276,10 @@ export default function RequestDetailForm() {
         <div className="print-report">
           <div className="ptitle">Request Detail</div>
           <div className="pcolbar detail3">
-            <span className="c-nm">To</span>
+            <span className="namecell">
+              <span className="c-nm">To</span>
+              <span className="c-desc">Description</span>
+            </span>
             <span className="c-due">Due</span>
             <span className="c-dn">Done</span>
           </div>
