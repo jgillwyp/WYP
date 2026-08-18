@@ -83,6 +83,10 @@ type ReceivedDetailPayload = {
   owner_name: string | null
   owner_tier: 'free' | 'subscriber' | null
   owner_request_time_enabled: boolean
+  // Un-archive-on-clear (owner request, 2026-08-17, migration 032) — the
+  // recipient's own archive state for this Request, as loaded. See the
+  // matching state var below.
+  received_archived_at: string | null
   dialog: DialogEntry[]
 }
 
@@ -167,6 +171,14 @@ export default function ResponseDetailForm() {
   const [doneDate, setDoneDate] = useState('')
   const [doneTime, setDoneTime] = useState('')
 
+  // Un-archive-on-clear (owner request, 2026-08-17) — the row's own
+  // received_archived_at as loaded. Not itself editable, and no
+  // client-side write is needed for it: migration 032's
+  // set_response_done_as_recipient already clears received_archived_at
+  // server-side whenever p_done_date is null, so this state exists only
+  // to drive the advisory note below, not to build the Save payload.
+  const [receivedArchivedAt, setReceivedArchivedAt] = useState<string | null>(null)
+
   // Owner-reported, 2026-08-15 — see RequestResponseForm.tsx's identical
   // comment; this screen mirrors that fix verbatim.
   const [alreadyDoneOnLoad, setAlreadyDoneOnLoad] = useState(false)
@@ -227,6 +239,7 @@ export default function ResponseDetailForm() {
       setDoneTime(payload.done_time ?? '')
       setAlreadyDoneOnLoad(!!payload.done_date)
       setDialogList(payload.dialog ?? [])
+      setReceivedArchivedAt(payload.received_archived_at)
 
       const { data: sessionData } = await supabase.auth.getSession()
       if (!cancelled) {
@@ -564,6 +577,19 @@ export default function ResponseDetailForm() {
                 </span>
               )}
             </div>
+
+            {/* Un-archive-on-clear advisory (owner request, 2026-08-17) —
+                only shows when this Request was loaded already archived
+                (in the recipient's own Archive, independent of the
+                owner's) AND Done Date is currently empty (about to be
+                cleared on Save/Send). migration 032's
+                set_response_done_as_recipient does the actual clearing
+                server-side. */}
+            {receivedArchivedAt !== null && doneDate.trim() === '' && (
+              <p className="subnote" style={{ padding: '0 var(--pad)' }}>
+                This Request will be returned to active status and will appear in your lists again once saved.
+              </p>
+            )}
 
             {/* Simplified empty-state row (§6.32, 2026-08-11): with no
                 entries, a single .frow — .actlabel + Add Dialog — replaces

@@ -6,6 +6,46 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-17 — Chron notification system built: day-before Reminders, Overdue transition, recurring nudges, two Requestor digests
+
+Owner's own original ask (verbatim, condensed): day-before Reminder emails to the Account holder of a Received Request or ToDo, and to the Recipient of a Sent Request; an opt-in daily digest to the Requestor of which Reminders just went out to Recipients; a daily digest to the Requestor of Requests that just became Overdue, at "12:01am the morning after"; an individual Overdue email to each Recipient; and an hourly-then-daily nudge to the Recipient of a Due-Time Request specifically. Every open design question (digest scope, nag cadence, ToDo gating, digest pricing tier, target local hour, and whether Archive exempts a Request from all of this) was answered directly in his next message — see this same date's earlier CLAUDE.md entry for the full Q&A.
+
+**Architecture: one hourly route, not three.** `app/api/cron/tick/route.ts`, invoked every hour by Vercel Cron (`vercel.json`), runs all four phases (day-before Reminders, Overdue transition, recurring nudges, digests) in a single pass, gating each candidate row's own action on that row's own *local* hour (`app/src/lib/cronTime.ts`, pure `Intl.DateTimeFormat`-based helpers — no date library). Vercel Cron entries are each fixed to one UTC time, but "morning" and "the morning after" mean each *owner's* (or *recipient's*) own local hour, not one global clock time — an hourly tick checking local hour per row serves every time zone from one schedule. **This design requires Vercel Pro** (Hobby caps Cron Jobs at once-per-day) — discovered mid-build, raised with the owner via AskUserQuestion; he upgraded the same day.
+
+**Whose time zone governs what**: the day-before Reminder to a Sent Request's Recipient uses the *Recipient's* own zone (`contacts.time_zone`, falling back to the owner's `profiles.time_zone`) — the one recipient-facing email in this batch timed to the reader's own morning, not the sender's. Every other timing decision (ToDo Reminders, the Overdue transition, recurring nudges, both digests) uses the *owner's* own zone — "12:01am the morning after" is naturally about whose day just ended.
+
+**Idempotency**: migration 032's `reminder_sent_at`/`overdue_notified_at`/`last_overdue_nudge_at` (drafted alongside this build, not yet confirmed run) — a send that fails or finds SMTP unconfigured is simply retried next hour, never marked sent. `overdue_notified_at` fires exactly once per Request; a Due-Date-only Request's first nudge is that same event (its own `last_overdue_nudge_at` is set in the same UPDATE), while a Due-Time Request's first nudge is a separate, later "hour after" event, left for the recurring-nudge phase to set.
+
+**Response links inside these emails** are minted by a new `cron_issue_request_link()` (migration 033, drafted) — a service_role-only sibling of the existing owner-only `issue_request_link` (migration 008), since a cron run has no session for that function's `auth.uid()` check to pass. Always mints fresh (no attempt to "reuse" a still-valid link) — the raw token is never persisted, only its hash, so an earlier link's raw value can never be recovered to re-embed; this is the same behavior `issue_request_link` itself already has on every call, not a new limitation introduced here.
+
+**Email templates** (`app/src/lib/email.ts`): the Sent Request Reminder reuses the *existing* Initial-Request templates (`buildRequestEmailSubject('reminder', ...)`, `buildRequestEmailHtml`/`Text`) with `reminderPromised: false` — sending the Reminder now would make "a reminder will arrive" self-referential nonsense. New: `buildOverdueRecipientEmail*` (one template for both the first Overdue notice and every later nudge — the owner's own wording works unchanged for a repeat send), `buildTodoReminderEmail*` (to the owner's own account, no Recipient exists for a ToDo), and `buildReminderDigestEmail*`/`buildOverdueDigestEmail*` (share one `DigestItem` row shape and list-rendering helper, differ only in subject/intro sentence).
+
+**ToDo Reminders** are gated purely on the owner's own `todo_dates_enabled` account toggle, per the owner's own answer — not a per-ToDo checkbox; `reminder_enabled` (migration 031) is a Request-only UI concept even though the column is physically shared with ToDo rows in the same `requests` table.
+
+**New Account toggle**: "Notify Me When Reminders Are Sent" (`profiles.reminder_digest_enabled`, migration 032) — free feature, off by default, same `handleToggle` pattern as every other `AccountForm.tsx` checkbox.
+
+**service_role** (`SUPABASE_SERVICE_ROLE_KEY`) is used throughout this route — a cron run has no user session for RLS to scope to at all. Same justified, narrow exception CLAUDE.md already carves out for the attachments API routes, extended here since a background job legitimately needs to read and act across every owner's account. Owner email lookups use `sb.auth.admin.getUserById()` (GoTrue Admin API), cached per run.
+
+**New `CRON_SECRET` env var** (`.env.local`, git-ignored; also needs adding to Vercel's own Environment Variables) — randomly generated, checked as a bearer token against every request to `/api/cron/tick`, same mechanism Vercel Cron itself uses to authenticate its own scheduled calls.
+
+`npx tsc --noEmit`/`npm run lint` clean. **Migrations 032 and 033 confirmed run by the owner, 2026-08-17.** Remaining before the schedule is live: adding `CRON_SECRET` to Vercel's own Environment Variables and a manual end-to-end test (`curl -X POST .../api/cron/tick -H "Authorization: Bearer $CRON_SECRET"`) — both have to happen on the owner's own machine, since this session's sandbox has no network route to either Supabase or the deployed Vercel app.
+
+\---
+
+## 2026-08-17 — Un-archive-on-clear: reopening a Done Request/ToDo from Archive returns it to active status
+
+Prerequisite for the Chron notification work below — the owner's own answer on notification scope ("archived items will not be subject to any notifications") only holds if a Request/ToDo edited back open from Archive can actually leave the archived state; otherwise a corrected item would become permanently invisible and permanently notification-exempt. Owner, in the same message: "If a Request Detail is edited from the Archive list view and the Done Date is removed, the end-user should be advised that the item will be returned to active status and will appear in their lists."
+
+**Applied identically across the three Detail-type screens** — `RequestDetailForm.tsx`, `TodoDetailForm.tsx`, `ResponseDetailForm.tsx` — each now loads its own `archived_at`/`received_archived_at` (Request Detail and ToDo Detail via a plain `.select()` column addition; Response Detail via a new field on `get_received_request`'s jsonb payload, migration 032) into local state, unedited by the user directly. `handleSubmit`'s update payload sets it to `null` whenever the Save is clearing Done Date to empty, and otherwise carries the loaded value through unchanged (a harmless no-op when it was already null). A `<p className="subnote">` advisory appears next to the relevant field whenever `archivedAt !== null` and Done Date is about to go empty this Save, worded "This `<Request/ToDo>` will be returned to active status and will appear in your lists again once saved."
+
+**ToDo Detail's condition branches on `todoDatesEnabled`** (§6.35, migration 022) rather than reading `form.doneDate` directly — when Due/Done Dates are off, `done_date` is driven by the Open/Done Status chip instead, and the existing `effectiveDoneDate` computed variable in `handleSubmit` already reduces both modes to the same null/non-null signal, reused here for both the advisory condition and the Save payload.
+
+**Response Detail needs no client-side write of its own** — migration 032's `set_response_done_as_recipient` already clears `received_archived_at` server-side whenever `p_done_date` is null, so `receivedArchivedAt` state exists purely to drive the advisory note, not the Save call.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-17 — Main Screen: Done column header no longer sortable/colorized on Sent/Received unless All or Done chip is selected
 
 Owner: the Done column header was colorizing (the `.pill` + ▲/▼ indicator) and toggling sort direction even while the Open or Overdue chip was selected — "which is not true - unless the All or Done chips are selected no Done items are in the list below the column heading." Correct: `filteredSent`/`filteredReceived` under Open or Overdue never include a Done row, so a sort-by-Done indicator there was describing an ordering that couldn't actually be observed in the visible list.

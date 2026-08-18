@@ -1729,3 +1729,64 @@ link is built only after the stack is proven on Add Contact.
   Canonical-sources setting is confirmed updated to v12.10 by the owner,
   2026-08-15.** See the decisions log's 2026-08-15 entry for the full
   write-up.
+- **Chron notification system built (2026-08-17) — migrations 032/033
+  DRAFTED, NOT YET CONFIRMED RUN; un-archive-on-clear built first as a
+  prerequisite (see that entry above).** Owner's original ask: a
+  day-before Reminder email (Received-Request account holder or ToDo
+  owner, and a Sent Request's Recipient), a free opt-in "your Reminders
+  went out" daily digest to the Requestor, a daily "just became Overdue"
+  digest to the Requestor, individual Overdue emails to Recipients, and an
+  hourly first-nudge for Due-Time Overdue Requests followed by a daily
+  cadence thereafter (Due-Date-only Overdue Requests go straight to
+  daily). Every open design question was answered directly and is
+  reflected in the build: digests report only newly-affected items, never
+  a repeating stale list; the nudge cadence is exactly as above; ToDo
+  Reminders gate on `todo_dates_enabled` only, no separate checkbox; the
+  Reminders-sent digest is a free feature; "morning" and the
+  Overdue-transition pass both run at the *owner's own* local hour (the
+  Sent Request Reminder alone uses the *Recipient's* own zone instead —
+  see below); archived items are exempt from every notification, which
+  only holds together because un-archive-on-clear (above) now exists.
+  **Discovered mid-build and raised with the owner via AskUserQuestion**:
+  Vercel's Hobby plan caps Cron Jobs at once-per-day, conflicting with the
+  hourly design — **the owner upgraded to Vercel Pro the same day**,
+  unblocking the design as originally specified.
+  **Built as one hourly route, not three** —
+  `app/api/cron/tick/route.ts`, invoked by a single `vercel.json` entry
+  (`0 * * * *`), runs all four phases (day-before Reminders, Overdue
+  transition, recurring nudges, two Requestor digests) every hour,
+  gating each candidate row's own action on that row's own local hour
+  via new `app/src/lib/cronTime.ts` (pure `Intl.DateTimeFormat` helpers,
+  no date library) — a fixed-UTC-time Vercel Cron schedule can't itself
+  express "each owner's own morning," so the route re-derives local time
+  per row instead. Recipient-facing Reminder timing uses the Recipient's
+  own zone (`contacts.time_zone`, falling back to the owner's
+  `profiles.time_zone`); every other phase uses the owner's own zone.
+  service_role (`SUPABASE_SERVICE_ROLE_KEY`) is used throughout — the
+  same justified, narrow exception already carved out for the
+  attachments API routes, extended here since a cron run has no session
+  for RLS to scope to at all; owner account emails are read via
+  `auth.admin.getUserById()`, cached per run.
+  **Migration 032** (`docs/Week6 - SQL history.txt`) adds
+  `requests.reminder_sent_at`/`overdue_notified_at`/`last_overdue_nudge_at`
+  (idempotency columns, the app's own established convention over
+  reconstructing state from `events`) and
+  `profiles.reminder_digest_enabled`, plus the `get_received_request`/
+  `set_response_done_as_recipient` changes the un-archive feature needed.
+  **Migration 033** adds `cron_issue_request_link()` — a service_role-only
+  sibling of the owner-only `issue_request_link` (migration 008), since a
+  cron run has no `auth.uid()` for that function's own check to pass;
+  always mints a fresh token rather than attempting to reuse an
+  already-valid one, since only the token's hash is ever persisted and
+  the raw value can't be recovered — the same behavior `issue_request_link`
+  itself already has on every call. **Migrations 032 and 033 confirmed run
+  by the owner, 2026-08-17.** New Account toggle: "Notify Me When
+  Reminders Are Sent" (`AccountForm.tsx`, free, off by default). New
+  `CRON_SECRET` env var (`.env.local`, git-ignored) checked as a bearer
+  token against every request to the route — **still needs adding to
+  Vercel's own Environment Variables** before the real schedule can
+  authenticate; this sandbox has no network route to either Supabase or
+  the deployed Vercel app, so that step and the live end-to-end test
+  (`curl -X POST .../api/cron/tick -H "Authorization: Bearer
+  $CRON_SECRET"`) both have to happen on the owner's own machine. `npx tsc
+  --noEmit`/`npm run lint` clean.

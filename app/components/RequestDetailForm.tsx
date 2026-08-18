@@ -210,6 +210,12 @@ export default function RequestDetailForm() {
   // Request Response/Response Detail already show; Request Detail never had
   // one, so created_at was never even fetched here before now.
   const [createdAt, setCreatedAt] = useState<string | null>(null)
+  // Un-archive-on-clear (owner request, 2026-08-17) — the row's own
+  // archived_at as loaded, carried unchanged through Save unless Done Date
+  // is being cleared this Save (see handleSubmit). Not itself editable —
+  // there's no Archive/Un-archive control on this screen, only the
+  // side-effect of clearing Done Date.
+  const [archivedAt, setArchivedAt] = useState<string | null>(null)
 
   const [form, setForm] = useState<RequestFormState>({
     dueDate: '',
@@ -327,7 +333,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, archived_at, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -369,6 +375,7 @@ export default function RequestDetailForm() {
         done_time: string | null
         category_id: string | null
         reminder_enabled: boolean
+        archived_at: string | null
         contacts: { display_name: string } | null
         categories: { name: string } | null
       }
@@ -376,6 +383,7 @@ export default function RequestDetailForm() {
 
       setRecipientName(row.contacts?.display_name ?? '—')
       setCreatedAt(row.created_at)
+      setArchivedAt(row.archived_at)
       setForm({
         dueDate: row.due_date ?? '',
         dueTime: row.due_time ?? '',
@@ -615,6 +623,12 @@ export default function RequestDetailForm() {
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
         reminder_enabled: form.reminderEnabled,
+        // Un-archive-on-clear (owner request, 2026-08-17): clearing Done
+        // Date on a Request that was archived returns it to active status
+        // — preserved unchanged in every other case (including a non-
+        // archived Request's Done Date being cleared, where archivedAt is
+        // already null and this is a harmless no-op).
+        archived_at: form.doneDate.trim() === '' ? null : archivedAt,
       })
       .eq('id', requestId)
 
@@ -893,6 +907,17 @@ export default function RequestDetailForm() {
                   </label>
                 </span>
               </div>
+            )}
+
+            {/* Un-archive-on-clear advisory (owner request, 2026-08-17) —
+                only shows when this Request was loaded already archived AND
+                Done Date is currently empty (about to be cleared on Save).
+                Save itself does the actual work — see handleSubmit's
+                archived_at expression. */}
+            {archivedAt !== null && form.doneDate.trim() === '' && (
+              <p className="subnote">
+                This Request will be returned to active status and will appear in your lists again once saved.
+              </p>
             )}
 
             {/* Category row — only when the account has turned Private

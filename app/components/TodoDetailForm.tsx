@@ -188,6 +188,13 @@ export default function TodoDetailForm() {
   // fields it would otherwise sync with aren't rendered at all.
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
   const [todoStatus, setTodoStatus] = useState<'open' | 'done'>('open')
+  // Un-archive-on-clear (owner request, 2026-08-17) — the row's own
+  // archived_at as loaded, carried unchanged through Save unless Done
+  // Date is being cleared this Save (see handleSubmit). Not itself
+  // editable — there's no Archive/Un-archive control on this screen,
+  // only the side-effect of clearing Done Date (or, with Due/Done Dates
+  // off, switching the Status chip back to Open).
+  const [archivedAt, setArchivedAt] = useState<string | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -283,7 +290,7 @@ export default function TodoDetailForm() {
       const [todoRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, category_id, categories(name)')
+          .select('id, description, priority, due_date, done_date, category_id, archived_at, categories(name)')
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -319,6 +326,7 @@ export default function TodoDetailForm() {
         due_date: string | null
         done_date: string | null
         category_id: string | null
+        archived_at: string | null
         categories: { name: string } | null
       }
       const row = todoRes.data as unknown as Row
@@ -339,6 +347,7 @@ export default function TodoDetailForm() {
       setTodoDatesEnabled(ownerRes.data?.todo_dates_enabled ?? false)
       setTier(ownerRes.data?.tier === 'subscriber' ? 'subscriber' : 'free')
       setTodoStatus(row.done_date ? 'done' : 'open')
+      setArchivedAt(row.archived_at)
 
       await loadDialog()
       if (!cancelled) setLoading(false)
@@ -539,6 +548,14 @@ export default function TodoDetailForm() {
         done_date: effectiveDoneDate,
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
+        // Un-archive-on-clear (owner request, 2026-08-17): a ToDo that was
+        // archived returns to active status the moment Done Date is
+        // cleared — whether that happens via the plain Done Date field
+        // (todoDatesEnabled on) or the Status chip switching back to Open
+        // (todoDatesEnabled off), both of which effectiveDoneDate already
+        // reduces to null. Preserved unchanged otherwise, including the
+        // harmless case where archivedAt is already null.
+        archived_at: effectiveDoneDate === null ? null : archivedAt,
       })
       .eq('id', todoId)
 
@@ -768,6 +785,19 @@ export default function TodoDetailForm() {
                 </div>
               </div>
             )}
+
+            {/* Un-archive-on-clear advisory (owner request, 2026-08-17) —
+                only shows when this ToDo was loaded already archived AND
+                Done Date is about to be cleared on Save (via the plain
+                field when todoDatesEnabled is on, or the Status chip
+                reading Open when it's off). Save itself does the actual
+                work — see handleSubmit's archived_at expression. */}
+            {archivedAt !== null &&
+              (todoDatesEnabled ? form.doneDate.trim() === '' : todoStatus === 'open') && (
+                <p className="subnote">
+                  This ToDo will be returned to active status and will appear in your lists again once saved.
+                </p>
+              )}
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). See

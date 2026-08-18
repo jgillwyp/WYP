@@ -266,3 +266,336 @@ commit;
 -- Reminder checkbox saves on Send and reloads correctly on Request Detail;
 -- toggle it off, re-open, confirm it stayed off.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 032 — Cron notification schema: Reminder/Overdue timestamps,
+-- profiles.reminder_digest_enabled, and get_received_request/
+-- set_response_done_as_recipient extended for un-archive-on-clear-Done-Date.
+-- DRAFTED 2026-08-17 — NOT YET CONFIRMED RUN.
+--
+-- Owner design pass, 2026-08-17 (chat), covering the cron-driven email
+-- notification system: day-before Reminders (Sent Request recipients,
+-- Received Request account holders, ToDo owners), a daily "just became
+-- Overdue" pass (individual Recipient notice + a Requestor-facing "new
+-- Overdue" digest, new items only — "the email should state something
+-- along those lines, e.g., 'Requests that just became Overdue'"), and
+-- per-Request recurring Overdue nudges to Recipients (the owner's own
+-- cadence: "the hour after for Due Time Overdues, daily thereafter. The
+-- next day and daily thereafter for Due Date only Requests"). This
+-- migration is schema only — the cron routes and email templates
+-- themselves are separate, see app/api/cron/*/route.ts and
+-- app/src/lib/email.ts once built.
+--
+-- Three new nullable requests columns, each a pure idempotency/cadence
+-- marker for its own job, following reminder_enabled/archived_at's own
+-- "plain column, no derived state" convention (CLAUDE.md, Attachments'
+-- deleted_at precedent) rather than reconstructing "has this fired yet"
+-- from the events table on every cron run:
+--   reminder_sent_at      — day-before Reminder job. Set once, the run a
+--                            Sent Request's Reminder actually goes out.
+--                            Also what makes a row eligible for the new
+--                            Reminders-sent Requestor digest THIS run — no
+--                            separate flag needed, the digest job reads
+--                            "which rows did the Reminder job just touch."
+--   overdue_notified_at   — set once, the first run a Request is found
+--                            newly Overdue (due_date in the past,
+--                            done_date still null, not archived). Gates
+--                            the Requestor's "just became Overdue" digest
+--                            and the Recipient's own first individual
+--                            Overdue notice — both fire exactly once per
+--                            Request, never repeated, independent of
+--                            last_overdue_nudge_at below.
+--   last_overdue_nudge_at — the Recipient-facing RECURRING nudge cadence
+--                            only, independent of overdue_notified_at's
+--                            one-time Requestor-digest signal. Null until
+--                            the first nudge — for a Due-Date-only Request
+--                            that first nudge is the same event as
+--                            overdue_notified_at's own first set; for a
+--                            Due-Time Request the first nudge instead
+--                            fires an hour past the due date+time, ahead
+--                            of overdue_notified_at's own next-day pass.
+--                            Every later nudge — daily, either population,
+--                            per the owner's own cadence above — reads and
+--                            updates only this column.
+--
+-- profiles.reminder_digest_enabled — the owner's own explicit "Perhaps an
+-- Account option would be for being notified of Reminders having been
+-- sent to recipients in a daily summary email" — a free feature (owner
+-- confirmed 2026-08-17), off by default, matching every other opt-in
+-- Account toggle added since migration 018. Governs ONLY the Reminders-
+-- sent digest — the "new Overdue" Requestor digest is NOT gated by any
+-- toggle; the owner's own description framed the former as an optional
+-- "perhaps," the latter as a plain feature.
+--
+-- get_received_request()/set_response_done_as_recipient() extended for a
+-- related, smaller feature from the same design pass — owner: "Items
+-- subject to being archived are all Done" (true by construction: Archive
+-- only ever lists done_date is not null candidates) "...If a Request
+-- Detail is edited from the Archive list view and the Done Date is
+-- removed, the end-user should be advised that the item will be returned
+-- to active status and will appear in their lists. Accordingly, archived
+-- items will not be subject to any notifications" — that last sentence
+-- only holds if un-archiving is real; otherwise a reopened-but-still-
+-- archived Request would be invisible on Main Screen AND permanently
+-- exempt from every cron job above, a dead end. get_received_request()
+-- gains received_archived_at in its jsonb payload — that function's own
+-- migration 020 comment already flagged this as deferred ("NOT touched
+-- this batch... revisit if a future Un-Archive-from-Detail affordance
+-- needs it" — this is that revisit). set_response_done_as_recipient() now
+-- clears received_archived_at in the same UPDATE whenever p_done_date is
+-- null, preserving it otherwise. The owner-side case (Request Detail/ToDo
+-- Detail clearing archived_at) needs no function at all — those are plain
+-- RLS-writable owner updates, same as everywhere else on this table;
+-- RequestDetailForm.tsx/TodoDetailForm.tsx just include archived_at in
+-- their own existing update() call. Scoped exactly to what the owner
+-- asked — editing from Request/ToDo/Response Detail — NOT extended to the
+-- anonymous /r/[token] screen (RequestResponseForm.tsx), which has no
+-- session and can't see archived_at either way; flagged as a known,
+-- out-of-scope gap, not silently covered.
+-- ============================================================================
+
+begin;
+
+alter table public.requests
+  add column if not exists reminder_sent_at timestamptz,
+  add column if not exists overdue_notified_at timestamptz,
+  add column if not exists last_overdue_nudge_at timestamptz;
+
+comment on column public.requests.reminder_sent_at is
+  'Set once, the cron run a day-before Reminder email actually goes out for this Request (Sent Requests only — see app/api/cron/reminders/route.ts). Null = not sent yet. Also the signal the Reminders-sent Requestor digest reads: a row this job just touched this run is included once, then never again.';
+comment on column public.requests.overdue_notified_at is
+  'Set once, the cron run this Request is first found newly Overdue (due_date in the past, done_date still null, not archived). Gates the Requestor''s "just became Overdue" digest and the Recipient''s own first individual Overdue notice — both fire exactly once per Request, never repeated, independent of last_overdue_nudge_at below.';
+comment on column public.requests.last_overdue_nudge_at is
+  'Recurring Recipient-facing Overdue nudge cadence (app/api/cron/overdue-hourly and overdue-daily). Null until the first nudge; every nudge after that — daily, for both Due-Time and Due-Date-only Requests — reads and updates only this column, independent of overdue_notified_at''s own one-time Requestor-digest signal.';
+
+alter table public.profiles
+  add column if not exists reminder_digest_enabled boolean not null default false;
+
+comment on column public.profiles.reminder_digest_enabled is
+  'Opt-in — a daily summary email listing which of the owner''s own Sent Requests just had a day-before Reminder go out to their Recipient, each with a Request Detail link. Free feature (owner confirmed 2026-08-17), off by default like every other Account toggle since migration 018. Independent of the "new Overdue" Requestor digest, which is not gated by any toggle.';
+
+-- ----------------------------------------------------------------------------
+-- get_received_request — add received_archived_at, deferred from migration
+-- 028 ("revisit if a future Un-Archive-from-Detail affordance needs it").
+-- returns jsonb, so a plain CREATE OR REPLACE is safe (no OUT-parameter row
+-- shape to fight, unlike get_received_requests()'s own RETURNS TABLE).
+-- Byte-identical to the migration 020 version otherwise.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_as_recipient — clear received_archived_at in the same
+-- UPDATE whenever p_done_date is null (un-archive-on-clear); preserved
+-- unchanged otherwise. Byte-identical to the migration 012 version apart
+-- from that one added case expression.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_as_recipient(
+  p_request_id uuid,
+  p_done_date date,
+  p_done_time time
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        received_archived_at = case when p_done_date is null then null else received_archived_at end
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'response_done_updated',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'via', 'recipient_session')
+    );
+end;
+$$;
+
+revoke all on function public.set_response_done_as_recipient(uuid, date, time) from public;
+grant execute on function public.set_response_done_as_recipient(uuid, date, time) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name from information_schema.columns
+--   where table_schema = 'public' and table_name = 'requests'
+--     and column_name in ('reminder_sent_at', 'overdue_notified_at', 'last_overdue_nudge_at');
+--   select column_name from information_schema.columns
+--   where table_schema = 'public' and table_name = 'profiles'
+--     and column_name = 'reminder_digest_enabled';
+--
+-- Real test (as the owner, signed in as a recipient with a matching
+-- account): open a Received Request that's Done and Archived via Archive,
+-- clear its Done Date on Response Detail, Send. Confirm it now reappears on
+-- Main Screen's Received list and no longer appears in Archive.
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 033 — cron_issue_request_link(): service_role-only response
+-- link minting for the cron notification system.
+-- DRAFTED 2026-08-17 — NOT YET CONFIRMED RUN.
+--
+-- app/api/cron/tick/route.ts (built alongside this migration) needs to embed
+-- a working /r/[token] response link in every Reminder and Overdue email it
+-- sends — the same link Request Detail's own "Get Response Link" band used
+-- to expose manually (removed 2026-08-14) and CreateRequestForm.tsx already
+-- mints automatically on Send. That existing function, issue_request_link
+-- (migration 008), is owner-only by design: it checks auth.uid() = the
+-- Request's own owner_id. A cron run has no session — auth.uid() is null —
+-- so it cannot call issue_request_link at all, and must not: relaxing that
+-- function's own check would let any authenticated caller mint a link for
+-- any Request, a real privilege escalation.
+--
+-- cron_issue_request_link is a separate function, not a relaxed version of
+-- issue_request_link — same token/hash/expiry mechanics (30-day expiry,
+-- salted SHA-256 hash, existing events logging), but with NO auth.uid()
+-- check at all. Safe only because it is never granted to authenticated or
+-- anon — only to service_role, which app/api/cron/tick/route.ts alone holds
+-- (SUPABASE_SERVICE_ROLE_KEY, server-only env var, same posture as
+-- app/api/attachments/*/route.ts). A caller who already has service_role
+-- can bypass RLS and read/write the requests table directly regardless, so
+-- this function grants no new capability to anyone who didn't already have
+-- it — it exists only so the cron route doesn't have to reimplement
+-- token-hash generation in JS and risk a byte-level mismatch against
+-- get_request_by_token's own `digest(p_token, 'sha256')` comparison.
+--
+-- Always mints a fresh token and overwrites link_token_hash, exactly like
+-- issue_request_link itself already does unconditionally on every call
+-- (migration 008 has no "reuse if still valid" branch either) — deliberate,
+-- not an oversight. Only the hash is ever persisted (CLAUDE.md's own
+-- "store digest(token,'sha256') not the token" rule), so a still-valid
+-- earlier link's raw value can never be recovered to re-embed in a second
+-- email; the only options are mint-fresh-and-supersede (what this does, and
+-- what the app has always done) or leave a stale link in an older email
+-- forever un-refreshed. A recipient who already clicked an earlier email's
+-- link and is mid-session on /r/[token] is unaffected either way — that
+-- page holds the token client-side for the rest of its own visit,
+-- independent of what the database's own current hash is.
+-- ============================================================================
+
+begin;
+
+create or replace function public.cron_issue_request_link(p_request_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_token text;
+begin
+  select owner_id into v_owner from public.requests where id = p_request_id;
+
+  if v_owner is null then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  update public.requests
+    set link_token_hash = digest(v_token, 'sha256'),
+        link_expires_at = now() + interval '30 days',
+        link_revoked_at = null
+    where id = p_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', p_request_id, p_request_id, 'issued', '{"via": "cron"}'::jsonb);
+
+  return v_token;
+end;
+$$;
+
+revoke all on function public.cron_issue_request_link(uuid) from public;
+grant execute on function public.cron_issue_request_link(uuid) to service_role;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name = 'cron_issue_request_link';
+--        -> should show service_role / EXECUTE only (no authenticated, no anon)
+--
+-- Real test: covered by the cron route's own manual-trigger test once
+-- CRON_SECRET is set — see app/api/cron/tick/route.ts's own header comment.
+-- ============================================================================

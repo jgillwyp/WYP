@@ -196,3 +196,169 @@ export const EMAIL_FROM_ADDRESS = 'notifications@wouldyouplease.com'
 export function buildRequestEmailFromName(ownerName: string | null): string {
   return ownerName ? `${ownerName} via Would You Please` : 'Would You Please'
 }
+
+// ============================================================================
+// Chron notification templates — day-before Reminders (ToDos), individual
+// Overdue notices/nudges (Recipients), and the two Requestor-facing digests.
+// Added 2026-08-17 alongside app/api/cron/tick/route.ts and migration 032.
+// Owner's own design pass (2026-08-17 chat) — see that migration's header
+// comment and the decisions log for the full requirements. All pure/
+// isomorphic, same reasoning as the rest of this module: no env access, no
+// network call, safe to import from the cron route or (in principle) a
+// future UI preview.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Overdue notice/nudge — sent to a Request's Recipient. One template covers
+// both the first individual Overdue notice (owner's own ask: "Individual
+// emails would be sent to Recipients when a Request is overdue") and every
+// later hourly/daily nudge for a Due-Time Request (owner: "an hourly process
+// could send a reminder email to the Recipient advising them the Due Date
+// and Time have passed... providing a link to do so") — the wording already
+// works unchanged for a repeat send, so there's no separate "nudge" template.
+// ----------------------------------------------------------------------------
+type OverdueRecipientEmailFields = {
+  ownerName: string | null
+  description: string
+  dueDate: string
+  dueTime: string | null
+  link: string
+  siteUrl: string
+}
+
+export function buildOverdueRecipientEmailSubject(
+  ownerName: string | null,
+  dueDate: string,
+  dueTime: string | null
+): string {
+  const from = ownerName ? ` from ${ownerName}` : ''
+  const due = formatMDY(dueDate) + (dueTime && dueTime.trim() !== '' ? ` ${formatTime12h(dueTime)}` : '')
+  return `OVERDUE: A Would You Please Request${from}, Due: ${due}`
+}
+
+export function buildOverdueRecipientEmailHtml(fields: OverdueRecipientEmailFields): string {
+  const due = formatMDY(fields.dueDate) + (fields.dueTime ? ` ${formatTime12h(fields.dueTime)}` : '')
+  return [
+    `<p>The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.</p>`,
+    `<p><a href="${fields.link}">Request Detail</a></p>`,
+    `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+    `<p>New to <a href="${fields.siteUrl}">Would You Please</a>? click to set up a free account.</p>`,
+  ].join('\n')
+}
+
+export function buildOverdueRecipientEmailText(fields: OverdueRecipientEmailFields): string {
+  const due = formatMDY(fields.dueDate) + (fields.dueTime ? ` ${formatTime12h(fields.dueTime)}` : '')
+  return [
+    `The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.`,
+    '',
+    'Request Detail:',
+    fields.link,
+    '',
+    fields.description,
+    '',
+    'New to Would You Please? click to set up a free account:',
+    fields.siteUrl,
+  ].join('\n')
+}
+
+// ----------------------------------------------------------------------------
+// ToDo day-before Reminder — sent to the owner's own account email (a ToDo
+// has no Recipient). Gated entirely on todo_dates_enabled by the cron route,
+// not by any per-ToDo checkbox (owner: "Gated on ToDo Dates enabled").
+// ----------------------------------------------------------------------------
+type TodoReminderEmailFields = {
+  description: string
+  dueDate: string
+  link: string
+}
+
+export function buildTodoReminderEmailSubject(dueDate: string): string {
+  return `REMINDER: Your Would You Please ToDo, Due: ${formatMDY(dueDate)}`
+}
+
+export function buildTodoReminderEmailHtml(fields: TodoReminderEmailFields): string {
+  return [
+    `<p>This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.</p>`,
+    `<p><a href="${fields.link}">ToDo Detail</a></p>`,
+    `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+  ].join('\n')
+}
+
+export function buildTodoReminderEmailText(fields: TodoReminderEmailFields): string {
+  return [
+    `This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.`,
+    '',
+    'ToDo Detail:',
+    fields.link,
+    '',
+    fields.description,
+  ].join('\n')
+}
+
+// ----------------------------------------------------------------------------
+// Requestor-facing digests — one row per Request, each with a "Request
+// Detail" link (owner's own specified link title, reused verbatim from the
+// Overdue-Recipient template above). Two digests share this one row shape
+// and HTML/text list-building logic, differing only in subject line and
+// intro sentence:
+//   - Reminders-sent digest (opt-in, profiles.reminder_digest_enabled) —
+//     owner: "The Email could report the Recipient Name, the Request
+//     Description and the Due Time if used."
+//   - New-Overdue digest (not gated by any toggle) — owner: "the email
+//     should state something along those lines, e.g., 'Requests that just
+//     became Overdue'" — new items only, never a repeat of yesterday's list.
+// ----------------------------------------------------------------------------
+export type DigestItem = {
+  recipientName: string
+  description: string
+  dueTime: string | null
+  link: string
+}
+
+function digestRowHtml(item: DigestItem): string {
+  const time = item.dueTime ? ` &nbsp; ${formatTime12h(item.dueTime)}` : ''
+  return `<li><b>${escapeHtml(item.recipientName)}</b> — ${escapeHtml(item.description)}${time} — <a href="${item.link}">Request Detail</a></li>`
+}
+
+function digestRowText(item: DigestItem): string {
+  const time = item.dueTime ? `  ${formatTime12h(item.dueTime)}` : ''
+  return `${item.recipientName} — ${item.description}${time} — Request Detail: ${item.link}`
+}
+
+export function buildReminderDigestEmailSubject(): string {
+  return 'Would You Please: Reminders Sent to Recipients'
+}
+
+export function buildReminderDigestEmailHtml(items: DigestItem[]): string {
+  return [
+    '<p>A day-before Reminder email was just sent to the Recipient of each of these Requests:</p>',
+    `<ul>${items.map(digestRowHtml).join('\n')}</ul>`,
+  ].join('\n')
+}
+
+export function buildReminderDigestEmailText(items: DigestItem[]): string {
+  return [
+    'A day-before Reminder email was just sent to the Recipient of each of these Requests:',
+    '',
+    ...items.map(digestRowText),
+  ].join('\n')
+}
+
+export function buildOverdueDigestEmailSubject(): string {
+  return 'Would You Please: Requests That Just Became Overdue'
+}
+
+export function buildOverdueDigestEmailHtml(items: DigestItem[]): string {
+  return [
+    '<p>These Requests just became Overdue — their Due Date has passed and they have not been reported as Done:</p>',
+    `<ul>${items.map(digestRowHtml).join('\n')}</ul>`,
+  ].join('\n')
+}
+
+export function buildOverdueDigestEmailText(items: DigestItem[]): string {
+  return [
+    'These Requests just became Overdue — their Due Date has passed and they have not been reported as Done:',
+    '',
+    ...items.map(digestRowText),
+  ].join('\n')
+}

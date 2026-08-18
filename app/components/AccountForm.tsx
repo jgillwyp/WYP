@@ -79,6 +79,11 @@ export default function AccountForm() {
   // Default flipped to false, migration 023 — see the file-level comment.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(false)
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  // profiles.reminder_digest_enabled (migration 032, 2026-08-17) — off by
+  // default, same "opt-in, plain boolean, immediate write" pattern as every
+  // toggle above. See app/api/cron/tick/route.ts's own header comment for
+  // the full Chron notification design.
+  const [reminderDigestEnabled, setReminderDigestEnabled] = useState(false)
   // Testing-only tier toggle (migration 024) — the DB column is text
   // ('free'/'subscriber'), not boolean, so it gets its own state and
   // handler rather than joining the shared boolean handleToggle below.
@@ -106,7 +111,7 @@ export default function AccountForm() {
 
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('private_category_enabled, request_time_enabled, todo_dates_enabled, tier')
+        .select('private_category_enabled, request_time_enabled, todo_dates_enabled, reminder_digest_enabled, tier')
         .eq('id', userData.user.id)
         .single()
 
@@ -121,6 +126,7 @@ export default function AccountForm() {
       setCategoriesEnabled(data?.private_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? false)
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+      setReminderDigestEnabled(data?.reminder_digest_enabled ?? false)
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setLoading(false)
     }
@@ -132,7 +138,7 @@ export default function AccountForm() {
   }, [])
 
   async function handleToggle(
-    field: 'private_category_enabled' | 'request_time_enabled' | 'todo_dates_enabled',
+    field: 'private_category_enabled' | 'request_time_enabled' | 'todo_dates_enabled' | 'reminder_digest_enabled',
     next: boolean,
     setLocal: (value: boolean) => void,
   ) {
@@ -271,6 +277,25 @@ export default function AccountForm() {
               <span className="checknote">
                 Adds Due Date and Done Date for ToDos instead of just a Status of Open
                 and Done. Off by default. Turn it on for more precise ToDo tracking.
+              </span>
+            </span>
+          </label>
+
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={reminderDigestEnabled}
+              disabled={saving}
+              onChange={(e) =>
+                handleToggle('reminder_digest_enabled', e.target.checked, setReminderDigestEnabled)
+              }
+            />
+            <span className="checktext">
+              Notify Me When Reminders Are Sent
+              <span className="checknote">
+                A daily summary email listing which of your Sent Requests just had a
+                day-before Reminder go out to their Recipient, with a link to each
+                Request. Off by default.
               </span>
             </span>
           </label>
