@@ -75,6 +75,11 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
+// 2026-08-17 — single-item print's new Priority column needs the same
+// label the chip UI already renders as literal text ("ASAP"/"SOON"/
+// "LATER"); no shared constant existed for it in this file until now.
+const PRIORITY_LABEL: Record<number, string> = { 1: 'ASAP', 2: 'SOON', 3: 'LATER' }
+
 function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 3) + '...' : s
 }
@@ -225,6 +230,11 @@ export default function TodoDetailForm() {
   // Locations (Week 5 Priority 3, 2026-08-14) — AttachmentsPanel does its
   // own fetching once these are known.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  // Date created — read-only, print-only (2026-08-17). Not part of `form`
+  // since it's never editable/saved; same pattern as ownerName/tier above.
+  // Needed for the single-item print's new Priority/Date/[Due]/Done first
+  // line, matching Main Screen's/Archive's own ToDos print redesign.
+  const [createdAt, setCreatedAt] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [authToken, setAuthToken] = useState<string | null>(null)
 
@@ -290,7 +300,7 @@ export default function TodoDetailForm() {
       const [todoRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, category_id, archived_at, categories(name)')
+          .select('id, description, priority, due_date, done_date, created_at, category_id, archived_at, categories(name)')
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -325,6 +335,7 @@ export default function TodoDetailForm() {
         priority: number | null
         due_date: string | null
         done_date: string | null
+        created_at: string
         category_id: string | null
         archived_at: string | null
         categories: { name: string } | null
@@ -338,6 +349,7 @@ export default function TodoDetailForm() {
         categoryName: row.categories?.name ?? '',
         description: row.description ?? '',
       })
+      setCreatedAt(row.created_at)
       if (row.category_id && row.categories) {
         setSelectedCategory({ id: row.category_id, name: row.categories.name })
       }
@@ -1131,24 +1143,29 @@ export default function TodoDetailForm() {
         )}
       </div>
 
-      {/* Single-item print (2026-08-15) — same shape as MainScreen.tsx's own
-          ToDos print (no name/date column, Description first, Due/Done
-          second, dropped entirely when todoDatesEnabled is off). Column-
-          header row added same day (owner-reported missing app-wide) —
-          reuses Main Screen's own .pcolbar.ptdc/.ptdc-nodates classes
-          verbatim, just without a sort arrow (nothing to sort with one
-          record, same reasoning as RequestDetailForm.tsx's own header). */}
+      {/* Single-item print, redesigned 2026-08-17 for consistency with Main
+          Screen's and Archive's own ToDos print reports (same day's earlier
+          batch) — supersedes the 2026-08-15 shape (Description first, no
+          Priority column at all, Due/Done as a second .pr1.ptd line), which
+          had the identical "missing Priority value" gap those two reports
+          were just fixed for. Reuses .pcolbar.pdcols/.pr1.pdcols verbatim —
+          same Priority/Date/[Due]/Done first line as the list reports, just
+          without a sort arrow (nothing to sort with one record, same
+          reasoning as RequestDetailForm.tsx's own header row). Date here is
+          this ToDo's own created_at (newly fetched — see the `Row` type
+          above), matching the list reports' "Date created is always shown"
+          rule rather than being gated by todoDatesEnabled. */}
       {showPrint && (
         <div className="print-report">
           <div className="ptitle">ToDo Detail</div>
-          <div className={`pcolbar ${todoDatesEnabled ? 'ptdc' : 'ptdc-nodates'}`}>
-            <span className="c-desc">Description</span>
-            {todoDatesEnabled && (
-              <>
-                <span className="c-due">Due</span>
-                <span className="c-dn">Done</span>
-              </>
-            )}
+          <div className={`pcolbar pdcols${todoDatesEnabled ? ' wide' : ''}`}>
+            <span className="namecell">
+              <span>Priority</span>
+              <span className="c-desc">Description</span>
+            </span>
+            <span className="c-dt">Date</span>
+            {todoDatesEnabled && <span className="c-due">Due</span>}
+            <span className="c-dn">Done</span>
           </div>
           <div className="prows">
             {(() => {
@@ -1161,18 +1178,18 @@ export default function TodoDetailForm() {
                 : todoStatus
               return (
                 <div className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
+                  <div className={`pr1 pdcols${todoDatesEnabled ? ' wide' : ''}`}>
+                    <span className="ppri">{PRIORITY_LABEL[form.priority] ?? ''}</span>
+                    <span className="pdt">{formatMDY(createdAt)}</span>
+                    {todoDatesEnabled && <span className="pdue">{formatMDY(form.dueDate || null)}</span>}
+                    <span className="pdn">{formatMDY(form.doneDate || null)}</span>
+                  </div>
                   <div className="pr2">
                     <span className="pdesc">
                       {categoriesEnabled && categoryPrefix(form.categoryName)}
                       {form.description}
                     </span>
                   </div>
-                  {todoDatesEnabled && (
-                    <div className="pr1 ptd">
-                      <span className="pdue">{formatMDY(form.dueDate || null)}</span>
-                      <span className="pdn">{formatMDY(form.doneDate || null)}</span>
-                    </div>
-                  )}
                   <PrintDialogList entries={dialogList} />
                   <PrintAttachmentList entries={printAttachments} />
                 </div>

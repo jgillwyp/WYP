@@ -1869,12 +1869,18 @@ link is built only after the stack is proven on Add Contact.
   print reports (Main Screen and Archive) gained a Priority column on their
   own first print line (`.pcolbar.pdcols`/`.pr1.pdcols`, new `.ppri` class),
   superseding the old `.pcolbar.ptdc`/`.ptdc-nodates` shape, which never
-  showed Priority at all. **`TodoDetailForm.tsx`'s own single-item ToDo
-  print still uses the old, Priority-less `.ptdc`/`.ptdc-nodates` shape** —
-  out of scope for this batch (owner named Main Screen and Archive
-  specifically), flagged as a known, fixable-on-request gap rather than
-  silently left inconsistent. Done-band wording ("...just click Save.")
-  changed to "This ToDo is now marked as Done." in both `TodoDetailForm.tsx`
-  and `CreateTodoForm.tsx` — owner: the old wording read like Save was still
-  needed for the Done status itself. `npx tsc --noEmit`/`npm run lint`
-  clean.
+  showed Priority at all. `TodoDetailForm.tsx`'s own single-item ToDo print
+  originally kept the old, Priority-less `.ptdc`/`.ptdc-nodates` shape —
+  flagged as a known gap, then closed the same day on the owner's own
+  follow-up ("apply the same fix... for consistency"): its query gained
+  `created_at` (a new `createdAt` state, separate from `form` since it's
+  never editable — same pattern as `ownerName`/`tier`), a local
+  `PRIORITY_LABEL` map was added (no shared constant existed in this file
+  before), and the print block now uses the identical `.pcolbar.pdcols`/
+  `.pr1.pdcols` shape the list reports use, just without a sort arrow —
+  nothing to sort with one record, same reasoning `RequestDetailForm.tsx`'s
+  own single-item header already established. Done-band wording ("...just
+  click Save.") changed to "This ToDo is now marked as Done." in both
+  `TodoDetailForm.tsx` and `CreateTodoForm.tsx` — owner: the old wording
+  read like Save was still needed for the Done status itself. `npx tsc
+  --noEmit`/`npm run lint` clean.

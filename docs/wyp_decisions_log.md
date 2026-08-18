@@ -6,6 +6,12 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-17 — ToDo Detail's single-item print closes the same "missing Priority" gap
+
+Owner, same day, immediately after confirming the batch below: "For consistency, please apply the same fix to the ToDo Detail print" — the gap that entry's own "Not touched, flagged rather than silently skipped" note called out. `TodoDetailForm.tsx`'s query gained `created_at` (this ToDo's own creation date wasn't fetched at all before); a new `createdAt` state holds it, kept separate from `form` since it's never editable or saved, the same convention already used for `ownerName`/`tier`. No `PRIORITY_LABEL` map existed in this file — the Priority chip UI has always rendered "ASAP"/"SOON"/"LATER" as literal JSX text, never a lookup — so one was added locally. The print block now uses `.pcolbar.pdcols`/`.pr1.pdcols`, identical to Main Screen's and Archive's own redesigned reports, with no sort arrow (nothing to sort with a single record, matching `RequestDetailForm.tsx`'s own single-item header precedent). `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-17 — ToDos colbar black-text bug fixed; Archive ToDos matched to Main Screen's new layout; print reports redesigned; ToDo Detail Done-band wording
 
 Owner testing the batch above found five issues, all from the same session. Fixed together.
