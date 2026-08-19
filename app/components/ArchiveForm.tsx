@@ -101,6 +101,12 @@ type SentCandidate = {
   created_at: string
   archived_at: string | null
   contacts: { display_name: string } | null
+  // dialog(count)/attachments(count) — 2026-08-19, closing a gap the owner
+  // spotted: this screen's rows never showed the Dialog/Attachments icons
+  // Main Screen's own Sent/Received/ToDos rows already have. Same PostgREST
+  // count-embed technique as MainScreen.tsx's SentRow.
+  dialog: { count: number }[] | null
+  attachments: { count: number }[] | null
 }
 
 type ReceivedCandidate = {
@@ -111,6 +117,11 @@ type ReceivedCandidate = {
   created_at: string
   owner_name: string | null
   received_archived_at: string | null
+  // get_received_requests() (migration 012/027) already returns these —
+  // MainScreen.tsx's ReceivedRow already reads them, this screen's own
+  // ReceivedCandidate just hadn't picked them up yet.
+  dialog_count: number
+  attachment_count: number
 }
 
 type TodoCandidate = {
@@ -121,6 +132,9 @@ type TodoCandidate = {
   done_date: string | null
   created_at: string
   archived_at: string | null
+  // Dialog only — ToDos' own Locations have no icon of their own yet,
+  // matching MainScreen.tsx's TodoRow (no attachments field there either).
+  dialog: { count: number }[] | null
 }
 
 const PRIORITY_LABEL: Record<number, string> = { 1: 'ASAP', 2: 'SOON', 3: 'LATER' }
@@ -337,6 +351,47 @@ function ColSort({
     >
       {active ? <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span> : label}
     </button>
+  )
+}
+
+// Dialog/Attachments row icons (2026-08-19) — duplicated verbatim from
+// MainScreen.tsx's own DialogIcon/AttachmentIcon (this app's established
+// convention for small stateless per-file helpers, same as formatMDY/
+// PRIORITY_LABEL elsewhere) so Archive's rows can show the same "something
+// here" indicator Main Screen's own Sent/Received/ToDos rows already do —
+// this screen never had them, closing a gap the owner spotted directly.
+function DialogIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Dialog present</title>
+      <path
+        d="M23,6 H37 A5,5 0 0 1 42,11 V19 A5,5 0 0 1 37,24 H30 L36,31 L28,24 H23 A5,5 0 0 1 18,19 V11 A5,5 0 0 1 23,6 Z"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11,20 H25 A5,5 0 0 1 30,25 V33 A5,5 0 0 1 25,38 H17 L10,44 L13,38 H11 A5,5 0 0 1 6,33 V25 A5,5 0 0 1 11,20 Z"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function AttachmentIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Attachments present</title>
+      <path
+        d="M32,14 L20,26 A6,6 0 0 0 28.5,34.5 L39,24 A10,10 0 0 0 24.5,9.5 L12.5,21.5 A14,14 0 0 0 32,41"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 
@@ -567,17 +622,18 @@ export default function ArchiveForm() {
       const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name)')
+          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count)')
           .not('contact_id', 'is', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +received_archived_at via
         // migration 028) — same reasoning as MainScreen.tsx: no column links
         // a requests row to its recipient's own account, only to the
-        // sender's Contact record for them.
+        // sender's Contact record for them. Already returns dialog_count/
+        // attachment_count (migration 027) — no query change needed there.
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, created_at, archived_at')
+          .select('id, description, priority, due_date, done_date, created_at, archived_at, dialog(count)')
           .is('contact_id', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
       ])
@@ -618,6 +674,10 @@ export default function ArchiveForm() {
     doneISO: string
     priLabel: string
     priority: number | null
+    // dialogCount/attachmentCount — 2026-08-19, see the Candidate types
+    // above. attachmentCount is always 0 for a ToDo row.
+    dialogCount: number
+    attachmentCount: number
   }
 
   const rows: Row[] = useMemo(() => {
@@ -636,6 +696,8 @@ export default function ArchiveForm() {
           doneISO: (r.done_date ?? '').slice(0, 10),
           priLabel: '',
           priority: null,
+          dialogCount: r.dialog?.[0]?.count ?? 0,
+          attachmentCount: r.attachments?.[0]?.count ?? 0,
         }))
     }
     if (currentType === 'received') {
@@ -653,6 +715,8 @@ export default function ArchiveForm() {
           doneISO: (r.done_date ?? '').slice(0, 10),
           priLabel: '',
           priority: null,
+          dialogCount: r.dialog_count,
+          attachmentCount: r.attachment_count,
         }))
     }
     // 2026-08-17 — due/date populated (previously always null): Archive's
@@ -673,6 +737,8 @@ export default function ArchiveForm() {
         doneISO: (t.done_date ?? '').slice(0, 10),
         priLabel: t.priority ? PRIORITY_LABEL[t.priority] : '',
         priority: t.priority ?? null,
+        dialogCount: t.dialog?.[0]?.count ?? 0,
+        attachmentCount: 0,
       }))
   }, [currentType, sentData, receivedData, todoData])
 
@@ -1222,6 +1288,9 @@ export default function ArchiveForm() {
                             <span className="dn">{r.doneDisp}</span>
                           </div>
                           <div className="r2">
+                            {r.dialogCount > 0 && (
+                              <span className="ii"><DialogIcon /></span>
+                            )}
                             <span className="desc">{r.desc}</span>
                           </div>
                         </>
@@ -1234,6 +1303,12 @@ export default function ArchiveForm() {
                             <span className="dn">{r.doneDisp}</span>
                           </div>
                           <div className="r2">
+                            {r.dialogCount > 0 && (
+                              <span className="ii"><DialogIcon /></span>
+                            )}
+                            {r.attachmentCount > 0 && (
+                              <span className="ii"><AttachmentIcon /></span>
+                            )}
                             <span className="desc">{r.desc}</span>
                           </div>
                         </>

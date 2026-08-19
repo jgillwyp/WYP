@@ -2034,3 +2034,68 @@ link is built only after the stack is proven on Add Contact.
   field, not the shared `.ftextarea` base rule, so Create Request/Create
   ToDo and every other textarea (Dialog Text, Notes) are unaffected. `npx
   tsc --noEmit`/`npm run lint` clean.
+- **"Subscribed?" toggle locked down, private-testing style — migration 035
+  DRAFTED, NOT YET CONFIRMED RUN (2026-08-19).** Owner: "We should lock
+  down the subscribe., but can we do it in a way which is similar to the
+  Private Testing method in place for opening a Free Account?" — followed
+  by "let the user know that the status will only be in effect during the
+  testing - afterward, they can 'actually' subscribe." Mirrors migration
+  015's shape: `app_settings.tier_toggle_gate_enabled` +
+  `tier_toggle_allowlist` (a separate table from `beta_allowlist` — signup
+  eligibility and self-grant-Subscriber-for-testing are different
+  permissions), seeded with the owner's own email so this doesn't lock him
+  out of Attachments testing. `can_toggle_tier()`/`set_tier_for_testing
+  (p_tier)` are the only permitted read/write path; migration 024's
+  blanket `grant update (tier) on profiles to authenticated` — the real
+  security hole — is revoked in the same migration, not left alongside the
+  new gated one. `AccountForm.tsx`'s Subscribed row is now wrapped in
+  `{canToggleTier && (...)}` (hidden entirely for anyone not allowed,
+  rather than shown and failing on click) and `handleTierToggle` calls the
+  RPC instead of a raw table update; the `checknote` copy now says the
+  status "only lasts for the testing period" and real subscription comes
+  later through an actual Subscription Details/eCommerce page. `npx tsc
+  --noEmit`/`npm run lint` clean. **Migration 035 confirmed run by the
+  owner, 2026-08-19.**
+- **Archive rows gain the Dialog/Attachments icons Main Screen's own rows
+  already have (2026-08-19).** Owner: "the description does not have the
+  Dialog and Attachments icons shown." `ArchiveForm.tsx`'s own Sent/
+  Received/ToDos queries never selected the counts those icons key off of.
+  Fixed by adding `dialog(count)`/`attachments(count)` to the Sent/ToDos
+  queries (Received's `get_received_requests()` RPC already returns
+  `dialog_count`/`attachment_count`, migration 027 — just needed adding to
+  the type) and threading them through the shared `Row` type into both row-
+  JSX branches, same icon-if-count-greater-than-zero pattern as
+  `MainScreen.tsx`. ToDos get Dialog only, matching Main Screen's own
+  TodoRow (no attachment/Locations icon exists anywhere yet).
+  `DialogIcon`/`AttachmentIcon` duplicated verbatim into `ArchiveForm.tsx`,
+  per this codebase's per-file-duplication convention. `npx tsc --noEmit`/
+  `npm run lint` clean.
+- **Search Mode redesign — results shown within Main Screen, Date Range
+  scope, Archived badge, "Search Results" notice (2026-08-19, §6.39
+  PROPOSED).** Owner had been designing a separate Search Results screen and
+  reconsidered: "showing results within the main screen would be more
+  logical." Confirmed via design discussion (recommendation → rejected
+  alternatives → open questions): Sent and Received stay in their own
+  separate sections during search (they always did — search was never
+  blending them); Archived items are automatically included and badged, not
+  opt-in ("at this point... maybe an 'Advanced' search option can be
+  offered later"); status chips are replaced by a plain "Search Results"
+  notice; and the text field auto-exits search mode the instant it's
+  cleared by hand. `.scope` is now a real `<select>` (All / Date Range),
+  replacing the old visual-only button — Date Range swaps the text field
+  for paired From/To Due Date fields (`matchesDateRange`, either side alone
+  valid). `isSearching` is derived from `searchText`/`fromDate`/`toDate`,
+  never a stored mode flag — this is what makes the auto-exit instruction
+  fall out for free. While searching: `matchesStatusFilter` is bypassed
+  entirely in `filteredSent`/`filteredReceived`/`filteredTodos` rather than
+  still narrowing results; the archived-row-hidden-at-rest check now keys
+  off `!isSearching` instead of `query === ''`, so Date Range searches
+  surface Archived rows too; each section's `.chips` row swaps to a plain
+  `.searchnotice` span; a small `.archtag` badge marks matched Archived rows
+  in `.r2`, keeping them inside their normal section rather than a separate
+  list; and a `.clearsearch` "Clear Search ×" control appears next to the
+  field(s) as one reliable exit regardless of scope, alongside the text
+  field's own inline `.fclear` × in a new `.fieldwrap` wrapper. Both call
+  `clearSearch()`, resetting text/dates/scope together. `npx tsc --noEmit`/
+  `npm run lint` clean. No mockup updated — none of the existing mockups
+  model Search at all; flagged in `design/README.md`.

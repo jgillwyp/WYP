@@ -39,10 +39,29 @@ import { usePWAInstall } from './PWAProvider'
  *   keystroke or chip click, since these lists are personal-scale (same
  *   reasoning as the Recipient/Category lookups elsewhere in the app).
  *   Search matches description plus contact name (Sent) / owner name
- *   (Received) / category name (ToDos), case-insensitive substring. The
- *   scope button ("All ▼") stays visual-only — it has never had a designed
- *   picker (see CLAUDE.md) and search already runs across all three sections
- *   at once, so there's nothing yet for a scope to narrow.
+ *   (Received) / category name (ToDos), case-insensitive substring, in the
+ *   default "All" scope. **Search Mode redesign, 2026-08-19** — supersedes
+ *   the "scope button stays visual-only" note that used to be here. The
+ *   scope button is now a real two-item picker (a plain `<select>`, styled
+ *   to match): "All" (the text search above) or "Date Range," which swaps
+ *   the text field for paired From/To Due Date fields — either side alone is
+ *   a valid search (matchesDateRange below). Results still render inside
+ *   Sent/Received/ToDos' own three sections, never a separate screen or a
+ *   blended list ("showing results within the main screen would be more
+ *   logical," owner) — Sent and Received were never blended in the first
+ *   place (filteredSent/filteredReceived always ran independently). While
+ *   any search criteria is active (isSearching, derived from searchText/
+ *   fromDate/toDate — never a separate stored "mode" flag, so clearing a
+ *   field by hand exits immediately with nothing further to reset): the
+ *   status chips (Open/Overdue/Done) are replaced by a plain "Search
+ *   Results" notice per section rather than still narrowing results
+ *   (matchesStatusFilter only applies at rest now); Archived items are
+ *   automatically included and tagged with a small "Archived" badge next to
+ *   the row's icons, rather than needing a separate opt-in ("at this
+ *   point... maybe an 'Advanced' search option can be offered later," owner);
+ *   and a "Clear Search ×" control appears next to the field(s) as one
+ *   reliable, always-visible way out regardless of scope, alongside the text
+ *   field's own inline × once it holds a value.
  * - Chip state survives a trip to a Detail screen and back (2026-08-09 —
  *   "It would be appropriate to return to the same chip state on the main
  *   screen"). This screen fully remounts on router.back() (no Cache
@@ -288,6 +307,20 @@ function matchesStatusFilter(
   if (filter === 'all') return true
   if (filter === 'open') return status === 'open' || status === 'overdue'
   return status === filter
+}
+
+// Date Range search scope (2026-08-19) — either side alone is a valid
+// search: From with no To means "on or after," To with no From means "on or
+// before," both means inclusive between. A row with no Due Date at all never
+// matches a Date Range search (nothing to compare) — same reasoning as
+// Archive's own "Before Done Date" filter treating a missing date as not a
+// match, just generalized to two sides instead of one.
+function matchesDateRange(dueDate: string | null, from: string, to: string): boolean {
+  if (!dueDate) return false
+  const d = dueDate.slice(0, 10)
+  if (from && d < from) return false
+  if (to && d > to) return false
+  return true
 }
 
 function dialogCount(dialog: { count: number }[] | null): number {
@@ -704,6 +737,51 @@ export default function MainScreen() {
   )
   const [searchText, setSearchText] = useState('')
 
+  // Search Mode redesign (2026-08-19) — owner: showing search results within
+  // Main Screen itself (not a separate screen) is "more logical," the Date
+  // scope button (previously visual-only, see the file header comment above)
+  // becomes a real "Date Range" scope with From/To fields replacing the text
+  // field, Archived items are automatically included while searching (no
+  // separate opt-in — "at this point... maybe an 'Advanced' search option can
+  // be offered later"), and the status chips (Open/Overdue/Done) disappear in
+  // favor of a plain "Search Results" notice while any search criteria is
+  // active. Sent and Received deliberately stay two separate sections/lists
+  // during a search, same as at rest — search was never blending them (see
+  // filteredSent/filteredReceived below, each filtered independently).
+  //
+  // searchScope only ever holds two values today; Date Range clears
+  // searchText on entry and All clears fromDate/toDate on entry, so only one
+  // field-set is ever "live" at a time — no stale hidden criteria silently
+  // narrowing a result set the person can no longer see.
+  const [searchScope, setSearchScope] = useState<'all' | 'daterange'>('all')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+
+  function selectSearchScope(next: 'all' | 'daterange') {
+    setSearchScope(next)
+    if (next === 'daterange') {
+      setSearchText('')
+    } else {
+      setFromDate('')
+      setToDate('')
+    }
+  }
+
+  // Deliberately derived, not a separate "in search mode" boolean — the
+  // owner's own instruction ("the text box emptying by hand should auto-exit
+  // search mode immediately") falls out for free this way: there is no mode
+  // flag to separately reset, so the instant the relevant field(s) go empty,
+  // every downstream isSearching read (filters, chip-row swap, Archived
+  // inclusion) reverts on the very next render.
+  const isSearching = searchScope === 'all' ? searchText.trim() !== '' : fromDate !== '' || toDate !== ''
+
+  function clearSearch() {
+    setSearchText('')
+    setFromDate('')
+    setToDate('')
+    setSearchScope('all')
+  }
+
   // Print Reports (2026-08-13) — owner: the current Print buttons print the
   // live, internally-scrolling on-screen layout as-is, which only captures
   // whatever currently fits the viewport ("only shows what can fit onto a
@@ -994,44 +1072,55 @@ export default function MainScreen() {
   // remaining available through Search"). Sent/Received/ToDos are always
   // fetched in full (migration 028 adds the archive columns to every
   // existing SELECT rather than filtering by them) — the hide-when-resting/
-  // show-when-searching split happens only here, client-side. An archived
-  // row still has to pass the status chip filter like any other row; only
-  // the "hidden at rest" behavior is special-cased.
+  // show-when-searching split happens only here, client-side.
+  //
+  // Search Mode redesign (2026-08-19) — while isSearching, the status chips
+  // (Open/Overdue/Done) are bypassed entirely rather than still narrowing
+  // results (matchesStatusFilter only runs at rest now), and matching
+  // switches to either the text query or the Date Range, whichever scope is
+  // active — never both, since selectSearchScope keeps the other scope's
+  // fields cleared. At rest, behavior is unchanged from before this batch.
   const filteredSent = useMemo(() => {
     return sent.filter((r) => {
-      if (r.archived_at && query === '') return false
-      if (!matchesStatusFilter(sentStatus(r), sentFilter)) return false
-      if (query === '') return true
+      if (!isSearching) {
+        if (r.archived_at) return false
+        return matchesStatusFilter(sentStatus(r), sentFilter)
+      }
+      if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
       return (
         r.description.toLowerCase().includes(query) ||
         (r.contacts?.display_name ?? '').toLowerCase().includes(query)
       )
     })
-  }, [sent, sentFilter, query])
+  }, [sent, sentFilter, query, isSearching, searchScope, fromDate, toDate])
 
   const filteredReceived = useMemo(() => {
     return received.filter((r) => {
-      if (r.received_archived_at && query === '') return false
-      if (!matchesStatusFilter(receivedStatus(r), receivedFilter)) return false
-      if (query === '') return true
+      if (!isSearching) {
+        if (r.received_archived_at) return false
+        return matchesStatusFilter(receivedStatus(r), receivedFilter)
+      }
+      if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
       return (
         r.description.toLowerCase().includes(query) ||
         (r.owner_name ?? '').toLowerCase().includes(query)
       )
     })
-  }, [received, receivedFilter, query])
+  }, [received, receivedFilter, query, isSearching, searchScope, fromDate, toDate])
 
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
-      if (t.archived_at && query === '') return false
-      if (!matchesStatusFilter(todoStatus(t), todoFilter)) return false
-      if (query === '') return true
+      if (!isSearching) {
+        if (t.archived_at) return false
+        return matchesStatusFilter(todoStatus(t), todoFilter)
+      }
+      if (searchScope === 'daterange') return matchesDateRange(t.due_date, fromDate, toDate)
       return (
         t.description.toLowerCase().includes(query) ||
         (t.categories?.name ?? '').toLowerCase().includes(query)
       )
     })
-  }, [todos, todoFilter, query])
+  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate])
 
   // Sorted on top of the already-filtered rows — filtering and sorting are
   // independent concerns (which rows show vs. what order they show in), so
@@ -1150,12 +1239,18 @@ export default function MainScreen() {
                   <button className="iconbtn" type="button" aria-label="Print Sent" onClick={() => startPrint('sent')}><PrintIcon /></button>
                 </span>
               </div>
-              <div className="chips">
-                <button className={`chip${sentFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('all')}>All</button>
-                <button className={`chip${sentFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('open')}>Open</button>
-                <button className={`chip over${sentFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('overdue')}>Overdue</button>
-                <button className={`chip done${sentFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('done')}>Done</button>
-              </div>
+              {isSearching ? (
+                <div className="chips">
+                  <span className="searchnotice">Search Results</span>
+                </div>
+              ) : (
+                <div className="chips">
+                  <button className={`chip${sentFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('all')}>All</button>
+                  <button className={`chip${sentFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('open')}>Open</button>
+                  <button className={`chip over${sentFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('overdue')}>Overdue</button>
+                  <button className={`chip done${sentFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('done')}>Done</button>
+                </div>
+              )}
             </div>
             <div className="subbody">
               <div className="colbar sr">
@@ -1171,7 +1266,7 @@ export default function MainScreen() {
                   active={sentSort.key === 'done'}
                   dir={sentSort.dir}
                   onClick={() => sortSent('done')}
-                  disabled={sentFilter !== 'all' && sentFilter !== 'done'}
+                  disabled={!isSearching && sentFilter !== 'all' && sentFilter !== 'done'}
                 />
               </div>
               <div className="rows">
@@ -1210,6 +1305,7 @@ export default function MainScreen() {
                         <span className={`dn${late ? ' late' : ''}`}>{formatMDY(r.done_date)}</span>
                       </div>
                       <div className="r2">
+                        {r.archived_at && <span className="archtag">Archived</span>}
                         {dialogCount(r.dialog) > 0 && (
                           <span className="ii"><DialogIcon /></span>
                         )}
@@ -1239,12 +1335,18 @@ export default function MainScreen() {
                   <button className="iconbtn" type="button" aria-label="Print Received" onClick={() => startPrint('received')}><PrintIcon /></button>
                 </span>
               </div>
-              <div className="chips">
-                <button className={`chip${receivedFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('all')}>All</button>
-                <button className={`chip${receivedFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('open')}>Open</button>
-                <button className={`chip over${receivedFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('overdue')}>Overdue</button>
-                <button className={`chip done${receivedFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('done')}>Done</button>
-              </div>
+              {isSearching ? (
+                <div className="chips">
+                  <span className="searchnotice">Search Results</span>
+                </div>
+              ) : (
+                <div className="chips">
+                  <button className={`chip${receivedFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('all')}>All</button>
+                  <button className={`chip${receivedFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('open')}>Open</button>
+                  <button className={`chip over${receivedFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('overdue')}>Overdue</button>
+                  <button className={`chip done${receivedFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('done')}>Done</button>
+                </div>
+              )}
             </div>
             <div className="subbody">
               <div className="colbar sr">
@@ -1260,7 +1362,7 @@ export default function MainScreen() {
                   active={receivedSort.key === 'done'}
                   dir={receivedSort.dir}
                   onClick={() => sortReceived('done')}
-                  disabled={receivedFilter !== 'all' && receivedFilter !== 'done'}
+                  disabled={!isSearching && receivedFilter !== 'all' && receivedFilter !== 'done'}
                 />
               </div>
               <div className="rows">
@@ -1299,6 +1401,7 @@ export default function MainScreen() {
                         <span className={`dn${late ? ' late' : ''}`}>{formatMDY(r.done_date)}</span>
                       </div>
                       <div className="r2">
+                        {r.received_archived_at && <span className="archtag">Archived</span>}
                         {r.dialog_count > 0 && (
                           <span className="ii"><DialogIcon /></span>
                         )}
@@ -1322,14 +1425,20 @@ export default function MainScreen() {
 
           <div className="subcard">
             <div className="subhead todos-head">
-              <div className="chips">
-                <button className={`chip${todoFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('all')}>All</button>
-                <button className={`chip${todoFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('open')}>Open</button>
-                {todoDatesEnabled && (
-                  <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('overdue')}>Overdue</button>
-                )}
-                <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
-              </div>
+              {isSearching ? (
+                <div className="chips">
+                  <span className="searchnotice">Search Results</span>
+                </div>
+              ) : (
+                <div className="chips">
+                  <button className={`chip${todoFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('all')}>All</button>
+                  <button className={`chip${todoFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('open')}>Open</button>
+                  {todoDatesEnabled && (
+                    <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('overdue')}>Overdue</button>
+                  )}
+                  <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
+                </div>
+              )}
               <span className="subicons">
                 <button className="iconbtn" type="button" aria-label="Print ToDos" onClick={() => startPrint('todos')}><PrintIcon /></button>
               </span>
@@ -1350,7 +1459,7 @@ export default function MainScreen() {
                   active={todoSort.key === 'done'}
                   dir={todoSort.dir}
                   onClick={() => sortTodos('done')}
-                  disabled={todoFilter !== 'all' && todoFilter !== 'done'}
+                  disabled={!isSearching && todoFilter !== 'all' && todoFilter !== 'done'}
                 />
               </div>
               <div className="rows">
@@ -1388,6 +1497,7 @@ export default function MainScreen() {
                         <span className="dn">{formatMDY(t.done_date)}</span>
                       </div>
                       <div className="r2">
+                        {t.archived_at && <span className="archtag">Archived</span>}
                         {dialogCount(t.dialog) > 0 && (
                           <span className="ii"><DialogIcon /></span>
                         )}
@@ -1537,16 +1647,78 @@ export default function MainScreen() {
           <div className="scroll-pad" />
         </div>
 
-        {/* Search bar — visual only this pass, see file header comment */}
+        {/* Search bar — Search Mode redesign (2026-08-19, see the file header
+            comment and selectSearchScope/isSearching/clearSearch above). The
+            scope button is now a real All/Date Range picker (previously
+            visual-only) — Date Range swaps the text field for paired From/To
+            date fields, either side alone a valid search. A Clear Search
+            control appears next to the field(s) whenever isSearching, so
+            there's always one reliable way out of Search Results mode
+            regardless of scope; the text field also gets its own inline ×
+            once it holds text. Clearing the text field to empty by hand
+            (backspace) exits automatically, with no separate step — isSearching
+            is derived, not a stored mode flag, so there is nothing left to
+            reset once the field itself is empty. */}
         <div className="searchbar sb">
-          <button className="scope" type="button">All&nbsp;▼</button>
-          <input
-            className="field"
-            type="text"
-            placeholder="Search Would You Please"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
+          <select
+            className="scope"
+            value={searchScope}
+            onChange={(e) => selectSearchScope(e.target.value as 'all' | 'daterange')}
+            aria-label="Search scope"
+          >
+            <option value="all">All</option>
+            <option value="daterange">Date Range</option>
+          </select>
+
+          {searchScope === 'all' ? (
+            <div className="fieldwrap">
+              <input
+                className="field"
+                type="text"
+                placeholder="Search Would You Please"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+              {searchText !== '' && (
+                <button
+                  className="fclear"
+                  type="button"
+                  aria-label="Clear search text"
+                  onClick={() => setSearchText('')}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="daterange-fields">
+              <label className="drfield">
+                <span className="drlabel">From</span>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  aria-label="Search Due Date from"
+                />
+              </label>
+              <label className="drfield">
+                <span className="drlabel">To</span>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  aria-label="Search Due Date to"
+                />
+              </label>
+            </div>
+          )}
+
+          {isSearching && (
+            <button className="clearsearch" type="button" onClick={clearSearch}>
+              Clear&nbsp;Search&nbsp;×
+            </button>
+          )}
+
           <span className="iconbtn" role="button" tabIndex={0} aria-label="Voice search"><VoiceSearchIcon /></span>
           <span className="iconbtn" role="button" tabIndex={0} aria-label="Search"><SearchIcon /></span>
         </div>

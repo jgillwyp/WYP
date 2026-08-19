@@ -66,8 +66,21 @@ import { supabase } from '@/lib/supabaseClient'
  * this option would present differently and only able to be set by
  * opening a subscription page with appropriate eCommerce links..." — a
  * real "Subscription Details" flow is meant to replace this checkbox
- * outright, not extend it. Flagged, not silently reopened — see migration
- * 024's own header and CLAUDE.md's Known gaps.
+ * outright, not extend it.
+ *
+ * Locked down, migration 035 (2026-08-19) — owner: "We should lock down
+ * the Subscribe[d toggle]... in a way which is similar to the Private
+ * Testing method in place for opening a Free Account" (migration 015),
+ * once other people started being invited to test. Migration 024's direct
+ * `update (tier) on profiles to authenticated` grant is revoked; the only
+ * remaining path is `set_tier_for_testing(p_tier)`, a SECURITY DEFINER
+ * function gated by the same app_settings-flag + allowlist shape as the
+ * signup gate (`tier_toggle_gate_enabled` / `tier_toggle_allowlist`,
+ * unlike `beta_allowlist` — a deliberately separate table, since "may
+ * create an account" and "may self-grant Subscriber for testing" are
+ * different questions). `can_toggle_tier()` is called on mount so the row
+ * is hidden entirely for anyone not allowed, rather than shown and then
+ * failing on click.
  */
 export default function AccountForm() {
   const router = useRouter()
@@ -88,6 +101,10 @@ export default function AccountForm() {
   // ('free'/'subscriber'), not boolean, so it gets its own state and
   // handler rather than joining the shared boolean handleToggle below.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  // Locked down, migration 035 — the whole row is hidden unless this is
+  // true, rather than shown and failing on click. Defaults false so there
+  // is no flash of the control before can_toggle_tier() resolves.
+  const [canToggleTier, setCanToggleTier] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -128,6 +145,14 @@ export default function AccountForm() {
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
       setReminderDigestEnabled(data?.reminder_digest_enabled ?? false)
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
+
+      // can_toggle_tier() (migration 035) — a failure here (RPC missing,
+      // network hiccup) is treated as "not allowed" rather than surfaced
+      // as a load error; the rest of the screen is still fully usable
+      // either way, and this control staying hidden is the safe default.
+      const { data: canToggle } = await supabase.rpc('can_toggle_tier')
+      if (!cancelled) setCanToggleTier(canToggle === true)
+
       setLoading(false)
     }
 
@@ -163,9 +188,12 @@ export default function AccountForm() {
     }
   }
 
-  // Testing-only — see the file-level comment on migration 024. Same
+  // Testing-only — see the file-level comment on migration 024/035. Same
   // optimistic-update-reverted-on-failure shape as handleToggle above, but
-  // writes a text value ('free'/'subscriber') rather than a boolean.
+  // goes through set_tier_for_testing() (a SECURITY DEFINER RPC) rather
+  // than a raw table update — migration 035 revoked the direct
+  // `update (tier)` grant migration 024 had opened, so a plain
+  // .from('profiles').update() would fail regardless now.
   async function handleTierToggle(next: boolean) {
     if (!userId) return
     const nextTier: 'free' | 'subscriber' = next ? 'subscriber' : 'free'
@@ -173,10 +201,7 @@ export default function AccountForm() {
     setSaving(true)
     setSaveError(null)
 
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ tier: nextTier })
-      .eq('id', userId)
+    const { error: updateError } = await supabase.rpc('set_tier_for_testing', { p_tier: nextTier })
 
     setSaving(false)
 
@@ -302,23 +327,26 @@ export default function AccountForm() {
             </span>
           </label>
 
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={tier === 'subscriber'}
-              disabled={saving}
-              onChange={(e) => handleTierToggle(e.target.checked)}
-            />
-            <span className="checktext">
-              Subscribed? (testing only)
-              <span className="checknote">
-                Sets your account to the Subscriber tier so subscriber-only features
-                like Attachments can be tested. Off by default. This is a stand-in for
-                real billing — later, a Subscription Details page with actual
-                eCommerce links will replace this checkbox.
+          {canToggleTier && (
+            <label className="checkrow">
+              <input
+                type="checkbox"
+                checked={tier === 'subscriber'}
+                disabled={saving}
+                onChange={(e) => handleTierToggle(e.target.checked)}
+              />
+              <span className="checktext">
+                Subscribed? (testing only)
+                <span className="checknote">
+                  Sets your account to the Subscriber tier so subscriber-only features
+                  like Attachments can be tested. Off by default. This status only
+                  lasts for the testing period — once testing ends, this checkbox goes
+                  away and you would subscribe for real, through an actual Subscription
+                  Details page with eCommerce links, to keep any subscriber features.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          )}
 
           {saveError && (
             <p className="ferror" role="alert">

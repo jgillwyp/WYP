@@ -6,6 +6,160 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-19 — Search Mode redesign: results shown within Main Screen, Date Range scope, Archived badge, "Search Results" notice
+
+Owner had been designing a separate Search Results screen and reconsidered:
+"showing results within the main screen would be more logical." Design
+discussion (recommendation → rejected alternatives → open questions, per the
+owner's own working-style rule), then confirmed point by point: Sent and
+Received stay in their own separate sections/lists during a search (they
+already were — search was never blending them, each of `filteredSent`/
+`filteredReceived` has always filtered independently); Archived items are
+automatically included and badged, not opt-in, "at this point... maybe an
+'Advanced' search option can be offered later"; status chips are removed in
+favor of a plain "Search Results" notice; and the exit mechanism (discussed
+separately, below) should auto-exit the instant the text field is cleared by
+hand.
+
+Implementation, `MainScreen.tsx`/`app/globals.css`:
+
+- **Scope becomes a real two-item picker** — a plain `<select>` styled to
+  match the old visual-only `.scope` button (`selectSearchScope`), replacing
+  it outright. "All" is the existing text search; "Date Range" swaps the
+  text field for paired From/To Due Date fields (`.daterange-fields`/
+  `.drfield`, reusing the equal-width-paired-field spirit of the app's
+  existing `.frow`/`.ffloat` convention without literally reusing those
+  classes, since this is a compact search-bar context, not a form panel).
+  Switching scope clears the other scope's own fields (`selectSearchScope`),
+  so there is never stale hidden criteria silently narrowing a result set
+  the person can no longer see.
+- **`isSearching` is derived, never a stored mode flag** — `searchScope ===
+  'all' ? searchText.trim() !== '' : fromDate !== '' || toDate !== ''`. This
+  is what makes the owner's exact instruction ("the text box emptying by
+  hand should auto-exit search mode immediately") fall out for free: there
+  is no separate flag to reset, so the moment the relevant field(s) go
+  empty, every downstream read of `isSearching` — filtering, the chip-row
+  swap, Archived inclusion — reverts on the very next render.
+- **Filtering** (`filteredSent`/`filteredReceived`/`filteredTodos`): at
+  rest, unchanged (status chip + hide-archived, as before). While
+  `isSearching`, the status chip check is skipped entirely rather than
+  still narrowing an already-narrowed result set, and matching uses either
+  the text query or `matchesDateRange(dueDate, fromDate, toDate)` depending
+  on scope — never both, since only one scope's fields are ever populated
+  at a time. `matchesDateRange` treats either side alone as valid (From
+  alone = on/after, To alone = on/before, both = inclusive between,
+  generalizing Archive's own existing "Before Done Date" single-sided
+  convention) and a row with no Due Date never matches. The existing
+  archived-row-hidden-at-rest check now keys off `!isSearching` rather than
+  `query === ''`, so Date Range searches surface Archived rows too, not
+  just text ones.
+- **"Search Results" notice**: each section's `.chips` row conditionally
+  renders a plain `.searchnotice` span instead of the status-chip buttons
+  while `isSearching` — matches the owner's own simplification ("maybe chip
+  filters are removed and a 'Search Results' notice is shown instead")
+  rather than the heavier per-section band originally floated in the design
+  discussion. Each section's Done column header (`ColSort`'s `disabled`
+  prop, 2026-08-17) is also un-gated while searching, since a Done row can
+  legitimately appear in results regardless of which chip was last
+  selected.
+- **Archived badge**: a small `.archtag` ("Archived," muted grey, Strip
+  background) renders in each matched row's `.r2` line, before the existing
+  Dialog/Attachments `.ii` icons — keeps an archived row inside its normal
+  Sent/Received/ToDos section (never a separate fourth list, which was
+  explicitly rejected in the design discussion) while still reading as more
+  than merely Done.
+- **Drop-out-of-search-results mechanism** — the owner's own follow-up
+  question, answered and confirmed separately: a `.clearsearch` "Clear
+  Search ×" control appears next to the field(s) whenever `isSearching`,
+  regardless of scope (the one reliable, always-visible exit); the text
+  field additionally gets its own inline `.fclear` × once it holds a value
+  (reusing the existing Due/Done Time Clear-affordance convention,
+  2026-08-11), wrapped in a new `.fieldwrap` positioning context. Both call
+  the same `clearSearch()`, which resets text, both date fields, and the
+  scope back to "All" together.
+
+`.searchbar` gained `flex-wrap: wrap` so the Date Range fields and Clear
+Search drop to their own line on a narrow phone rather than squeezing.
+`npx tsc --noEmit`/`npm run lint` clean. No mockup updated — none of the
+existing mockups model Search at all; flagged in `design/README.md`.
+
+\---
+
+## 2026-08-19 — Archive rows gain the Dialog/Attachments icons Main Screen's own rows already have
+
+Owner, while reviewing Archive: "I noticed that the description does not
+have the Dialog and Attachments icons shown." True — `ArchiveForm.tsx`'s own
+Sent/Received/ToDos queries never selected `dialog(count)`/
+`attachments(count)` (or, for Received, the RPC's own `dialog_count`/
+`attachment_count`) at all, so its row JSX had nothing to check even though
+`DialogIcon`/`AttachmentIcon` were already established components elsewhere
+in the app.
+
+Fixed by extending `SentCandidate`/`ReceivedCandidate`/`TodoCandidate` with
+the same fields `MainScreen.tsx`'s own `SentRow`/`ReceivedRow`/`TodoRow`
+already carry (`dialog(count)`/`attachments(count)` PostgREST embeds added
+to the Sent and ToDos queries; Received's `get_received_requests()` RPC
+already returns `dialog_count`/`attachment_count` — migration 027 — so only
+the type needed the two fields, no query change), then threading them
+through the shared `Row` type used by Archive's sent/received/todos
+`useMemo` (as plain `dialogCount`/`attachmentCount` numbers, resolved once
+at that mapping step rather than re-derived in JSX) and rendering the same
+icon-if-count-greater-than-zero pattern in both row-JSX branches. ToDos get
+Dialog only, `attachmentCount` hardcoded to 0 — matching Main Screen's own
+TodoRow, which has never had an attachment/Locations icon either.
+`DialogIcon`/`AttachmentIcon` are duplicated into `ArchiveForm.tsx` verbatim
+rather than imported, per this codebase's established per-file-duplication
+convention for small stateless helpers. `npx tsc --noEmit`/`npm run lint`
+clean.
+
+\---
+
+## 2026-08-19 — Subscribed toggle locked down, private-testing style —
+migration 035 DRAFTED, NOT YET CONFIRMED RUN
+
+Owner: "We should lock down the subscribe., but can we do it in a way which
+is similar to the Private Testing method in place for opening a Free
+Account?" — followed, mid-turn, by "And. let the user know that the status
+will only be in effect during the testing - afterward, they can 'actually'
+subscribe."
+
+Deliberately mirrors migration 015's already-battle-tested shape rather
+than inventing a new one: an `app_settings` key/value gate
+(`tier_toggle_gate_enabled`), a dedicated allowlist table
+(`tier_toggle_allowlist` — a new table, not a reuse of `beta_allowlist`,
+since "may create an account" and "may self-grant Subscriber for testing"
+are different permissions that shouldn't share one ambiguous list, seeded
+with Jim's own email so this migration doesn't lock him out of the
+Attachments testing he's already using the toggle for), and two SECURITY
+DEFINER functions: `can_toggle_tier()` (returns whether the gate is off or
+the caller is allowlisted — same true-when-off, check-allowlist-when-on
+shape as `can_create_account()`) and `set_tier_for_testing(p_tier)` (the
+only permitted write path, re-checking `can_toggle_tier()` itself rather
+than trusting a prior client-side check, per CLAUDE.md's own Entitlements
+principle: "the SECURITY DEFINER function must refuse the write regardless;
+assume the control was bypassed"). Migration 024's direct
+`grant update (tier) on profiles to authenticated` — the actual security
+hole, not just a missing convenience — is revoked in the same migration, so
+the old unguarded path can't be used alongside the new gated one.
+
+`AccountForm.tsx`: `can_toggle_tier()` is called once on load and the whole
+Subscribed row is wrapped in `{canToggleTier && (...)}` — hidden entirely
+for anyone not allowed, rather than shown and left to fail on click, same
+posture as every other gated control in this app. `handleTierToggle` now
+calls the `set_tier_for_testing` RPC instead of a raw table update, keeping
+the existing optimistic-update-reverted-on-failure shape. Per the owner's
+follow-up, the `checknote` copy was rewritten to say the Subscribed status
+"only lasts for the testing period" and that afterward the checkbox goes
+away and real subscription happens "through an actual Subscription Details
+page with eCommerce links" — the existing forward-reference to that
+not-yet-built page, now framed as what replaces this toggle rather than
+what merely "will replace this checkbox" someday. `npx tsc --noEmit`/`npm
+run lint` clean. **Migration 035 still needs to be run in Supabase before
+this is live** — until then, `can_toggle_tier()`/`set_tier_for_testing()`
+don't exist and the toggle will fail to load/save.
+
+\---
+
 ## 2026-08-19 — Auto-growing Description on Request Detail / ToDo Detail
 
 Owner: "When entering [Description] in Create it is scrolling as typed, so

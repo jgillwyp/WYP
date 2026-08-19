@@ -2159,10 +2159,15 @@ body {
   color: var(--ink);
 }
 
-/* Search bar (visual-only this pass — see CLAUDE.md Known gaps) */
+/* Search bar — Search Mode redesign, 2026-08-19 (see MainScreen.tsx's own
+   file-header comment for the full reasoning). .scope is now a real
+   `<select>` (All / Date Range), not a visual-only button; flex-wrap lets
+   the Date Range fields and the Clear Search control drop to their own line
+   on a narrow phone rather than squeezing everything onto one row. */
 .searchbar {
   flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   background: var(--band);
@@ -2199,6 +2204,116 @@ body {
 .field::placeholder {
   color: var(--ink-soft);
   opacity: .85;
+}
+
+/* Wraps .field so its own inline × (.fclear, §6.33's existing convention)
+   can be absolutely positioned inside it, same pattern as Due/Done Time's
+   own .ffloat wrapper. */
+.fieldwrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+.fieldwrap .field {
+  padding-right: 28px;
+}
+
+/* Date Range search fields — always full-width on their own line (see
+   .searchbar's flex-wrap above), two equal-width fields side by side. */
+.daterange-fields {
+  flex: 1 1 100%;
+  display: flex;
+  gap: 8px;
+}
+
+.drfield {
+  flex: 1 1 0%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.drlabel {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+
+.drfield input[type='date'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  padding: 5px 0;
+}
+
+.drfield input[type='date']:focus {
+  outline: none;
+}
+
+/* Clear Search — always-visible exit from Search Results mode, next to the
+   field(s) regardless of scope (the text field's own .fclear × is a second,
+   narrower shortcut only available in the "All" scope). */
+.clearsearch {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-blue);
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.clearsearch:active {
+  color: var(--alert-red);
+}
+
+/* "Search Results" notice — replaces the status chips (Open/Overdue/Done)
+   while any search criteria is active, since they'd otherwise still narrow
+   an already-narrowed result set (see matchesStatusFilter's own bypass in
+   MainScreen.tsx). Sits in the same .chips slot, same vertical rhythm, but
+   plain text — not a control. */
+.searchnotice {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+
+/* Archived badge — a matched row that is archived still renders in its own
+   Sent/Received/ToDos section (never a separate list), tagged so it doesn't
+   read as merely Done. Sits in .r2 alongside the Dialog/Attachments .ii
+   icons, before .desc. */
+.archtag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--strip);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
 }
 
 /* ============================================================================

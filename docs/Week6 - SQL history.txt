@@ -633,3 +633,172 @@ commit;
 -- whose existing "contacts: owners select/update/delete own" policies
 -- (migration 002) already cover every column equally.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 035 — private-testing gate for the "Subscribed?" tier toggle
+-- DRAFTED 2026-08-19 — NOT YET CONFIRMED RUN.
+--
+-- Background (see decisions log, 2026-08-19): the owner asked to "lock down
+-- the Subscribe[d]" toggle now that other people are being invited to test,
+-- "in a way which is similar to the Private Testing method in place for
+-- opening a Free Account" (migration 015). Migration 024 granted
+-- `update (tier) on profiles to authenticated` outright, as an explicitly
+-- temporary testing affordance — any signed-in user, including a real
+-- tester, could currently set their own tier to 'subscriber' for free. This
+-- migration closes that direct path and replaces it with the exact same
+-- shape migration 015 already established: an app_settings gate flag, an
+-- allowlist table, and a SECURITY DEFINER function as the only door through.
+--
+-- tier_toggle_gate_enabled (app_settings) — on by default, same as
+-- signup_gate_enabled. Toggle with a plain UPDATE, no redeploy:
+--   update app_settings set value = false where key = 'tier_toggle_gate_enabled';
+--
+-- tier_toggle_allowlist — one row per email allowed to flip their own tier
+-- for testing while the gate is on. Deliberately a NEW table, not a second
+-- use of beta_allowlist — that table's own meaning ("may create a brand-new
+-- account") is a different question from this one ("may this already-signed-
+-- in account grant itself Subscriber for testing"), and overloading one
+-- table for both would make a row's meaning ambiguous at a glance.
+--
+-- UNLIKE can_create_account (migration 015), there is no "already exists,
+-- always allowed" bypass here — every account, including the owner's own,
+-- must be on tier_toggle_allowlist for the toggle to work while the gate is
+-- on, since the gated action is "may I self-grant Subscriber," not
+-- "have I signed up before." The owner's own email is seeded below so this
+-- migration doesn't lock him out of the very feature he's been using.
+--
+-- can_toggle_tier() — read-only permission check, called by AccountForm.tsx
+-- on mount so the whole row can be hidden from anyone not allowed, rather
+-- than shown and then failing on click. Reads the caller's own email via
+-- auth.uid() -> auth.users (same technique get_contact_request_counts'
+-- Rec'd match and can_create_account's own auth.users read already use),
+-- never the client-supplied value — nothing about who's asking is trusted
+-- from the browser.
+--
+-- set_tier_for_testing(p_tier) — the only path that can actually write
+-- profiles.tier now that migration 024's blanket grant is revoked below. Re-
+-- checks permission itself (calls can_toggle_tier() internally) rather than
+-- trusting that the client already checked — CLAUDE.md's own Entitlements
+-- section: "the SECURITY DEFINER function must refuse the write regardless;
+-- assume the control was bypassed." Also validates p_tier is one of the two
+-- legal values before writing, rather than trusting the client's own
+-- checkbox state.
+--
+-- Both functions granted to authenticated only, not anon — /account is
+-- only ever reached signed-in (RequireAuth), so there's no legitimate
+-- anonymous caller the way can_create_account needs one from /login.
+-- ============================================================================
+
+begin;
+
+insert into app_settings (key, value)
+values ('tier_toggle_gate_enabled', true)
+on conflict (key) do nothing;
+
+create table if not exists tier_toggle_allowlist (
+  email text primary key,
+  added_at timestamptz not null default now(),
+  note text
+);
+alter table tier_toggle_allowlist enable row level security;
+-- No policies — same deny-all-for-clients reasoning as beta_allowlist/
+-- app_settings (migration 015). Only the SECURITY DEFINER functions below
+-- ever read this table.
+
+insert into tier_toggle_allowlist (email, note)
+values ('jimgillon@gmail.com', 'App owner — seeded so this migration does not lock out the account already using this toggle for Attachments testing.')
+on conflict (email) do nothing;
+
+create or replace function public.can_toggle_tier()
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_gate_enabled boolean;
+  v_email text;
+  v_allowlisted boolean;
+begin
+  select coalesce(
+    (select value from app_settings where key = 'tier_toggle_gate_enabled'),
+    true
+  ) into v_gate_enabled;
+
+  if not v_gate_enabled then
+    return true;
+  end if;
+
+  select lower(trim(email)) into v_email from auth.users where id = auth.uid();
+
+  if v_email is null then
+    return false;
+  end if;
+
+  select exists(
+    select 1 from tier_toggle_allowlist where lower(email) = v_email
+  ) into v_allowlisted;
+
+  return v_allowlisted;
+end;
+$$;
+
+revoke all on function public.can_toggle_tier() from public;
+grant execute on function public.can_toggle_tier() to authenticated;
+
+create or replace function public.set_tier_for_testing(p_tier text)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.can_toggle_tier() then
+    raise exception 'Not permitted.';
+  end if;
+
+  if p_tier not in ('free', 'subscriber') then
+    raise exception 'Invalid tier.';
+  end if;
+
+  update public.profiles
+    set tier = p_tier
+    where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.set_tier_for_testing(text) from public;
+grant execute on function public.set_tier_for_testing(text) to authenticated;
+
+-- Close the direct path migration 024 opened — every tier write now has to
+-- go through set_tier_for_testing, which re-checks the gate/allowlist on
+-- every call rather than trusting a client that already passed once.
+revoke update (tier) on public.profiles from authenticated;
+
+commit;
+
+-- ============================================================================
+-- Managing the gate day to day, once this migration has run:
+--
+--   -- invite someone to test the Subscribed toggle:
+--   insert into tier_toggle_allowlist (email, note) values ('someone@example.com', 'testing Attachments with me');
+--
+--   -- turn the gate off (anyone signed in may toggle their own tier):
+--   update app_settings set value = false where key = 'tier_toggle_gate_enabled';
+--
+--   -- turn it back on:
+--   update app_settings set value = true where key = 'tier_toggle_gate_enabled';
+--
+-- Verify (superuser, proves creation only — see this file's recurring
+-- caveat; the real check is calling these as a signed-in user from the
+-- browser):
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles' and column_name = 'tier';
+--        -> authenticated / UPDATE should be GONE
+--
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name in ('can_toggle_tier', 'set_tier_for_testing');
+--        -> should show authenticated / EXECUTE for both, no anon row
+-- ============================================================================
