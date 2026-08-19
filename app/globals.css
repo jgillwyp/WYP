@@ -777,6 +777,24 @@ body {
   padding-top: 10px;
 }
 
+/* Auto-growing Description on Request Detail / ToDo Detail (2026-08-19,
+   owner request) — "when entering [Description] in Create it is scrolling
+   as typed, so that is not an issue. If it is being edited, it would be
+   easier to see all of the text." Create Request/Create ToDo keep the
+   ordinary fixed-height + manual .resize:vertical handle (already fine per
+   the owner's own framing); this modifier is added only to the two Detail
+   screens, whose Description can already hold existing, possibly long
+   text the moment the record loads. overflow:hidden suppresses the
+   scrollbar that would otherwise flash on every height recalculation —
+   the component sets .style.height directly (RequestDetailForm.tsx/
+   TodoDetailForm.tsx's own descRef effect), this class only removes the
+   scrollbar and the fixed resize handle, which would fight an
+   automatically-managed height. */
+.ftextarea.ftextarea-autosize {
+  overflow: hidden;
+  resize: none;
+}
+
 /* Live character counter for capped .ftextarea fields (2026-08-16) —
    companion to the plain-placeholder change above. maxLength alone gives no
    feedback: typing at the cap silently stops accepting keystrokes, and a

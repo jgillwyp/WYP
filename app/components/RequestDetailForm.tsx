@@ -263,6 +263,22 @@ export default function RequestDetailForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Auto-growing Description (2026-08-19, owner request) — this screen
+  // loads an existing, possibly long Description the moment the record
+  // fetches, unlike Create Request's own fresh-typed-and-scrolls case
+  // (owner's own framing: "not an issue" there). Resizing on every render
+  // where form.description changed — rather than only in the textarea's
+  // own onChange — covers both the async load and manual editing with one
+  // effect. .ftextarea-autosize (globals.css) turns off the fixed height/
+  // scrollbar/resize-handle this would otherwise fight.
+  const descRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = descRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [form.description])
+
   // Attachments (Week 5 Priority 3, 2026-08-14) — AttachmentsPanel does its
   // own fetching once these are known.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
@@ -997,7 +1013,8 @@ export default function RequestDetailForm() {
 
             <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
               <textarea
-                className="ftextarea ftextarea-plain req"
+                ref={descRef}
+                className="ftextarea ftextarea-plain ftextarea-autosize req"
                 id="desc"
                 maxLength={DESCRIPTION_MAX}
                 placeholder="Request Description"

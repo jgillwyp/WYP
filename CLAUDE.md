@@ -2021,3 +2021,16 @@ link is built only after the stack is proven on Add Contact.
   persistent failure shows a generic message plus a Try Again button
   (`reloadTick` state) instead of the raw error text. `npx tsc --noEmit`/
   `npm run lint` clean.
+- **Auto-growing Description on Request Detail / ToDo Detail (2026-08-19).**
+  Owner: Create Request/Create ToDo's own Description "is scrolling as
+  typed, so that is not an issue," but an existing (possibly long)
+  Description loaded on the two Detail/edit screens should show in full.
+  Both `RequestDetailForm.tsx`/`TodoDetailForm.tsx` gained a `descRef` +
+  `useEffect` keyed on `form.description` that resets the textarea's
+  `.style.height` to its `scrollHeight` on every change, including the
+  initial async load. New `.ftextarea-autosize` CSS (`app/globals.css`)
+  disables the fixed height/scrollbar/manual resize handle that would
+  otherwise fight it — applied only to these two screens' Description
+  field, not the shared `.ftextarea` base rule, so Create Request/Create
+  ToDo and every other textarea (Dialog Text, Notes) are unaffected. `npx
+  tsc --noEmit`/`npm run lint` clean.

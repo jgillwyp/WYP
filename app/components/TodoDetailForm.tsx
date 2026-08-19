@@ -227,6 +227,18 @@ export default function TodoDetailForm() {
 
   const doneDateRef = useRef<HTMLInputElement>(null)
 
+  // Auto-growing Description (2026-08-19, owner request) — see
+  // RequestDetailForm.tsx's identical descRef effect for the full
+  // reasoning (Create ToDo's fresh-typed-and-scrolls case is unaffected by
+  // this, per the owner's own scoping).
+  const descRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = descRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [form.description])
+
   // Locations (Week 5 Priority 3, 2026-08-14) — AttachmentsPanel does its
   // own fetching once these are known.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
@@ -886,7 +898,8 @@ export default function TodoDetailForm() {
 
             <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
               <textarea
-                className="ftextarea ftextarea-desc ftextarea-plain req"
+                ref={descRef}
+                className="ftextarea ftextarea-desc ftextarea-plain ftextarea-autosize req"
                 id="desc"
                 maxLength={DESCRIPTION_MAX}
                 placeholder="ToDo Description"

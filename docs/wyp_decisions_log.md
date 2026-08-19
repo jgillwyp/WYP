@@ -6,6 +6,31 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-19 — Auto-growing Description on Request Detail / ToDo Detail
+
+Owner: "When entering [Description] in Create it is scrolling as typed, so
+that is not an issue. If it is being edited, it would be easier to see all
+of the text." — scoped deliberately to just the two Detail (edit) screens,
+since Create Request/Create ToDo start every Description empty and never
+have this problem the way an existing, possibly long record does the
+moment it loads.
+
+Both `RequestDetailForm.tsx` and `TodoDetailForm.tsx` gained a `descRef`
++ `useEffect` keyed on `form.description`: on every render where the
+Description value changed — the initial async load included, since that's
+just another state update — the textarea's own `.style.height` is reset to
+`'auto'` then set to its `scrollHeight`, so the box always grows to fit
+whatever it holds rather than internally scrolling. New CSS modifier
+`.ftextarea-autosize` (`app/globals.css`) turns off the ordinary fixed
+`min-height`/scrollbar/`resize: vertical` handle, which would otherwise
+fight a JS-managed height — added only alongside `.ftextarea-plain` on
+these two screens' Description field, not the shared base `.ftextarea`
+rule, so Create Request/Create ToDo and every other textarea in the app
+(Dialog Text, Notes) keep their existing fixed-height/manual-resize
+behavior unchanged. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-18 — Default standalone-window size on desktop PWA launch
 
 Owner: the installed desktop icon opens Would You Please in a very wide
