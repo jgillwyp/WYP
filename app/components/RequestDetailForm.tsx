@@ -30,14 +30,13 @@ import { isReminderEligible } from '@/lib/email'
  * Reminder checkbox (§6.37 PROPOSED, migration 031, 2026-08-15) — same
  * control and eligibility rules as CreateRequestForm.tsx's own (see that
  * file's header comment for the full reasoning), persisted/reloaded here on
- * Save. Placement differs from Create Request, though: that screen can
- * place the checkbox beside a lone Due Date field once Due Time is off,
- * because it has no Done Date/Time yet. This screen always shows Done
- * Date alongside Due Date (requestTimeEnabled or not — the collapsed row
- * pairs Due Date with Done Date, never leaves Due Date alone), so there is
- * never spare row width to place the checkbox inline — it always renders as
- * its own standalone row here, after Attachments, regardless of
- * requestTimeEnabled.
+ * Save. **Relocated 2026-08-19** (owner's own new design, mirrored onto
+ * Request Response/Response Detail — migration 036) from its original
+ * standalone row after Attachments to its own full-width row directly under
+ * the Date/Recipient metarow block, replacing that older placement rather
+ * than adding a second control — still not placed beside the metarow block
+ * (a side-by-side Date/Recipient + control layout was tried and reverted
+ * here once already, .metatop/.metacol, 2026-08-10, over Android word-wrap).
  */
 
 type Kind = 'question' | 'answer' | 'comment'
@@ -735,6 +734,17 @@ export default function RequestDetailForm() {
               <div className="metarow"><span className="mlabel">Recipient:</span><span className="mval">{recipientName}</span></div>
             </div>
 
+            {/* Reminder checkbox — moved here from its old standalone
+                bottom-of-form row (2026-08-19, owner's own new design:
+                Date/Recipient plus a quick-access Reminder control near the
+                top, mirrored onto Request Response/Response Detail too).
+                Own full-width row below the metarow block, not beside it —
+                a side-by-side Date/Recipient + control layout was tried and
+                reverted here once already (.metatop/.metacol, 2026-08-10,
+                word-wrapped "Wednesday, August 10," on a narrow Android
+                phone); staying full-width avoids repeating that. */}
+            {reminderCheckbox()}
+
             {requestTimeEnabled ? (
               <>
                 <div className="fgroup frow">
@@ -1092,12 +1102,6 @@ export default function RequestDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
             />
-
-            {/* Reminder checkbox — always the standalone-row placement on
-                this screen; see the file-level comment for why (Done Date
-                is always paired with Due Date here, unlike Create
-                Request). */}
-            {reminderCheckbox()}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

@@ -802,3 +802,270 @@ commit;
 --   where routine_name in ('can_toggle_tier', 'set_tier_for_testing');
 --        -> should show authenticated / EXECUTE for both, no anon row
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 036 — reminder_enabled becomes recipient-readable/writable
+-- DRAFTED 2026-08-19 — NOT YET CONFIRMED RUN.
+--
+-- Context: reminder_enabled (migration 031) has been owner-only since it
+-- shipped — set via Create Request's/Request Detail's own .checkrow, never
+-- read or written from any recipient-facing screen. Owner's own new design
+-- (three pasted mockups, 2026-08-19) adds the same control to Request
+-- Response (anonymous /r/[token]), Response Detail (signed-in recipient),
+-- and moves Request Detail's own copy from its old standalone bottom row up
+-- next to the Date/Recipient block. It's the same single shared column
+-- either party can now flip — not a per-viewer flag, not a snapshot — same
+-- reasoning CLAUDE.md's Entitlements section already gives for tier: one
+-- place to read, no per-viewer copy to drift.
+--
+-- Two functions gain a new field in their jsonb payload (both `returns
+-- jsonb`, so plain `create or replace function` is safe — the migration
+-- 020 lesson, not the migration 017/021 "must drop first" one, which only
+-- applies to `RETURNS TABLE` functions changing their OUT-parameter shape):
+--   - get_request_by_token       (anon + authenticated)
+--   - get_received_request       (authenticated)
+--
+-- Two functions gain a new trailing parameter, `p_reminder_enabled boolean
+-- default null` — safe to add via `create or replace function` per
+-- Postgres's own rule (a new parameter may be appended if it has a
+-- default). Defaulting to null and writing
+-- `coalesce(p_reminder_enabled, reminder_enabled)` rather than a bare
+-- assignment means an old/unaware caller that never passes the new
+-- argument leaves the column untouched, not silently reset:
+--   - set_response_done_by_token      (anon + authenticated)
+--   - set_response_done_as_recipient  (authenticated)
+--
+-- No RLS/grant changes needed — both write functions are already
+-- SECURITY DEFINER with their existing grants; this migration only widens
+-- what each already-callable function reads and writes.
+-- ============================================================================
+
+begin;
+
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at, r.reminder_enabled,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'reminder_enabled', v_request.reminder_enabled,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+create or replace function public.set_response_done_by_token(
+  p_token text,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_request_id uuid;
+  v_revoked timestamptz;
+  v_expires timestamptz;
+begin
+  select id, link_revoked_at, link_expires_at
+    into v_request_id, v_revoked, v_expires
+    from public.requests
+    where link_token_hash = digest(p_token, 'sha256');
+
+  if v_request_id is null or v_revoked is not null or v_expires < now() then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled)
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'response_done_updated',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled)
+    );
+end;
+$$;
+
+revoke all on function public.set_response_done_by_token(text, date, time, boolean) from public;
+grant execute on function public.set_response_done_by_token(text, date, time, boolean) to anon, authenticated;
+
+create or replace function public.set_response_done_as_recipient(
+  p_request_id uuid,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        received_archived_at = case when p_done_date is null then null else received_archived_at end,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled)
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'response_done_updated',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'via', 'recipient_session')
+    );
+end;
+$$;
+
+revoke all on function public.set_response_done_as_recipient(uuid, date, time, boolean) from public;
+grant execute on function public.set_response_done_as_recipient(uuid, date, time, boolean) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only — the real check is calling these
+-- from the browser as an anonymous /r/[token] visitor and as a signed-in
+-- recipient):
+--   select proname, pronargs from pg_proc
+--   where proname in ('set_response_done_by_token', 'set_response_done_as_recipient')
+--     and pronamespace = 'public'::regnamespace;
+--        -> pronargs should read 4 for both (was 3)
+-- ============================================================================

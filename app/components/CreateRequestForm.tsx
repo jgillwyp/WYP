@@ -1415,12 +1415,15 @@ export default function CreateRequestForm() {
                   </button>
                   {/* Locked, not just unselected — a Request/ToDo's thread is
                       always empty at this point, so there is nothing yet to
-                      answer. See Respond to Request for the dynamic version. */}
+                      answer. See Respond to Request for the dynamic version.
+                      No lockglyph icon here (2026-08-19 fix) — matches the
+                      dynamically-locked Answer chip on Request Detail/Request
+                      Response/Response Detail/ToDo Detail, none of which show
+                      one; the icon's extra width was pushing Comment onto a
+                      second line on a phone, a wrap none of those other four
+                      screens ever had. aria-disabled carries the same meaning
+                      without it. */}
                   <button className="chip is-locked" type="button" aria-disabled="true" aria-pressed={false} onMouseDown={(e) => e.preventDefault()}>
-                    <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                      <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                    </svg>
                     Answer
                   </button>
                   <button

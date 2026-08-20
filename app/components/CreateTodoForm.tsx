@@ -1147,11 +1147,11 @@ export default function CreateTodoForm() {
                   >
                     Question
                   </button>
+                  {/* No lockglyph icon (2026-08-19 fix) — see
+                      CreateRequestForm.tsx's identical Answer chip for the
+                      full reasoning; the icon's extra width was pushing
+                      Comment onto a second line on a phone. */}
                   <button className="chip is-locked" type="button" aria-disabled="true" aria-pressed={false} onMouseDown={(e) => e.preventDefault()}>
-                    <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                      <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                    </svg>
                     Answer
                   </button>
                   <button

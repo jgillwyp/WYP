@@ -236,11 +236,20 @@ export function buildOverdueRecipientEmailSubject(
   return `OVERDUE: A Would You Please Request${from}, Due: ${due}`
 }
 
+// Link text — changed 2026-08-19 (owner's own concern: generic "Request
+// Detail" anchor text on an unsolicited-feeling Overdue notice risked being
+// reported as spam). This is the recipient's own /r/[token] link (see
+// mintLink in app/api/cron/tick/route.ts) — the recipient can both mark the
+// Request Done there and, as of migration 036/RequestResponseForm.tsx's own
+// Reminder checkbox (2026-08-19), opt out of further Reminder emails, so the
+// action-oriented wording is literally true, not just friendlier-sounding.
+const OVERDUE_LINK_TEXT = 'Open Request to mark Done or to turn off notifications'
+
 export function buildOverdueRecipientEmailHtml(fields: OverdueRecipientEmailFields): string {
   const due = formatMDY(fields.dueDate) + (fields.dueTime ? ` ${formatTime12h(fields.dueTime)}` : '')
   return [
     `<p>The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.</p>`,
-    `<p><a href="${fields.link}">Request Detail</a></p>`,
+    `<p><a href="${fields.link}">${OVERDUE_LINK_TEXT}</a></p>`,
     `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
     `<p>New to <a href="${fields.siteUrl}">Would You Please</a>? click to set up a free account.</p>`,
   ].join('\n')
@@ -251,7 +260,7 @@ export function buildOverdueRecipientEmailText(fields: OverdueRecipientEmailFiel
   return [
     `The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.`,
     '',
-    'Request Detail:',
+    `${OVERDUE_LINK_TEXT}:`,
     fields.link,
     '',
     fields.description,
@@ -276,10 +285,17 @@ export function buildTodoReminderEmailSubject(dueDate: string): string {
   return `REMINDER: Your Would You Please ToDo, Due: ${formatMDY(dueDate)}`
 }
 
+// Link text — changed 2026-08-19, same spam-risk reasoning as
+// OVERDUE_LINK_TEXT above, but a ToDo has no per-item Reminder toggle
+// (todo_dates_enabled gates the whole feature, not a checkbox on any one
+// ToDo — see TodoDetailForm.tsx, which carries no Reminder control at all),
+// so this wording only promises what's actually there: marking it Done.
+const TODO_REMINDER_LINK_TEXT = 'Open ToDo to mark Done'
+
 export function buildTodoReminderEmailHtml(fields: TodoReminderEmailFields): string {
   return [
     `<p>This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.</p>`,
-    `<p><a href="${fields.link}">ToDo Detail</a></p>`,
+    `<p><a href="${fields.link}">${TODO_REMINDER_LINK_TEXT}</a></p>`,
     `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
   ].join('\n')
 }
@@ -288,7 +304,7 @@ export function buildTodoReminderEmailText(fields: TodoReminderEmailFields): str
   return [
     `This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.`,
     '',
-    'ToDo Detail:',
+    `${TODO_REMINDER_LINK_TEXT}:`,
     fields.link,
     '',
     fields.description,
@@ -315,14 +331,20 @@ export type DigestItem = {
   link: string
 }
 
+// Link text — changed 2026-08-19, same reasoning and wording as
+// OVERDUE_LINK_TEXT above. These digest rows link to the same /r/[token]
+// recipient path (see pushDigestItem/mintLink in
+// app/api/cron/tick/route.ts) — the Requestor reading the digest is
+// clicking through to their own Recipient's response screen, where Done and
+// the Reminder checkbox both genuinely live.
 function digestRowHtml(item: DigestItem): string {
   const time = item.dueTime ? ` &nbsp; ${formatTime12h(item.dueTime)}` : ''
-  return `<li><b>${escapeHtml(item.recipientName)}</b> — ${escapeHtml(item.description)}${time} — <a href="${item.link}">Request Detail</a></li>`
+  return `<li><b>${escapeHtml(item.recipientName)}</b> — ${escapeHtml(item.description)}${time} — <a href="${item.link}">${OVERDUE_LINK_TEXT}</a></li>`
 }
 
 function digestRowText(item: DigestItem): string {
   const time = item.dueTime ? `  ${formatTime12h(item.dueTime)}` : ''
-  return `${item.recipientName} — ${item.description}${time} — Request Detail: ${item.link}`
+  return `${item.recipientName} — ${item.description}${time} — ${OVERDUE_LINK_TEXT}: ${item.link}`
 }
 
 export function buildReminderDigestEmailSubject(): string {

@@ -7,6 +7,7 @@ import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
+import { isReminderEligible } from '@/lib/email'
 
 /**
  * Response Detail (§6.28) — converted from
@@ -83,6 +84,11 @@ type ReceivedDetailPayload = {
   owner_name: string | null
   owner_tier: 'free' | 'subscriber' | null
   owner_request_time_enabled: boolean
+  // Reminder opt-out (migration 036, 2026-08-19) — the single shared
+  // requests.reminder_enabled column (migration 031), now readable and
+  // writable from here too, not just the owner's own Create Request/
+  // Request Detail. See the file-header comment for the full reasoning.
+  reminder_enabled: boolean
   // Un-archive-on-clear (owner request, 2026-08-17, migration 032) — the
   // recipient's own archive state for this Request, as loaded. See the
   // matching state var below.
@@ -229,6 +235,12 @@ export default function ResponseDetailForm() {
   const [doneDate, setDoneDate] = useState('')
   const [doneTime, setDoneTime] = useState('')
 
+  // Reminder checkbox (migration 036, 2026-08-19) — same shared column,
+  // same plain checked=on .checkrow component as Request Detail's own;
+  // loaded from data.reminder_enabled, written on Send via
+  // set_response_done_as_recipient's new p_reminder_enabled argument.
+  const [reminderEnabled, setReminderEnabled] = useState(true)
+
   // Un-archive-on-clear (owner request, 2026-08-17) — the row's own
   // received_archived_at as loaded. Not itself editable, and no
   // client-side write is needed for it: migration 032's
@@ -329,6 +341,7 @@ export default function ResponseDetailForm() {
       setData(payload)
       setDoneDate(payload.done_date ?? '')
       setDoneTime(payload.done_time ?? '')
+      setReminderEnabled(payload.reminder_enabled)
       setAlreadyDoneOnLoad(!!payload.done_date)
       setDialogList(payload.dialog ?? [])
       setReceivedArchivedAt(payload.received_archived_at)
@@ -440,6 +453,35 @@ export default function ResponseDetailForm() {
     setDialogModalOpen(false)
   }
 
+  // Reminder checkbox (migration 036, 2026-08-19) — same plain checked=on
+  // .checkrow component as RequestDetailForm.tsx's own; eligibility mirrors
+  // that screen's rule (isReminderEligible on the Due Date) but there's no
+  // "select Contact/Due Date first" prerequisite here — Due Date isn't
+  // editable on this screen at all, it's whatever the owner already set.
+  const reminderIneligible = !isReminderEligible(data?.due_date ?? null)
+  const reminderTooltip = reminderIneligible
+    ? data?.due_date
+      ? 'A Reminder is not available due to the short lead time.'
+      : 'A Reminder is not available without a Due Date.'
+    : undefined
+
+  function reminderCheckbox() {
+    return (
+      <label className={`checkrow${reminderIneligible ? ' checkrow-disabled' : ''}`} title={reminderTooltip}>
+        <input
+          type="checkbox"
+          checked={reminderEnabled}
+          disabled={reminderIneligible}
+          onChange={(e) => setReminderEnabled(e.target.checked)}
+        />
+        <span className="checktext">
+          Reminder
+          <span className="checknote">Send on the morning before unless it is marked Done.</span>
+        </span>
+      </label>
+    )
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     setSendError(null)
@@ -450,6 +492,7 @@ export default function ResponseDetailForm() {
       p_request_id: requestId,
       p_done_date: doneDate.trim() === '' ? null : doneDate,
       p_done_time: doneTime.trim() === '' ? null : doneTime,
+      p_reminder_enabled: reminderEnabled,
     })
 
     setSending(false)
@@ -583,6 +626,17 @@ export default function ResponseDetailForm() {
                 </span>
               </div>
             </div>
+
+            {/* Reminder checkbox (migration 036, 2026-08-19) — new
+                capability, owner's own design (mirrored onto Request
+                Detail/Request Response too): the recipient can now opt
+                out of the shared day-before Reminder for this Request,
+                same single reminder_enabled column the owner's own
+                Create Request/Request Detail checkbox already writes.
+                Own full-width row below .meta, not beside it — see
+                RequestDetailForm.tsx's identical comment on the
+                2026-08-10 .metatop/.metacol wrap precedent this avoids. */}
+            {reminderCheckbox()}
 
             <div className="seclabel">Request Description</div>
             <div className="respdesc">{data.description}</div>

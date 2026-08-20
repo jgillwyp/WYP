@@ -6,6 +6,126 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-19 — Reminder checkbox extended to Request Detail (relocated), Response Detail, and Request Response — migration 036
+
+Owner pasted three screenshots of his own new design: Response Detail
+unchecked ("Turn off Reminders for this Request (Check and Send)"),
+Response Detail checked ("Turn on Reminders..."), and Request Detail
+showing a *second* Reminder checkbox in a new top band alongside the
+existing bottom-of-form one built 2026-08-15. Two real conflicts with what
+was already shipped, resolved via AskUserQuestion before building anything:
+
+1. **Request Detail now has two Reminder checkboxes — replace or keep
+   both?** Recommended and chosen: **replace** — the new top-band control
+   supersedes the old standalone one rather than the two coexisting.
+2. **The mockup's checkbox is inverted** (unchecked = "Turn off
+   Reminders... Check and Send"; checked = "Turn on Reminders..."), while
+   every existing Reminder checkbox in the app (Create Request, the old
+   Request Detail one) is a plain checked-means-on toggle with static
+   wording. Recommended and chosen: **keep plain checked = on** — the new
+   controls reuse the existing `.checkrow`/`.checktext`/`.checknote`
+   component and wording verbatim, not the inverted semantics or copy from
+   the mockup.
+
+**Migration 036** (`docs/Week6 - SQL history.txt`, drafted, **NOT YET
+CONFIRMED RUN**) extends the two jsonb-returning read functions
+(`get_request_by_token`, `get_received_request`) to include
+`reminder_enabled`, and adds a new trailing `p_reminder_enabled boolean
+default null` parameter to both write functions
+(`set_response_done_by_token`, `set_response_done_as_recipient`), written
+with `coalesce(p_reminder_enabled, reminder_enabled)` so an unpassed value
+leaves the column untouched. Both are `returns void`/`returns jsonb`, never
+`RETURNS TABLE`, so a plain `CREATE OR REPLACE FUNCTION` with a new
+trailing default parameter is safe — no drop-then-recreate needed, unlike
+the migration-017/021 precedent for `RETURNS TABLE` functions.
+
+Built, all sharing the identical `reminderCheckbox()`/`.checkrow` pattern
+and `isReminderEligible` eligibility rule (`app/src/lib/email.ts`):
+
+- **`RequestDetailForm.tsx`** — the checkbox moved from its old
+  standalone bottom-of-form row up to immediately after the Date/Recipient
+  `.metarow` block. Deliberately its own full-width row below the
+  metarow, not beside it — a side-by-side Date/Recipient-plus-control
+  layout was tried and reverted here once already (`.metatop`/`.metacol`,
+  2026-08-10, word-wrapped "Wednesday, August 10," on a narrow Android
+  phone), so staying full-width avoids repeating that.
+- **`ResponseDetailForm.tsx`** — new capability, not a relocation: the
+  signed-in recipient can now opt out of the shared Reminder for a
+  Received Request. Eligibility mirrors Request Detail's own rule
+  (`isReminderEligible` on the Due Date) but with no "select Contact/Due
+  Date first" prerequisite — Due Date isn't editable on this screen, it's
+  whatever the owner already set. Rendered as its own row right after the
+  existing `.meta` (Date/From/Due) block, same wrap-avoidance reasoning as
+  above.
+- **`RequestResponseForm.tsx`** (anonymous `/r/[token]` path) — identical
+  pattern, extending `ResponsePayload` with `reminder_enabled`, loading it
+  in the token-fetch effect, and passing `p_reminder_enabled` on Send via
+  `set_response_done_by_token`.
+
+`npx tsc --noEmit`/`npm run lint` clean across all three files. No mockup
+updated — none of the three source mockups (Request Detail, Response
+Detail, Respond to Request) have this control drawn in; flagged in
+`design/README.md`.
+
+## 2026-08-19 — Reminder-related email link text: "Open Request/ToDo to mark Done..." replaces generic "Request Detail"/"ToDo Detail"
+
+Owner: "For reminders being sent out, the URL link text is 'Request
+Detail', maybe to avoid the risk of being reported as a spam source it
+should be 'Open Request to mark Done or to turn off notifications'. The
+wording may need some tweaking."
+
+Applied to every remaining generic "Request Detail"/"ToDo Detail" anchor
+text in `app/src/lib/email.ts` (the day-before Reminder email to a Sent
+Request's own Recipient was already excluded — it reuses
+`buildRequestEmailHtml`/`Text`, the Initial Request template, whose link
+text was redesigned separately on 2026-08-16 to "Click to respond or mark
+as completed"):
+
+- `buildOverdueRecipientEmailHtml`/`Text` and `digestRowHtml`/`Text` (the
+  two Requestor-facing digests) all link to the recipient's own
+  `/r/[token]` response screen (confirmed by reading
+  `app/api/cron/tick/route.ts`'s `mintLink`) — used Jim's suggested
+  wording verbatim, **"Open Request to mark Done or to turn off
+  notifications"** (`OVERDUE_LINK_TEXT` constant), since that screen
+  genuinely offers both actions as of the same day's Reminder-checkbox
+  batch above.
+- `buildTodoReminderEmailHtml`/`Text` links to the owner's own
+  `/todos/[id]` ToDo Detail, which has **no** per-ToDo Reminder toggle
+  (`todo_dates_enabled` gates the whole feature, not a per-item checkbox —
+  confirmed no Reminder markup exists in `TodoDetailForm.tsx`), so used
+  narrower wording that only promises what's actually there: **"Open ToDo
+  to mark Done"** (`TODO_REMINDER_LINK_TEXT` constant).
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-08-19 — Add Dialog's locked Answer chip loses its padlock icon on Create Request/Create ToDo
+
+Owner: "When I Create a Request or a ToDo and Add Dialog, the Comment chip
+wraps to a second line for chips. The same chip-wrap is not true if I am
+looking at other screens with an Add Dialog." Root cause: Create Request's
+and Create ToDo's Add Dialog modal render the always-locked Answer chip
+(there's never anything yet to answer on a brand-new Request/ToDo) with an
+inline `.lockglyph` padlock SVG plus the word "Answer"; Request Detail,
+Request Response, Response Detail, and ToDo Detail's own *dynamically*
+locked Answer chip (locked only when no Question is currently open) has
+never carried that icon — plain text with `is-locked` styling and
+`aria-disabled` only. The icon's own width (plus the JSX-implicit space
+before "Answer") was enough extra horizontal room, on a phone, to push
+Comment onto its own line — a wrap the four other screens never had, since
+their chip was already narrower.
+
+Fixed by removing the `.lockglyph` SVG from Create Request's and Create
+ToDo's Answer chip, matching the other four screens exactly — the app now
+has one consistent (icon-less) treatment for a locked Add Dialog chip
+everywhere, `aria-disabled="true"` still carries the same meaning for
+assistive tech. `npx tsc --noEmit`/`npm run lint` clean. No mockup
+updated — none of the six Dialog/Attachments-batch mockups have real,
+interactive Add Dialog chip JS.
+
+\---
+
 ## 2026-08-19 — Search bar: "Date Range" shortened to "Dates," field/date-field flex-basis fixed to stop the search icon wrapping
 
 Owner, still on a phone: "it still wraps the magnifying glass to the next

@@ -2145,3 +2145,40 @@ link is built only after the stack is proven on Add Contact.
   the owner ("Let's test for browser-support later"). `npx tsc --noEmit`/
   `npm run lint` clean. No mockup updated — neither source mockup has
   interactive Description JS to add a mic button to.
+- **Reminder checkbox extended to Request Detail (relocated), Response
+  Detail, and Request Response — migration 036 DRAFTED, NOT YET CONFIRMED
+  RUN (2026-08-19).** Owner's own new design (three pasted screenshots),
+  resolved via two AskUserQuestion calls before building: Request Detail's
+  new top-band Reminder control **replaces** its old standalone
+  bottom-of-form one (built 2026-08-15) rather than both coexisting, and
+  every new control uses the existing **plain checked = on**
+  `.checkrow`/`.checktext`/`.checknote` component and wording, not the
+  mockup's own inverted "Turn off Reminders (Check and Send)" semantics.
+  Migration 036 adds `reminder_enabled` to the two jsonb-returning read
+  functions (`get_request_by_token`, `get_received_request`) and a new
+  trailing `p_reminder_enabled boolean default null` parameter to both
+  write functions (`set_response_done_by_token`,
+  `set_response_done_as_recipient`), coalesced against the existing column
+  so an unpassed value leaves it untouched. `RequestDetailForm.tsx`'s
+  checkbox moved to right after its Date/Recipient `.metarow`;
+  `ResponseDetailForm.tsx` and `RequestResponseForm.tsx` (the anonymous
+  `/r/[token]` path) both gained the identical control for the first time,
+  right after their own `.meta` block — every placement is its own
+  full-width row below the metarow/meta block, never beside it, per the
+  2026-08-10 `.metatop`/`.metacol` word-wrap precedent. `npx tsc --noEmit`/
+  `npm run lint` clean. No mockup updated — none of the three source
+  mockups (Request Detail, Response Detail, Respond to Request) draw this
+  control.
+- **Reminder-related email link text changed from generic "Request
+  Detail"/"ToDo Detail" to action-oriented wording (2026-08-19)** — owner's
+  own spam-risk concern. `buildOverdueRecipientEmailHtml`/`Text` and the
+  two Requestor-facing digest row builders (`digestRowHtml`/`Text`), all of
+  which link to the recipient's own `/r/[token]` response screen, now use
+  "Open Request to mark Done or to turn off notifications" (owner's
+  suggested wording, used verbatim). `buildTodoReminderEmailHtml`/`Text`,
+  which links to the owner's own ToDo Detail (no per-ToDo Reminder toggle
+  exists), uses the narrower "Open ToDo to mark Done" instead. The Sent
+  Request's own day-before Reminder to its Recipient was already excluded
+  — it reuses the Initial Request template's own link text ("Click to
+  respond or mark as completed"), redesigned separately 2026-08-16. `npx
+  tsc --noEmit`/`npm run lint` clean.
