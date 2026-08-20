@@ -1069,3 +1069,305 @@ commit;
 --     and pronamespace = 'public'::regnamespace;
 --        -> pronargs should read 4 for both (was 3)
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 037 — requests.overdue_reminder_enabled ("Daily thereafter")
+-- DRAFTED 2026-08-20 — CONFIRMED RUN by the owner 2026-08-20.
+--
+-- Context: owner's own new "Reminders until Done" banner design (two pasted
+-- mockups, Create Request and Response Detail) pairs the existing "Morning
+-- before" checkbox (reminder_enabled, migration 031/036 — the one-time
+-- day-before Reminder) with a second, new "Daily thereafter" checkbox. The
+-- Overdue notification system (migrations 032/033, 2026-08-17) already sends
+-- the Recipient a one-time "just became overdue" notice plus recurring
+-- nudges (hour-after-Due-Time then daily; straight to daily for a
+-- Due-Date-only Request) — always, unconditionally, with no per-Request
+-- opt-out. "Daily thereafter" becomes that opt-out.
+--
+-- Confirmed with the owner (chat, 2026-08-20) that unchecking it silences
+-- BOTH the one-time Overdue transition notice AND every recurring nudge
+-- after it — not just the recurring part — so a Recipient who's turned it
+-- off gets zero automatic overdue-related email for that Request. The
+-- Requestor's own un-gated "newly overdue" digest (Phase D) is untouched
+-- either way — that's the Requestor's own visibility into their account,
+-- not something the Recipient's preference should silence.
+--
+-- Default true, matching reminder_enabled's own precedent when it was tier/
+-- time-sensitive-but-not-privacy-sensitive (migration 019's request_time_enabled
+-- was the one exception, defaulted true then later flipped false once no real
+-- users besides the owner existed to worry about hiding existing data from —
+-- see migration 023's own header comment). No existing users besides the
+-- owner exist yet, so a default-false flip is equally safe here, but true is
+-- chosen deliberately: this is a *change in delivered behavior* for every
+-- Request that already exists (the Overdue system has been unconditional
+-- since 2026-08-17), and a silent default-off would be a behavior regression
+-- disguised as a new toggle, not a neutral new opt-in.
+--
+-- app/api/cron/tick/route.ts (Phase B/C) is the actual gate — this migration
+-- only adds the column and the read/write plumbing three existing functions
+-- already need (get_request_by_token, get_received_request — both jsonb,
+-- plain create-or-replace; set_response_done_by_token/
+-- set_response_done_as_recipient gain a fifth positional default-null
+-- parameter each, same coalesce-against-existing-column pattern as
+-- p_reminder_enabled). get_received_requests() (RETURNS TABLE) is NOT
+-- touched — Main Screen's list view has no Reminder checkbox to read this
+-- value for.
+-- ============================================================================
+
+begin;
+
+alter table public.requests
+  add column if not exists overdue_reminder_enabled boolean not null default true;
+
+comment on column public.requests.overdue_reminder_enabled is
+  'Recipient-facing "Daily thereafter" toggle (§6.41, 2026-08-20) — governs the automatic post-Due-Date Overdue system (migrations 032/033) for this Request: false silences both the one-time "just became overdue" notice and every recurring nudge after it. Default true, matching the Overdue system''s own unconditional behavior before this column existed. Never gates the Requestor''s own un-gated "newly overdue" digest.';
+
+-- ----------------------------------------------------------------------------
+-- get_request_by_token — add overdue_reminder_enabled to the jsonb payload.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.overdue_reminder_enabled,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_received_request — same addition, signed-in recipient path.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at, r.reminder_enabled, r.overdue_reminder_enabled,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'reminder_enabled', v_request.reminder_enabled,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_by_token — gains p_overdue_reminder_enabled, same
+-- coalesce-against-existing-column pattern as p_reminder_enabled.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_by_token(
+  p_token text,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null,
+  p_overdue_reminder_enabled boolean default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_request_id uuid;
+  v_revoked timestamptz;
+  v_expires timestamptz;
+begin
+  select id, link_revoked_at, link_expires_at
+    into v_request_id, v_revoked, v_expires
+    from public.requests
+    where link_token_hash = digest(p_token, 'sha256');
+
+  if v_request_id is null or v_revoked is not null or v_expires < now() then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled),
+        overdue_reminder_enabled = coalesce(p_overdue_reminder_enabled, overdue_reminder_enabled)
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'response_done_updated',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'overdue_reminder_enabled', p_overdue_reminder_enabled)
+    );
+end;
+$$;
+
+revoke all on function public.set_response_done_by_token(text, date, time, boolean, boolean) from public;
+grant execute on function public.set_response_done_by_token(text, date, time, boolean, boolean) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_as_recipient — same addition, signed-in recipient path.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_as_recipient(
+  p_request_id uuid,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null,
+  p_overdue_reminder_enabled boolean default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        received_archived_at = case when p_done_date is null then null else received_archived_at end,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled),
+        overdue_reminder_enabled = coalesce(p_overdue_reminder_enabled, overdue_reminder_enabled)
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'response_done_updated',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'overdue_reminder_enabled', p_overdue_reminder_enabled, 'via', 'recipient_session')
+    );
+end;
+$$;
+
+revoke all on function public.set_response_done_as_recipient(uuid, date, time, boolean, boolean) from public;
+grant execute on function public.set_response_done_as_recipient(uuid, date, time, boolean, boolean) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only — the real check is exercising the
+-- new "Daily thereafter" checkbox from all four screens):
+--   select column_name, column_default from information_schema.columns
+--   where table_name = 'requests' and column_name = 'overdue_reminder_enabled';
+--        -> should exist, default true
+--
+--   select proname, pronargs from pg_proc
+--   where proname in ('set_response_done_by_token', 'set_response_done_as_recipient')
+--     and pronamespace = 'public'::regnamespace;
+--        -> pronargs should read 5 for both (was 4)
+-- ============================================================================

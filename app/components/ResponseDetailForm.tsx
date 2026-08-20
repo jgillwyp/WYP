@@ -55,6 +55,15 @@ import { isReminderEligible } from '@/lib/email'
  *      been updated to show them (same situation Create ToDo's mockup was
  *      in before it caught up). Flagged in design/README.md, not silently
  *      diverged from without a trace.
+ *
+ * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20) —
+ * see RequestDetailForm.tsx's identical file-header paragraph for the full
+ * reasoning. Same two-checkbox banner here, recipient-facing: "Morning
+ * before" (reminder_enabled) and "Daily thereafter" (overdue_reminder_
+ * enabled, the Overdue-notification opt-out — unchecking it stops this
+ * recipient's Overdue emails entirely, confirmed with the owner). "Morning
+ * before" is greyed out once reminder_sent_at is set, on top of the
+ * existing eligibility checks.
  */
 
 type Kind = 'question' | 'answer' | 'comment'
@@ -63,6 +72,48 @@ type Kind = 'question' | 'answer' | 'comment'
 // (globals.css's ftextarea-plain/.charcount comment; owner request
 // 2026-08-16).
 const DIALOG_MAX = 500
+
+// Voice dictation for Dialog Text (2026-08-20) — same Web-Speech-API
+// pattern as CreateRequestForm.tsx's own Description dictation, extended
+// here per the owner's request. This screen has no editable Description
+// (read-only issuer content), so Dialog Text is the only field that needs
+// it. Gated on the Request's own issuer tier (data.owner_tier), never this
+// signed-in recipient's own tier — see CLAUDE.md's Entitlements section:
+// rights on a Request come from its issuer, never from whoever is reading
+// it. Duplicated per this codebase's established per-file convention.
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: { length: number; [index: number]: { [index: number]: { transcript: string } } }
+}
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 type DialogEntry = {
   id: number
@@ -89,6 +140,12 @@ type ReceivedDetailPayload = {
   // writable from here too, not just the owner's own Create Request/
   // Request Detail. See the file-header comment for the full reasoning.
   reminder_enabled: boolean
+  // Reminders until Done banner (migration 037, 2026-08-20) — see
+  // RequestDetailForm.tsx's identical file-header paragraph for the full
+  // reasoning. overdue_reminder_enabled is the "Daily thereafter" opt-out;
+  // reminder_sent_at drives "Morning before"'s second grey-out condition.
+  overdue_reminder_enabled: boolean
+  reminder_sent_at: string | null
   // Un-archive-on-clear (owner request, 2026-08-17, migration 032) — the
   // recipient's own archive state for this Request, as loaded. See the
   // matching state var below.
@@ -240,6 +297,30 @@ export default function ResponseDetailForm() {
   // loaded from data.reminder_enabled, written on Send via
   // set_response_done_as_recipient's new p_reminder_enabled argument.
   const [reminderEnabled, setReminderEnabled] = useState(true)
+  // "Daily thereafter" opt-out (migration 037, 2026-08-20) — see
+  // RequestDetailForm.tsx's identical addition.
+  const [overdueReminderEnabled, setOverdueReminderEnabled] = useState(true)
+  const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
+
+  // Close/Cancel label (2026-08-20) — same reasoning/pattern as
+  // RequestDetailForm.tsx's identical addition: a snapshot of the fields
+  // this screen can actually write (Done Date, Done Time, both Reminder
+  // checkboxes), taken once on load, compared live against the editable
+  // state below. Dialog/Attachments deliberately excluded — both write
+  // immediately and independently of Send/Cancel here, so Cancel was never
+  // going to discard them regardless of the label.
+  const initialFormRef = useRef<{
+    doneDate: string
+    doneTime: string
+    reminderEnabled: boolean
+    overdueReminderEnabled: boolean
+  } | null>(null)
+  const hasChanges =
+    initialFormRef.current !== null &&
+    (doneDate !== initialFormRef.current.doneDate ||
+      doneTime !== initialFormRef.current.doneTime ||
+      reminderEnabled !== initialFormRef.current.reminderEnabled ||
+      overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
 
   // Un-archive-on-clear (owner request, 2026-08-17) — the row's own
   // received_archived_at as loaded. Not itself editable, and no
@@ -263,6 +344,48 @@ export default function ResponseDetailForm() {
   const [dialogSaving, setDialogSaving] = useState(false)
   const dialogTextRef = useRef<HTMLTextAreaElement>(null)
   const doneDateRef = useRef<HTMLInputElement>(null)
+
+  // Voice dictation for Dialog Text (2026-08-20) — see the module-level
+  // comment above getSpeechRecognition() for the full reasoning.
+  const [dlgDictating, setDlgDictating] = useState(false)
+  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setVoiceSupported(getSpeechRecognition() !== null)
+    })
+    return () => {
+      cancelled = true
+      dlgRecognitionRef.current?.stop()
+    }
+  }, [])
+
+  function toggleDialogDictation() {
+    if (dlgDictating) {
+      dlgRecognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
+    }
+    recognition.onerror = () => setDlgDictating(false)
+    recognition.onend = () => setDlgDictating(false)
+    dlgRecognitionRef.current = recognition
+    recognition.start()
+    setDlgDictating(true)
+  }
 
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
@@ -342,6 +465,14 @@ export default function ResponseDetailForm() {
       setDoneDate(payload.done_date ?? '')
       setDoneTime(payload.done_time ?? '')
       setReminderEnabled(payload.reminder_enabled)
+      setOverdueReminderEnabled(payload.overdue_reminder_enabled)
+      setReminderSentAt(payload.reminder_sent_at)
+      initialFormRef.current = {
+        doneDate: payload.done_date ?? '',
+        doneTime: payload.done_time ?? '',
+        reminderEnabled: payload.reminder_enabled,
+        overdueReminderEnabled: payload.overdue_reminder_enabled,
+      }
       setAlreadyDoneOnLoad(!!payload.done_date)
       setDialogList(payload.dialog ?? [])
       setReceivedArchivedAt(payload.received_archived_at)
@@ -468,29 +599,48 @@ export default function ResponseDetailForm() {
   // Received Request, not just a literal click from Archive.
   const reminderArchived = receivedArchivedAt !== null
   const reminderIneligible = !reminderArchived && !isReminderEligible(data?.due_date ?? null)
-  const reminderDisabled = reminderArchived || reminderIneligible
+  // "has been sent already" (owner, 2026-08-20) — see
+  // RequestDetailForm.tsx's identical addition; a second, independent
+  // grey-out for "Morning before" only.
+  const reminderAlreadySent = reminderSentAt !== null
+  const reminderDisabled = reminderArchived || reminderIneligible || reminderAlreadySent
   const reminderTooltip = reminderArchived
     ? 'Reminders are not available for archived Requests.'
     : reminderIneligible
       ? data?.due_date
         ? 'A Reminder is not available due to the short lead time.'
         : 'A Reminder is not available without a Due Date.'
-      : undefined
+      : reminderAlreadySent
+        ? 'The morning-before Reminder has already been sent for this Request.'
+        : undefined
 
-  function reminderCheckbox() {
+  function reminderBanner() {
     return (
-      <label className={`checkrow${reminderDisabled ? ' checkrow-disabled' : ''}`} title={reminderTooltip}>
-        <input
-          type="checkbox"
-          checked={reminderEnabled}
-          disabled={reminderDisabled}
-          onChange={(e) => setReminderEnabled(e.target.checked)}
-        />
-        <span className="checktext">
-          Reminder
-          <span className="checknote">Send on the morning before unless it is marked Done.</span>
-        </span>
-      </label>
+      <div className="reminderbanner">
+        <p className="reminderbanner-title">Reminders until Done</p>
+        <div className="reminderbanner-items">
+          <label
+            className={`reminderitem${reminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={reminderTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={reminderEnabled}
+              disabled={reminderDisabled}
+              onChange={(e) => setReminderEnabled(e.target.checked)}
+            />
+            <span>Morning before</span>
+          </label>
+          <label className="reminderitem">
+            <input
+              type="checkbox"
+              checked={overdueReminderEnabled}
+              onChange={(e) => setOverdueReminderEnabled(e.target.checked)}
+            />
+            <span>Daily thereafter</span>
+          </label>
+        </div>
+      </div>
     )
   }
 
@@ -505,6 +655,7 @@ export default function ResponseDetailForm() {
       p_done_date: doneDate.trim() === '' ? null : doneDate,
       p_done_time: doneTime.trim() === '' ? null : doneTime,
       p_reminder_enabled: reminderEnabled,
+      p_overdue_reminder_enabled: overdueReminderEnabled,
     })
 
     setSending(false)
@@ -603,7 +754,7 @@ export default function ResponseDetailForm() {
               {sending ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={sending}>
-              Cancel
+              {hasChanges ? 'Cancel' : 'Close'}
             </button>
           </span>
         </div>
@@ -639,16 +790,15 @@ export default function ResponseDetailForm() {
               </div>
             </div>
 
-            {/* Reminder checkbox (migration 036, 2026-08-19) — new
-                capability, owner's own design (mirrored onto Request
-                Detail/Request Response too): the recipient can now opt
-                out of the shared day-before Reminder for this Request,
-                same single reminder_enabled column the owner's own
-                Create Request/Request Detail checkbox already writes.
-                Own full-width row below .meta, not beside it — see
+            {/* Reminders until Done banner (migration 036/037,
+                2026-08-19/20) — new capability, owner's own design
+                (mirrored onto Request Detail/Request Response too): the
+                recipient can now opt out of the shared day-before Reminder
+                and/or the recurring Overdue notices for this Request. Own
+                full-width row below .meta, not beside it — see
                 RequestDetailForm.tsx's identical comment on the
                 2026-08-10 .metatop/.metacol wrap precedent this avoids. */}
-            {reminderCheckbox()}
+            {reminderBanner()}
 
             <div className="seclabel">Request Description</div>
             <div className="respdesc">{data.description}</div>
@@ -922,20 +1072,32 @@ export default function ResponseDetailForm() {
               )}
 
               <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
-                <textarea
-                  ref={dialogTextRef}
-                  className="ftextarea ftextarea-plain"
-                  id="dlgtext"
-                  maxLength={DIALOG_MAX}
-                  placeholder="Dialog Text"
-                  aria-label="Dialog Text"
-                  value={dialogModalBody}
-                  onChange={(e) => {
-                    setDialogModalBody(e.target.value)
-                    if (dialogModalError) setDialogModalError(null)
-                  }}
-                  autoFocus
-                />
+                <div className="descwrap">
+                  <textarea
+                    ref={dialogTextRef}
+                    className="ftextarea ftextarea-plain"
+                    id="dlgtext"
+                    maxLength={DIALOG_MAX}
+                    placeholder="Dialog Text"
+                    aria-label="Dialog Text"
+                    value={dialogModalBody}
+                    onChange={(e) => {
+                      setDialogModalBody(e.target.value)
+                      if (dialogModalError) setDialogModalError(null)
+                    }}
+                    autoFocus
+                  />
+                  {data.owner_tier === 'subscriber' && voiceSupported && (
+                    <button
+                      type="button"
+                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
+                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={toggleDialogDictation}
+                    >
+                      <MicIcon />
+                    </button>
+                  )}
+                </div>
                 <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
                   {dialogModalBody.length} / {DIALOG_MAX}
                 </p>

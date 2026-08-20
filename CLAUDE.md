@@ -2190,3 +2190,67 @@ link is built only after the stack is proven on Add Contact.
   navigation flag — covers every path that reaches an archived Request's
   Detail screen, not just a literal click from Archive's own list. `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Description auto-grow fixed with `field-sizing: content` (2026-08-19)**
+  — owner reported Request Detail's Description was still a fixed-height
+  scrolling box despite the auto-grow feature already being shipped;
+  confirmed via git + the Vercel MCP that production was serving the exact
+  latest commit, ruling out a stale deploy. Added `field-sizing: content` to
+  `.ftextarea.ftextarea-autosize` (`app/globals.css`) as a belt-and-suspenders
+  fix — this CSS property overrides any specified height, including one set
+  via JS (`.style.height`), so it wins regardless of whatever was wrong with
+  the existing `descRef` effect. Covers both Request Detail and ToDo Detail
+  in one shot, since both already share the class.
+- **Request Response Cancel removed + banner wording; Close/Cancel dynamic
+  label on Detail screens; voice dictation extended to Detail Descriptions
+  and all Dialog Text; Archived badge/search-text visibility bump
+  (2026-08-20)** — see the decisions log's 2026-08-20 entry for the full
+  write-up. Summary: `RequestResponseForm.tsx` no longer has a Cancel
+  button (owner: it had no useful purpose, and he kept clicking it trying
+  to close the tab); its post-Send banner now reads "Response sent." not
+  "Response saved." `RequestDetailForm.tsx`/`ResponseDetailForm.tsx`/
+  `TodoDetailForm.tsx` now show **Close** at rest and only switch to
+  **Cancel** once real form-data changes have been made (a `useRef`
+  snapshot taken at load time, deliberately excluding Dialog/Attachments/
+  Locations, which already save independently of Cancel). Voice dictation
+  (Web Speech API, same pattern as the Create screens' own 2026-08-19
+  build) is now on Request Detail's and ToDo Detail's own Description
+  field, and on Dialog Text everywhere it appears across all six
+  Request/ToDo screens — gated on the signed-in owner's own `tier` on the
+  four owner-side screens, and on `data.owner_tier === 'subscriber'` (the
+  Request's own issuer, never the viewer) on the two recipient-facing
+  screens, per the Entitlements rule above. `.archtag`/`.clearsearch`/
+  `.searchnotice` got a pure font-size/contrast bump — the underlying
+  Search-mode logic was already correct, just too subtle to notice. `npx
+  tsc --noEmit`/`npm run lint` clean across the whole batch.
+- **"Reminders until Done" banner — single Reminder checkbox replaced by
+  two, plus a new Overdue-notification opt-out — migration 037 confirmed
+  run by the owner 2026-08-20.** Owner's own mockups (Create Request,
+  Response Detail): a "Reminders until Done" box holding "Morning before"
+  (the existing day-before Reminder, `reminder_enabled`, migration 031/036,
+  unchanged rules) and a new "Daily thereafter" (`overdue_reminder_enabled`,
+  default `true` — behavior-preserving, since the automatic Overdue cron
+  system built 2026-08-17 has been unconditional since then). Confirmed via
+  `AskUserQuestion`: unchecking "Daily thereafter" stops the Recipient's
+  Overdue emails **entirely**, including the first transition notice, not
+  just the recurring nudges after it — `app/api/cron/tick/route.ts`'s Phase
+  B and Phase C both gate on the new column, still advancing the state
+  machine (`overdue_notified_at`/`last_overdue_nudge_at`) so the row doesn't
+  get retried, just skipping the actual send. The owner's own described
+  Overdue cadence (hour-after-Due-Time first nudge, not hourly all day —
+  spam-risk concern; daily thereafter; no notice during a Due-Date-only
+  Request's own Due Date) turned out to already match the shipped cron
+  logic exactly — no cadence code changed, only the new opt-out. New
+  `.reminderbanner`/`.reminderitem` CSS (§6.41 PROPOSED) — one flex-wrap
+  container holding two `inline-flex`/`white-space:nowrap` items, satisfying
+  the owner's explicit "wrap the checkbox and its label together" rule
+  through CSS alone, no separate narrow/wide markup variants. "Morning
+  before" gained a second, independent grey-out condition — `reminder_
+  sent_at` (newly exposed by migration 037 on the two recipient-facing read
+  functions) is not null — layered on the existing eligibility/archived
+  checks; "Daily thereafter" has no eligibility gate of its own anywhere.
+  Built on all four Request-facing screens (Create Request, Request Detail,
+  Response Detail, Request Response); Request Detail's and Response
+  Detail's existing Close/Cancel dirty-check snapshots extended to include
+  the new field. See the decisions log's 2026-08-20 entry for the full
+  write-up. `npx tsc --noEmit` clean; `npm run lint` not yet re-run for this
+  specific batch.

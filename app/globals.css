@@ -1290,6 +1290,98 @@ body {
 }
 
 /* ============================================================================
+   REMINDERS UNTIL DONE BANNER — §6.41 PROPOSED, 2026-08-20. Owner's own new
+   design (two pasted mockups: Create Request, Response Detail) supersedes
+   §6.37's single .checkrow Reminder control with two independent toggles —
+   "Morning before" (the existing reminder_enabled day-before Reminder) and
+   "Daily thereafter" (new overdue_reminder_enabled, migration 037 — gates
+   the Recipient's automatic post-Due-Date Overdue notice and every
+   recurring nudge after it, entirely, when off).
+   .reminderbanner reuses .checkrow's own Strip-tint box (background,
+   radius, padding) rather than inventing a new container. .reminderitem is
+   a `white-space: nowrap` inline-flex unit — the owner's own explicit
+   requirement: "if a wrap were to occur, it would be important to wrap
+   both the checkbox and the associated text together," never split a
+   checkbox from its own label. .reminderbanner-items wraps between the two
+   items (not within one), so the same markup naturally reflows to the
+   owner's two different mockup layouts — stacked in the narrow inline slot
+   beside Due Date (Create Request, Due Time off), side by side in the
+   full-width placement everywhere else — with no separate narrow/wide
+   variant needed. Each item greys out independently via
+   .reminderitem-disabled, since "Morning before" can become unavailable
+   (short lead time, already sent) while "Daily thereafter" stays live —
+   the reverse is never true today, "Daily thereafter" has no eligibility
+   rule of its own, only the existing archived-Request grey-out that already
+   applied to the old single checkbox. */
+.reminderbanner {
+  background: var(--strip);
+  border-radius: 9px;
+  padding: 10px;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.reminderbanner-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.reminderbanner-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.reminderitem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.reminderitem input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--brand-blue);
+  cursor: pointer;
+}
+
+.reminderitem span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.reminderitem:focus-within {
+  box-shadow: var(--focus-halo);
+  border-radius: 4px;
+}
+
+.reminderitem-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.reminderitem-disabled input,
+.reminderitem-disabled span {
+  cursor: not-allowed;
+}
+
+/* Inline placement beside Due Date (Due Time off) — same override
+   .checkrow-inline already needed (§6.37), reapplied to .reminderbanner. */
+.frow > .reminderbanner.reminderbanner-inline {
+  width: auto;
+  flex: 1 1 auto;
+  margin-bottom: 0;
+  padding: 8px 10px;
+}
+
+/* ============================================================================
    SEND-BY CHIP ROW (§6.2 form variant) — Add Contact
    Compressed full-width strip: chips left, gating notice right. Chips choose
    an either/or value, unlike .checkrow above (a single persistent toggle).
@@ -2305,7 +2397,7 @@ body {
 .clearsearch {
   flex: 0 0 auto;
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--brand-blue);
   background: none;
@@ -2325,7 +2417,7 @@ body {
    MainScreen.tsx). Sits in the same .chips slot, same vertical rhythm, but
    plain text — not a control. */
 .searchnotice {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink-soft);
   text-transform: uppercase;
@@ -2400,17 +2492,25 @@ body {
 /* Archived badge — a matched row that is archived still renders in its own
    Sent/Received/ToDos section (never a separate list), tagged so it doesn't
    read as merely Done. Sits in .r2 alongside the Dialog/Attachments .ii
-   icons, before .desc. */
+   icons, before .desc.
+
+   Bumped in size/contrast 2026-08-20 — owner: "I thought some type of
+   'Badge' was going to distinguish Archive items in the Search Results and
+   do not see that." The logic was already correct (archived rows are
+   excluded at rest and only ever render, badge included, while isSearching
+   — verified, no bug), but at 10px on --ink-soft against --strip it read as
+   too subtle to register at a glance, same complaint as the Search Results
+   notice text below. Bumped a step darker/larger rather than reworked. */
 .archtag {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   margin-right: 6px;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
   background: var(--strip);
-  color: var(--ink-soft);
-  font-size: 10px;
+  color: var(--ink);
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .02em;

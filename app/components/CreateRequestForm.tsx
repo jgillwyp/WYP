@@ -74,6 +74,18 @@ import {
  * own "a reminder will arrive" sentence (send-request/route.ts) in the
  * meantime, same as the two never being able to disagree that the old
  * tightWindow note relied on.
+ *
+ * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20) —
+ * owner's own new design (two pasted mockups) pairs the checkbox above
+ * ("Morning before") with a second, independent one ("Daily thereafter",
+ * overdueReminderEnabled) inside one .reminderbanner box. "Daily thereafter"
+ * gates the automatic post-Due-Date Overdue notification system (migrations
+ * 032/033) for this Request — unchecking it silences the Recipient's
+ * one-time "just became overdue" notice AND every recurring nudge after it,
+ * confirmed with the owner via chat 2026-08-20. Always enabled here (no
+ * eligibility rule of its own — this is a brand-new Request, nothing can be
+ * overdue yet); Request Detail's own copy of this banner adds the
+ * archived-Request grey-out that already existed for the single checkbox.
  */
 
 type Contact = {
@@ -94,6 +106,9 @@ type RequestFormState = {
   categoryName: string
   description: string
   reminderEnabled: boolean
+  // "Daily thereafter" (§6.41, migration 037, 2026-08-20) — see the
+  // Reminders-until-Done banner comment below for the full reasoning.
+  overdueReminderEnabled: boolean
 }
 
 const initialState: RequestFormState = {
@@ -105,6 +120,7 @@ const initialState: RequestFormState = {
   // Default checked, matching the owner's own mockup — see the file-level
   // comment on the Reminder checkbox.
   reminderEnabled: true,
+  overdueReminderEnabled: true,
 }
 
 const CATEGORY_CAP = 20
@@ -329,6 +345,14 @@ export default function CreateRequestForm() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const [voiceSupported, setVoiceSupported] = useState(false)
 
+  // Dialog Text gets its own independent dictating/recognitionRef pair
+  // (2026-08-20) — extended from Description-only per the owner's request.
+  // Shares voiceSupported above (one browser-capability check covers both
+  // fields) but needs a separate live-recognition instance since the two
+  // textareas are never the same input.
+  const [dlgDictating, setDlgDictating] = useState(false)
+  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+
   const [contactInvalid, setContactInvalid] = useState(false)
   const [dueDateInvalid, setDueDateInvalid] = useState(false)
   const [descInvalid, setDescInvalid] = useState(false)
@@ -384,8 +408,35 @@ export default function CreateRequestForm() {
     return () => {
       cancelled = true
       recognitionRef.current?.stop()
+      dlgRecognitionRef.current?.stop()
     }
   }, [])
+
+  function toggleDialogDictation() {
+    if (dlgDictating) {
+      dlgRecognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
+    }
+    recognition.onerror = () => setDlgDictating(false)
+    recognition.onend = () => setDlgDictating(false)
+    dlgRecognitionRef.current = recognition
+    recognition.start()
+    setDlgDictating(true)
+  }
 
   // Load the owner's own contacts and categories once. RLS already scopes
   // both to owner_id = auth.uid() (migration 002 / 003) — no client-side
@@ -612,23 +663,38 @@ export default function CreateRequestForm() {
       ? 'A Reminder is not available due to the short lead time.'
       : undefined
 
-  function reminderCheckbox(inline: boolean) {
+  // Reminders until Done banner (§6.41 PROPOSED, 2026-08-20) — replaces the
+  // single reminderCheckbox() with two independent .reminderitem toggles in
+  // one .reminderbanner box. "Daily thereafter" has no eligibility rule of
+  // its own on this screen (a brand-new Request, nothing can be overdue
+  // yet) — always enabled, default checked.
+  function reminderBanner(inline: boolean) {
     return (
-      <label
-        className={`checkrow${inline ? ' checkrow-inline' : ''}${reminderDisabled ? ' checkrow-disabled' : ''}`}
-        title={reminderTooltip}
-      >
-        <input
-          type="checkbox"
-          checked={form.reminderEnabled}
-          disabled={reminderDisabled}
-          onChange={(e) => set('reminderEnabled', e.target.checked)}
-        />
-        <span className="checktext">
-          Reminder
-          <span className="checknote">Send on the morning before unless it is marked Done.</span>
-        </span>
-      </label>
+      <div className={`reminderbanner${inline ? ' reminderbanner-inline' : ''}`}>
+        <p className="reminderbanner-title">Reminders until Done</p>
+        <div className="reminderbanner-items">
+          <label
+            className={`reminderitem${reminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={reminderTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderEnabled}
+              disabled={reminderDisabled}
+              onChange={(e) => set('reminderEnabled', e.target.checked)}
+            />
+            <span>Morning before</span>
+          </label>
+          <label className="reminderitem">
+            <input
+              type="checkbox"
+              checked={form.overdueReminderEnabled}
+              onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
+            />
+            <span>Daily thereafter</span>
+          </label>
+        </div>
+      </div>
     )
   }
 
@@ -768,6 +834,7 @@ export default function CreateRequestForm() {
         due_date: form.dueDate,
         due_time: form.dueTime.trim() === '' ? null : form.dueTime,
         reminder_enabled: form.reminderEnabled,
+        overdue_reminder_enabled: form.overdueReminderEnabled,
       })
       .select('id')
       .single()
@@ -1065,7 +1132,7 @@ export default function CreateRequestForm() {
                   )}
                 </span>
               ) : (
-                reminderCheckbox(true)
+                reminderBanner(true)
               )}
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
@@ -1303,10 +1370,10 @@ export default function CreateRequestForm() {
               </div>
             )}
 
-            {/* Reminder checkbox, standalone-row placement — only when Due
-                Time is on (the inline placement above already covers the
-                off case; see the file-level comment). */}
-            {requestTimeEnabled && reminderCheckbox(false)}
+            {/* Reminders until Done banner, standalone-row placement — only
+                when Due Time is on (the inline placement above already
+                covers the off case; see the file-level comment). */}
+            {requestTimeEnabled && reminderBanner(false)}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>
@@ -1439,20 +1506,32 @@ export default function CreateRequestForm() {
               </div>
 
               <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
-                <textarea
-                  ref={dialogTextRef}
-                  className="ftextarea ftextarea-plain"
-                  id="dlgtext"
-                  maxLength={DIALOG_MAX}
-                  placeholder="Dialog Text"
-                  aria-label="Dialog Text"
-                  value={dialogModalBody}
-                  onChange={(e) => {
-                    setDialogModalBody(e.target.value)
-                    if (dialogModalError) setDialogModalError(null)
-                  }}
-                  autoFocus
-                />
+                <div className="descwrap">
+                  <textarea
+                    ref={dialogTextRef}
+                    className="ftextarea ftextarea-plain"
+                    id="dlgtext"
+                    maxLength={DIALOG_MAX}
+                    placeholder="Dialog Text"
+                    aria-label="Dialog Text"
+                    value={dialogModalBody}
+                    onChange={(e) => {
+                      setDialogModalBody(e.target.value)
+                      if (dialogModalError) setDialogModalError(null)
+                    }}
+                    autoFocus
+                  />
+                  {tier === 'subscriber' && voiceSupported && (
+                    <button
+                      type="button"
+                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
+                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={toggleDialogDictation}
+                    >
+                      <MicIcon />
+                    </button>
+                  )}
+                </div>
                 <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
                   {dialogModalBody.length} / {DIALOG_MAX}
                 </p>

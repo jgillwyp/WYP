@@ -37,6 +37,22 @@ import { isReminderEligible } from '@/lib/email'
  * than adding a second control — still not placed beside the metarow block
  * (a side-by-side Date/Recipient + control layout was tried and reverted
  * here once already, .metatop/.metacol, 2026-08-10, over Android word-wrap).
+ *
+ * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20) —
+ * the single Reminder checkbox above is superseded by a two-checkbox
+ * "Reminders until Done" banner (.reminderbanner/.reminderitem, globals.css):
+ * "Morning before" is the existing day-before Reminder (reminder_enabled,
+ * unchanged rules), "Daily thereafter" is a new opt-OUT of the existing
+ * unconditional Overdue-notification cron system (overdue_reminder_enabled,
+ * default true — this is a behavior-preserving default, not a neutral
+ * opt-in one, since that system has been unconditional since 2026-08-17).
+ * Confirmed with the owner: unchecking "Daily thereafter" stops the
+ * Recipient's Overdue emails entirely, including the first notice, not just
+ * the repeating nudges after it (see app/api/cron/tick/route.ts Phase B/C).
+ * "Morning before" gains a second, independent grey-out condition here —
+ * reminder_sent_at (fetched below) is not null, i.e. it has already gone out
+ * for this Request — layered on top of the existing eligibility checks;
+ * "Daily thereafter" has no eligibility gate of its own on this screen.
  */
 
 type Kind = 'question' | 'answer' | 'comment'
@@ -72,6 +88,7 @@ type RequestFormState = {
   categoryName: string
   description: string
   reminderEnabled: boolean
+  overdueReminderEnabled: boolean
 }
 
 const CATEGORY_CAP = 20
@@ -82,6 +99,45 @@ const LOOKUP_BROWSE_THRESHOLD = 12
 // 2026-08-16).
 const DESCRIPTION_MAX = 500
 const DIALOG_MAX = 500
+
+// Voice dictation (2026-08-20) — same Web-Speech-API pattern as
+// CreateRequestForm.tsx's own Description dictation, ported here per the
+// owner's request to extend it to the Detail screens. Duplicated per this
+// codebase's established per-file convention rather than extracted to a
+// shared lib/hook.
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: { length: number; [index: number]: { [index: number]: { transcript: string } } }
+}
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 function formatMDY(value: string | null): string {
   if (!value) return ''
@@ -215,6 +271,11 @@ export default function RequestDetailForm() {
   // there's no Archive/Un-archive control on this screen, only the
   // side-effect of clearing Done Date.
   const [archivedAt, setArchivedAt] = useState<string | null>(null)
+  // Reminders until Done banner (2026-08-20) — when "Morning before" already
+  // went out for this Request, per the owner's own new grey-out rule. Not
+  // itself editable; loaded once and compared against, same shape as
+  // archivedAt above.
+  const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
 
   const [form, setForm] = useState<RequestFormState>({
     dueDate: '',
@@ -224,6 +285,7 @@ export default function RequestDetailForm() {
     categoryName: '',
     description: '',
     reminderEnabled: true,
+    overdueReminderEnabled: true,
   })
 
   // Private Category is now an opt-in account preference (migration 018,
@@ -278,6 +340,81 @@ export default function RequestDetailForm() {
     el.style.height = `${el.scrollHeight}px`
   }, [form.description])
 
+  // Voice dictation (2026-08-20) — extended from Create Request/Create ToDo
+  // to this screen's own Description field, per the owner's request. Gated
+  // on this screen's existing `tier` state below (signed-in owner's own
+  // profiles.tier — this screen has no anonymous visitor). Dialog Text gets
+  // its own independent dictating/recognitionRef pair further down, since
+  // the two fields could theoretically both want to dictate.
+  const [descDictating, setDescDictating] = useState(false)
+  const descRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const [dlgDictating, setDlgDictating] = useState(false)
+  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setVoiceSupported(getSpeechRecognition() !== null)
+    })
+    return () => {
+      cancelled = true
+      descRecognitionRef.current?.stop()
+      dlgRecognitionRef.current?.stop()
+    }
+  }, [])
+
+  function toggleDescDictation() {
+    if (descDictating) {
+      descRecognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      set('description', form.description ? `${form.description} ${addition.trim()}` : addition.trim())
+    }
+    recognition.onerror = () => setDescDictating(false)
+    recognition.onend = () => setDescDictating(false)
+    descRecognitionRef.current = recognition
+    recognition.start()
+    setDescDictating(true)
+  }
+
+  function toggleDialogDictation() {
+    if (dlgDictating) {
+      dlgRecognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
+    }
+    recognition.onerror = () => setDlgDictating(false)
+    recognition.onend = () => setDlgDictating(false)
+    dlgRecognitionRef.current = recognition
+    recognition.start()
+    setDlgDictating(true)
+  }
+
   // Attachments (Week 5 Priority 3, 2026-08-14) — AttachmentsPanel does its
   // own fetching once these are known.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
@@ -299,6 +436,41 @@ export default function RequestDetailForm() {
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
+
+  // Close/Cancel label (2026-08-20, owner request) — "the Cancel button
+  // would be enhanced by initially showing the label to be 'Close' and only
+  // changing the label to 'Cancel' after any changes have been made to
+  // form data" — a snapshot of every field Save actually writes, taken once
+  // when the record loads (set alongside setForm/setSelectedCategory in
+  // load() below), compared against the live form on every render. A ref,
+  // not state — it's read during render, never needs to trigger one of its
+  // own. Deliberately excludes Dialog and Attachments: the owner's own
+  // words — "additional Dialog or Attachments currently are kept even if
+  // the Cancel button is clicked... so making either of those changes
+  // would not result in the button being renamed 'Cancel'" — both already
+  // write immediately and independently of Save/Cancel on this screen, so
+  // clicking Cancel was never going to discard them anyway; the label
+  // should only warn about what Cancel actually can discard.
+  const initialFormRef = useRef<{
+    dueDate: string
+    dueTime: string
+    doneDate: string
+    doneTime: string
+    categoryId: string | null
+    description: string
+    reminderEnabled: boolean
+    overdueReminderEnabled: boolean
+  } | null>(null)
+  const hasChanges =
+    initialFormRef.current !== null &&
+    (form.dueDate !== initialFormRef.current.dueDate ||
+      form.dueTime !== initialFormRef.current.dueTime ||
+      form.doneDate !== initialFormRef.current.doneDate ||
+      form.doneTime !== initialFormRef.current.doneTime ||
+      form.description !== initialFormRef.current.description ||
+      form.reminderEnabled !== initialFormRef.current.reminderEnabled ||
+      form.overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled ||
+      (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId)
 
   async function loadDialog() {
     const { data } = await supabase
@@ -348,7 +520,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, archived_at, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, archived_at, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -390,6 +562,8 @@ export default function RequestDetailForm() {
         done_time: string | null
         category_id: string | null
         reminder_enabled: boolean
+        overdue_reminder_enabled: boolean
+        reminder_sent_at: string | null
         archived_at: string | null
         contacts: { display_name: string } | null
         categories: { name: string } | null
@@ -399,6 +573,7 @@ export default function RequestDetailForm() {
       setRecipientName(row.contacts?.display_name ?? '—')
       setCreatedAt(row.created_at)
       setArchivedAt(row.archived_at)
+      setReminderSentAt(row.reminder_sent_at)
       setForm({
         dueDate: row.due_date ?? '',
         dueTime: row.due_time ?? '',
@@ -407,7 +582,18 @@ export default function RequestDetailForm() {
         categoryName: row.categories?.name ?? '',
         description: row.description ?? '',
         reminderEnabled: row.reminder_enabled,
+        overdueReminderEnabled: row.overdue_reminder_enabled,
       })
+      initialFormRef.current = {
+        dueDate: row.due_date ?? '',
+        dueTime: row.due_time ?? '',
+        doneDate: row.done_date ?? '',
+        doneTime: row.done_time ?? '',
+        categoryId: row.category_id ?? null,
+        description: row.description ?? '',
+        reminderEnabled: row.reminder_enabled,
+        overdueReminderEnabled: row.overdue_reminder_enabled,
+      }
       if (row.category_id && row.categories) {
         setSelectedCategory({ id: row.category_id, name: row.categories.name })
       }
@@ -609,29 +795,48 @@ export default function RequestDetailForm() {
   const reminderArchived = archivedAt !== null
   const reminderPrereqsMissing = form.dueDate.trim() === ''
   const reminderIneligible = !reminderPrereqsMissing && !isReminderEligible(form.dueDate)
-  const reminderDisabled = reminderArchived || reminderPrereqsMissing || reminderIneligible
+  // "has been sent already for today" (owner, 2026-08-20) — a second,
+  // independent grey-out for "Morning before" only: once reminder_sent_at is
+  // set, re-checking the box wouldn't undo an email that already went out.
+  const reminderAlreadySent = reminderSentAt !== null
+  const reminderDisabled = reminderArchived || reminderPrereqsMissing || reminderIneligible || reminderAlreadySent
   const reminderTooltip = reminderArchived
     ? 'Reminders are not available for archived Requests.'
     : reminderPrereqsMissing
       ? 'Please select Contact and Due Date before modifying the Reminder.'
       : reminderIneligible
         ? 'A Reminder is not available due to the short lead time.'
-        : undefined
+        : reminderAlreadySent
+          ? 'The morning-before Reminder has already been sent for this Request.'
+          : undefined
 
-  function reminderCheckbox() {
+  function reminderBanner() {
     return (
-      <label className={`checkrow${reminderDisabled ? ' checkrow-disabled' : ''}`} title={reminderTooltip}>
-        <input
-          type="checkbox"
-          checked={form.reminderEnabled}
-          disabled={reminderDisabled}
-          onChange={(e) => set('reminderEnabled', e.target.checked)}
-        />
-        <span className="checktext">
-          Reminder
-          <span className="checknote">Send on the morning before unless it is marked Done.</span>
-        </span>
-      </label>
+      <div className="reminderbanner">
+        <p className="reminderbanner-title">Reminders until Done</p>
+        <div className="reminderbanner-items">
+          <label
+            className={`reminderitem${reminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={reminderTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderEnabled}
+              disabled={reminderDisabled}
+              onChange={(e) => set('reminderEnabled', e.target.checked)}
+            />
+            <span>Morning before</span>
+          </label>
+          <label className="reminderitem">
+            <input
+              type="checkbox"
+              checked={form.overdueReminderEnabled}
+              onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
+            />
+            <span>Daily thereafter</span>
+          </label>
+        </div>
+      </div>
     )
   }
 
@@ -652,6 +857,7 @@ export default function RequestDetailForm() {
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
         reminder_enabled: form.reminderEnabled,
+        overdue_reminder_enabled: form.overdueReminderEnabled,
         // Un-archive-on-clear (owner request, 2026-08-17): clearing Done
         // Date on a Request that was archived returns it to active status
         // — preserved unchanged in every other case (including a non-
@@ -733,7 +939,7 @@ export default function RequestDetailForm() {
               {saving ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={saving}>
-              Cancel
+              {hasChanges ? 'Cancel' : 'Close'}
             </button>
           </span>
         </div>
@@ -748,16 +954,18 @@ export default function RequestDetailForm() {
               <div className="metarow"><span className="mlabel">Recipient:</span><span className="mval">{recipientName}</span></div>
             </div>
 
-            {/* Reminder checkbox — moved here from its old standalone
-                bottom-of-form row (2026-08-19, owner's own new design:
-                Date/Recipient plus a quick-access Reminder control near the
-                top, mirrored onto Request Response/Response Detail too).
-                Own full-width row below the metarow block, not beside it —
-                a side-by-side Date/Recipient + control layout was tried and
-                reverted here once already (.metatop/.metacol, 2026-08-10,
-                word-wrapped "Wednesday, August 10," on a narrow Android
-                phone); staying full-width avoids repeating that. */}
-            {reminderCheckbox()}
+            {/* Reminders until Done banner — moved here from its old
+                standalone bottom-of-form row (2026-08-19, owner's own new
+                design: Date/Recipient plus a quick-access Reminder control
+                near the top, mirrored onto Request Response/Response Detail
+                too), then expanded from a single checkbox into the two-item
+                banner (2026-08-20, §6.41). Own full-width row below the
+                metarow block, not beside it — a side-by-side Date/Recipient
+                + control layout was tried and reverted here once already
+                (.metatop/.metacol, 2026-08-10, word-wrapped "Wednesday,
+                August 10," on a narrow Android phone); staying full-width
+                avoids repeating that. */}
+            {reminderBanner()}
 
             {requestTimeEnabled ? (
               <>
@@ -1036,19 +1244,31 @@ export default function RequestDetailForm() {
             )}
 
             <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
-              <textarea
-                ref={descRef}
-                className="ftextarea ftextarea-plain ftextarea-autosize req"
-                id="desc"
-                maxLength={DESCRIPTION_MAX}
-                placeholder="Request Description"
-                aria-label="Request Description"
-                value={form.description}
-                onChange={(e) => {
-                  set('description', e.target.value)
-                  if (descInvalid) setDescInvalid(false)
-                }}
-              />
+              <div className="descwrap">
+                <textarea
+                  ref={descRef}
+                  className="ftextarea ftextarea-plain ftextarea-autosize req"
+                  id="desc"
+                  maxLength={DESCRIPTION_MAX}
+                  placeholder="Request Description"
+                  aria-label="Request Description"
+                  value={form.description}
+                  onChange={(e) => {
+                    set('description', e.target.value)
+                    if (descInvalid) setDescInvalid(false)
+                  }}
+                />
+                {tier === 'subscriber' && voiceSupported && (
+                  <button
+                    type="button"
+                    className={`micbtn${descDictating ? ' listening' : ''}`}
+                    aria-label={descDictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                    onClick={toggleDescDictation}
+                  >
+                    <MicIcon />
+                  </button>
+                )}
+              </div>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
               <p className={`charcount${form.description.length >= DESCRIPTION_MAX ? ' limit' : ''}`}>
                 {form.description.length} / {DESCRIPTION_MAX}
@@ -1273,20 +1493,32 @@ export default function RequestDetailForm() {
               )}
 
               <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
-                <textarea
-                  ref={dialogTextRef}
-                  className="ftextarea ftextarea-plain"
-                  id="dlgtext"
-                  maxLength={DIALOG_MAX}
-                  placeholder="Dialog Text"
-                  aria-label="Dialog Text"
-                  value={dialogModalBody}
-                  onChange={(e) => {
-                    setDialogModalBody(e.target.value)
-                    if (dialogModalError) setDialogModalError(null)
-                  }}
-                  autoFocus
-                />
+                <div className="descwrap">
+                  <textarea
+                    ref={dialogTextRef}
+                    className="ftextarea ftextarea-plain"
+                    id="dlgtext"
+                    maxLength={DIALOG_MAX}
+                    placeholder="Dialog Text"
+                    aria-label="Dialog Text"
+                    value={dialogModalBody}
+                    onChange={(e) => {
+                      setDialogModalBody(e.target.value)
+                      if (dialogModalError) setDialogModalError(null)
+                    }}
+                    autoFocus
+                  />
+                  {tier === 'subscriber' && voiceSupported && (
+                    <button
+                      type="button"
+                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
+                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={toggleDialogDictation}
+                    >
+                      <MicIcon />
+                    </button>
+                  )}
+                </div>
                 <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
                   {dialogModalBody.length} / {DIALOG_MAX}
                 </p>

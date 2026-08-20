@@ -241,6 +241,12 @@ export default function CreateTodoForm() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const [voiceSupported, setVoiceSupported] = useState(false)
 
+  // Dialog Text gets its own independent dictating/recognitionRef pair
+  // (2026-08-20) — see CreateRequestForm.tsx's identical addition for the
+  // full reasoning.
+  const [dlgDictating, setDlgDictating] = useState(false)
+  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+
   const doneDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -276,8 +282,35 @@ export default function CreateTodoForm() {
     return () => {
       cancelled = true
       recognitionRef.current?.stop()
+      dlgRecognitionRef.current?.stop()
     }
   }, [])
+
+  function toggleDialogDictation() {
+    if (dlgDictating) {
+      dlgRecognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
+    }
+    recognition.onerror = () => setDlgDictating(false)
+    recognition.onend = () => setDlgDictating(false)
+    dlgRecognitionRef.current = recognition
+    recognition.start()
+    setDlgDictating(true)
+  }
 
   function openDialogModal() {
     setDialogModalKind('question')
@@ -1167,20 +1200,32 @@ export default function CreateTodoForm() {
               </div>
 
               <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
-                <textarea
-                  ref={dialogTextRef}
-                  className="ftextarea ftextarea-plain"
-                  id="dlgtext"
-                  maxLength={DIALOG_MAX}
-                  placeholder="Dialog Text"
-                  aria-label="Dialog Text"
-                  value={dialogModalBody}
-                  onChange={(e) => {
-                    setDialogModalBody(e.target.value)
-                    if (dialogModalError) setDialogModalError(null)
-                  }}
-                  autoFocus
-                />
+                <div className="descwrap">
+                  <textarea
+                    ref={dialogTextRef}
+                    className="ftextarea ftextarea-plain"
+                    id="dlgtext"
+                    maxLength={DIALOG_MAX}
+                    placeholder="Dialog Text"
+                    aria-label="Dialog Text"
+                    value={dialogModalBody}
+                    onChange={(e) => {
+                      setDialogModalBody(e.target.value)
+                      if (dialogModalError) setDialogModalError(null)
+                    }}
+                    autoFocus
+                  />
+                  {tier === 'subscriber' && voiceSupported && (
+                    <button
+                      type="button"
+                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
+                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={toggleDialogDictation}
+                    >
+                      <MicIcon />
+                    </button>
+                  )}
+                </div>
                 <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
                   {dialogModalBody.length} / {DIALOG_MAX}
                 </p>

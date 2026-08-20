@@ -6,6 +6,241 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-20 — "Reminders until Done" banner: two-checkbox Reminder control replacing the single Reminder checkbox, plus a new Overdue-notification opt-out — migration 037
+
+Owner pasted two mockup screenshots (Create Request and Response Detail)
+showing a boxed "Reminders until Done" banner with two checkboxes: "Morning
+before" (the existing day-before Reminder) and a new "Daily thereafter."
+Explicit requirement, stated up front: **"if a wrap were to occur, it would
+be important to wrap both the checkbox and the associated text together"**
+— a checkbox must never visually separate from its own label across a line
+wrap, even though the banner as a whole may wrap.
+
+**The real design question wasn't the checkbox — it was what "Daily
+thereafter" controls.** The existing automatic Overdue-notification cron
+system (built 2026-08-17, migrations 032/033) already sends the Recipient
+an unconditional one-time "just became overdue" notice plus recurring
+nudges, with no existing per-Request opt-out. Flagged this before building
+anything and proposed treating "Daily thereafter" as an opt-out for that
+system via a new column. Owner then described the cadence he wanted in
+detail (hour-after-Due-Time first nudge, not hourly all day — spam-risk
+concern; a Due-Date-only Request gets no notice during its own Due Date but
+still gets the daily cadence) — read through `app/api/cron/tick/route.ts`
+in full and confirmed the *existing* shipped cadence already matched this
+exactly; reported that back rather than building anything for the cadence
+itself. One open question remained: when "Daily thereafter" is unchecked,
+should the Recipient's Overdue emails stop entirely (including the first
+notice) or just the recurring nudges after it. Asked via `AskUserQuestion`;
+owner chose **"Stop entirely (Recommended)."**
+
+**Migration 037** (`docs/Week6 - SQL history.txt`, DRAFTED, NOT YET
+CONFIRMED RUN) adds `requests.overdue_reminder_enabled boolean not null
+default true` — default `true` deliberately, because this is a
+behavior-*preserving* default (the Overdue system has been unconditional
+since 2026-08-17), not a neutral opt-in default; `false` would silently
+regress every existing Request's Overdue notifications the instant the
+migration runs. Extends the two jsonb-returning read functions
+(`get_request_by_token`, `get_received_request`) with both
+`overdue_reminder_enabled` and `reminder_sent_at` (the latter needed for the
+new grey-out rule below, not previously exposed to either recipient path),
+and adds a 5th parameter (`p_overdue_reminder_enabled boolean default
+null`) to both write functions (`set_response_done_by_token`,
+`set_response_done_as_recipient`), coalesced against the existing column so
+an unpassed value leaves it untouched — `revoke`/`grant execute` updated to
+each function's new 5-arg signature. Deliberately does **not** touch
+`get_received_requests()` (`RETURNS TABLE`, would need a `drop`/`create`
+cycle) — confirmed via code reading that Main Screen's Received list has no
+per-row Reminder control to read this value for.
+
+**A second, independent grey-out condition for "Morning before."** Owner,
+same message: **"This should be recipient-facing, but if the 'morning
+before' date is prior to today or has been sent already for today - that
+part of the option should be greyed out."** The existing `isReminderEligible`
+threshold (Due Date must be more than two calendar days out) already
+subsumes "the morning-before date has passed" as a *stricter* condition, so
+the only genuinely new check needed is `reminder_sent_at !== null` —
+layered on top of the existing eligibility/archived checks, applying to
+"Morning before" only; "Daily thereafter" has no eligibility gate of its
+own on any of the four screens.
+
+**Markup: one flexible shape, not two.** `.reminderbanner`/
+`.reminderbanner-items`/`.reminderitem` (§6.41 PROPOSED, `app/globals.css`)
+— a single `.reminderbanner-items` flex-wrap container holding two
+`.reminderitem` units, each `display: inline-flex` with `white-space:
+nowrap`. This one markup shape naturally produces both of the owner's
+pasted layouts (stacked in the narrow Due-Date-adjacent inline slot,
+side-by-side in the full-width placement) purely through CSS wrapping
+behavior — `white-space: nowrap` is scoped to each individual `.reminderitem`,
+never the banner as a whole, which is what satisfies the "wrap checkbox and
+label together" requirement: wrapping can only ever happen *between* the
+two items, never *inside* one. `.reminderitem-disabled` is a per-item, not
+per-banner, disabled state — "Morning before" can be disabled while "Daily
+thereafter" stays enabled. The inline placement beside Due Date (Due Time
+off) reuses the same `.frow > .checkrow-inline` override pattern already
+established for the old single checkbox (§6.37), reapplied to
+`.reminderbanner.reminderbanner-inline`.
+
+**`app/api/cron/tick/route.ts`** — Phase B (the one-time Overdue-transition
+notice) gates on `row.overdue_reminder_enabled`: when false, the state
+machine still advances (`overdue_notified_at`/`last_overdue_nudge_at` set,
+matching the existing "sent" branch's own update shape) but the actual
+`sendMail` call and Requestor-digest push are skipped, so `counts.
+overdueNotices` isn't incremented either — the Recipient truly gets
+nothing, not a a silently-swallowed send. Phase C (recurring nudges) gets a
+one-line early exit on the same flag. No other phase touches this column —
+the day-before Reminder (`reminder_enabled`) and the Overdue system
+(`overdue_reminder_enabled`) remain two independently-controllable columns
+on the same banner, by design.
+
+**Built across all four Request-facing screens**, each following the same
+pattern: `RequestFormState`/payload type gains `overdueReminderEnabled`
+(and, on the three existing-record screens, `reminderSentAt`); the old
+`reminderCheckbox()`/single-`.checkrow` function becomes `reminderBanner()`
+rendering the two-item component; the Save/Send RPC or `.update()` call
+gains the new field; Request Detail's and Response Detail's existing
+`hasChanges`/`initialFormRef` dirty-check snapshots (Close/Cancel dynamic
+label, 2026-08-20 batch above) are extended to include
+`overdueReminderEnabled` so toggling "Daily thereafter" alone correctly
+flips the button label:
+
+  - **Create Request** — no existing-record concerns (no `reminder_sent_at`,
+    no archived state); `overdueReminderEnabled` defaults `true` in
+    `initialState`, written on insert alongside `reminder_enabled`.
+  - **Request Detail** — full grey-out logic (archived, prereqs-missing,
+    ineligible, already-sent, in that tooltip priority order), banner moved
+    into the same top-band placement the old single checkbox already
+    occupied (2026-08-19 relocation), `reminder_sent_at` newly selected in
+    the record fetch.
+  - **Response Detail** — recipient-facing via `get_received_request`;
+    `reminder_sent_at`/`overdue_reminder_enabled` read from the RPC
+    payload, written back through `set_response_done_as_recipient`'s new
+    5th argument.
+  - **Request Response** — the anonymous `/r/[token]` path; same shape via
+    `get_request_by_token`/`set_response_done_by_token`, no
+    `hasChanges`/dirty-check snapshot on this screen (Cancel was removed
+    from it entirely in the earlier 2026-08-20 batch, so there's no label
+    to keep in sync).
+
+**Alternatives considered and rejected**
+
+* *Two separate markup shapes (a narrow stacked variant and a wide
+  side-by-side variant).* Rejected — the single flex-wrap shape produces
+  both from identical JSX with no duplicated component logic.
+* *A single combined "Reminders" boolean instead of two independent
+  columns.* Rejected — the owner's own mockups show two checkboxes with
+  clearly separable meanings (one governs the day-before Reminder, the
+  other the ongoing Overdue cadence), and the existing `reminder_enabled`
+  column already has its own eligibility rules that don't apply to the
+  Overdue system.
+* *"Daily thereafter" unchecked silencing only the recurring nudges, not
+  the first Overdue notice.* This was the actual open question put to the
+  owner; he chose "stop entirely," so the one-time transition notice in
+  Phase B is gated identically to the Phase C nudges, not treated as a
+  separate, always-sent event.
+* *Reusing `isReminderEligible`'s existing threshold as the only grey-out
+  condition for "Morning before," on the reasoning that it's "close
+  enough."* Rejected once the owner's own wording ("has been sent already
+  for today") named a condition the existing threshold literally cannot
+  express (a Request can be well past the 3-day threshold and still have
+  its Reminder already sent) — added `reminder_sent_at` as its own,
+  independent check rather than stretching the existing one to cover both
+  cases.
+
+**Not done in this batch**: no mockup was updated — none of the five source
+mockups involved (Create Request, Create ToDo — N/A, Request Detail,
+Response Detail, Respond to Request) draw the old single Reminder checkbox
+either, so there was no existing markup to convert; flagged in
+`design/README.md`'s §6.41 row. **Migration 037 confirmed run by the owner,
+2026-08-20** — the "Reminders until Done" banner is now live end to end on
+all four Request-facing screens.
+
+\---
+
+## 2026-08-20 — Request Response Cancel removed + banner wording; Close/Cancel dynamic label on Detail screens; voice dictation extended to Detail Descriptions and all Dialog Text fields; Archived badge/search-text visibility bump
+
+Owner's 5-item batch (item 5, ToDo Attachments+Locations, answered separately,
+informational only — see the decisions log's companion entry or the chat
+response itself; no code change).
+
+**1. Request Response Cancel button removed; banner wording changed.**
+Owner: on the anonymous `/r/[token]` screen, Cancel "has no useful purpose...
+all it does that I see is remove the banner... I tend to click it to try to
+close the browser tab - which of course does not and cannot work." Removed
+the Cancel button and its `handleCancel()` handler entirely from
+`RequestResponseForm.tsx`, along with the now-dead `savedDoneDate`/
+`savedDoneTime` state that only existed to support it. The post-Send banner
+changed from "Response saved. Your update has been recorded." to **"Response
+sent."** — more accurate once there's no Cancel to imply "saved" was ever a
+reversible, draft-like state.
+
+**2. Close/Cancel dynamic label on Detail screens.** Owner: the Cancel
+button on Request Detail, Response Detail, and ToDo Detail should read
+**"Close"** at rest and switch to **"Cancel"** only once real form data has
+changed — explicitly excluding Dialog/Attachments/Locations, since those
+already write immediately and independently of Save/Cancel ("additional
+Dialog or Attachments currently are kept even if the Cancel button is
+clicked or the web page is closed"). Implemented with a `useRef` snapshot
+of each screen's own form fields, captured once inside `load()` right
+alongside the existing `setForm(...)` calls, compared against current state
+directly in the render body (`hasChanges`, plain field equality, no
+`useMemo` needed — cheap comparisons). Request Detail's snapshot covers
+Due/Done Date/Time, Category, Description, and the Reminder checkbox;
+Response Detail's covers Done Date/Time and Reminder; ToDo Detail's covers
+Priority, Due/Done Date, Category, Description, and the Status chip (only
+meaningfully variable when `todo_dates_enabled` is off — harmless to
+include unconditionally, since nothing else touches it when dates are on).
+
+**3. Voice dictation extended from Create-only to every Detail screen's
+Description and every screen's Dialog Text.** Owner: "the voice typing
+feature for the Create screens works really well. I would like to add it
+to all Detail screen Descriptions and to Dialog text." Ported the existing
+Web-Speech-API pattern (`SpeechRecognition`/`webkitSpeechRecognition`,
+duplicated per-file per this codebase's convention) to:
+  - **Description** on Request Detail and ToDo Detail (Response Detail and
+    Request Response have no editable Description — issuer content, always
+    read-only there — so nothing to add).
+  - **Dialog Text** everywhere it appears — all six screens (Create
+    Request, Create ToDo, Request Detail, ToDo Detail, Response Detail,
+    Request Response) — a genuinely new capability; no screen had dictation
+    on Dialog Text before this batch.
+
+  Each field that can dictate gets its own independent `dictating`/
+  `recognitionRef` state pair (Description and Dialog Text are different
+  inputs that could theoretically both want to listen, though never
+  simultaneously in practice) sharing one `voiceSupported` browser-capability
+  flag per screen. Gating follows the Entitlements rule (CLAUDE.md: rights
+  on a Request come from its issuer, never from whoever is reading it) —
+  the four owner-side screens (Create Request, Create ToDo, Request Detail,
+  ToDo Detail) gate on the signed-in owner's own `tier`; the two
+  recipient-facing screens (Response Detail, Request Response) gate on
+  `data.owner_tier === 'subscriber'` (the Request's own issuer's tier,
+  already fetched by `get_received_request`/`get_request_by_token`), never
+  the viewer's own tier — an anonymous Request Response visitor has no tier
+  of their own to gate on in the first place. Mic button sits in a new
+  `.descwrap` wrapper alongside each textarea, reusing the existing
+  `.micbtn`/`.listening` CSS from the Create-screen build (2026-08-19) —
+  no new CSS needed.
+
+**4. Archived badge and Search Results text visibility bumped.** Owner:
+"I thought some type of 'Badge' was going to distinguish Archive items in
+the Search Results and do not see that" (pasted screenshot of a Sent row
+with no visible badge), plus "The font-size should be increased a bit for
+the 'SEARCH RESULTS Clear Search x' text. The first time I used the Search,
+I did not notice it." Traced the badge report to a visibility problem, not
+a logic bug — read `MainScreen.tsx`'s full `filteredSent`/`sortedSent`/row-
+render chain end-to-end and confirmed `.archtag` was already rendering
+correctly on every archived matched row; it was just too subtle (10px,
+`--ink-soft`) to notice against the row text around it. Bumped `.archtag`
+to 11px/`--ink`/tighter padding, and `.clearsearch`/`.searchnotice` from
+11px to 13px — pure CSS, no logic changes, in `app/globals.css`.
+
+`npx tsc --noEmit` and `npm run lint` both clean across all files touched
+in this batch (`RequestResponseForm.tsx`, `RequestDetailForm.tsx`,
+`ResponseDetailForm.tsx`, `TodoDetailForm.tsx`, `CreateRequestForm.tsx`,
+`CreateTodoForm.tsx`, `app/globals.css`).
+
+\---
+
 ## 2026-08-19 — Description auto-grow fixed with native `field-sizing: content` (Request Detail + ToDo Detail)
 
 Owner reported, with a screenshot, that Request Detail's Description box

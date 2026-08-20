@@ -131,6 +131,7 @@ type RequestRow = {
   due_time: string | null
   reminder_enabled: boolean
   reminder_sent_at: string | null
+  overdue_reminder_enabled: boolean
   overdue_notified_at: string | null
   last_overdue_nudge_at: string | null
   contacts: ContactInfo
@@ -175,7 +176,7 @@ async function handle(request: Request) {
   const { data: reqData, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, overdue_notified_at, last_overdue_nudge_at, contacts(email, display_name, time_zone)'
+      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, overdue_reminder_enabled, overdue_notified_at, last_overdue_nudge_at, contacts(email, display_name, time_zone)'
     )
     .not('contact_id', 'is', null)
     .is('done_date', null)
@@ -377,6 +378,17 @@ async function handle(request: Request) {
   // Requestor digest of newly-Overdue items). Timing: the OWNER's own
   // local zone — "12:01am the morning after" is naturally about whose day
   // just ended, i.e. the Requestor's, not the Recipient's.
+  //
+  // Gated on overdue_reminder_enabled (migration 037, "Daily thereafter"
+  // checkbox, 2026-08-20) — confirmed with the owner: unchecking it stops
+  // the Recipient's overdue emails ENTIRELY, including this first one, not
+  // just the recurring nudges in Phase C below. When false, the transition
+  // still advances (overdue_notified_at/last_overdue_nudge_at get set) so
+  // Phase C's own state machine and idempotency stay correct if the toggle
+  // is turned back on later — only the actual send and the Requestor digest
+  // item are skipped. The Requestor's own un-gated digest is otherwise
+  // unaffected by this toggle either way — that's the Requestor's own
+  // visibility into their account, not the Recipient's to silence.
   // ======================================================================
   for (const row of requestRows) {
     if (row.overdue_notified_at || !row.due_date || !row.contacts) continue
@@ -384,6 +396,18 @@ async function handle(request: Request) {
     const zone = profile?.time_zone ?? null
     if (localHour(zone, now) !== OVERDUE_HOUR) continue
     if (!hasLocalDateTimePassed(zone, row.due_date, row.due_time, now)) continue
+
+    if (!row.overdue_reminder_enabled) {
+      const nowIso = now.toISOString()
+      await sb
+        .from('requests')
+        .update({
+          overdue_notified_at: nowIso,
+          last_overdue_nudge_at: row.due_time ? row.last_overdue_nudge_at : nowIso,
+        })
+        .eq('id', row.id)
+      continue
+    }
 
     const link = await mintLink(sb, row.id)
     if (!link) {
@@ -447,6 +471,7 @@ async function handle(request: Request) {
   // ======================================================================
   for (const row of requestRows) {
     if (!row.overdue_notified_at || !row.due_date || !row.contacts) continue
+    if (!row.overdue_reminder_enabled) continue
     const profile = profileMap.get(row.owner_id) ?? null
     const zone = profile?.time_zone ?? null
 

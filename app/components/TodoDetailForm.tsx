@@ -69,6 +69,45 @@ const LOOKUP_BROWSE_THRESHOLD = 12
 const DESCRIPTION_MAX = 500
 const DIALOG_MAX = 500
 
+// Voice dictation (2026-08-20) — same Web-Speech-API pattern as
+// CreateRequestForm.tsx's own Description dictation, ported here per the
+// owner's request to extend it to the Detail screens. Duplicated per this
+// codebase's established per-file convention rather than extracted to a
+// shared lib/hook.
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: { length: number; [index: number]: { [index: number]: { transcript: string } } }
+}
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function formatMDY(value: string | null): string {
   if (!value) return ''
   const [y, m, d] = value.slice(0, 10).split('-')
@@ -239,6 +278,81 @@ export default function TodoDetailForm() {
     el.style.height = `${el.scrollHeight}px`
   }, [form.description])
 
+  // Voice dictation (2026-08-20) — extended from Create Request/Create ToDo
+  // to this screen's own Description field, per the owner's request. Gated
+  // on this screen's existing `tier` state below (signed-in owner's own
+  // profiles.tier). Dialog Text gets its own independent dictating/
+  // recognitionRef pair further down, since the two fields could
+  // theoretically both want to dictate.
+  const [descDictating, setDescDictating] = useState(false)
+  const descRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const [dlgDictating, setDlgDictating] = useState(false)
+  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setVoiceSupported(getSpeechRecognition() !== null)
+    })
+    return () => {
+      cancelled = true
+      descRecognitionRef.current?.stop()
+      dlgRecognitionRef.current?.stop()
+    }
+  }, [])
+
+  function toggleDescDictation() {
+    if (descDictating) {
+      descRecognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      set('description', form.description ? `${form.description} ${addition.trim()}` : addition.trim())
+    }
+    recognition.onerror = () => setDescDictating(false)
+    recognition.onend = () => setDescDictating(false)
+    descRecognitionRef.current = recognition
+    recognition.start()
+    setDescDictating(true)
+  }
+
+  function toggleDialogDictation() {
+    if (dlgDictating) {
+      dlgRecognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
+    }
+    recognition.onerror = () => setDlgDictating(false)
+    recognition.onend = () => setDlgDictating(false)
+    dlgRecognitionRef.current = recognition
+    recognition.start()
+    setDlgDictating(true)
+  }
+
   // Locations (Week 5 Priority 3, 2026-08-14) — AttachmentsPanel does its
   // own fetching once these are known.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
@@ -261,6 +375,33 @@ export default function TodoDetailForm() {
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
+
+  // Close/Cancel label (2026-08-20) — same pattern as RequestDetailForm.tsx/
+  // ResponseDetailForm.tsx's identical addition: a snapshot of every field
+  // Save actually writes, taken once on load, compared live on every
+  // render. Includes todoStatus alongside form's own fields — when
+  // todoDatesEnabled is off, that's the only thing the Status chips change;
+  // when it's on, todoStatus never moves from its load-time value (nothing
+  // else sets it while the chips aren't rendered), so it's a harmless
+  // always-equal comparison in that case rather than a special-cased one.
+  // Dialog/Attachments/Locations excluded — same reasoning as the other two
+  // screens, both already write immediately and independently of Cancel.
+  const initialFormRef = useRef<{
+    priority: 1 | 2 | 3
+    dueDate: string
+    doneDate: string
+    categoryId: string | null
+    description: string
+    todoStatus: 'open' | 'done'
+  } | null>(null)
+  const hasChanges =
+    initialFormRef.current !== null &&
+    (form.priority !== initialFormRef.current.priority ||
+      form.dueDate !== initialFormRef.current.dueDate ||
+      form.doneDate !== initialFormRef.current.doneDate ||
+      form.description !== initialFormRef.current.description ||
+      todoStatus !== initialFormRef.current.todoStatus ||
+      (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId)
 
   // Quick-Done band (§6.31) — added 2026-08-11, matching CreateTodoForm.tsx's
   // identical handleQuickDone: this screen never got the band ported over
@@ -370,8 +511,17 @@ export default function TodoDetailForm() {
       setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
       setTodoDatesEnabled(ownerRes.data?.todo_dates_enabled ?? false)
       setTier(ownerRes.data?.tier === 'subscriber' ? 'subscriber' : 'free')
-      setTodoStatus(row.done_date ? 'done' : 'open')
+      const initialTodoStatus = row.done_date ? 'done' : 'open'
+      setTodoStatus(initialTodoStatus)
       setArchivedAt(row.archived_at)
+      initialFormRef.current = {
+        priority: (row.priority as 1 | 2 | 3) ?? 1,
+        dueDate: row.due_date ?? '',
+        doneDate: row.done_date ?? '',
+        categoryId: row.category_id ?? null,
+        description: row.description ?? '',
+        todoStatus: initialTodoStatus,
+      }
 
       await loadDialog()
       if (!cancelled) setLoading(false)
@@ -652,7 +802,7 @@ export default function TodoDetailForm() {
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={saving}>
-              Cancel
+              {hasChanges ? 'Cancel' : 'Close'}
             </button>
           </span>
         </div>
@@ -897,19 +1047,31 @@ export default function TodoDetailForm() {
             )}
 
             <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
-              <textarea
-                ref={descRef}
-                className="ftextarea ftextarea-desc ftextarea-plain ftextarea-autosize req"
-                id="desc"
-                maxLength={DESCRIPTION_MAX}
-                placeholder="ToDo Description"
-                aria-label="ToDo Description"
-                value={form.description}
-                onChange={(e) => {
-                  set('description', e.target.value)
-                  if (descInvalid) setDescInvalid(false)
-                }}
-              />
+              <div className="descwrap">
+                <textarea
+                  ref={descRef}
+                  className="ftextarea ftextarea-desc ftextarea-plain ftextarea-autosize req"
+                  id="desc"
+                  maxLength={DESCRIPTION_MAX}
+                  placeholder="ToDo Description"
+                  aria-label="ToDo Description"
+                  value={form.description}
+                  onChange={(e) => {
+                    set('description', e.target.value)
+                    if (descInvalid) setDescInvalid(false)
+                  }}
+                />
+                {tier === 'subscriber' && voiceSupported && (
+                  <button
+                    type="button"
+                    className={`micbtn${descDictating ? ' listening' : ''}`}
+                    aria-label={descDictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                    onClick={toggleDescDictation}
+                  >
+                    <MicIcon />
+                  </button>
+                )}
+              </div>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
               <p className={`charcount${form.description.length >= DESCRIPTION_MAX ? ' limit' : ''}`}>
                 {form.description.length} / {DESCRIPTION_MAX}
@@ -1132,20 +1294,32 @@ export default function TodoDetailForm() {
               )}
 
               <div className={`fgroup${dialogModalError ? ' is-invalid' : ''}`}>
-                <textarea
-                  ref={dialogTextRef}
-                  className="ftextarea ftextarea-plain"
-                  id="dlgtext"
-                  maxLength={DIALOG_MAX}
-                  placeholder="Dialog Text"
-                  aria-label="Dialog Text"
-                  value={dialogModalBody}
-                  onChange={(e) => {
-                    setDialogModalBody(e.target.value)
-                    if (dialogModalError) setDialogModalError(null)
-                  }}
-                  autoFocus
-                />
+                <div className="descwrap">
+                  <textarea
+                    ref={dialogTextRef}
+                    className="ftextarea ftextarea-plain"
+                    id="dlgtext"
+                    maxLength={DIALOG_MAX}
+                    placeholder="Dialog Text"
+                    aria-label="Dialog Text"
+                    value={dialogModalBody}
+                    onChange={(e) => {
+                      setDialogModalBody(e.target.value)
+                      if (dialogModalError) setDialogModalError(null)
+                    }}
+                    autoFocus
+                  />
+                  {tier === 'subscriber' && voiceSupported && (
+                    <button
+                      type="button"
+                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
+                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={toggleDialogDictation}
+                    >
+                      <MicIcon />
+                    </button>
+                  )}
+                </div>
                 <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
                   {dialogModalBody.length} / {DIALOG_MAX}
                 </p>
