@@ -2146,8 +2146,8 @@ link is built only after the stack is proven on Add Contact.
   `npm run lint` clean. No mockup updated — neither source mockup has
   interactive Description JS to add a mic button to.
 - **Reminder checkbox extended to Request Detail (relocated), Response
-  Detail, and Request Response — migration 036 DRAFTED, NOT YET CONFIRMED
-  RUN (2026-08-19).** Owner's own new design (three pasted screenshots),
+  Detail, and Request Response — migration 036 confirmed run by the owner
+  2026-08-19.** Owner's own new design (three pasted screenshots),
   resolved via two AskUserQuestion calls before building: Request Detail's
   new top-band Reminder control **replaces** its old standalone
   bottom-of-form one (built 2026-08-15) rather than both coexisting, and
@@ -2182,3 +2182,11 @@ link is built only after the stack is proven on Add Contact.
   — it reuses the Initial Request template's own link text ("Click to
   respond or mark as completed"), redesigned separately 2026-08-16. `npx
   tsc --noEmit`/`npm run lint` clean.
+- **Reminder checkbox greyed out for archived Requests (2026-08-19)** —
+  `RequestDetailForm.tsx`/`ResponseDetailForm.tsx` now disable the Reminder
+  checkbox (and grey its text via the existing `.checkrow-disabled`) when
+  the request is archived, gated on the already-fetched `archivedAt`/
+  `receivedArchivedAt` columns rather than a new "came from Archive"
+  navigation flag — covers every path that reaches an archived Request's
+  Detail screen, not just a literal click from Archive's own list. `npx tsc
+  --noEmit`/`npm run lint` clean.

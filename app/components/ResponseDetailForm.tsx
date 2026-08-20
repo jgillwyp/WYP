@@ -458,20 +458,32 @@ export default function ResponseDetailForm() {
   // that screen's rule (isReminderEligible on the Due Date) but there's no
   // "select Contact/Due Date first" prerequisite here — Due Date isn't
   // editable on this screen at all, it's whatever the owner already set.
-  const reminderIneligible = !isReminderEligible(data?.due_date ?? null)
-  const reminderTooltip = reminderIneligible
-    ? data?.due_date
-      ? 'A Reminder is not available due to the short lead time.'
-      : 'A Reminder is not available without a Due Date.'
-    : undefined
+  //
+  // Archived state added same day (owner: greyed out when viewed via
+  // Archive) — reuses `receivedArchivedAt` (already fetched for the
+  // un-archive-on-clear feature above), same reasoning as
+  // RequestDetailForm.tsx's identical addition: this is the recipient's own
+  // archived flag, independent of the owner's `archived_at`, and gating on
+  // the real persisted column covers every path that reaches an archived
+  // Received Request, not just a literal click from Archive.
+  const reminderArchived = receivedArchivedAt !== null
+  const reminderIneligible = !reminderArchived && !isReminderEligible(data?.due_date ?? null)
+  const reminderDisabled = reminderArchived || reminderIneligible
+  const reminderTooltip = reminderArchived
+    ? 'Reminders are not available for archived Requests.'
+    : reminderIneligible
+      ? data?.due_date
+        ? 'A Reminder is not available due to the short lead time.'
+        : 'A Reminder is not available without a Due Date.'
+      : undefined
 
   function reminderCheckbox() {
     return (
-      <label className={`checkrow${reminderIneligible ? ' checkrow-disabled' : ''}`} title={reminderTooltip}>
+      <label className={`checkrow${reminderDisabled ? ' checkrow-disabled' : ''}`} title={reminderTooltip}>
         <input
           type="checkbox"
           checked={reminderEnabled}
-          disabled={reminderIneligible}
+          disabled={reminderDisabled}
           onChange={(e) => setReminderEnabled(e.target.checked)}
         />
         <span className="checktext">

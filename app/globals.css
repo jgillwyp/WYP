@@ -789,10 +789,27 @@ body {
    the component sets .style.height directly (RequestDetailForm.tsx/
    TodoDetailForm.tsx's own descRef effect), this class only removes the
    scrollbar and the fixed resize handle, which would fight an
-   automatically-managed height. */
+   automatically-managed height.
+
+   field-sizing: content added 2026-08-19, same day — owner reported the
+   box was still showing fixed-height with an internal scrollbar on a real
+   loaded Request (screenshot), i.e. the JS approach above wasn't taking
+   effect for him in practice. Rather than chase a React-effect-timing
+   theory blind (production was confirmed already serving this exact
+   commit via Vercel, so it isn't a stale-deploy issue), added the native
+   CSS auto-sizing property as the primary mechanism: per spec, when
+   supported, `field-sizing: content` overrides any specified height —
+   including a `.style.height` set by the descRef effect above — and grows
+   the box to its content directly, no JS involved and nothing left to race
+   against. Supported in Chrome/Edge 123+ (2024), which covers every
+   browser this app has been tested in so far. The existing JS effect is
+   left in place as a fallback for a browser without the property — in a
+   supporting browser it becomes a harmless no-op, since the CSS wins
+   regardless of what inline height it sets. */
 .ftextarea.ftextarea-autosize {
   overflow: hidden;
   resize: none;
+  field-sizing: content;
 }
 
 /* Live character counter for capped .ftextarea fields (2026-08-16) —

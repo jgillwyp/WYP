@@ -595,14 +595,28 @@ export default function RequestDetailForm() {
   // Contact prerequisite from that screen doesn't apply here — Recipient is
   // already fixed and always present on an existing Request — so only the
   // Due Date itself gates state 1.
+  //
+  // Archived state added 2026-08-19 (owner: greyed out when viewed via
+  // Archive) — takes priority over the other two states in the tooltip,
+  // since an archived Request's Reminder is moot regardless of Due Date.
+  // Reuses `archivedAt` (already fetched/round-tripped for the
+  // un-archive-on-clear feature above) rather than a new "came from
+  // Archive" navigation flag — ArchiveForm.tsx's own openDetail() passes no
+  // query param, and gating on the real persisted archived_at is both
+  // simpler and correct for every path that reaches an archived Request
+  // (Archive's own list, or a Main Screen search result showing the
+  // .archtag badge), not just a literal click from Archive.
+  const reminderArchived = archivedAt !== null
   const reminderPrereqsMissing = form.dueDate.trim() === ''
   const reminderIneligible = !reminderPrereqsMissing && !isReminderEligible(form.dueDate)
-  const reminderDisabled = reminderPrereqsMissing || reminderIneligible
-  const reminderTooltip = reminderPrereqsMissing
-    ? 'Please select Contact and Due Date before modifying the Reminder.'
-    : reminderIneligible
-      ? 'A Reminder is not available due to the short lead time.'
-      : undefined
+  const reminderDisabled = reminderArchived || reminderPrereqsMissing || reminderIneligible
+  const reminderTooltip = reminderArchived
+    ? 'Reminders are not available for archived Requests.'
+    : reminderPrereqsMissing
+      ? 'Please select Contact and Due Date before modifying the Reminder.'
+      : reminderIneligible
+        ? 'A Reminder is not available due to the short lead time.'
+        : undefined
 
   function reminderCheckbox() {
     return (

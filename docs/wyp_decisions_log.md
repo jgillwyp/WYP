@@ -6,6 +6,58 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-19 — Description auto-grow fixed with native `field-sizing: content` (Request Detail + ToDo Detail)
+
+Owner reported, with a screenshot, that Request Detail's Description box
+was still a fixed-height scrolling box despite the 2026-08-19 auto-grow
+feature (commit `53c41d2`) — confirmed via the Vercel MCP that production
+was already serving that exact commit (`b55ea01`, READY), ruling out a
+stale-deploy explanation. Rather than chase the React-effect-timing theory
+blind, added `field-sizing: content` to `.ftextarea.ftextarea-autosize`
+(`app/globals.css`) as the primary mechanism — per spec this CSS property
+overrides any specified height, including one a script sets via
+`.style.height`, so it wins over the existing `descRef` effect regardless
+of whatever was preventing that effect from taking visible effect.
+Supported in Chrome/Edge 123+, which covers this app's tested browsers.
+The existing JS effect (`RequestDetailForm.tsx`/`TodoDetailForm.tsx`) is
+left in place as a fallback for an unsupporting browser — harmless where
+the CSS property is supported, since it wins regardless. One CSS property,
+no component changes. Applies to both Request Detail and ToDo Detail in
+one shot, since both already share the `.ftextarea-autosize` class —
+covers the owner's follow-up ("The same treatment should be true for ToDo
+Detail") for free.
+
+\---
+
+## 2026-08-19 — Reminder checkbox greyed out for archived Requests (Request Detail + Response Detail)
+
+Owner: "The Reminder checkboxes and text for the Sent and Received Request
+Detail screens when viewed from the Archive lists should be greyed out."
+
+Rather than plumbing an "opened from Archive" navigation flag through
+`ArchiveForm.tsx`'s `openDetail()` (which today does a bare `router.push`
+with no query param or state), gated the Reminder checkbox on the real
+persisted archived column each screen already fetches:
+`RequestDetailForm.tsx`'s own `archivedAt` (already read for the
+un-archive-on-clear feature) and `ResponseDetailForm.tsx`'s
+`receivedArchivedAt` (ditto, via `get_received_request`, which already
+returns it — no SQL change needed). This is simpler than a navigation flag
+and more correct: it covers every path that can land on an archived
+Request's Detail screen (Archive's own list, or a Main Screen search result
+showing the `.archtag` badge), not just a literal click from Archive, and
+it self-corrects the moment the item is un-archived (clearing Done Date,
+which un-archives per the existing feature) without any extra wiring.
+
+Both screens' `reminderCheckbox()` disabled/tooltip logic gained an
+archived check that takes priority over the existing Due-Date-lead-time
+checks: `'Reminders are not available for archived Requests.'` when
+archived, falling through to the existing tooltips otherwise. Uses the
+existing `.checkrow-disabled` styling (opacity 0.55, `not-allowed` cursor)
+already applied elsewhere for this same component — no new CSS. `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-19 — Reminder checkbox extended to Request Detail (relocated), Response Detail, and Request Response — migration 036
 
 Owner pasted three screenshots of his own new design: Response Detail
@@ -27,8 +79,8 @@ was already shipped, resolved via AskUserQuestion before building anything:
    component and wording verbatim, not the inverted semantics or copy from
    the mockup.
 
-**Migration 036** (`docs/Week6 - SQL history.txt`, drafted, **NOT YET
-CONFIRMED RUN**) extends the two jsonb-returning read functions
+**Migration 036** (`docs/Week6 - SQL history.txt`, **confirmed run by the
+owner 2026-08-19**) extends the two jsonb-returning read functions
 (`get_request_by_token`, `get_received_request`) to include
 `reminder_enabled`, and adds a new trailing `p_reminder_enabled boolean
 default null` parameter to both write functions
