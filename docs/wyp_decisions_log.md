@@ -85,6 +85,138 @@ existing mockups model Search at all; flagged in `design/README.md`.
 
 \---
 
+## 2026-08-19 — Search bar relocated under Housekeeping, Housekeeping hidden while searching, voice-search icon dropped
+
+Owner, testing the Search Mode redesign above on a phone: "I think the
+search will be an infrequently used feature. Search now requires two line
+large vertical lines (on my phone) and three lines when searching by date
+range. The result is to leave significantly less vertical space to scroll
+the app." Several relocation/reduction options were floated (narrower scope
+select, text field that scales to width, mic icon moved into the text
+field's own corner, floating labels on the date fields); recommendation
+given (recommendation → alternatives rejected → open questions, per the
+owner's own working-style rule) was that the search bar's real cost was its
+fixed position outside `.scroll`, not just its width — moving the whole
+control into the scroll area under Housekeeping was the highest-leverage
+fix on its own. Confirmed: "hold off on the floating labels, drop the
+voice-search icon now, having Clear Search in both places is useful,
+subscription banner and ad stays pinned and only Search itself relocates."
+
+Implementation, `MainScreen.tsx`/`app/globals.css`:
+
+- **Search relocated into `.scroll`.** The `<div className="searchbar sb">`
+  block (scope select, text-field-or-date-range fields, Clear Search, the
+  remaining Search icon) moved from its old fixed position beside
+  `.subbanner`/`.adslot` (outside `.scroll`) to a new `<div
+  className="band"><span className="glabel">Search</span></div>` +
+  searchbar pairing placed right after the Housekeeping block and before
+  `.scroll-pad`, inside `.scroll`. `.subbanner` and `.adslot` are untouched
+  — per the owner's explicit instruction they stay pinned; only Search
+  itself moved.
+- **Housekeeping hidden while searching.** The entire Housekeeping band +
+  subcard is now wrapped in `{!isSearching && (<>...</>)}` — the owner's own
+  reasoning ("while in a 'search results state', I don't think we need to
+  show the Housekeeping section"). Housekeeping reappears the instant
+  `isSearching` goes false, same as everything else driven by that derived
+  flag.
+- **Voice-search icon removed outright**, not just from the search bar's
+  horizontal budget — `VoiceSearchIcon()` deleted entirely from
+  `MainScreen.tsx`. It was always decorative (never wired to anything), and
+  the owner separately redirected the actual idea toward Description
+  dictation (see the entry below) rather than Search, where "the main field
+  for using it would be for Description text" anyway.
+- **Per-section Clear Search added alongside the band one.** Each section's
+  `isSearching` chip-row branch (`.chips`) gained a `.searchresultsrow`
+  modifier (`justify-content: space-between`) so "Search Results" and a
+  second `.clearsearch` button render at opposite ends of the same row —
+  owner: "having Clear Search in both places is useful," avoiding a trip
+  back to the bottom of the screen to exit search from wherever a result is
+  being read. Both Clear Search controls (band and per-section) call the
+  same `clearSearch()`.
+- **Floating labels on the Date Range fields — held off**, per the owner's
+  own instruction, not attempted this batch. Reasoning noted at proposal
+  time: native `type="date"` rendering makes a floated label fiddly for
+  little width gained, worth revisiting only if the relocation above turns
+  out not to be enough on its own.
+
+`npx tsc --noEmit`/`npm run lint` clean. No mockup updated — same reasoning
+as the Search Mode entry above.
+
+\---
+
+## 2026-08-19 — Voice dictation for Description (subscriber-gated, Create Request + Create ToDo)
+
+Owner, in the same conversation that dropped the Search bar's own voice
+icon: "As to removal of the voice search icon - I see it as a good option
+for entry of the Description during a Create. And, it could be a
+subscription option to be an Account option." Recommendation given
+(recommendation → alternatives rejected → open questions): build on the
+browser-native Web Speech API (`SpeechRecognition`/
+`webkitSpeechRecognition`) rather than a paid hosted transcription service —
+no vendor, no per-use cost, no server round trip, unlike the
+Twilio/10DLC-dependent path Request Texting would need; gate it the same way
+Attachments/Locations already are, off the signed-in owner's own live
+`profiles.tier`, not anything baked into the Request/ToDo itself; scope to
+just the Description field on Create Request and Create ToDo for this
+batch. Owner: "Let's test for browser-support later (post Private
+Testing)" — read as approval to build now, basic feature detection still in
+place, with thorough cross-browser QA deferred. Follow-up note on framing:
+"The feature could be described as 'available if your browser supports it
+(and most do)'" — reflected in code comments rather than any user-facing
+copy, since the mic button simply doesn't render at all on an unsupported
+browser (there's nothing to word for that case).
+
+Implementation, `CreateRequestForm.tsx`/`CreateTodoForm.tsx`/`globals.css`:
+
+- **Duplicated per component**, per this codebase's established convention
+  (`DialogIcon`/`openPicker`/etc.) rather than extracted to a shared lib
+  file: minimal local structural types (`SpeechRecognitionEventLike`,
+  `SpeechRecognitionLike`, `SpeechRecognitionConstructor`) stand in for the
+  real, non-standard Web Speech API (not part of TS's default DOM lib)
+  rather than reaching for `any`; `getSpeechRecognition()` reads
+  `window.SpeechRecognition ?? window.webkitSpeechRecognition` via a single
+  `as unknown as {...}` cast; `MicIcon()` is a small inline SVG.
+- **`voiceSupported` is computed once, client-only, via a mount effect**,
+  never read directly during render — starts `false` on both the server
+  render and the first client render, so there's no hydration mismatch,
+  then flips true a tick later if the API is actually present. The
+  `setVoiceSupported` call itself is deferred one microtask
+  (`queueMicrotask`) rather than called synchronously in the effect body —
+  satisfies `react-hooks/set-state-in-effect`, the same shape
+  `PWAProvider.tsx`'s own `beforeinstallprompt` listener already satisfies
+  via a real browser event; here there's no event to listen for, so a
+  microtask stands in for one.
+- **`toggleDictation()`** starts/stops a single `SpeechRecognition`
+  instance (`continuous: true`, `interimResults: false` — only finalized
+  phrases are appended, avoiding duplicate text from a browser that
+  re-sends firming-up interim results); `onresult` appends only
+  `event.resultIndex` onward to `form.description` via the existing `set()`
+  helper; `onerror`/`onend` both reset `dictating` to false, since a real
+  error and a natural stop (e.g. a silence timeout) look identical from the
+  button's point of view. A cleanup effect stops any live recognition on
+  unmount.
+- **Mic button placement**: the Description `<textarea>` is now wrapped in
+  a `.descwrap` (`position: relative`), with a `.micbtn` — a small circular
+  button, absolutely positioned in the textarea's own bottom-right corner —
+  rendered only when `tier === 'subscriber' && voiceSupported`. Rest state
+  reuses `--ink-soft` (the same muted-icon convention as `.fclear`);
+  `.listening` switches it to `--alert-red`, background-filled — a
+  deliberate reuse of the app's one "something is happening, pay attention"
+  color (Overdue rows, error text), not a new token.
+- **Gating**: sender-side only, off the signed-in owner's own `tier` — both
+  forms already load it in their existing mount effect (`profiles.tier`),
+  no new query needed. Not wired into Request Detail/ToDo Detail (editing
+  an existing item) or any recipient-facing screen — scoped to Create
+  Request/Create ToDo only, per the owner's own framing ("during a
+  Create").
+
+`npx tsc --noEmit`/`npm run lint` clean. New `.descwrap`/`.micbtn`/
+`.micbtn.listening` CSS, §6.4x PROPOSED — not drawn in any mockup (neither
+source mockup has interactive Description JS to add a mic button to);
+flagged in `design/README.md`.
+
+\---
+
 ## 2026-08-19 — Archive rows gain the Dialog/Attachments icons Main Screen's own rows already have
 
 Owner, while reviewing Archive: "I noticed that the description does not

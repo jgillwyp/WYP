@@ -697,16 +697,10 @@ function SearchIcon() {
   )
 }
 
-function VoiceSearchIcon() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="16" y="4" width="16" height="24" rx="8" stroke="currentColor" strokeWidth="2.5" />
-      <path d="M10,24 Q10,36 24,36 Q38,36 38,24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      <line x1="24" y1="36" x2="24" y2="44" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="16" y1="44" x2="32" y2="44" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  )
-}
+// VoiceSearchIcon removed 2026-08-19 — owner: drop the mic icon from Search
+// now, both to reclaim horizontal space and because it was never wired to
+// anything (always decorative); voice input on Description fields, where it
+// would actually matter, is its own separate, not-yet-scoped idea.
 
 export default function MainScreen() {
   const router = useRouter()
@@ -1240,8 +1234,11 @@ export default function MainScreen() {
                 </span>
               </div>
               {isSearching ? (
-                <div className="chips">
+                <div className="chips searchresultsrow">
                   <span className="searchnotice">Search Results</span>
+                  <button className="clearsearch" type="button" onClick={clearSearch}>
+                    Clear&nbsp;Search&nbsp;×
+                  </button>
                 </div>
               ) : (
                 <div className="chips">
@@ -1336,8 +1333,11 @@ export default function MainScreen() {
                 </span>
               </div>
               {isSearching ? (
-                <div className="chips">
+                <div className="chips searchresultsrow">
                   <span className="searchnotice">Search Results</span>
+                  <button className="clearsearch" type="button" onClick={clearSearch}>
+                    Clear&nbsp;Search&nbsp;×
+                  </button>
                 </div>
               ) : (
                 <div className="chips">
@@ -1426,8 +1426,11 @@ export default function MainScreen() {
           <div className="subcard">
             <div className="subhead todos-head">
               {isSearching ? (
-                <div className="chips">
+                <div className="chips searchresultsrow">
                   <span className="searchnotice">Search Results</span>
+                  <button className="clearsearch" type="button" onClick={clearSearch}>
+                    Clear&nbsp;Search&nbsp;×
+                  </button>
                 </div>
               ) : (
                 <div className="chips">
@@ -1518,7 +1521,14 @@ export default function MainScreen() {
             </div>
           </div>
 
-          {/* ---------------------------------------------------------- Housekeeping */}
+          {/* ---------------------------------------------------------- Housekeeping
+              Hidden while isSearching (2026-08-19, owner: "I don't think we
+              need to show the Housekeeping section" while search results are
+              showing) — the Search band itself, just below, stays visible
+              regardless, since the field needs to stay reachable to change
+              or clear what's been typed. */}
+          {!isSearching && (
+            <>
           <div className="band">
             <span className="glabel">Housekeeping</span>
             <button className="btn-quiet" type="button" onClick={handleLogOut} disabled={signingOut}>
@@ -1643,85 +1653,107 @@ export default function MainScreen() {
               </div>
             )}
           </div>
+            </>
+          )}
+
+          {/* ---------------------------------------------------------- Search
+              Relocated 2026-08-19 (owner: search is infrequently used, and a
+              fixed footer costs permanent scroll space on every visit; "I
+              prefer placing the Search as scrollable under the Housekeeping
+              section"). Was a fixed-footer sibling of .scroll (outside it,
+              alongside .subbanner/.adslot, which stay pinned there — owner's
+              explicit call: "subscription banner and ad stays pinned and
+              only Search itself relocates"); now its own band inside .scroll,
+              right after Housekeeping, so it only costs space once someone
+              has actually scrolled down to it. Unlike Housekeeping just
+              above, this band is NOT hidden while isSearching — the field
+              itself has to stay reachable to change or clear what's typed.
+              The scope button is a real All/Date Range picker — Date Range
+              swaps the text field for paired From/To date fields, either
+              side alone a valid search. A Clear Search control appears next
+              to the field(s) whenever isSearching (a second one also lives
+              in each section's own "Search Results" notice above, on the
+              owner's own request — "having Clear Search in both places is
+              useful"); the text field also gets its own inline × once it
+              holds text. Clearing the text field to empty by hand
+              (backspace) exits automatically, with no separate step —
+              isSearching is derived, not a stored mode flag, so there is
+              nothing left to reset once the field itself is empty. The
+              voice-search icon is gone (2026-08-19, see VoiceSearchIcon's
+              own removal comment above) — was always decorative, and
+              dropping it also gives the scope select and field(s) more of
+              the line's width now that this band isn't squeezed into a
+              fixed-height footer strip either. */}
+          <div className="band">
+            <span className="glabel">Search</span>
+          </div>
+
+          <div className="searchbar sb">
+            <select
+              className="scope"
+              value={searchScope}
+              onChange={(e) => selectSearchScope(e.target.value as 'all' | 'daterange')}
+              aria-label="Search scope"
+            >
+              <option value="all">All</option>
+              <option value="daterange">Date Range</option>
+            </select>
+
+            {searchScope === 'all' ? (
+              <div className="fieldwrap">
+                <input
+                  className="field"
+                  type="text"
+                  placeholder="Search Would You Please"
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                />
+                {searchText !== '' && (
+                  <button
+                    className="fclear"
+                    type="button"
+                    aria-label="Clear search text"
+                    onClick={() => setSearchText('')}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="daterange-fields">
+                <label className="drfield">
+                  <span className="drlabel">From</span>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    aria-label="Search Due Date from"
+                  />
+                </label>
+                <label className="drfield">
+                  <span className="drlabel">To</span>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    aria-label="Search Due Date to"
+                  />
+                </label>
+              </div>
+            )}
+
+            {isSearching && (
+              <button className="clearsearch" type="button" onClick={clearSearch}>
+                Clear&nbsp;Search&nbsp;×
+              </button>
+            )}
+
+            <span className="iconbtn" role="button" tabIndex={0} aria-label="Search"><SearchIcon /></span>
+          </div>
 
           <div className="scroll-pad" />
         </div>
 
-        {/* Search bar — Search Mode redesign (2026-08-19, see the file header
-            comment and selectSearchScope/isSearching/clearSearch above). The
-            scope button is now a real All/Date Range picker (previously
-            visual-only) — Date Range swaps the text field for paired From/To
-            date fields, either side alone a valid search. A Clear Search
-            control appears next to the field(s) whenever isSearching, so
-            there's always one reliable way out of Search Results mode
-            regardless of scope; the text field also gets its own inline ×
-            once it holds text. Clearing the text field to empty by hand
-            (backspace) exits automatically, with no separate step — isSearching
-            is derived, not a stored mode flag, so there is nothing left to
-            reset once the field itself is empty. */}
-        <div className="searchbar sb">
-          <select
-            className="scope"
-            value={searchScope}
-            onChange={(e) => selectSearchScope(e.target.value as 'all' | 'daterange')}
-            aria-label="Search scope"
-          >
-            <option value="all">All</option>
-            <option value="daterange">Date Range</option>
-          </select>
-
-          {searchScope === 'all' ? (
-            <div className="fieldwrap">
-              <input
-                className="field"
-                type="text"
-                placeholder="Search Would You Please"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
-              {searchText !== '' && (
-                <button
-                  className="fclear"
-                  type="button"
-                  aria-label="Clear search text"
-                  onClick={() => setSearchText('')}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="daterange-fields">
-              <label className="drfield">
-                <span className="drlabel">From</span>
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  aria-label="Search Due Date from"
-                />
-              </label>
-              <label className="drfield">
-                <span className="drlabel">To</span>
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  aria-label="Search Due Date to"
-                />
-              </label>
-            </div>
-          )}
-
-          {isSearching && (
-            <button className="clearsearch" type="button" onClick={clearSearch}>
-              Clear&nbsp;Search&nbsp;×
-            </button>
-          )}
-
-          <span className="iconbtn" role="button" tabIndex={0} aria-label="Voice search"><VoiceSearchIcon /></span>
-          <span className="iconbtn" role="button" tabIndex={0} aria-label="Search"><SearchIcon /></span>
-        </div>
         <div className="subbanner" role="button" tabIndex={0}>See Subscription Features and Other Options</div>
         <div className="adslot" aria-hidden="true"><span className="adbox">AD — 320×50 RESERVED</span></div>
       </div>

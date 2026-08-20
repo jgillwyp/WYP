@@ -2297,6 +2297,71 @@ body {
   letter-spacing: .02em;
 }
 
+/* Spreads "Search Results" and "Clear Search ×" to opposite ends of the
+   .chips row (2026-08-19, owner: avoids having to return to the bottom of
+   the screen to clear — a second Clear Search, alongside the one on the
+   Search band itself, "having Clear Search in both places is useful"). */
+.searchresultsrow {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.searchresultsrow .clearsearch {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Voice dictation mic button (2026-08-19, §6.4x PROPOSED) — subscriber-only
+   Description dictation on Create Request/Create ToDo (CreateRequestForm.tsx,
+   CreateTodoForm.tsx). descwrap makes the textarea's own corner a valid
+   anchor for the button without touching .ftextarea's box model; micbtn
+   itself is a small circular control absolutely positioned inside it,
+   independent of the textarea's resize handle (browsers reserve their own
+   bottom-right corner for that, so the button sits slightly inset). Rest
+   state uses --ink-soft, same muted-icon convention as .fclear; --alert-red
+   while actively listening is a deliberate reuse of the app's one
+   "something is happening, pay attention" color (Overdue rows, error text),
+   not a new token. */
+.descwrap {
+  position: relative;
+}
+
+.micbtn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: var(--ink-soft);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.micbtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.micbtn.listening {
+  background: var(--alert-red);
+  color: #fff;
+}
+
+.micbtn:active {
+  color: var(--brand-blue);
+}
+
+.micbtn.listening:active {
+  color: #fff;
+}
+
 /* Archived badge — a matched row that is archived still renders in its own
    Sent/Received/ToDos section (never a separate list), tagged so it doesn't
    read as merely Done. Sits in .r2 alongside the Dialog/Attachments .ii

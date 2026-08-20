@@ -2099,3 +2099,49 @@ link is built only after the stack is proven on Add Contact.
   `clearSearch()`, resetting text/dates/scope together. `npx tsc --noEmit`/
   `npm run lint` clean. No mockup updated — none of the existing mockups
   model Search at all; flagged in `design/README.md`.
+- **Search bar relocated under Housekeeping; Housekeeping hidden while
+  searching; voice-search icon dropped (2026-08-19).** Owner, testing the
+  above on a phone: two/three-line search bar was eating too much scroll
+  space. Moved the whole `.searchbar` block (scope select, fields, Clear
+  Search, Search icon) from its old fixed position beside
+  `.subbanner`/`.adslot` (outside `.scroll`) into a new Search band inside
+  `.scroll`, right after Housekeeping — `.subbanner`/`.adslot` stay pinned
+  outside `.scroll`, per the owner's explicit instruction only Search
+  itself relocates. Housekeeping is now wrapped in `{!isSearching && (...)}`
+  — hidden entirely while searching. `VoiceSearchIcon()` deleted outright
+  (always decorative, never wired). Each section's `isSearching` chip row
+  gained a `.searchresultsrow` modifier so a second `.clearsearch` sits
+  opposite "Search Results" — owner: "having Clear Search in both places is
+  useful." Floating labels on the Date Range fields held off, per the
+  owner's own instruction. `npx tsc --noEmit`/`npm run lint` clean. No
+  mockup updated.
+- **Voice dictation for Description — subscriber-gated, Create Request +
+  Create ToDo (2026-08-19, §6.4x PROPOSED).** Owner: "I see it as a good
+  option for entry of the Description during a Create... it could be a
+  subscription option." Browser-native Web Speech API
+  (`SpeechRecognition`/`webkitSpeechRecognition`) — no vendor, no per-use
+  cost, unlike Request Texting's Twilio dependency — gated off the signed-in
+  owner's own live `profiles.tier`, same convention as Attachments/
+  Locations. Minimal local structural types stand in for the API rather than
+  `any` (duplicated per component: `CreateRequestForm.tsx`,
+  `CreateTodoForm.tsx` — this codebase's established per-file convention).
+  `voiceSupported` is set once in a mount effect (`getSpeechRecognition()
+  !== null`), deferred one microtask before calling `setState` to satisfy
+  `react-hooks/set-state-in-effect` — same shape `PWAProvider.tsx`'s
+  `beforeinstallprompt` listener already satisfies via a real event, just
+  with a microtask standing in since there's no event here. Starts `false`
+  on both server and first client render (no hydration mismatch), flips
+  true after mount if the browser actually supports it — lets the feature
+  be described as "available if your browser supports it (and most do)"
+  rather than assumed universal (owner's own framing). `toggleDictation()`
+  starts/stops a `SpeechRecognition` instance and appends finalized results
+  to `form.description` via the existing `set()` helper. Mic button
+  (`.descwrap`/`.micbtn`, new CSS) sits in the Description textarea's own
+  bottom-right corner, shown only when `tier === 'subscriber' &&
+  voiceSupported`; `--alert-red` while listening, `--ink-soft` at rest.
+  Scoped to Create Request/Create ToDo only (owner's own framing, "during a
+  Create") — not on Request Detail/ToDo Detail or any recipient-facing
+  screen. Cross-browser QA explicitly deferred to post-Private-Testing, per
+  the owner ("Let's test for browser-support later"). `npx tsc --noEmit`/
+  `npm run lint` clean. No mockup updated — neither source mockup has
+  interactive Description JS to add a mic button to.

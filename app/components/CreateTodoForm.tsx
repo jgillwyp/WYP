@@ -127,6 +127,60 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
   }
 }
 
+// Voice dictation for Description (2026-08-19) — owner: "I see it as a good
+// option for entry of the Description during a Create... it could be a
+// subscription option." Browser-native (Web Speech API — Chrome/Edge/Safari
+// ship SpeechRecognition or webkitSpeechRecognition; no vendor, no per-use
+// cost), gated the same way Attachments/Locations already are, off the
+// signed-in owner's own live `tier`. A minimal local type stands in for the
+// real (non-standard, not part of TS's default DOM lib) SpeechRecognition
+// API rather than reaching for `any`. Browser-support testing/fallback
+// polish is deliberately deferred to post-Private-Testing (owner's own
+// call) — for now the mic icon simply doesn't render when the API isn't
+// present (voiceSupported below), computed in an effect rather than during
+// render so server and first client render agree (no hydration mismatch),
+// letting the feature honestly be described as "available if your browser
+// supports it (and most do)" rather than assumed present. Duplicated per
+// component (CreateRequestForm.tsx has its own copy) — same convention as
+// openPicker/todayISODate above.
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: { length: number; [index: number]: { [index: number]: { transcript: string } } }
+}
+
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
+
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export default function CreateTodoForm() {
   const router = useRouter()
 
@@ -180,6 +234,13 @@ export default function CreateTodoForm() {
   const [locationError, setLocationError] = useState<string | null>(null)
   const [copiedLocationIndex, setCopiedLocationIndex] = useState<number | null>(null)
 
+  // Voice dictation for Description (2026-08-19) — same feature and
+  // reasoning as CreateRequestForm.tsx's own copy; see the module-level
+  // comment on getSpeechRecognition() above for the full write-up.
+  const [dictating, setDictating] = useState(false)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+
   const doneDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -199,6 +260,23 @@ export default function CreateTodoForm() {
         setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
       })
+  }, [])
+
+  // Voice dictation support check (2026-08-19) — see CreateRequestForm.tsx's
+  // identical effect for the SSR/hydration reasoning. Stops any live
+  // recognition on unmount.
+  useEffect(() => {
+    // Deferred a tick — see CreateRequestForm.tsx's identical effect for
+    // why (react-hooks/set-state-in-effect, same fix PWAProvider.tsx's own
+    // beforeinstallprompt listener satisfies via a real browser event).
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setVoiceSupported(getSpeechRecognition() !== null)
+    })
+    return () => {
+      cancelled = true
+      recognitionRef.current?.stop()
+    }
   }, [])
 
   function openDialogModal() {
@@ -270,6 +348,43 @@ export default function CreateTodoForm() {
 
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  // Voice dictation toggle (2026-08-19) — see CreateRequestForm.tsx's
+  // identical handler for the full reasoning.
+  function toggleDictation() {
+    if (dictating) {
+      recognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let addition = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        addition += event.results[i][0].transcript
+      }
+      if (addition.trim() === '') return
+      setForm((f) => ({
+        ...f,
+        description: f.description
+          ? `${f.description} ${addition.trim()}`
+          : addition.trim(),
+      }))
+    }
+    recognition.onerror = () => {
+      setDictating(false)
+    }
+    recognition.onend = () => {
+      setDictating(false)
+    }
+    recognitionRef.current = recognition
+    recognition.start()
+    setDictating(true)
   }
 
   // Quick-Done band (2026-08-10) — same pattern as Request Response's
@@ -722,18 +837,35 @@ export default function CreateTodoForm() {
                 field. Plain placeholder, not a floating label — see
                 globals.css's ftextarea-plain comment. */}
             <div className={`fgroup${descInvalid ? ' is-invalid' : ''}`}>
-              <textarea
-                className="ftextarea ftextarea-desc ftextarea-plain req"
-                id="desc"
-                maxLength={DESCRIPTION_MAX}
-                placeholder="ToDo Description"
-                aria-label="ToDo Description"
-                value={form.description}
-                onChange={(e) => {
-                  set('description', e.target.value)
-                  if (descInvalid) setDescInvalid(false)
-                }}
-              />
+              {/* descwrap positions the mic button in the textarea's own
+                  bottom-right corner (2026-08-19) — subscriber-only voice
+                  dictation, same feature as CreateRequestForm.tsx's
+                  identical block. Only rendered when the API is actually
+                  present (voiceSupported). */}
+              <div className="descwrap">
+                <textarea
+                  className="ftextarea ftextarea-desc ftextarea-plain req"
+                  id="desc"
+                  maxLength={DESCRIPTION_MAX}
+                  placeholder="ToDo Description"
+                  aria-label="ToDo Description"
+                  value={form.description}
+                  onChange={(e) => {
+                    set('description', e.target.value)
+                    if (descInvalid) setDescInvalid(false)
+                  }}
+                />
+                {tier === 'subscriber' && voiceSupported && (
+                  <button
+                    type="button"
+                    className={`micbtn${dictating ? ' listening' : ''}`}
+                    aria-label={dictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                    onClick={toggleDictation}
+                  >
+                    <MicIcon />
+                  </button>
+                )}
+              </div>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
               <p className={`charcount${form.description.length >= DESCRIPTION_MAX ? ' limit' : ''}`}>
                 {form.description.length} / {DESCRIPTION_MAX}
