@@ -2189,8 +2189,17 @@ body {
   white-space: nowrap;
 }
 
+/* flex-basis of 60px (not auto) — 2026-08-19, owner: the magnifying glass
+   was wrapping to its own line on a phone. With flex-basis: auto, a
+   wrapping flex container decides line breaks using each item's
+   max-content hypothetical size (the placeholder text's own width, here),
+   not its ability to shrink — so a long placeholder pushed the search icon
+   past the edge before flex-shrink ever got a chance to act. A small fixed
+   basis keeps the field's hypothetical size low enough that the whole row
+   (scope + field + icon) is chosen to fit on one line; flex-grow: 1 still
+   lets it fill the remaining width once that decision is made. */
 .field {
-  flex: 1 1 auto;
+  flex: 1 1 60px;
   min-width: 0;
   font: inherit;
   font-size: 11px;
@@ -2211,7 +2220,7 @@ body {
    own .ffloat wrapper. */
 .fieldwrap {
   position: relative;
-  flex: 1 1 auto;
+  flex: 1 1 60px;
   min-width: 0;
   display: flex;
 }
@@ -2220,24 +2229,33 @@ body {
   padding-right: 28px;
 }
 
-/* Date Range search fields — always full-width on their own line (see
-   .searchbar's flex-wrap above), two equal-width fields side by side. */
+/* Date Range search fields — two equal-width fields side by side. Basis
+   dropped from 100% to a fixed 190px (2026-08-19, owner: the search icon
+   was wrapping to a third line) — a 100% basis, like .field's old
+   flex-basis: auto, forced this item to claim the entire line for the
+   flex-wrap line-breaking decision (see the .field comment above for why
+   that decision uses hypothetical/basis size, not final shrunk size), which
+   left zero room on that line for Clear Search or the icon and pushed them
+   down again. A modest fixed basis lets scope + these fields + Clear
+   Search + the icon share a line when there's room, and still shrink
+   (flex-shrink is unchanged) before anything is forced to wrap. */
 .daterange-fields {
-  flex: 1 1 100%;
+  flex: 1 1 190px;
+  min-width: 0;
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .drfield {
   flex: 1 1 0%;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   background: #fff;
   border: 1px solid var(--input-border);
   border-radius: 8px;
-  padding: 4px 8px;
+  padding: 4px 6px;
 }
 
 .drlabel {

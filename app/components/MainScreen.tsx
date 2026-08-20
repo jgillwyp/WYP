@@ -1696,7 +1696,7 @@ export default function MainScreen() {
               aria-label="Search scope"
             >
               <option value="all">All</option>
-              <option value="daterange">Date Range</option>
+              <option value="daterange">Dates</option>
             </select>
 
             {searchScope === 'all' ? (

@@ -6,6 +6,39 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-19 — Search bar: "Date Range" shortened to "Dates," field/date-field flex-basis fixed to stop the search icon wrapping
+
+Owner, still on a phone: "it still wraps the magnifying glass to the next
+line on my phone - it would look better if it did not do that... the phrase
+'Date Range' can be shortened to 'Dates' without any loss of meaning - since
+the data fields say 'From/To', and the text entry field and respective date
+fields can still be a bit shorter."
+
+Root cause, not just width: `.field`, `.fieldwrap`, and `.daterange-fields`
+all had `flex-basis: auto` (or, for `.daterange-fields`, an explicit `100%`)
+with no fixed basis. A wrapping flex container decides where to break lines
+using each item's *hypothetical* main size — its flex-basis, or, when that's
+`auto`, its max-content size — not its ability to shrink; flex-shrink only
+acts after an item has already been placed on a line. The text field's
+max-content size (driven by its placeholder text) and the date-range
+group's explicit 100% basis were both large enough that the search icon,
+last in DOM order, didn't fit on the line and wrapped away, regardless of
+how much `.field`/`.drfield` could actually shrink once placed.
+
+Fix: the select option's label changed to "Dates" (`MainScreen.tsx`); `.field`
+and `.fieldwrap` given a small fixed `flex-basis: 60px` instead of `auto`,
+and `.daterange-fields` dropped from `flex: 1 1 100%` to `flex: 1 1 190px` —
+all three still `flex-grow: 1` and shrinkable, so they fill available space
+exactly as before once placed, but the line-breaking decision no longer
+overestimates their size. `.drfield` also tightened slightly (padding
+4px 8px → 4px 6px, internal gap 6px → 4px) — the "date fields can still be
+a bit shorter" the owner flagged as acceptable, read as permission for
+this shrinkage rather than a separate ask. `npx tsc --noEmit`/`npm run
+lint` clean. No mockup updated — same reasoning as the two Search entries
+above.
+
+\---
+
 ## 2026-08-19 — Search Mode redesign: results shown within Main Screen, Date Range scope, Archived badge, "Search Results" notice
 
 Owner had been designing a separate Search Results screen and reconsidered:
