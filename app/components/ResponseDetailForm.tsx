@@ -997,7 +997,7 @@ export default function ResponseDetailForm() {
                 Dialog" placement correction. */}
             {data.repeat_rule && data.due_date && (
               <p className="subnote" style={{ margin: '0 var(--pad) 12px' }}>
-                * This Request repeats — {describeRepeat(data.repeat_rule, data.due_date)}.
+                * This Request — {describeRepeat(data.repeat_rule, data.due_date)}.
               </p>
             )}
           </form>

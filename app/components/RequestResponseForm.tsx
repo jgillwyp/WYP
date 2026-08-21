@@ -923,7 +923,7 @@ export default function RequestResponseForm() {
                 this screen, below Attachments and the Free Account promo. */}
             {data.repeat_rule && data.due_date && (
               <p className="subnote" style={{ margin: '0 var(--pad) 12px' }}>
-                * This Request repeats — {describeRepeat(data.repeat_rule, data.due_date)}.
+                * This Request — {describeRepeat(data.repeat_rule, data.due_date)}.
               </p>
             )}
           </form>

@@ -84,6 +84,20 @@ function nthWeekdayOfMonth(y: number, m: number, weekday: number, nth: number): 
   if (day > daysInMonth(y, m)) return null // nth doesn't exist this month (rare — a "5th X" pattern)
   return { y, m, d: day }
 }
+// Same "invalid projected date -> closest earlier one" convention
+// addMonthsClamped already applies to day-of-month mode (Jan 31 -> Feb 28),
+// applied here for weekday mode: if the target month has no Nth occurrence
+// of the weekday (a "5th Wednesday" most months don't have), step down to
+// the 4th, 3rd, etc. within that *same* month rather than searching forward
+// for a future month that does have a 5th. Every month has at least four
+// occurrences of any given weekday, so nth=1 always resolves.
+function nthWeekdayOfMonthClamped(y: number, m: number, weekday: number, nth: number): { y: number; m: number; d: number } {
+  for (let n = nth; n >= 1; n--) {
+    const found = nthWeekdayOfMonth(y, m, weekday, n)
+    if (found) return found
+  }
+  return { y, m, d: 1 } // unreachable — n=1 always exists
+}
 function nthOfWeekdayInMonth(y: number, m: number, d: number): number {
   return Math.floor((d - 1) / 7) + 1
 }
@@ -151,20 +165,11 @@ export function computeNextDueDate(currentDueDate: string, rule: RepeatRule): st
       if (rule.monthMode === 'weekday') {
         const weekday = dayOfWeek(y, m, d)
         const nth = nthOfWeekdayInMonth(y, m, d)
-        let cy = y
-        let cm = m
-        for (let i = 0; i < 24; i++) {
-          const total = cy * 12 + (cm - 1) + rule.interval
-          cy = Math.floor(total / 12)
-          cm = (total % 12) + 1
-          const found = nthWeekdayOfMonth(cy, cm, weekday, nth)
-          if (found) return toISO(found.y, found.m, found.d)
-          // This target month has no Nth occurrence of that weekday (e.g. a
-          // "5th Wednesday" pattern most months don't have) — advance by
-          // another whole interval rather than silently clamping to the 4th.
-        }
-        const fallback = addMonthsClamped(y, m, d, rule.interval)
-        return toISO(fallback.y, fallback.m, fallback.d)
+        const total = y * 12 + (m - 1) + rule.interval
+        const ny = Math.floor(total / 12)
+        const nm = (total % 12) + 1
+        const found = nthWeekdayOfMonthClamped(ny, nm, weekday, nth)
+        return toISO(found.y, found.m, found.d)
       }
       const next = addMonthsClamped(y, m, d, rule.interval)
       return toISO(next.y, next.m, next.d)

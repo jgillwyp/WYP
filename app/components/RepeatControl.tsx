@@ -284,6 +284,13 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
                 <span>times</span>
               </label>
             </div>
+
+            <p className="checknote repeat-invalid-note">
+              <strong>Note:</strong> If a projected date doesn&rsquo;t exist (for
+              example, the 31st in a 30-day month, or a 5th Wednesday in a
+              month that only has four), the closest earlier date is used
+              instead &mdash; the 30th, or the 4th Wednesday.
+            </p>
           </div>
         </>
       )}
