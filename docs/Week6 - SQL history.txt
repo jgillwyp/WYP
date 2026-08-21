@@ -1374,7 +1374,7 @@ commit;
 
 -- ============================================================================
 -- WYP migration 038 — Repeat feature (recurring Requests and ToDos)
--- DRAFTED 2026-08-21 — NOT YET CONFIRMED RUN.
+-- DRAFTED 2026-08-21 — CONFIRMED RUN by the owner 2026-08-21.
 --
 -- Jim's own recurrence-method design ("WYP Repeat design.docx", uploaded
 -- 2026-08-21) — a Request or ToDo can repeat on a Day/Week/Month/Year
@@ -1505,7 +1505,7 @@ commit;
 -- ============================================================================
 -- WYP migration 039 — repeat_rule exposed to the two recipient-facing read
 -- functions (drafted 2026-08-21, part of the same Repeat batch as migration
--- 038).
+-- 038). CONFIRMED RUN by the owner 2026-08-21.
 --
 -- Recipient visibility, per Jim's own confirmed design: "It would be good to
 -- show the recurrence to the Recipient as non-editable information... at the
@@ -1689,7 +1689,8 @@ commit;
 -- WYP migration 040 — repeat_rule added to get_received_requests(), for the
 -- "Repeats: ..." print-report line on Main Screen's and Archive's own
 -- Received-type print reports (both already reuse this one RPC). Drafted
--- 2026-08-21, same batch as migration 039.
+-- 2026-08-21, same batch as migration 039. CONFIRMED RUN by the owner
+-- 2026-08-21.
 --
 -- RETURNS TABLE, unlike migration 039's two jsonb functions — the
 -- migration-017/021/027 precedent applies here (a RETURNS TABLE function's

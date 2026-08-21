@@ -2255,10 +2255,10 @@ link is built only after the stack is proven on Add Contact.
   write-up. `npx tsc --noEmit` clean; `npm run lint` not yet re-run for this
   specific batch.
 - **Repeat (recurrence) for Requests and ToDos, built end to end
-  (2026-08-21) — migration(s) drafted in `docs/Week6 - SQL history.txt`
-  (`requests.repeat_rule jsonb`, `requests.repeat_next_generated_at`,
-  `attachments.carry_into_repeats`, migrations 039/040), confirmation
-  status not yet recorded here — check that file's own header comments.**
+  (2026-08-21) — migrations 038/039/040 (`docs/Week6 - SQL history.txt`:
+  `requests.repeat_rule jsonb`, `requests.repeat_next_generated_at`,
+  `attachments.carry_into_repeats`, plus the read-function updates) all
+  CONFIRMED RUN by the owner 2026-08-21.**
   Owner's own design doc (`WYP Repeat design.docx`), refined through a
   round of clarifying questions before any code was written; see the
   decisions log's 2026-08-21 entry for the full write-up, this is a
