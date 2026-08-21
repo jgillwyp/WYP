@@ -1,7 +1,10 @@
+import { randomUUID } from 'crypto'
+
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
 
 import { buildIcsContent, type IcsRequestFields } from '@/lib/ics'
+import { type RepeatRule, computeNextDueDate, shouldStopBeforeGenerating } from '@/lib/repeatRule'
 import {
   EMAIL_FROM_ADDRESS,
   buildRequestEmailFromName,
@@ -122,6 +125,39 @@ type ProfileRow = {
 
 type ContactInfo = { email: string; display_name: string | null; time_zone: string | null } | null
 
+// Phase E — Repeat generation (Jim's own recurrence-method design,
+// 2026-08-21). Deliberately its own row shape/query, not a subset of
+// requestRows/todoRows above: those two both filter `.is('done_date', null)`,
+// but Jim's own instruction is that Due Date, never Done status, determines
+// generation — a Done repeating Request/ToDo must still spawn its successor.
+type RepeatRow = {
+  id: string
+  owner_id: string
+  contact_id: string | null
+  category_id: string | null
+  description: string
+  priority: number | null
+  due_date: string
+  due_time: string | null
+  reminder_enabled: boolean
+  overdue_reminder_enabled: boolean
+  repeat_rule: RepeatRule
+  repeat_occurrence_index: number | null
+}
+
+type CarryAttachmentRow = {
+  id: string
+  kind: 'file' | 'reference'
+  file_name: string | null
+  storage_path: string | null
+  mime_type: string | null
+  size_bytes: number | null
+  reference_note: string | null
+  reference_url: string | null
+  uploaded_by: string | null
+  uploaded_by_label: string | null
+}
+
 type RequestRow = {
   id: string
   owner_id: string
@@ -162,6 +198,7 @@ async function handle(request: Request) {
     overdueNudges: 0,
     reminderDigests: 0,
     overdueDigests: 0,
+    repeatsGenerated: 0,
     errors: 0,
   }
 
@@ -553,6 +590,127 @@ async function handle(request: Request) {
       replyTo: null,
     })
     if (sent) counts.overdueDigests += 1
+  }
+
+  // ======================================================================
+  // Phase E — Repeat generation (Jim's own recurrence-method design,
+  // 2026-08-21; migration 038). "The Due Date should be the determinant" —
+  // fires once, at the OWNER's own local midnight, on the calendar day the
+  // current occurrence's Due Date itself falls on (not the day after, which
+  // is Phase B's own "became Overdue" moment) — independent of Done status,
+  // so this deliberately does NOT reuse requestRows/todoRows above (both
+  // filter out Done rows). repeat_next_generated_at (migration 038) is the
+  // idempotency marker: set once a row's Due-Date-arrival has been
+  // processed, whether or not a successor was actually produced (a stopped
+  // series still needs to stop retrying every hour).
+  // ======================================================================
+  const { data: repeatData, error: repeatError } = await sb
+    .from('requests')
+    .select(
+      'id, owner_id, contact_id, category_id, description, priority, due_date, due_time, reminder_enabled, overdue_reminder_enabled, repeat_rule, repeat_occurrence_index'
+    )
+    .not('repeat_rule', 'is', null)
+    .is('archived_at', null)
+    .is('repeat_next_generated_at', null)
+    .not('due_date', 'is', null)
+
+  const repeatRows = repeatError ? [] : ((repeatData ?? []) as unknown as RepeatRow[])
+
+  const repeatOwnerIds = repeatRows.map((r) => r.owner_id).filter((id) => !profileMap.has(id))
+  if (repeatOwnerIds.length > 0) {
+    const { data: moreProfiles } = await sb
+      .from('profiles')
+      .select('id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled')
+      .in('id', Array.from(new Set(repeatOwnerIds)))
+    for (const p of (moreProfiles ?? []) as ProfileRow[]) profileMap.set(p.id, p)
+  }
+
+  for (const row of repeatRows) {
+    const profile = profileMap.get(row.owner_id) ?? null
+    const zone = profile?.time_zone ?? null
+    if (localDateISO(zone, now) !== row.due_date || localHour(zone, now) !== OVERDUE_HOUR) continue
+
+    const rule = row.repeat_rule
+    const nextOccurrenceIndex = (row.repeat_occurrence_index ?? 1) + 1
+    const nextDueDate = computeNextDueDate(row.due_date, rule)
+
+    if (shouldStopBeforeGenerating(rule, nextOccurrenceIndex, nextDueDate)) {
+      await sb.from('requests').update({ repeat_next_generated_at: now.toISOString() }).eq('id', row.id)
+      continue
+    }
+
+    const { data: newRow, error: insertError } = await sb
+      .from('requests')
+      .insert({
+        owner_id: row.owner_id,
+        contact_id: row.contact_id,
+        category_id: row.category_id,
+        description: row.description,
+        priority: row.priority,
+        due_date: nextDueDate,
+        due_time: row.due_time,
+        reminder_enabled: row.reminder_enabled,
+        overdue_reminder_enabled: row.overdue_reminder_enabled,
+        repeat_rule: rule,
+        repeat_occurrence_index: nextOccurrenceIndex,
+      })
+      .select('id')
+      .single()
+
+    if (insertError || !newRow) {
+      counts.errors += 1
+      continue
+    }
+
+    // Attachments/Locations carry-forward — Jim's own instruction ("Dialog
+    // is not carried into repeated Requests. Select any Attachments that
+    // should be included with each repeat.") — duplicates every row still
+    // marked carry_into_repeats onto the new occurrence, keeping the same
+    // flag true so it keeps propagating down the whole chain rather than
+    // requiring the owner to re-select on every single generation.
+    const { data: carryRows } = await sb
+      .from('attachments')
+      .select('id, kind, file_name, storage_path, mime_type, size_bytes, reference_note, reference_url, uploaded_by, uploaded_by_label')
+      .eq('request_id', row.id)
+      .eq('carry_into_repeats', true)
+      .is('deleted_at', null)
+
+    for (const att of (carryRows ?? []) as CarryAttachmentRow[]) {
+      if (att.kind === 'file' && att.storage_path && att.file_name) {
+        const newId = randomUUID()
+        const newPath = `${newRow.id}/${newId}-${att.file_name}`
+        const { error: copyError } = await sb.storage.from('attachments').copy(att.storage_path, newPath)
+        if (copyError) {
+          counts.errors += 1
+          continue
+        }
+        await sb.from('attachments').insert({
+          id: newId,
+          request_id: newRow.id,
+          uploaded_by: att.uploaded_by,
+          uploaded_by_label: att.uploaded_by_label,
+          kind: 'file',
+          file_name: att.file_name,
+          storage_path: newPath,
+          size_bytes: att.size_bytes,
+          mime_type: att.mime_type,
+          carry_into_repeats: true,
+        })
+      } else if (att.kind === 'reference') {
+        await sb.from('attachments').insert({
+          request_id: newRow.id,
+          uploaded_by: att.uploaded_by,
+          uploaded_by_label: att.uploaded_by_label,
+          kind: 'reference',
+          reference_note: att.reference_note,
+          reference_url: att.reference_url,
+          carry_into_repeats: true,
+        })
+      }
+    }
+
+    await sb.from('requests').update({ repeat_next_generated_at: now.toISOString() }).eq('id', row.id)
+    counts.repeatsGenerated += 1
   }
 
   return Response.json({ ok: true, counts }, { status: 200 })

@@ -9,6 +9,7 @@ import AttachmentsPanel from './AttachmentsPanel'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 import { isReminderEligible } from '@/lib/email'
+import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
  * Request Response (§9.3) — converted from
@@ -132,6 +133,10 @@ type ResponsePayload = {
   // ResponseDetailForm.tsx's identical addition for the full reasoning.
   overdue_reminder_enabled: boolean
   reminder_sent_at: string | null
+  // Repeat, read-only recipient footnote (Jim's own design, 2026-08-21,
+  // migration 039). Never editable here — only Request Detail's/ToDo
+  // Detail's own RepeatControl on the owner's side can set or change it.
+  repeat_rule: RepeatRule | null
   contact_name: string | null
   dialog: DialogEntry[]
 }
@@ -665,6 +670,13 @@ export default function RequestResponseForm() {
                   {data.owner_request_time_enabled && data.due_time && (
                     <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>
                   )}
+                  {/* Repeat footnote marker (Jim's own design, 2026-08-21) —
+                      "an adjacent-top-right asterisk," pointing at the
+                      read-only Repeat note near the bottom of this screen.
+                      Read-only here — see the ResponsePayload comment above. */}
+                  {data.repeat_rule && (
+                    <sup className="repeatmark" aria-hidden="true">*</sup>
+                  )}
                 </span>
               </div>
             </div>
@@ -901,6 +913,17 @@ export default function RequestResponseForm() {
             {sendError && (
               <p className="ferror" role="alert" style={{ margin: '0 var(--pad) 12px' }}>
                 {sendError}
+              </p>
+            )}
+
+            {/* Repeat footnote (Jim's own design, 2026-08-21) — read-only
+                recurrence note for the Recipient, placed "at the bottom, not
+                above Dialog" (Jim's own correction, superseding an earlier
+                above-Dialog placement suggestion). The very last thing on
+                this screen, below Attachments and the Free Account promo. */}
+            {data.repeat_rule && data.due_date && (
+              <p className="subnote" style={{ margin: '0 var(--pad) 12px' }}>
+                * This Request repeats — {describeRepeat(data.repeat_rule, data.due_date)}.
               </p>
             )}
           </form>

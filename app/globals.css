@@ -1048,6 +1048,31 @@ body {
   outline-offset: 1px;
 }
 
+/* Repeat carry-forward toggle on an existing Attachment/Location row
+   (migration 038, 2026-08-21) — small enough to sit inline in .attitem
+   beside the remove ×, not a full .checkrow. */
+.carrytoggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.carrytoggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--brand-blue);
+  cursor: pointer;
+}
+
+.carrytoggle span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
 /* ============================================================================
    STAGED DIALOG ENTRIES (2026-08-06) — reuses .attitem/.attname/.attremove's
    row styling rather than inventing a second list treatment. Unlike the
@@ -1379,6 +1404,123 @@ body {
   flex: 1 1 auto;
   margin-bottom: 0;
   padding: 8px 10px;
+}
+
+/* ============================================================================
+   REPEAT BAND + MODAL (§6.42 PROPOSED — band; §6.43 PROPOSED — Stops
+   Repeating radio group) — Create Request, Request Detail, Create ToDo,
+   ToDo Detail (Jim's own recurrence-method design, 2026-08-21). The band
+   mirrors .donerow's own Strip-tint shape (text left, one action right);
+   the Add/Edit Repeat modal reuses .modal/.modalhead/.chiprow/.chip as-is.
+   .stoprow is this app's first native <input type="radio"> — every other
+   either/or choice elsewhere uses .chip instead, but each Stops Repeating
+   option carries its own inline field (a date, a count) that only makes
+   sense once selected, which .chip's compact pill shape doesn't fit, and
+   "choose exactly one" is exactly what a radio group means semantically.
+   ============================================================================ */
+.repeatband {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 14px;
+  background: var(--strip);
+  border-radius: 9px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.repeatband-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.repeatband.is-disabled {
+  opacity: 0.55;
+}
+
+.repeat-interval-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.repeat-number,
+.stop-date-field {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--input-border);
+  border-radius: 7px;
+  min-height: 34px;
+  padding: 4px 8px;
+}
+
+.repeat-number {
+  width: 64px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.stop-date-field {
+  width: 150px;
+  flex: 0 0 auto;
+}
+
+.stopgroup {
+  background: var(--strip);
+  border-radius: 9px;
+  padding: 10px;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.stopgroup-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.stoprow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.stoprow:last-child {
+  margin-bottom: 0;
+}
+
+.stoprow input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--brand-blue);
+  cursor: pointer;
+}
+
+.stoprow span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.stoprow input:disabled,
+.repeat-interval-row input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============================================================================
@@ -2559,6 +2701,17 @@ body {
   color: var(--ink);
 }
 
+/* Repeat footnote marker (§6.42, 2026-08-21) — "an adjacent-top-right
+   asterisk" (Jim's own wording) beside the Due Date value on Request
+   Response/Response Detail, pointing at the read-only Repeat note near the
+   bottom of the screen. Plain <sup>, no custom vertical-align needed —
+   superscript positioning already reads as top-right of the preceding text. */
+.repeatmark {
+  color: var(--brand-blue);
+  font-weight: 700;
+  margin-left: 1px;
+}
+
 /* Dialog read panel — an existing thread, not Create Request/ToDo's blank
    staged list. */
 .panel {
@@ -3146,6 +3299,21 @@ body {
 }
 
 .pdlgkind {
+  font-weight: 700;
+}
+
+/* "Repeats: ..." print line (Jim's own instruction, 2026-08-21) — same
+   indentation/size as .pdlg/.patt above, rendered ahead of Dialog per his
+   own "preceding the Dialog" placement. One line, no separate heading row
+   — the bold "Repeats:" label plays that role inline instead. */
+.prepeat {
+  margin: 5px 0 0 16px;
+  font-size: 11pt;
+  color: var(--ink);
+  line-height: 1.34;
+}
+
+.prepeathead {
   font-weight: 700;
 }
 

@@ -5,7 +5,9 @@ import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
+import RepeatControl from './RepeatControl'
 import { supabase } from '@/lib/supabaseClient'
+import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
  * ToDo Detail (§9.4) — converted from
@@ -170,6 +172,18 @@ function PrintAttachmentList({ entries }: { entries: PrintAttachmentEntry[] }) {
               : a.reference_url}
         </div>
       ))}
+    </div>
+  )
+}
+
+// "Repeats: ..." print line — same shared builder and placement rule
+// (preceding Dialog) as CreateRequestForm.tsx/RequestDetailForm.tsx's
+// identical copies.
+function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: string }) {
+  if (!rule || !dueDate) return null
+  return (
+    <div className="prepeat">
+      <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
     </div>
   )
 }
@@ -364,6 +378,11 @@ export default function TodoDetailForm() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [authToken, setAuthToken] = useState<string | null>(null)
 
+  // Repeat (Jim's own recurrence-method design, 2026-08-21) — same
+  // rule/occurrence-index pair as RequestDetailForm.tsx's own copy.
+  const [repeatRule, setRepeatRule] = useState<RepeatRule | null>(null)
+  const [repeatOccurrenceIndex, setRepeatOccurrenceIndex] = useState<number | null>(null)
+
   // Print (2026-08-15) — same reasoning/pattern as RequestDetailForm.tsx's
   // identical addition. dialogList already has everything Dialog needs;
   // Locations need their own small fetch since AttachmentsPanel keeps its
@@ -393,6 +412,7 @@ export default function TodoDetailForm() {
     categoryId: string | null
     description: string
     todoStatus: 'open' | 'done'
+    repeatRule: RepeatRule | null
   } | null>(null)
   const hasChanges =
     initialFormRef.current !== null &&
@@ -401,7 +421,8 @@ export default function TodoDetailForm() {
       form.doneDate !== initialFormRef.current.doneDate ||
       form.description !== initialFormRef.current.description ||
       todoStatus !== initialFormRef.current.todoStatus ||
-      (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId)
+      (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId ||
+      JSON.stringify(repeatRule) !== JSON.stringify(initialFormRef.current.repeatRule))
 
   // Quick-Done band (§6.31) — added 2026-08-11, matching CreateTodoForm.tsx's
   // identical handleQuickDone: this screen never got the band ported over
@@ -453,7 +474,7 @@ export default function TodoDetailForm() {
       const [todoRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, created_at, category_id, archived_at, categories(name)')
+          .select('id, description, priority, due_date, done_date, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, categories(name)')
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -491,6 +512,8 @@ export default function TodoDetailForm() {
         created_at: string
         category_id: string | null
         archived_at: string | null
+        repeat_rule: RepeatRule | null
+        repeat_occurrence_index: number | null
         categories: { name: string } | null
       }
       const row = todoRes.data as unknown as Row
@@ -514,6 +537,8 @@ export default function TodoDetailForm() {
       const initialTodoStatus = row.done_date ? 'done' : 'open'
       setTodoStatus(initialTodoStatus)
       setArchivedAt(row.archived_at)
+      setRepeatRule(row.repeat_rule)
+      setRepeatOccurrenceIndex(row.repeat_occurrence_index)
       initialFormRef.current = {
         priority: (row.priority as 1 | 2 | 3) ?? 1,
         dueDate: row.due_date ?? '',
@@ -521,6 +546,7 @@ export default function TodoDetailForm() {
         categoryId: row.category_id ?? null,
         description: row.description ?? '',
         todoStatus: initialTodoStatus,
+        repeatRule: row.repeat_rule,
       }
 
       await loadDialog()
@@ -722,6 +748,8 @@ export default function TodoDetailForm() {
         done_date: effectiveDoneDate,
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
+        repeat_rule: repeatRule,
+        repeat_occurrence_index: repeatRule ? (repeatOccurrenceIndex ?? 1) : null,
         // Un-archive-on-clear (owner request, 2026-08-17): a ToDo that was
         // archived returns to active status the moment Done Date is
         // cleared — whether that happens via the plain Done Date field
@@ -973,6 +1001,29 @@ export default function TodoDetailForm() {
                 </p>
               )}
 
+            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — hidden entirely for free
+                tier and when Due/Done Dates is off, same gate as ToDo Detail's
+                own CreateTodoForm.tsx counterpart. Greyed when archived (no
+                Due Date to anchor generation on while inactive) or before a
+                Due Date has been entered. */}
+            {tier === 'subscriber' && todoDatesEnabled && (
+              <RepeatControl
+                rule={repeatRule}
+                dueDate={form.dueDate}
+                onSave={(rule) => {
+                  setRepeatRule(rule)
+                  setRepeatOccurrenceIndex((current) => current ?? 1)
+                }}
+                onRemove={() => setRepeatRule(null)}
+                disabled={form.dueDate.trim() === '' || archivedAt !== null}
+                disabledReason={
+                  archivedAt !== null
+                    ? 'Repeats are not available for archived ToDos.'
+                    : 'Please select a Due Date before adding a Repeat.'
+                }
+              />
+            )}
+
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). See
                 CreateRequestForm.tsx's identical gate for the full
@@ -1136,6 +1187,7 @@ export default function TodoDetailForm() {
               isOwner={true}
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
+              showCarryToggle={repeatRule !== null}
             />
 
             {error && (
@@ -1377,6 +1429,7 @@ export default function TodoDetailForm() {
                       {form.description}
                     </span>
                   </div>
+                  <PrintRepeatLine rule={repeatRule} dueDate={form.dueDate} />
                   <PrintDialogList entries={dialogList} />
                   <PrintAttachmentList entries={printAttachments} />
                 </div>

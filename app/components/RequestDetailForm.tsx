@@ -5,8 +5,10 @@ import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
+import RepeatControl from './RepeatControl'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
+import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
  * Request Detail (§9.3) — converted from
@@ -232,6 +234,17 @@ function PrintAttachmentList({ entries }: { entries: PrintAttachmentEntry[] }) {
   )
 }
 
+// "Repeats: ..." print line (Jim's own instruction, 2026-08-21, "preceding
+// the Dialog") — same describeRepeat() builder the live Repeat band uses.
+function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: string }) {
+  if (!rule || !dueDate) return null
+  return (
+    <div className="prepeat">
+      <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
+    </div>
+  )
+}
+
 // Desktop browsers only open a date/time input's native picker when the
 // calendar/clock icon itself is clicked — unlike mobile, where tapping
 // anywhere in the field does. Hand-typing a value isn't a supported way to
@@ -276,6 +289,15 @@ export default function RequestDetailForm() {
   // itself editable; loaded once and compared against, same shape as
   // archivedAt above.
   const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
+
+  // Repeat (Jim's own recurrence-method design, 2026-08-21) — loaded from
+  // the row itself, edited via RepeatControl's own modal, written back on
+  // Save alongside everything else in `form`. Not itself part of the
+  // RequestFormState union — RepeatControl manages its own draft state
+  // internally and only calls back on Save/Remove, same shape as
+  // selectedCategory below.
+  const [repeatRule, setRepeatRule] = useState<RepeatRule | null>(null)
+  const [repeatOccurrenceIndex, setRepeatOccurrenceIndex] = useState<number | null>(null)
 
   const [form, setForm] = useState<RequestFormState>({
     dueDate: '',
@@ -460,6 +482,7 @@ export default function RequestDetailForm() {
     description: string
     reminderEnabled: boolean
     overdueReminderEnabled: boolean
+    repeatRule: RepeatRule | null
   } | null>(null)
   const hasChanges =
     initialFormRef.current !== null &&
@@ -470,7 +493,8 @@ export default function RequestDetailForm() {
       form.description !== initialFormRef.current.description ||
       form.reminderEnabled !== initialFormRef.current.reminderEnabled ||
       form.overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled ||
-      (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId)
+      (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId ||
+      JSON.stringify(repeatRule) !== JSON.stringify(initialFormRef.current.repeatRule))
 
   async function loadDialog() {
     const { data } = await supabase
@@ -520,7 +544,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, archived_at, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, archived_at, repeat_rule, repeat_occurrence_index, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -565,6 +589,8 @@ export default function RequestDetailForm() {
         overdue_reminder_enabled: boolean
         reminder_sent_at: string | null
         archived_at: string | null
+        repeat_rule: RepeatRule | null
+        repeat_occurrence_index: number | null
         contacts: { display_name: string } | null
         categories: { name: string } | null
       }
@@ -574,6 +600,8 @@ export default function RequestDetailForm() {
       setCreatedAt(row.created_at)
       setArchivedAt(row.archived_at)
       setReminderSentAt(row.reminder_sent_at)
+      setRepeatRule(row.repeat_rule)
+      setRepeatOccurrenceIndex(row.repeat_occurrence_index)
       setForm({
         dueDate: row.due_date ?? '',
         dueTime: row.due_time ?? '',
@@ -593,6 +621,7 @@ export default function RequestDetailForm() {
         description: row.description ?? '',
         reminderEnabled: row.reminder_enabled,
         overdueReminderEnabled: row.overdue_reminder_enabled,
+        repeatRule: row.repeat_rule,
       }
       if (row.category_id && row.categories) {
         setSelectedCategory({ id: row.category_id, name: row.categories.name })
@@ -858,6 +887,8 @@ export default function RequestDetailForm() {
         description: form.description.trim(),
         reminder_enabled: form.reminderEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
+        repeat_rule: repeatRule,
+        repeat_occurrence_index: repeatRule ? (repeatOccurrenceIndex ?? 1) : null,
         // Un-archive-on-clear (owner request, 2026-08-17): clearing Done
         // Date on a Request that was archived returns it to active status
         // — preserved unchanged in every other case (including a non-
@@ -1168,6 +1199,28 @@ export default function RequestDetailForm() {
               </p>
             )}
 
+            {/* Repeat (§6.42 PROPOSED) — hidden entirely for free tier, same
+                posture as Attachments' own owner_tier gate. Greyed until a
+                Due Date is entered, or when this Request is archived —
+                Jim's own spec. */}
+            {tier === 'subscriber' && (
+              <RepeatControl
+                rule={repeatRule}
+                dueDate={form.dueDate}
+                onSave={(rule) => {
+                  setRepeatRule(rule)
+                  setRepeatOccurrenceIndex((current) => current ?? 1)
+                }}
+                onRemove={() => setRepeatRule(null)}
+                disabled={form.dueDate.trim() === '' || archivedAt !== null}
+                disabledReason={
+                  archivedAt !== null
+                    ? 'Repeats are not available for archived Requests.'
+                    : 'Please select a Due Date before adding a Repeat.'
+                }
+              />
+            )}
+
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). See
                 CreateRequestForm.tsx's identical gate for the full
@@ -1335,6 +1388,7 @@ export default function RequestDetailForm() {
               isOwner={true}
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
+              showCarryToggle={repeatRule !== null}
             />
 
             {error && (
@@ -1572,6 +1626,7 @@ export default function RequestDetailForm() {
                       {form.description}
                     </span>
                   </div>
+                  <PrintRepeatLine rule={repeatRule} dueDate={form.dueDate} />
                   <PrintDialogList entries={dialogList} />
                   <PrintAttachmentList entries={printAttachments} />
                 </div>

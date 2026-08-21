@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
+import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
  * Main Screen (§6.7) — converted from
@@ -120,6 +121,9 @@ type SentRow = {
   // resting but re-includes it once the owner is actively searching (see
   // filteredSent below).
   archived_at: string | null
+  // repeat_rule — Jim's own recurrence-method design, 2026-08-21, for the
+  // print report's own "Repeats: ..." line only (no on-screen use here).
+  repeat_rule: RepeatRule | null
 }
 
 type TodoRow = {
@@ -139,6 +143,7 @@ type TodoRow = {
   // so this is its only archive state (there is no received_archived_at
   // counterpart for ToDos).
   archived_at: string | null
+  repeat_rule: RepeatRule | null
 }
 
 // Shape returned by the get_received_requests() RPC (migration 012, plus
@@ -176,6 +181,10 @@ type ReceivedRow = {
   // still-fetched-but-hidden-at-rest treatment as SentRow.archived_at; see
   // filteredReceived below.
   received_archived_at: string | null
+  // repeat_rule — migration 040, alongside this batch's other Repeat print
+  // additions. The issuer's own rule, read-only here same as everywhere
+  // else Received shows issuer-owned information.
+  repeat_rule: RepeatRule | null
 }
 
 // Print Reports detail (2026-08-15) — the owner's own xlsx print mockups
@@ -635,6 +644,17 @@ function categoryPrefix(name: string | null | undefined): string {
   return name ? `[${name}] ` : ''
 }
 
+// "Repeats: ..." print line (Jim's own instruction, 2026-08-21, "preceding
+// the Dialog") — same shared describeRepeat() builder every consumer uses.
+function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: string | null }) {
+  if (!rule || !dueDate) return null
+  return (
+    <div className="prepeat">
+      <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
+    </div>
+  )
+}
+
 // Full Dialog thread for one printed record (2026-08-15) — see PrintDetail's
 // own comment above. No sort-arrow/column-header row here, since this only
 // ever renders inside a single record's block, never a list.
@@ -1000,7 +1020,7 @@ export default function MainScreen() {
       return Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at')
+          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule')
           .not('contact_id', 'is', null)
           .order('due_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
@@ -1012,7 +1032,7 @@ export default function MainScreen() {
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at')
+          .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at, repeat_rule')
           .is('contact_id', null)
           .order('priority', { ascending: true, nullsFirst: false }),
       ])
@@ -1817,6 +1837,7 @@ export default function MainScreen() {
                           {r.description}
                         </span>
                       </div>
+                      <PrintRepeatLine rule={r.repeat_rule} dueDate={r.due_date} />
                       {detail && <PrintDialogList entries={detail.dialog} />}
                       {detail && <PrintAttachmentList entries={detail.attachments} heading="Attachments" />}
                     </div>
@@ -1867,6 +1888,7 @@ export default function MainScreen() {
                       <div className="pr2">
                         <span className="pdesc">{r.description}</span>
                       </div>
+                      <PrintRepeatLine rule={r.repeat_rule} dueDate={r.due_date} />
                       {detail && <PrintDialogList entries={detail.dialog} />}
                       {detail && <PrintAttachmentList entries={detail.attachments} heading="Attachments" />}
                     </div>
@@ -1920,6 +1942,7 @@ export default function MainScreen() {
                           {t.description}
                         </span>
                       </div>
+                      <PrintRepeatLine rule={t.repeat_rule} dueDate={t.due_date} />
                       {detail && <PrintDialogList entries={detail.dialog} />}
                       {detail && <PrintAttachmentList entries={detail.attachments} heading="Locations" />}
                     </div>

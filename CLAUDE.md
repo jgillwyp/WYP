@@ -2254,3 +2254,53 @@ link is built only after the stack is proven on Add Contact.
   the new field. See the decisions log's 2026-08-20 entry for the full
   write-up. `npx tsc --noEmit` clean; `npm run lint` not yet re-run for this
   specific batch.
+- **Repeat (recurrence) for Requests and ToDos, built end to end
+  (2026-08-21) — migration(s) drafted in `docs/Week6 - SQL history.txt`
+  (`requests.repeat_rule jsonb`, `requests.repeat_next_generated_at`,
+  `attachments.carry_into_repeats`, migrations 039/040), confirmation
+  status not yet recorded here — check that file's own header comments.**
+  Owner's own design doc (`WYP Repeat design.docx`), refined through a
+  round of clarifying questions before any code was written; see the
+  decisions log's 2026-08-21 entry for the full write-up, this is a
+  summary. **Due Date, never Done Date, determines generation** — an
+  incomplete Request/ToDo still spawns its next occurrence on schedule,
+  per the owner's own explicit correction. Generation happens in a new
+  cron Phase E (`app/api/cron/tick/route.ts`), firing once at the owner's
+  own local midnight on the calendar day matching the row's `due_date`,
+  distinct from Phase B/C's day-after Overdue trigger. No series table —
+  each generated row is an ordinary `requests` row linked only by
+  `repeat_occurrence_index` (1-based, original = 1); `describeRepeat(rule,
+  dueDate)` in `app/src/lib/repeatRule.ts` is the one function every
+  consumer (band, recipient footnote, print line) calls, joining clauses
+  with a comma + non-breaking space so word-wrap can only happen between
+  phrases, never mid-phrase — the owner's own explicit rule. Shared
+  `RepeatControl` component (`app/components/RepeatControl.tsx`) wired
+  into Create Request, Request Detail, Create ToDo, and ToDo Detail —
+  gated `tier === 'subscriber'` and **hidden entirely** when not (not
+  `.is-locked`, unlike Attachments — owner's explicit distinction), and on
+  ToDo screens additionally gated on `todo_dates_enabled`. Mid-series edits
+  are forward-only by construction — each row's `repeat_rule` is its own
+  independent copy, not a pointer to a shared definition — and Request
+  Detail/ToDo Detail both gained a Remove option. A carry-forward prompt
+  ("Dialogs are not included with Request Repeats, Attachments can be.
+  Please select any Attachments to use for Repeated Requests." — owner's
+  wording verbatim) appears at Send/Save on Create Request/Create ToDo
+  when a Repeat is set and staged Attachments/Locations exist; a real
+  `kind='file'` attachment carried forward gets a **duplicated** Storage
+  object per generated occurrence, not a shared reference. Recipient-facing
+  display (Request Response, Response Detail) is read-only: a `.repeatmark`
+  asterisk beside the Due Date/Time value, with the actual descriptive text
+  moved to a footnote at the very bottom of the form — **owner's own
+  mid-build correction**, originally placed above Dialog. Print Reports
+  gained a "Repeats: ..." line preceding Dialog on every screen that prints
+  Sent/Received/ToDo detail (Create Request's preview, Request Detail,
+  Response Detail, Main Screen's three sections, Archive's three sections)
+  — the Received-side report needed its own migration (040) since
+  `get_received_requests()` is `RETURNS TABLE` and required the established
+  drop-then-recreate pattern (migrations 017/021/027 precedent), unlike the
+  two jsonb-returning functions migration 039 touches with a plain
+  create-or-replace. **No mockup reflects any of this** — every screen
+  above was built directly in its live component; see `design/README.md`
+  §6.42/§6.43 for the flagged gap. `npx tsc --noEmit` clean through every
+  file in this batch; `npm run lint` not yet run for this batch as of this
+  entry.

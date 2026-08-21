@@ -39,6 +39,11 @@ export async function POST(request: Request) {
   const file = form.get('file')
   const requestId = form.get('requestId')
   const token = form.get('token')
+  // Repeat carry-forward selection (Jim's own design, 2026-08-21, migration
+  // 038) — optional; absent on every caller that predates Repeat, so this
+  // defaults to false rather than requiring every existing call site to
+  // start sending it.
+  const carryIntoRepeats = form.get('carryIntoRepeats') === 'true'
 
   if (!(file instanceof File) || typeof requestId !== 'string' || !requestId) {
     return Response.json({ error: 'bad_request' }, { status: 400 })
@@ -122,6 +127,7 @@ export async function POST(request: Request) {
       storage_path: storagePath,
       size_bytes: file.size,
       mime_type: file.type || 'application/octet-stream',
+      carry_into_repeats: carryIntoRepeats,
     })
     .select('id, file_name, size_bytes, mime_type, uploaded_by, uploaded_by_label, created_at')
     .single()

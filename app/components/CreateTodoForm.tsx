@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import RepeatControl from './RepeatControl'
 import { supabase } from '@/lib/supabaseClient'
 import { insertAttachmentReference } from '@/lib/attachmentsClient'
 import { urlLocationHref } from '@/lib/attachments'
+import { type RepeatRule } from '@/lib/repeatRule'
 
 /**
  * Create ToDo (§9.4) — converted by hand from
@@ -233,6 +235,16 @@ export default function CreateTodoForm() {
   const [locationValue, setLocationValue] = useState('')
   const [locationError, setLocationError] = useState<string | null>(null)
   const [copiedLocationIndex, setCopiedLocationIndex] = useState<number | null>(null)
+
+  // Repeat (Jim's own recurrence-method design, 2026-08-21) — same staged
+  // pattern as CreateRequestForm.tsx's own copy. Gated on todoDatesEnabled
+  // as well as tier — a ToDo with Due/Done Dates turned off has no Due Date
+  // field for Repeat to anchor on. The carry-forward prompt asks about
+  // staged Locations instead of staged Attachments, same "Dialog never
+  // carries forward" wording.
+  const [repeatRule, setRepeatRule] = useState<RepeatRule | null>(null)
+  const [carryPromptOpen, setCarryPromptOpen] = useState(false)
+  const [carryLocationIndexes, setCarryLocationIndexes] = useState<Set<number>>(new Set())
 
   // Voice dictation for Description (2026-08-19) — same feature and
   // reasoning as CreateRequestForm.tsx's own copy; see the module-level
@@ -507,6 +519,21 @@ export default function CreateTodoForm() {
 
     if (!validate()) return
 
+    // Repeat carry-forward gate — same pattern as CreateRequestForm.tsx's
+    // own copy, asking about staged Locations instead of staged Attachments.
+    // Only interrupts Save once, and only when there's something to ask
+    // about; carryPromptOpen guards against re-showing after the user has
+    // already confirmed a selection and re-clicked Save.
+    if (repeatRule && stagedLocations.length > 0 && !carryPromptOpen) {
+      setCarryLocationIndexes(new Set(stagedLocations.map((_, i) => i)))
+      setCarryPromptOpen(true)
+      return
+    }
+
+    await doSubmit()
+  }
+
+  async function doSubmit() {
     setSaving(true)
 
     const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -535,6 +562,8 @@ export default function CreateTodoForm() {
         priority: form.priority,
         due_date: form.dueDate.trim() === '' ? null : form.dueDate,
         done_date: effectiveDoneDate,
+        repeat_rule: repeatRule,
+        repeat_occurrence_index: repeatRule ? 1 : null,
       })
       .select('id')
       .single()
@@ -571,12 +600,14 @@ export default function CreateTodoForm() {
     // (kind = 'reference' is allowed by migration 025's RLS policy).
     if (stagedLocations.length > 0) {
       const who = ownerName ?? userData.user.email ?? 'You'
-      for (const entry of stagedLocations) {
+      for (let i = 0; i < stagedLocations.length; i++) {
+        const entry = stagedLocations[i]
         const result = await insertAttachmentReference({
           requestId: newTodo.id,
           uploadedByLabel: who,
           referenceNote: entry.description === '' ? null : entry.description,
           referenceUrl: entry.location === '' ? null : entry.location,
+          carryIntoRepeats: carryLocationIndexes.has(i),
         })
         if (!result) {
           setSaving(false)
@@ -792,6 +823,24 @@ export default function CreateTodoForm() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — hidden entirely for free
+                tier, same posture as Locations' own tier gate above. Also
+                gated on todoDatesEnabled: with Due/Done Dates turned off
+                there's no Due Date field for Repeat to anchor generation on
+                (Jim's own confirmed rule — "the Due Date should be the
+                determinant"). Greyed with its own reason once Due/Done Dates
+                is on but no Due Date has been entered yet. */}
+            {tier === 'subscriber' && todoDatesEnabled && (
+              <RepeatControl
+                rule={repeatRule}
+                dueDate={form.dueDate}
+                onSave={setRepeatRule}
+                onRemove={() => setRepeatRule(null)}
+                disabled={form.dueDate.trim() === ''}
+                disabledReason="Please select a Due Date before adding a Repeat."
+              />
             )}
 
             {/* Category row — only when the account has turned Private
@@ -1231,6 +1280,65 @@ export default function CreateTodoForm() {
                 </p>
               </div>
               {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
+            </div>
+          </>
+        )}
+
+        {/* Repeat carry-forward prompt — same pattern and wording as
+            CreateRequestForm.tsx's own copy, asking about staged Locations
+            instead of staged Attachments. Shown once, at Save, only when a
+            Repeat is set and there are staged Locations to ask about. */}
+        {carryPromptOpen && (
+          <>
+            <div className="scrim" onClick={() => setCarryPromptOpen(false)} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="carry-title">
+              <div className="modalhead">
+                <p className="modal-title" id="carry-title">
+                  Carry Locations into Repeats
+                </p>
+                <div className="modalacts">
+                  <button className="btn-secondary" type="button" onClick={() => setCarryPromptOpen(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      setCarryPromptOpen(false)
+                      doSubmit()
+                    }}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+              <p className="checknote" style={{ marginBottom: 10 }}>
+                Dialog is not carried into repeated ToDos. Select any Locations that should be
+                included with each repeat.
+              </p>
+              <div className="dlgstaged">
+                {stagedLocations.map((entry, i) => (
+                  <label
+                    className="checkrow"
+                    key={i}
+                    style={{ marginBottom: i === stagedLocations.length - 1 ? 0 : 8 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={carryLocationIndexes.has(i)}
+                      onChange={(e) =>
+                        setCarryLocationIndexes((current) => {
+                          const next = new Set(current)
+                          if (e.target.checked) next.add(i)
+                          else next.delete(i)
+                          return next
+                        })
+                      }
+                    />
+                    <span className="checktext">{entry.description || entry.location}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </>
         )}

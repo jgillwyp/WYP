@@ -8,6 +8,7 @@ import AttachmentsPanel from './AttachmentsPanel'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 import { isReminderEligible } from '@/lib/email'
+import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
  * Response Detail (§6.28) — converted from
@@ -150,6 +151,9 @@ type ReceivedDetailPayload = {
   // recipient's own archive state for this Request, as loaded. See the
   // matching state var below.
   received_archived_at: string | null
+  // Repeat, read-only recipient footnote (Jim's own design, 2026-08-21,
+  // migration 039). See RequestResponseForm.tsx's identical field comment.
+  repeat_rule: RepeatRule | null
   dialog: DialogEntry[]
 }
 
@@ -786,6 +790,11 @@ export default function ResponseDetailForm() {
                   {data.owner_request_time_enabled && data.due_time && (
                     <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>
                   )}
+                  {/* Repeat footnote marker — see RequestResponseForm.tsx's
+                      identical addition for the full reasoning. */}
+                  {data.repeat_rule && (
+                    <sup className="repeatmark" aria-hidden="true">*</sup>
+                  )}
                 </span>
               </div>
             </div>
@@ -980,6 +989,15 @@ export default function ResponseDetailForm() {
             {sendError && (
               <p className="ferror" role="alert" style={{ margin: '0 var(--pad) 12px' }}>
                 {sendError}
+              </p>
+            )}
+
+            {/* Repeat footnote — see RequestResponseForm.tsx's identical
+                addition, including Jim's own "at the bottom, not above
+                Dialog" placement correction. */}
+            {data.repeat_rule && data.due_date && (
+              <p className="subnote" style={{ margin: '0 var(--pad) 12px' }}>
+                * This Request repeats — {describeRepeat(data.repeat_rule, data.due_date)}.
               </p>
             )}
           </form>

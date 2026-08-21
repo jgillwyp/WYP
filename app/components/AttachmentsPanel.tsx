@@ -72,6 +72,15 @@ type Props = {
    * there would double it. Default false (assume a `.form` ancestor).
    * 2026-08-14, owner-reported misalignment fix. */
   standalone?: boolean
+  /** True when this Request/ToDo currently has a Repeat set — shows a small
+   * "Repeat" checkbox on each row, letting the owner pick which existing
+   * Attachments/Locations should carry forward into future occurrences
+   * (migration 038, 2026-08-21). Jim's own recommendation, confirmed:
+   * surfaced here rather than only at initial Send, since Request Detail/
+   * ToDo Detail already have real rows to toggle. Owner-only — never shown
+   * on the two recipient-facing call sites (Request Response, Response
+   * Detail), which never pass this prop. */
+  showCarryToggle?: boolean
 }
 
 const emptyLabel = { file: 'Attachments', reference: 'Locations' } as const
@@ -87,6 +96,7 @@ export default function AttachmentsPanel({
   currentUserId,
   ownerLabel,
   standalone = false,
+  showCarryToggle = false,
 }: Props) {
   const [rows, setRows] = useState<AttachmentRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -210,6 +220,16 @@ export default function AttachmentsPanel({
       else setError('Could not remove this attachment.')
     } catch {
       setError('Could not remove this attachment.')
+    }
+  }
+
+  async function handleToggleCarry(id: string, checked: boolean) {
+    const { updateCarryIntoRepeats } = await import('@/lib/attachmentsClient')
+    const ok = await updateCarryIntoRepeats(id, checked)
+    if (ok) {
+      setRows((current) => current.map((r) => (r.id === id ? { ...r, carry_into_repeats: checked } : r)))
+    } else {
+      setError('Could not update the Repeat selection.')
     }
   }
 
@@ -403,6 +423,16 @@ export default function AttachmentsPanel({
                         {isOwner ? ` — ${row.uploaded_by_label}` : ''})
                       </span>
                     </span>
+                    {showCarryToggle && (
+                      <label className="carrytoggle" title="Carry this Attachment into future Repeats">
+                        <input
+                          type="checkbox"
+                          checked={!!row.carry_into_repeats}
+                          onChange={(e) => handleToggleCarry(row.id, e.target.checked)}
+                        />
+                        <span>Repeat</span>
+                      </label>
+                    )}
                     {canDelete && (
                       <button
                         className="attremove"
@@ -441,6 +471,16 @@ export default function AttachmentsPanel({
                     <button className="linkbtn" type="button" onClick={() => handleCopyLocation(row.id, url)}>
                       {copiedId === row.id ? 'Copied' : 'Copy'}
                     </button>
+                  )}
+                  {showCarryToggle && (
+                    <label className="carrytoggle" title="Carry this Location into future Repeats">
+                      <input
+                        type="checkbox"
+                        checked={!!row.carry_into_repeats}
+                        onChange={(e) => handleToggleCarry(row.id, e.target.checked)}
+                      />
+                      <span>Repeat</span>
+                    </label>
                   )}
                   {canDelete && (
                     <button

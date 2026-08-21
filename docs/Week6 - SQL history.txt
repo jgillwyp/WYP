@@ -1371,3 +1371,393 @@ commit;
 --     and pronamespace = 'public'::regnamespace;
 --        -> pronargs should read 5 for both (was 4)
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 038 — Repeat feature (recurring Requests and ToDos)
+-- DRAFTED 2026-08-21 — NOT YET CONFIRMED RUN.
+--
+-- Jim's own recurrence-method design ("WYP Repeat design.docx", uploaded
+-- 2026-08-21) — a Request or ToDo can repeat on a Day/Week/Month/Year
+-- schedule, anchored to its own Due Date (never Done Date — Jim's explicit
+-- instruction: "the Due Date should be the determinant as to the generation
+-- of the next Request"). See app/src/lib/repeatRule.ts for the pure
+-- recurrence math and descriptive-text builder shared by every screen.
+--
+-- requests.repeat_rule (jsonb) — the whole RepeatRule object (type,
+-- interval, weekdaysOnly, monthMode, stopType, stopDate, stopCount — see
+-- repeatRule.ts's own RepeatRule type for the exact shape). Null means "not
+-- repeating." Copied verbatim onto every generated successor so the chain
+-- continues without re-reading the original.
+--
+-- requests.repeat_occurrence_index (integer) — 1-based position in the
+-- series; the very first Request/ToDo (the one the user configured Repeat
+-- on) is 1, its first generated successor is 2, and so on. Only meaningful
+-- when repeat_rule is set; needed for the "stops after N occurrences"
+-- condition, which can't be answered by counting rows — nothing links a
+-- series together beyond each row's own repeat_rule copy (no series id,
+-- since nothing in this feature needs to list a whole series, only ever
+-- the current and next occurrence).
+--
+-- requests.repeat_next_generated_at (timestamptz) — idempotency marker, same
+-- convention as reminder_sent_at/overdue_notified_at (migration 032): set by
+-- the cron job (app/api/cron/tick/route.ts, new Phase E) the moment it has
+-- processed this row's own Due-Date-arrival for repeat-generation purposes,
+-- whether that produced a successor or hit a stop condition. Prevents a
+-- second cron run in the same hour from double-inserting.
+--
+-- attachments.carry_into_repeats (boolean) — Jim's own design for carrying
+-- Attachments/Locations into a repeating series: at Send/Save time (or
+-- later, via Edit Repeat), the sender is shown the existing Attachments/
+-- Locations list with checkboxes and told Dialog is never carried forward,
+-- only whichever items they check. A boolean on the row itself, not a
+-- separate join table or an array column on requests — the cron job's own
+-- generation step just selects `where carry_into_repeats = true` on the
+-- occurrence it's about to supersede, and stamps the same flag on every
+-- duplicate it creates, so the selection propagates down the whole chain
+-- with no re-asking.
+--
+-- Real 'file' Attachments are duplicated as a fresh Storage object per
+-- generated occurrence (app/api/cron/tick/route.ts uses storage.copy()),
+-- never shared across multiple `attachments` rows — matches this table's
+-- existing hard-delete-per-row model (migration 025's own header comment)
+-- and avoids the complexity of reference-counted deletes. Accepted
+-- trade-off, confirmed with Jim: an unbounded "every day, stops never"
+-- repeat with a carried file keeps duplicating that file's bytes into every
+-- occurrence indefinitely — a real but currently acceptable storage cost at
+-- this app's testing scale.
+--
+-- Archived Requests/ToDos are exempt from repeat generation, same posture
+-- CLAUDE.md/the cron system already takes for every other notification
+-- (migration 032's own "archived items are exempt from every notification"
+-- rule) — an archived row's Repeat control is already greyed/non-modifiable
+-- in the UI (Jim's own spec), so the cron job honors that by simply never
+-- generating a successor for an archived row, rather than generating one
+-- silently behind the scenes.
+-- ============================================================================
+
+begin;
+
+alter table public.requests
+  add column if not exists repeat_rule jsonb,
+  add column if not exists repeat_occurrence_index integer,
+  add column if not exists repeat_next_generated_at timestamptz;
+
+comment on column public.requests.repeat_rule is
+  'Recurrence rule (Day/Week/Month/Year + interval + stop condition), or null if this Request/ToDo does not repeat. Shape defined by RepeatRule in app/src/lib/repeatRule.ts. Copied verbatim onto every generated successor.';
+comment on column public.requests.repeat_occurrence_index is
+  '1-based position in this row''s own repeat series (1 = the original, 2 = its first generated successor, ...). Only meaningful when repeat_rule is set.';
+comment on column public.requests.repeat_next_generated_at is
+  'Idempotency marker for the cron job''s Repeat-generation phase — set once this row''s own Due Date has been processed (successor generated, or a stop condition was hit), whether or not a new row was actually inserted.';
+
+alter table public.attachments
+  add column if not exists carry_into_repeats boolean not null default false;
+
+comment on column public.attachments.carry_into_repeats is
+  'Set at Send/Save time (or later via Edit Repeat) when the sender selects this Attachment/Location to carry into every future occurrence of a repeating Request/ToDo. The cron job duplicates every row with this flag set onto each newly generated occurrence, propagating the flag onto the duplicate too, so the selection continues down the whole chain without re-asking.';
+
+-- repeat_rule/repeat_occurrence_index/repeat_next_generated_at need no new
+-- RLS/grants — plain requests columns, already covered by that table's
+-- existing owner-scoped policies (migration 002/003).
+--
+-- carry_into_repeats is different: migration 025 deliberately created NO
+-- update policy on attachments at all ("an attachment is added or removed,
+-- never edited in place" — that migration's own header comment), so a
+-- direct client toggle of this new column would silently fail RLS with no
+-- policy to admit it. Rather than open a general UPDATE (which would
+-- contradict that same append-only design), this adds a narrow one scoped
+-- to a single column — same two-part shape (RLS policy + column-level
+-- GRANT) migration 013 already established for profiles.time_zone: the RLS
+-- policy admits an UPDATE on any row belonging to the caller's own
+-- Request/ToDo, and the GRANT then restricts that permission to touching
+-- only carry_into_repeats — an owner still cannot rename, resize, or
+-- otherwise edit an existing attachment in place.
+create policy "attachments: owners update carry_into_repeats"
+  on public.attachments for update to authenticated
+  using (request_id in (select id from public.requests where owner_id = auth.uid()))
+  with check (request_id in (select id from public.requests where owner_id = auth.uid()));
+
+grant update (carry_into_repeats) on public.attachments to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name, data_type from information_schema.columns
+--   where table_name = 'requests' and column_name like 'repeat_%';
+--        -> repeat_rule/jsonb, repeat_occurrence_index/integer,
+--           repeat_next_generated_at/timestamp with time zone
+--
+--   select column_name, data_type, column_default from information_schema.columns
+--   where table_name = 'attachments' and column_name = 'carry_into_repeats';
+--        -> boolean, default false
+--
+--   select grantee, privilege_type, column_name from information_schema.column_privileges
+--   where table_name = 'attachments' and column_name = 'carry_into_repeats';
+--        -> authenticated / UPDATE
+--
+-- Verify as a client, not here:
+--   await supabase.from('attachments').update({ carry_into_repeats: true }).eq('id', '<one of your own attachments>')
+--        -> succeeds
+--   await supabase.from('attachments').update({ file_name: 'renamed.pdf' }).eq('id', '<same row>')
+--        -> must FAIL/no-op: the column-level grant only covers carry_into_repeats
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 039 — repeat_rule exposed to the two recipient-facing read
+-- functions (drafted 2026-08-21, part of the same Repeat batch as migration
+-- 038).
+--
+-- Recipient visibility, per Jim's own confirmed design: "It would be good to
+-- show the recurrence to the Recipient as non-editable information... at the
+-- bottom, maybe as a 'footnote' to the Due Date." Read-only — no write
+-- function here gains a p_repeat_rule parameter; a Recipient never sets or
+-- changes a Repeat, only sees it.
+--
+-- Both target functions already return jsonb (get_request_by_token,
+-- get_received_request), so this is a plain create-or-replace with no
+-- OUT-parameter-shape hazard — the migration-011/020 precedent this file's
+-- own earlier entries already established, and the opposite of migration
+-- 017/021/027's own RETURNS TABLE drop-then-recreate requirement.
+-- get_received_requests() (RETURNS TABLE, Main Screen's own list view) is
+-- deliberately NOT touched — there is no Repeat indicator anywhere in a list
+-- row, only on the Detail-shaped screens (Request Response, Response
+-- Detail), matching how reminder_enabled/overdue_reminder_enabled were
+-- scoped in migrations 036/037.
+--
+-- Bodies below are copied from migration 037's own text (Week6 - SQL
+-- history.txt, "Reminders until Done" batch) with only the repeat_rule
+-- addition — every other field, join, and check is unchanged.
+-- ============================================================================
+
+begin;
+
+-- ----------------------------------------------------------------------------
+-- get_request_by_token — add repeat_rule to the jsonb payload.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.overdue_reminder_enabled, r.repeat_rule,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'repeat_rule', v_request.repeat_rule,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_received_request — same addition, signed-in recipient path.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at, r.reminder_enabled, r.overdue_reminder_enabled, r.repeat_rule,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'reminder_enabled', v_request.reminder_enabled,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'repeat_rule', v_request.repeat_rule,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select pg_get_function_result('public.get_request_by_token'::regproc);
+--        -> jsonb (unchanged signature, body only)
+--
+-- Verify as a client, not here:
+--   Open an existing /r/[token] link for a Request that has a Repeat set —
+--   payload.repeat_rule should be the same object shape RepeatControl.tsx
+--   already writes (type/interval/weekdaysOnly/monthMode/stopType/stopDate/
+--   stopCount), not null.
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 040 — repeat_rule added to get_received_requests(), for the
+-- "Repeats: ..." print-report line on Main Screen's and Archive's own
+-- Received-type print reports (both already reuse this one RPC). Drafted
+-- 2026-08-21, same batch as migration 039.
+--
+-- RETURNS TABLE, unlike migration 039's two jsonb functions — the
+-- migration-017/021/027 precedent applies here (a RETURNS TABLE function's
+-- OUT-parameter row shape cannot be changed by create-or-replace; drop-then-
+-- create is required). Body copied verbatim from migration 027's own text
+-- (Week5 - SQL history.txt) with only the repeat_rule addition.
+-- ============================================================================
+
+begin;
+
+drop function if exists public.get_received_requests();
+
+create function public.get_received_requests()
+returns table (
+  id uuid,
+  description text,
+  due_date date,
+  due_time time,
+  done_date date,
+  created_at timestamptz,
+  owner_name text,
+  owner_request_time_enabled boolean,
+  dialog_count bigint,
+  attachment_count bigint,
+  received_archived_at timestamptz,
+  repeat_rule jsonb
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' then
+    return; -- no email claim on the session; nothing to match
+  end if;
+
+  return query
+    select
+      r.id, r.description, r.due_date, r.due_time, r.done_date, r.created_at,
+      p.display_name as owner_name,
+      coalesce(p.request_time_enabled, true) as owner_request_time_enabled,
+      (select count(*) from public.dialog d where d.request_id = r.id) as dialog_count,
+      (select count(*) from public.attachments a where a.request_id = r.id and a.kind = 'file') as attachment_count,
+      r.received_archived_at,
+      r.repeat_rule
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where lower(trim(c.email)) = v_email
+    order by r.due_date desc nulls last;
+end;
+$$;
+
+revoke all on function public.get_received_requests() from public;
+grant execute on function public.get_received_requests() to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select prosrc from pg_proc where proname = 'get_received_requests';
+--        -> should show repeat_rule in both the returns table and the
+--           select list
+--
+-- Verify as a client, not here:
+--   Open Main Screen or Archive's own Received-type print report for a
+--   Received Request whose issuer has set a Repeat — the printed record
+--   should show a "Repeats: ..." line preceding Dialog.
+-- ============================================================================

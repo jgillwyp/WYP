@@ -6,6 +6,153 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-21 — Repeat (recurrence) for Requests and ToDos, built end to end
+
+Owner's own design doc (`WYP Repeat design.docx`), refined through a round of
+clarifying questions before any code was written. Full feature, not a
+mockup-first pass — Repeat touches live data (a new column, a cron phase,
+Storage duplication) more than it touches screen layout, so the usual
+mockup-then-convert sequencing was set aside for this batch; flagged below.
+
+**Data model.** `requests.repeat_rule jsonb` (migration — see
+`docs/Week6 - SQL history.txt`), shared by both Requests and ToDos (Owner:
+"ToDos are included"). Shape: `{ type: 'day'|'week'|'month'|'year',
+interval, weekdaysOnly?, monthMode?: 'day'|'weekday', stopType:
+'never'|'on'|'after', stopDate?, stopCount? }`. No separate series table —
+each generated row is an ordinary `requests` row, linked only by
+`repeat_occurrence_index` (1-based; the original Request/ToDo is always 1).
+`requests.repeat_next_generated_at` is the idempotency column, same
+pattern as `reminder_sent_at`/`overdue_notified_at` — set once a row's own
+Due-Date-arrival has been processed for generation, whether or not a
+successor was actually created (a stopped series still needs to mark
+itself done, or the cron would re-evaluate it every hour forever).
+
+**Generation trigger — Due Date, not Done Date (owner's explicit
+correction).** The cron's new Phase E fires once, at the owner's own local
+midnight on the calendar day equal to a row's own `due_date` — deliberately
+distinct from Phase B/C's "day after" Overdue trigger. The query has no
+`done_date` filter at all, unlike every other cron phase — a Request left
+incomplete still spawns its next occurrence on schedule, per the owner's
+own words: "the Due Date should be the determinant... explicitly not Done
+Date."
+
+**Attachments/Locations carry-forward.** `attachments.carry_into_repeats
+boolean not null default false` (its own migration, narrow UPDATE policy +
+column grant, since migration 025 otherwise has no UPDATE policy on this
+table at all). At Send/Save time, if a Repeat is set and staged
+Attachments/Locations exist, a modal prompts: "Dialogs are not included
+with Request Repeats, Attachments can be. Please select any Attachments to
+use for Repeated Requests." (owner's own wording, used verbatim) — built on
+Create Request and Create ToDo. A real `kind='file'` attachment carried
+into a generated occurrence gets a **duplicated** Storage object (fresh
+`randomUUID()`-based path under the new row's own id), not a shared
+reference — avoids a delete on one occurrence silently breaking another's
+file. Dialog is never carried, by design — each occurrence starts with an
+empty thread.
+
+**Mid-series edits, forward-only.** Editing a generated occurrence's own
+Repeat rule (or removing it) only ever affects Requests/ToDos generated
+*after* that edit — the already-existing chain up to that point is
+untouched, since each row's `repeat_rule` is its own independent copy, not
+a pointer to a shared series definition. Request Detail and ToDo Detail
+both gained a Remove option in the Edit Repeat modal.
+
+**Recipient-facing display — read-only, asterisk + bottom footnote.**
+Request Response and Response Detail show a plain `*` superscript
+(`.repeatmark`, brand-blue, §6.42) immediately after the Due Date/Time
+value, with the actual descriptive line moved to the very bottom of the
+form — **owner's own correction mid-build**: "the placement of the Repeats
+information can be at the bottom, not above Dialog." Migration 039 (jsonb
+functions, plain create-or-replace — see that file's own header comment
+for why this is safe unlike the RETURNS TABLE case below) exposes
+`repeat_rule` on `get_request_by_token`/`get_received_request` for this.
+Nothing on either recipient screen can edit the rule — Repeat is entirely
+sender-controlled.
+
+**Word-wrap rule for the descriptive text — comma-phrase boundaries only.**
+Owner: "word wrapping if needed should be on a phrase basis (between
+commas)." `describeRepeat(rule, dueDate)` (`app/src/lib/repeatRule.ts`)
+joins each clause with a comma followed by a non-breaking space, so a
+browser's own line-breaking algorithm can only wrap between phrases, never
+mid-phrase — this is the single function every consumer (band, footnote,
+print) calls, so the rule only had to be gotten right once.
+
+**Entitlements — hidden, not locked.** Repeat gated on
+`tier === 'subscriber'` the same way Attachments already is, but rendered
+as `{tier === 'subscriber' && <RepeatControl .../>}` rather than
+`.is-locked` — owner: "Add Repeat" should be hidden entirely for a
+free-tier account, not shown-and-blocked. Matches the existing Entitlements
+posture (rights come from the issuer, checked live, never snapshotted).
+
+**Print Reports.** A "Repeats: ..." line (`PrintRepeatLine`, duplicated
+per-file per this codebase's established convention) precedes the Dialog
+line on every print report that shows Sent/Received/ToDo detail: Create
+Request's preview, Request Detail, Response Detail, Main Screen's three
+sections, and Archive's three sections. The Received-side print report
+needed its own migration (040, `docs/Week6 - SQL history.txt`) —
+`get_received_requests()` is a `RETURNS TABLE` function, so adding
+`repeat_rule` required the established drop-then-recreate pattern
+(migrations 017/021/027 precedent), not a plain create-or-replace.
+
+**Flagged, not silently skipped: no mockup reflects any of this.** Every
+screen above was built directly in its live component — none of the six
+source mockups (`WYP_create_request_palette1.html`,
+`WYP_request_detail_palette1.html`, `WYP_todo_detail_palette1.html`,
+`WYP_create_todo_palette1.html`, `WYP_respond_to_request_palette1.html`,
+`WYP_response_detail_palette1.html`) were touched. `design/README.md`'s own
+proposed-components table should gain §6.42 (`.repeatmark`) and §6.43
+(RepeatControl band/modal) rows recording this gap explicitly, matching the
+project's established "flag, don't silently skip" convention used
+throughout this file for prior batches (e.g. the Reminder-checkbox and
+Search-mode batches).
+
+\---
+
+## 2026-08-20 — Desktop PWA icon launching to a stale magic-link URL, investigated — no app bug found
+
+Owner-reported: clicking the desktop icon after logging out landed on
+`wouldyouplease.com/#access_token=...&type=magiclink` — a live-looking,
+recently-issued magic-link fragment — instead of a fresh page, and showed
+Hostinger's generic placeholder page on first paint (fixed by a manual
+Reload). Investigated rather than patched blind, per this project's usual
+approach.
+
+Ruled out via direct source inspection, not guessing:
+
+* `app/manifest.ts`'s `start_url` is a plain `'/'` — the installed PWA has
+  no fixed/stale URL baked into its own launch target.
+* `public/sw.js` does zero caching (`event.respondWith(fetch(event.request))`
+  on every request, confirmed by reading the file) — cannot explain a
+  different page appearing on first load vs. reload for the same URL.
+* `@supabase/auth-js` (installed version, `node_modules`) does clear
+  `window.location.hash` itself once it finishes processing a magic-link
+  session — confirmed by reading `GoTrueClient.js` directly, not assumed.
+  A normal, isolated navigation should not leave that fragment sitting in
+  the address bar.
+
+That combination pointed at a cross-window/tab issue rather than anything
+in this codebase: Edge/Chrome will hand an already-open tab's *current*
+URL over to an installed PWA's window (via its own "open in app"
+window-reuse behavior) rather than giving the app a fresh navigation to
+the manifest's `start_url`. The owner confirmed he had a regular,
+full-sized browser tab open on the same origin at the time — that tab was
+still sitting on the magic-link URL, and the app window inherited it
+rather than launching clean.
+
+**Confirmed by the owner's own test**: closing both the regular tab and
+the app window completely, then clicking the desktop icon with nothing
+else open on wouldyouplease.com, landed cleanly on the landing page with
+no stale hash. No code change made — the fix is behavioral (don't leave a
+tab open on the site when the app window is also in use), not a bug in
+`app/manifest.ts`, `public/sw.js`, `app/page.tsx`, or supabase-js's own
+session handling. The separate "Hostinger generic page on first paint"
+symptom remains unexplained by anything in this codebase and was flagged
+to the owner as a DNS/hosting question (Vercel's Domains panel and
+Hostinger's DNS zone for wouldyouplease.com) rather than assumed to share
+the same root cause — not independently confirmed either way.
+
+\---
+
 ## 2026-08-20 — "Reminders until Done" banner: two-checkbox Reminder control replacing the single Reminder checkbox, plus a new Overdue-notification opt-out — migration 037
 
 Owner pasted two mockup screenshots (Create Request and Response Detail)

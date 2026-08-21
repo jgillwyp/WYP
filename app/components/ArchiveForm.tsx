@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
  * Archive (2026-08-14) — live conversion of
@@ -107,6 +108,9 @@ type SentCandidate = {
   // count-embed technique as MainScreen.tsx's SentRow.
   dialog: { count: number }[] | null
   attachments: { count: number }[] | null
+  // repeat_rule — migration 040, alongside this batch's other Repeat print
+  // additions.
+  repeat_rule: RepeatRule | null
 }
 
 type ReceivedCandidate = {
@@ -122,6 +126,7 @@ type ReceivedCandidate = {
   // ReceivedCandidate just hadn't picked them up yet.
   dialog_count: number
   attachment_count: number
+  repeat_rule: RepeatRule | null
 }
 
 type TodoCandidate = {
@@ -135,6 +140,7 @@ type TodoCandidate = {
   // Dialog only — ToDos' own Locations have no icon of their own yet,
   // matching MainScreen.tsx's TodoRow (no attachments field there either).
   dialog: { count: number }[] | null
+  repeat_rule: RepeatRule | null
 }
 
 const PRIORITY_LABEL: Record<number, string> = { 1: 'ASAP', 2: 'SOON', 3: 'LATER' }
@@ -165,6 +171,17 @@ type PrintAttachmentEntry = {
 }
 type PrintDetail = { dialog: PrintDialogEntry[]; attachments: PrintAttachmentEntry[] }
 type PrintDetailMap = Record<string, PrintDetail>
+
+// "Repeats: ..." print line — same shared describeRepeat() builder every
+// consumer uses; see MainScreen.tsx's identical copy.
+function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: string | null }) {
+  if (!rule || !dueDate) return null
+  return (
+    <div className="prepeat">
+      <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
+    </div>
+  )
+}
 
 function PrintDialogList({ entries }: { entries: PrintDialogEntry[] }) {
   if (entries.length === 0) return null
@@ -622,7 +639,7 @@ export default function ArchiveForm() {
       const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count)')
+          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count), repeat_rule')
           .not('contact_id', 'is', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +received_archived_at via
@@ -633,7 +650,7 @@ export default function ArchiveForm() {
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, created_at, archived_at, dialog(count)')
+          .select('id, description, priority, due_date, done_date, created_at, archived_at, dialog(count), repeat_rule')
           .is('contact_id', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
       ])
@@ -678,6 +695,7 @@ export default function ArchiveForm() {
     // above. attachmentCount is always 0 for a ToDo row.
     dialogCount: number
     attachmentCount: number
+    repeatRule: RepeatRule | null
   }
 
   const rows: Row[] = useMemo(() => {
@@ -698,6 +716,7 @@ export default function ArchiveForm() {
           priority: null,
           dialogCount: r.dialog?.[0]?.count ?? 0,
           attachmentCount: r.attachments?.[0]?.count ?? 0,
+          repeatRule: r.repeat_rule,
         }))
     }
     if (currentType === 'received') {
@@ -717,6 +736,7 @@ export default function ArchiveForm() {
           priority: null,
           dialogCount: r.dialog_count,
           attachmentCount: r.attachment_count,
+          repeatRule: r.repeat_rule,
         }))
     }
     // 2026-08-17 — due/date populated (previously always null): Archive's
@@ -739,6 +759,7 @@ export default function ArchiveForm() {
         priority: t.priority ?? null,
         dialogCount: t.dialog?.[0]?.count ?? 0,
         attachmentCount: 0,
+        repeatRule: t.repeat_rule,
       }))
   }, [currentType, sentData, receivedData, todoData])
 
@@ -1405,6 +1426,7 @@ export default function ArchiveForm() {
                         </div>
                       </>
                     )}
+                    <PrintRepeatLine rule={r.repeatRule} dueDate={r.dueISO} />
                     {detail && <PrintDialogList entries={detail.dialog} />}
                     {detail && (
                       <PrintAttachmentList entries={detail.attachments} heading={currentType === 'todos' ? 'Locations' : 'Attachments'} />

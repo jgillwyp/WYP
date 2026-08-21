@@ -153,4 +153,10 @@ export type AttachmentRow = {
   /** Signed Storage URL, present only on 'file' rows, only from
    * /api/attachments/list — never persisted, always generated on demand. */
   url?: string
+  /** Repeat carry-forward selection (migration 038, 2026-08-21) — whether
+   * this Attachment/Location should be duplicated onto each future
+   * occurrence of a repeating Request/ToDo. Only ever shown/editable when
+   * the item actually has a Repeat set — see AttachmentsPanel's own
+   * showCarryToggle prop. */
+  carry_into_repeats?: boolean
 }

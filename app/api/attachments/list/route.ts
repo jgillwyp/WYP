@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   const { data: rows, error } = await admin
     .from('attachments')
     .select(
-      'id, kind, file_name, size_bytes, mime_type, reference_url, reference_note, uploaded_by, uploaded_by_label, created_at, storage_path'
+      'id, kind, file_name, size_bytes, mime_type, reference_url, reference_note, uploaded_by, uploaded_by_label, created_at, storage_path, carry_into_repeats'
     )
     .eq('request_id', permission.requestId)
     .is('deleted_at', null)
@@ -77,6 +77,7 @@ export async function POST(request: Request) {
         uploaded_by_label: row.uploaded_by_label,
         created_at: row.created_at,
         url,
+        carry_into_repeats: row.carry_into_repeats,
       }
     })
   )

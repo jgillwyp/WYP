@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import RepeatControl from './RepeatControl'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
+import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_ITEM,
@@ -225,6 +227,18 @@ function PrintAttachmentList({ files }: { files: File[] }) {
   )
 }
 
+// "Repeats: ..." print line (Jim's own instruction, 2026-08-21, "preceding
+// the Dialog") — reuses the same describeRepeat() builder the live Repeat
+// band uses, so print can never say something different from the screen.
+function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: string }) {
+  if (!rule || !dueDate) return null
+  return (
+    <div className="prepeat">
+      <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
+    </div>
+  )
+}
+
 // Voice dictation for Description (2026-08-19) — owner: "I see it as a good
 // option for entry of the Description during a Create... it could be a
 // subscription option." Browser-native (Web Speech API — Chrome/Edge/Safari
@@ -333,6 +347,21 @@ export default function CreateRequestForm() {
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [attachError, setAttachError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Repeat (Jim's own recurrence-method design, 2026-08-21) — staged as a
+  // plain RepeatRule | null, same "hold as client-side draft state until
+  // Send produces a real id" pattern as dialogEntries/stagedFiles above.
+  // Hidden entirely for free tier (not shown .is-locked) — same posture as
+  // Attachments' own owner_tier === 'subscriber' gate, confirmed with Jim:
+  // "the 'Add Repeat' is hidden at this point." The carry-forward prompt
+  // (carryPromptOpen/carryFileIndexes) only appears at Send, and only when
+  // a repeat rule is set AND there are staged Attachments to ask about —
+  // Jim's own instruction: "prompt the user as to whether or not the
+  // attachment(s) should be used for Repeated Requests," told plainly that
+  // Dialog is never carried forward. Defaults every staged file to checked.
+  const [repeatRule, setRepeatRule] = useState<RepeatRule | null>(null)
+  const [carryPromptOpen, setCarryPromptOpen] = useState(false)
+  const [carryFileIndexes, setCarryFileIndexes] = useState<Set<number>>(new Set())
 
   // Voice dictation for Description (2026-08-19) — see the module-level
   // comment above getSpeechRecognition() for the full reasoning. dictating
@@ -575,15 +604,20 @@ export default function CreateRequestForm() {
     setStagedFiles((files) => files.filter((_, i) => i !== index))
   }
 
-  async function uploadStagedFiles(requestId: string) {
+  async function uploadStagedFiles(requestId: string, carryIndexes: Set<number>) {
     const { data: sessionData } = await supabase.auth.getSession()
     const accessToken = sessionData.session?.access_token
     if (!accessToken) throw new Error('Your session has expired.')
 
-    for (const file of stagedFiles) {
+    for (let i = 0; i < stagedFiles.length; i++) {
+      const file = stagedFiles[i]
       const body = new FormData()
       body.append('file', file)
       body.append('requestId', requestId)
+      // Repeat carry-forward selection (Jim's own design, 2026-08-21) — only
+      // meaningful when repeatRule is set, but harmless to send either way;
+      // the upload route just writes it straight onto the new row.
+      body.append('carryIntoRepeats', carryIndexes.has(i) ? 'true' : 'false')
       const res = await fetch('/api/attachments/upload', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -812,6 +846,22 @@ export default function CreateRequestForm() {
 
     if (!validate()) return
 
+    // Repeat carry-forward gate — only interrupts Send once, and only when
+    // there's something for it to ask about (Jim's own spec is silent on
+    // what happens with no staged Attachments, so this simply skips
+    // straight to doSubmit in that case rather than showing an empty
+    // picker). carryPromptOpen itself guards against re-showing the prompt
+    // after the user has already confirmed a selection and re-clicked Send.
+    if (repeatRule && stagedFiles.length > 0 && !carryPromptOpen) {
+      setCarryFileIndexes(new Set(stagedFiles.map((_, i) => i)))
+      setCarryPromptOpen(true)
+      return
+    }
+
+    await doSubmit()
+  }
+
+  async function doSubmit() {
     setSaving(true)
 
     // Same pattern as AddContactForm: owner_id is set here to populate the
@@ -835,6 +885,8 @@ export default function CreateRequestForm() {
         due_time: form.dueTime.trim() === '' ? null : form.dueTime,
         reminder_enabled: form.reminderEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
+        repeat_rule: repeatRule,
+        repeat_occurrence_index: repeatRule ? 1 : null,
       })
       .select('id')
       .single()
@@ -879,7 +931,7 @@ export default function CreateRequestForm() {
     // is the only path that can create a kind = 'file' row (migration 025).
     if (stagedFiles.length > 0) {
       try {
-        await uploadStagedFiles(newRequest.id)
+        await uploadStagedFiles(newRequest.id, carryFileIndexes)
       } catch (err) {
         setSaving(false)
         setError(
@@ -1136,6 +1188,20 @@ export default function CreateRequestForm() {
               )}
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
+
+            {/* Repeat (§6.42 PROPOSED) — hidden entirely for free tier, same
+                posture as Attachments' own owner_tier gate. Greyed until a
+                Due Date is entered — Jim's own spec. */}
+            {tier === 'subscriber' && (
+              <RepeatControl
+                rule={repeatRule}
+                dueDate={form.dueDate}
+                onSave={setRepeatRule}
+                onRemove={() => setRepeatRule(null)}
+                disabled={form.dueDate.trim() === ''}
+                disabledReason="Please select a Due Date before adding a Repeat."
+              />
+            )}
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). Off by default:
@@ -1540,6 +1606,66 @@ export default function CreateRequestForm() {
             </div>
           </>
         )}
+
+        {/* Repeat carry-forward prompt — Jim's own design, 2026-08-21:
+            shown once, at Send, only when a Repeat is set and there are
+            staged Attachments to ask about. Continue re-submits the same
+            form; Cancel backs out of Send entirely (does not clear the
+            Repeat rule or the staged files) so the user can reconsider. */}
+        {carryPromptOpen && (
+          <>
+            <div className="scrim" onClick={() => setCarryPromptOpen(false)} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="carry-title">
+              <div className="modalhead">
+                <p className="modal-title" id="carry-title">
+                  Carry Attachments into Repeats
+                </p>
+                <div className="modalacts">
+                  <button className="btn-secondary" type="button" onClick={() => setCarryPromptOpen(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      setCarryPromptOpen(false)
+                      doSubmit()
+                    }}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+              <p className="checknote" style={{ marginBottom: 10 }}>
+                Dialog is not carried into repeated Requests. Select any Attachments that should be
+                included with each repeat.
+              </p>
+              <div className="dlgstaged">
+                {stagedFiles.map((f, i) => (
+                  <label
+                    className="checkrow"
+                    key={i}
+                    style={{ marginBottom: i === stagedFiles.length - 1 ? 0 : 8 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={carryFileIndexes.has(i)}
+                      onChange={(e) =>
+                        setCarryFileIndexes((current) => {
+                          const next = new Set(current)
+                          if (e.target.checked) next.add(i)
+                          else next.delete(i)
+                          return next
+                        })
+                      }
+                    />
+                    <span className="checktext">{f.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Single-item print (2026-08-18) — brings this screen up to the same
@@ -1578,6 +1704,7 @@ export default function CreateRequestForm() {
                   {form.description}
                 </span>
               </div>
+              <PrintRepeatLine rule={repeatRule} dueDate={form.dueDate} />
               <PrintDialogList entries={dialogEntries} />
               <PrintAttachmentList files={stagedFiles} />
             </div>
