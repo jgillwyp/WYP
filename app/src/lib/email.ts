@@ -160,8 +160,21 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
     '<!DOCTYPE html>',
     '<html>',
     '<body style="margin:0; padding:0; background:#F4F5F7;">',
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="left" style="padding:24px 12px;">',
-    `<table role="presentation" width="1200" cellpadding="0" cellspacing="0" style="max-width:1200px; width:100%; background:${EMAIL_STRIP}; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
+    // Outer wrapper padding removed and the card's own HTML width attribute
+    // changed from a fixed "1200" to "100%", 2026-08-22, seventh same-day
+    // follow-up — Jim's own phone screenshots: the 24px/12px outer padding
+    // plus a fixed pixel width attribute meant several mobile mail apps
+    // rendered the full 1200px-wide table at its literal size and shrank
+    // the whole thing to fit the screen, leaving grey letterboxing down
+    // both sides that ate roughly a third of the usable width. A fixed
+    // HTML width attribute is what old desktop clients (Outlook's Word
+    // engine) fall back to when they ignore CSS, but it's exactly what
+    // defeats `max-width` on a client that *does* respect it — the
+    // standard fluid-table fix is to keep the pixel cap in `style` only
+    // and let the HTML attribute itself say "100%", so the table is
+    // genuinely fluid up to 1200px rather than fixed-then-scaled.
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="left" style="padding:0;">',
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:1200px; width:100%; background:${EMAIL_STRIP}; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
     // Logo width history: 220 -> 340 -> 480 -> 300px, 2026-08-22, fourth
     // same-day follow-up. 480px was itself the overcorrection — Jim's next
     // test called it "larger than desired" and flagged too much vertical
@@ -181,8 +194,12 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
     // directly address "too much vertical space" — the smaller logo alone
     // already reduces the header's height substantially, since it scales
     // with width, but the padding was worth trimming too.
-    `<tr><td style="background:${EMAIL_STRIP}; padding:16px 24px;"><img src="${logoUrl}" width="300" alt="Would You Please" style="display:block; border:0; outline:none; width:300px; max-width:100%; height:auto;"></td></tr>`,
-    `<tr><td style="padding:28px 24px; color:${EMAIL_INK}; font-size:15px; line-height:1.5;">`,
+    // Vertical gap between the logo and the button tightened, same
+    // follow-up — header bottom padding 16px -> 8px, body top padding
+    // 28px -> 8px (its bottom/side padding is untouched, so the rest of
+    // the body's own spacing is unaffected).
+    `<tr><td style="background:${EMAIL_STRIP}; padding:16px 24px 8px;"><img src="${logoUrl}" width="300" alt="Would You Please" style="display:block; border:0; outline:none; width:300px; max-width:100%; height:auto;"></td></tr>`,
+    `<tr><td style="padding:8px 24px 28px; color:${EMAIL_INK}; font-size:15px; line-height:1.5;">`,
     bodyHtml,
     '</td></tr>',
     '</table>',

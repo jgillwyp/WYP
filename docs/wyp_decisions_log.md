@@ -6,6 +6,54 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Fixed a real mobile-rendering bug (fixed-pixel table width fighting max-width), tightened logo-to-button spacing, widened the tagline
+
+Seventh same-day follow-up, from Jim's own phone screenshots comparing the
+current email against a Paint-annotated mockup of the desired layout.
+
+**The "grey border eating a third of the screen on phone" was a real,
+well-known HTML-email bug, not a styling preference.** `wrapEmailHtml()`'s
+outer card table had both `width="1200"` (a literal HTML attribute) and
+`style="max-width:1200px; width:100%"` (CSS). Desktop/webmail clients that
+honor CSS use `max-width` and render fluidly; several mobile mail apps
+render the literal `width="1200"` attribute first — rendering the whole
+table at a fixed 1200px, then shrinking that fixed-size result to fit the
+screen, leaving grey (`#F4F5F7`) letterboxing down both sides where the
+now-shrunk table no longer fills the viewport. This is a well-documented
+HTML-email gotcha, not something to guess-and-check: the standard fix is
+to never set a literal pixel `width` on a table meant to be responsive —
+set the HTML attribute to `"100%"` and let `max-width` in `style` do the
+capping. Applied to both the outer full-bleed table and the card table
+itself. The outer `<td>`'s own `padding:24px 12px` was removed entirely
+(now `padding:0`) per Jim's explicit "expand to 100% of the available
+width" — the card now goes edge-to-edge on any screen narrower than
+1200px, with the grey background only ever showing beyond that cap on a
+genuinely wide desktop viewport.
+
+**Vertical gap tightened**: header `<td>` padding `16px 24px` ->
+`16px 24px 8px`; body `<td>`'s own top padding `28px` -> `8px` (its
+bottom/side padding, and therefore every paragraph spacing below the
+button, is unaffected).
+
+**Tagline widened, 30px -> 42px, y-position 170 -> 182** (`public/email/
+wyp-logo-horizontal-light.svg`) — Jim: it should be "the width of or at
+least almost the width of" the wordmark, "as is true in its normal
+presentation in the app." Checked the live app's own ratio rather than
+guessing: `.word`/`.tag` in `app/globals.css` are 23px/13.5px
+(ratio ≈0.587); applied to the wordmark's own 72px gives ≈42px, which also
+independently matched a rough character-count/width estimate for the
+28-character tagline needing to span roughly the same width as the
+16-character wordmark. The y-shift (170 -> 182) was needed once the
+larger tagline's own cap-height came close to touching the wordmark's
+descenders (the "p" in "Please") — verified visually via the `Read` tool
+against the actual rasterized PNG, not computed blind; the result shows
+the tagline spanning almost the full wordmark width with no clipping or
+overlap.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-22 — Fixed the real cause of "letters run together" (font-weight, not size); logo shrunk back down; Requestor name un-bolded fix reversed
 
 Sixth same-day follow-up, comparing Jim's own reference mockup against a
