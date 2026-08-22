@@ -2317,3 +2317,21 @@ link is built only after the stack is proven on Add Contact.
   See the decisions log's 2026-08-22 entry for the full write-up, including
   the header-style choice confirmed via `AskUserQuestion`. `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Branded emails, same-day redesign (2026-08-22)** — from Jim's own
+  screenshots of the deployed result. Root-caused the broken logo: the bare
+  apex `wouldyouplease.com` 308-redirects to `www.wouldyouplease.com` at
+  the Vercel domain level (confirmed via the Vercel MCP's
+  `web_fetch_vercel_url`, not guessed at), which a hotlinked `<img src>`
+  doesn't reliably survive in Outlook Web even though a clicked link does.
+  Fixed narrowly with `emailAssetUrl()` normalizing just the logo URL's
+  host to `www` when `siteUrl`'s hostname is the bare apex — **the real,
+  more complete fix is still open**: either `NEXT_PUBLIC_SITE_URL` itself
+  or Vercel's own canonical-domain Setting, both outside this codebase,
+  flagged for Jim rather than changed unprompted. Also widened
+  `wrapEmailHtml()`'s card from 600px/centered to 1200px/left-aligned,
+  switched its body background to Strip (`#E5ECF7`), added
+  `emailDescriptionBox()` (a white highlight box around the Description
+  text, three templates), and replaced the old inline signup sentence with
+  `emailSignupFooter()` (a standalone Blue-Pressed `#1E4AA0` question plus
+  its own button, two templates). See the decisions log's second
+  2026-08-22 entry. `npx tsc --noEmit`/`npm run lint` clean.

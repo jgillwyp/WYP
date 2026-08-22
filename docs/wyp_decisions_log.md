@@ -6,6 +6,77 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Branded email redesign: root-caused broken logo, widened/left-aligned layout, Strip-background body with a white Description highlight, restructured signup footer
+
+Same-day follow-up to the initial branding batch below, from Jim's own
+screenshots of the deployed result in Outlook Web and Gmail.
+
+**Broken logo, root-caused, not guessed at.** Jim's Outlook Web screenshot
+showed a broken-image icon with small black alt text in place of the logo.
+Deployment timing and git-tracking of the PNG were both checked and ruled
+out first (the commit was confirmed on GitHub, `.gitignore` doesn't exclude
+`public/email/`, and the Vercel MCP's own `list_deployments` showed the
+branding commit's deployment reached `READY` well before the test email was
+generated). The actual cause was found by fetching the logo URL directly
+through the Vercel MCP's `web_fetch_vercel_url` tool: `https://
+wouldyouplease.com/...` (the bare apex domain, no "www") returns a real
+`308 Permanent Redirect` to `https://www.wouldyouplease.com/...` — a Vercel
+domain-configuration setting, not an app bug. `NEXT_PUBLIC_SITE_URL` is
+presumably set to the bare apex form, which every email template inherits
+as its own `siteUrl`. A *clicked* link (the "Click to respond" button, the
+new signup button) survives a redirect like this transparently in every
+mail client tested — Outlook Web's own image proxy is specifically the one
+that doesn't reliably follow a redirect on a hotlinked `<img src>`. Fixed
+with a new `emailAssetUrl()` helper in `app/src/lib/email.ts` that
+normalizes just the logo's own URL to the `www` host when `siteUrl`'s
+hostname is exactly the bare apex `wouldyouplease.com` — narrow by design,
+so a local or Vercel-preview `siteUrl` (localhost, `*.vercel.app`) is
+unaffected. **Not fixed here, flagged for Jim**: the underlying
+`NEXT_PUBLIC_SITE_URL` env var itself, and/or Vercel's own Domains setting
+for which of the two hosts is canonical — either would be the more complete
+fix, but both are dashboard/env changes outside this codebase, not
+something to change unprompted.
+
+**Four visual changes, per Jim's literal wording**: "The width of the
+formatted area is too small - it should probably be twice as wide and
+should be left-aligned instead of centered. To highlight the request
+description, the background color should probably be white for that text
+and Strip #E5ECF7 for the remaining text. The bottom message of 'New to
+Would You Please? Click to set up a free account' should be modified to a
+text prefix of 'New to Would You Please?' in a slightly larger font with a
+color of Blue (pressed) #1E4AA0 and then offer a button below for 'Learn
+more or set up a free account'." Implemented literally:
+- `wrapEmailHtml()`'s outer table widened from `600`/`max-width:600px` to
+  `1200`/`max-width:1200px`, and its containing `<td>` switched from
+  `align="center"` to `align="left"` — a deliberate departure from the
+  600px-safe-width convention most transactional-email guides recommend,
+  Jim's own call for more breathing room on a wide reading pane.
+- The card's body-content background changed from white to Strip
+  (`#E5ECF7`, the same token — `--strip` — the live app already uses for
+  Row Tint/optional-field backgrounds); the header band stays brand-blue,
+  unchanged.
+- New `emailDescriptionBox()` wraps the Description paragraph in its own
+  white, rounded box — applied to the three templates with a real
+  Description: `buildRequestEmailHtml`, `buildOverdueRecipientEmailHtml`,
+  `buildTodoReminderEmailHtml`. The two digest templates have no single
+  Description to highlight (each is a `<ul>` of several rows), so neither
+  was touched.
+- New `emailSignupFooter()` replaces the old single small inline sentence
+  with a standalone `<p>` ("New to Would You Please?", 17px, `#1E4AA0`)
+  followed by an `emailButton()`-styled button reading "Learn more or set
+  up a free account," linking to `siteUrl` — applied to the two templates
+  that had the old footer, `buildRequestEmailHtml` and
+  `buildOverdueRecipientEmailHtml`. `buildTodoReminderEmailHtml` never had
+  this footer (sent to an already-signed-up owner) and still doesn't.
+
+Both new colors are real, existing app design tokens (`app/globals.css`
+`:root`), not new values invented for email: `--blue-pressed: #1E4AA0` and
+`--strip: #E5ECF7`. Hardcoded as literal hex in the email HTML rather than
+referenced by CSS custom property, since email clients don't support
+`var()`. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-22 — Branded HTML emails (logo + brand colors), all six templates
 
 Owner: wanted the WYP logo and brand colors in the automated emails, which

@@ -75,19 +75,62 @@ export function isReminderEligible(dueDate: string | null, now: Date = new Date(
 // TodoReminderEmailFields and the two digest builders' own signatures,
 // neither of which needed it before this batch) purely to build the
 // absolute logo URL — email clients don't resolve a relative image path.
+//
+// Revised 2026-08-22, same day, from the owner's own screenshots of the
+// first version rendered in Outlook Web and Gmail: (1) card widened from
+// 600px to 1200px and left-aligned rather than centered — the owner's own
+// call, a deliberate departure from the 600px-safe-width convention most
+// transactional-email guides recommend, since he wanted more breathing
+// room than a centered 600px card gives on a wide reading pane. (2) The
+// body area's background is now Strip (--strip, #E5ECF7, the same token
+// the live app uses for Row Tint/optional-field backgrounds) instead of
+// plain white, with the Request/ToDo Description itself highlighted in a
+// white box (buildDescriptionBox()) so it visually pops against the
+// Strip backdrop — same white-vs-tint contrast language the app's own UI
+// already uses. (3) The closing "New to Would You Please?" line is now a
+// standalone, larger, Blue-Pressed-colored (--blue-pressed, #1E4AA0)
+// question, with its own emailButton() below reading "Learn more or set
+// up a free account" — previously a single small inline sentence with an
+// embedded text link.
 // ----------------------------------------------------------------------------
 const EMAIL_BRAND_BLUE = '#2A5FC8'
+const EMAIL_BLUE_PRESSED = '#1E4AA0'
+const EMAIL_STRIP = '#E5ECF7'
 const EMAIL_INK = '#1F2933'
 const EMAIL_LOGO_PATH = '/email/wyp-logo-horizontal-dark.png'
 
+// Root-caused 2026-08-22, from Jim's own Outlook Web screenshot showing a
+// broken-image icon in the header band: wouldyouplease.com (the bare apex
+// domain, no "www") 308-redirects to www.wouldyouplease.com at the Vercel
+// domain-config level — confirmed directly by fetching the logo URL through
+// both hosts. A clicked link (the "Click to respond" button, or the closing
+// signup button) follows a redirect like this transparently in every mail
+// client, but a hotlinked <img src> does not always survive one — Outlook
+// Web's own image proxy is the one that visibly failed on it. NEXT_PUBLIC_
+// SITE_URL is presumably set to the bare apex form, which every email in
+// this module inherits as its own siteUrl. Rather than depend on Jim
+// changing that env var (which would fix this but is a Vercel dashboard
+// change outside this codebase), the logo URL specifically is normalized to
+// the www host here — narrow enough that a local/preview siteUrl (localhost,
+// a *.vercel.app preview) is untouched, since neither hostname matches.
+function emailAssetUrl(siteUrl: string, path: string): string {
+  try {
+    const u = new URL(siteUrl)
+    if (u.hostname === 'wouldyouplease.com') u.hostname = 'www.wouldyouplease.com'
+    return `${u.origin}${path}`
+  } catch {
+    return `${siteUrl}${path}`
+  }
+}
+
 function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
-  const logoUrl = `${siteUrl}${EMAIL_LOGO_PATH}`
+  const logoUrl = emailAssetUrl(siteUrl, EMAIL_LOGO_PATH)
   return [
     '<!DOCTYPE html>',
     '<html>',
     '<body style="margin:0; padding:0; background:#F4F5F7;">',
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="center" style="padding:24px 12px;">',
-    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#FFFFFF; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="left" style="padding:24px 12px;">',
+    `<table role="presentation" width="1200" cellpadding="0" cellspacing="0" style="max-width:1200px; width:100%; background:${EMAIL_STRIP}; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
     `<tr><td style="background:${EMAIL_BRAND_BLUE}; padding:20px 24px;"><img src="${logoUrl}" width="220" alt="Would You Please" style="display:block; border:0; outline:none; width:220px; max-width:100%; height:auto;"></td></tr>`,
     `<tr><td style="padding:28px 24px; color:${EMAIL_INK}; font-size:15px; line-height:1.5;">`,
     bodyHtml,
@@ -101,11 +144,28 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
 
 // A single primary call-to-action rendered as a filled brand-blue button —
 // every email here has exactly one (Click to respond, Open Request, Open
-// ToDo); a digest's own per-row links stay plain text (a button per <li>
-// in a list of several reads as visual noise, plain brand-blue link text
-// doesn't).
+// ToDo, or the closing signup CTA); a digest's own per-row links stay
+// plain text (a button per <li> in a list of several reads as visual
+// noise, plain brand-blue link text doesn't).
 function emailButton(href: string, text: string): string {
   return `<a href="${href}" style="display:inline-block; background:${EMAIL_BRAND_BLUE}; color:#FFFFFF; text-decoration:none; font-weight:700; font-size:15px; padding:12px 22px; border-radius:8px; font-family:Arial, Helvetica, sans-serif;">${text}</a>`
+}
+
+// Highlights the sender's own Description text in a white box against the
+// Strip-colored body — the one piece of real user content in every email
+// that includes it, so it's the one thing given its own visual weight.
+function emailDescriptionBox(html: string): string {
+  return `<div style="background:#FFFFFF; border-radius:8px; padding:14px 16px; margin:0 0 14px;">${html}</div>`
+}
+
+// Closing "New to Would You Please?" signup CTA — a standalone question in
+// Blue Pressed, larger than body text, followed by its own button (not an
+// inline text link) below it.
+function emailSignupFooter(siteUrl: string): string {
+  return [
+    `<p style="margin:18px 0 8px; font-size:17px; font-weight:700; color:${EMAIL_BLUE_PRESSED};">New to Would You Please?</p>`,
+    `<p style="margin:0;">${emailButton(siteUrl, 'Learn more or set up a free account')}</p>`,
+  ].join('\n')
 }
 
 // ----------------------------------------------------------------------------
@@ -200,7 +260,7 @@ function escapeHtml(s: string): string {
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
   const parts = [
     `<p style="margin:0 0 18px;">${emailButton(fields.link, 'Click to respond or mark as completed')}</p>`,
-    `<p style="margin:0 0 14px;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ]
 
   if (fields.reminderPromised) {
@@ -209,7 +269,7 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
 
   parts.push(
     '<p style="margin:0 0 14px;">You can also see any attachments and add questions or comments to this Request with the above link.</p>',
-    `<p style="margin:0; color:#5A6675; font-size:13px;">New to <a href="${fields.siteUrl}" style="color:${EMAIL_BRAND_BLUE};">Would You Please</a>? click to set up a free account.</p>`
+    emailSignupFooter(fields.siteUrl)
   )
 
   return wrapEmailHtml(fields.siteUrl, parts.join('\n'))
@@ -307,8 +367,8 @@ export function buildOverdueRecipientEmailHtml(fields: OverdueRecipientEmailFiel
   const body = [
     `<p style="margin:0 0 18px;">The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.</p>`,
     `<p style="margin:0 0 18px;">${emailButton(fields.link, OVERDUE_LINK_TEXT)}</p>`,
-    `<p style="margin:0 0 14px;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
-    `<p style="margin:0; color:#5A6675; font-size:13px;">New to <a href="${fields.siteUrl}" style="color:${EMAIL_BRAND_BLUE};">Would You Please</a>? click to set up a free account.</p>`,
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
+    emailSignupFooter(fields.siteUrl),
   ].join('\n')
   return wrapEmailHtml(fields.siteUrl, body)
 }
@@ -355,7 +415,7 @@ export function buildTodoReminderEmailHtml(fields: TodoReminderEmailFields): str
   const body = [
     `<p style="margin:0 0 18px;">This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.</p>`,
     `<p style="margin:0 0 18px;">${emailButton(fields.link, TODO_REMINDER_LINK_TEXT)}</p>`,
-    `<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ].join('\n')
   return wrapEmailHtml(fields.siteUrl, body)
 }
