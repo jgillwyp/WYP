@@ -6,6 +6,39 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Cache-busted the email logo asset (eighth same-day follow-up)
+
+Jim confirmed two of the three fixes from the same-day batch immediately
+below this entry worked on both desktop and phone (no grey border, tighter
+logo-to-button spacing), but reported the third — the widened tagline —
+"still in the smaller font." All three changes shipped in the same commit
+to the same file (`public/email/wyp-logo-horizontal-light.svg`/`.png`), so a
+stale deploy can't explain a partial result on one property but not the
+other two baked into the identical PNG. A stale **cached copy of the image
+itself** can: the image URL (`/email/wyp-logo-horizontal-light.png`) never
+changed across any of these edits, only the file's bytes did, and Outlook's
+own image proxy (which fetches and caches externally-linked images
+server-side, keyed by URL, independent of any HTTP cache-control header the
+origin sends) is a well-documented cause of exactly this symptom — old image
+content persisting at an unchanged URL well past when the source changed.
+Mobile mail clients can do the same locally.
+
+**Fix**: `EMAIL_LOGO_PATH` now carries a trailing `?v=2` query string,
+forcing a new cache key. No other code changed — `emailAssetUrl()` already
+concatenates `origin + path` verbatim, so the query string passes through
+untouched to both the apex-to-www host rewrite and the final `<img src>`.
+Convention going forward: bump the version number any time this PNG's pixel
+content changes, even though the SVG source is otherwise unchanged.
+
+**Not yet confirmed working** — this is Jim's next thing to test. If the
+tagline still shows small after this, the next things to check would be
+whether Jim's test pulled from a genuinely fresh send (not a re-opened
+earlier message) and whether the latest commit actually deployed (`git log`
++ Vercel deployment state), the same two-step diagnostic pattern already
+used earlier this same day for the original broken-logo investigation.
+
+\---
+
 ## 2026-08-22 — Fixed a real mobile-rendering bug (fixed-pixel table width fighting max-width), tightened logo-to-button spacing, widened the tagline
 
 Seventh same-day follow-up, from Jim's own phone screenshots comparing the

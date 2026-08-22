@@ -128,7 +128,17 @@ const EMAIL_INK = '#1F2933'
 //      the mark and text block's own coordinates are unchanged, only the
 //      canvas got wider. Verified visually (Read tool) before finalizing,
 //      not just by inspecting the SVG source.
-const EMAIL_LOGO_PATH = '/email/wyp-logo-horizontal-light.png'
+// Cache-busted with a trailing ?v= — the path itself never changes across
+// edits to the underlying PNG, and both Outlook's own image proxy (which
+// fetches and caches external images server-side, keyed by URL) and some
+// mobile mail clients hold onto that cached copy well past when the file on
+// disk changed. Jim confirmed this exact symptom 2026-08-22: two of three
+// fixes in one deploy showed correctly (no border, tighter spacing) while
+// the third (wider tagline) kept showing the old, smaller version — since
+// all three shipped in the same file, a stale deploy can't explain a partial
+// result, but a stale cached image can. Bump the version number any time
+// this PNG's pixel content changes; a new query string is a new cache key.
+const EMAIL_LOGO_PATH = '/email/wyp-logo-horizontal-light.png?v=2'
 
 // Root-caused 2026-08-22, from Jim's own Outlook Web screenshot showing a
 // broken-image icon in the header band: wouldyouplease.com (the bare apex
