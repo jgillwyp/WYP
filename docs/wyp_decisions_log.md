@@ -6,6 +6,44 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Confirmed local-dev localhost URL as the real logo-broken cause; header logo widened; "Click to respond" button wording clarified
+
+Third same-day follow-up. Jim's test email (sent from `npm run dev`) was
+still showing a broken logo after the apex/www fix above, in both Gmail
+and Outlook alike — inconsistent with a redirect-following theory, since
+Gmail's own image proxy generally does follow redirects fine. Checked
+`.env.local` directly and found `NEXT_PUBLIC_SITE_URL="http://localhost:
+3000"` — correct for local dev generally, but it means every email a local
+`npm run dev` server sends embeds an image URL neither Gmail's nor
+Outlook's servers can reach (a mail provider can't fetch an image off
+Jim's own machine), which explains the identical failure in both clients
+regardless of the earlier apex/www fix. Once Jim tested against the live
+domain, the logo rendered correctly — confirming both this diagnosis and
+the earlier `emailAssetUrl()` fix are correct.
+
+Two follow-up items from that same working test email: the logo's wordmark
+and tagline (baked into the one PNG, not real HTML text) read as too small
+and blurred together once the card widened to 1200px — the image was still
+displayed at its old 220px width, sized for the old 600px card. Widened to
+340px (`wrapEmailHtml()`, `app/src/lib/email.ts`), roughly preserving the
+original width-to-card-width ratio. Separately, Jim considered adding a
+"The Request" header above the Description box, then proposed a simpler
+fix instead — reword the button itself from "Click to respond or mark as
+completed" to "Click to respond or mark this Request as completed." Applied
+everywhere that exact phrase appeared: the initial-Request HTML button and
+its plain-text equivalent (`buildRequestEmailHtml`/`buildRequestEmailText`,
+`app/src/lib/email.ts`), and the matching link text embedded in the `.ics`
+attachment's own DESCRIPTION field (`buildIcsDescription`,
+`app/src/lib/ics.ts`) — that field was deliberately written to mirror the
+email body's own wording when the email was redesigned 2026-08-16, so it
+needed the identical change to stay in sync. The Overdue-notice and ToDo-
+Reminder templates use their own separate, already action-oriented link
+text (`OVERDUE_LINK_TEXT`/`TODO_REMINDER_LINK_TEXT`) and were untouched —
+this wording only ever applied to the very first Initial Request email.
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-22 — Branded email redesign: root-caused broken logo, widened/left-aligned layout, Strip-background body with a white Description highlight, restructured signup footer
 
 Same-day follow-up to the initial branding batch below, from Jim's own

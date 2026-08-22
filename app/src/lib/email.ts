@@ -131,7 +131,13 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
     '<body style="margin:0; padding:0; background:#F4F5F7;">',
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="left" style="padding:24px 12px;">',
     `<table role="presentation" width="1200" cellpadding="0" cellspacing="0" style="max-width:1200px; width:100%; background:${EMAIL_STRIP}; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
-    `<tr><td style="background:${EMAIL_BRAND_BLUE}; padding:20px 24px;"><img src="${logoUrl}" width="220" alt="Would You Please" style="display:block; border:0; outline:none; width:220px; max-width:100%; height:auto;"></td></tr>`,
+    // Logo width bumped 220px -> 340px, 2026-08-22 same-day follow-up — the
+    // wordmark and tagline are baked into this one raster image (not real
+    // HTML text), so at the original width, sized for the old 600px-wide
+    // card, both read as too small/blurred-together once the card itself
+    // doubled to 1200px. 340px keeps the same rough proportion the 220px
+    // logo had against the old 600px card, scaled up for the new width.
+    `<tr><td style="background:${EMAIL_BRAND_BLUE}; padding:24px 24px;"><img src="${logoUrl}" width="340" alt="Would You Please" style="display:block; border:0; outline:none; width:340px; max-width:100%; height:auto;"></td></tr>`,
     `<tr><td style="padding:28px 24px; color:${EMAIL_INK}; font-size:15px; line-height:1.5;">`,
     bodyHtml,
     '</td></tr>',
@@ -259,7 +265,7 @@ function escapeHtml(s: string): string {
 
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
   const parts = [
-    `<p style="margin:0 0 18px;">${emailButton(fields.link, 'Click to respond or mark as completed')}</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, 'Click to respond or mark this Request as completed')}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ]
 
@@ -282,7 +288,7 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
 // Same content and order as buildRequestEmailHtml, bare URLs instead of
 // anchors.
 export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
-  const lines = ['Click to respond or mark as completed:', fields.link, '', fields.description]
+  const lines = ['Click to respond or mark this Request as completed:', fields.link, '', fields.description]
 
   if (fields.reminderPromised) {
     lines.push('', 'A reminder email will arrive the day before the Due Date.')

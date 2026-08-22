@@ -120,7 +120,7 @@ export function buildIcsDescription(
   siteUrl: string,
   reminderPromised = false
 ): string {
-  const parts = [`Click to respond or mark as completed: ${link}`, description]
+  const parts = [`Click to respond or mark this Request as completed: ${link}`, description]
 
   if (reminderPromised) {
     parts.push('A reminder email will arrive the day before the Due Date.')
