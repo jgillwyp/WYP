@@ -97,7 +97,14 @@ const EMAIL_BRAND_BLUE = '#2A5FC8'
 const EMAIL_BLUE_PRESSED = '#1E4AA0'
 const EMAIL_STRIP = '#E5ECF7'
 const EMAIL_INK = '#1F2933'
-const EMAIL_LOGO_PATH = '/email/wyp-logo-horizontal-dark.png'
+// Switched from the white-reversed "dark_bg" logo variant to the brand-blue/
+// navy "light_bg" variant, 2026-08-22, per Jim's own clarification: the
+// header band itself is now Strip-colored (matching the rest of the card),
+// not brand-blue, so the logo needs the counterpart asset meant for a light
+// background — see wyp_assets_source.md's own `wyp_logo_horizontal_light_
+// bg.svg` entry (Project knowledge base), copied into public/email/ the
+// same way the dark variant was.
+const EMAIL_LOGO_PATH = '/email/wyp-logo-horizontal-light.png'
 
 // Root-caused 2026-08-22, from Jim's own Outlook Web screenshot showing a
 // broken-image icon in the header band: wouldyouplease.com (the bare apex
@@ -131,13 +138,20 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
     '<body style="margin:0; padding:0; background:#F4F5F7;">',
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="left" style="padding:24px 12px;">',
     `<table role="presentation" width="1200" cellpadding="0" cellspacing="0" style="max-width:1200px; width:100%; background:${EMAIL_STRIP}; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
-    // Logo width bumped 220px -> 340px, 2026-08-22 same-day follow-up — the
-    // wordmark and tagline are baked into this one raster image (not real
-    // HTML text), so at the original width, sized for the old 600px-wide
-    // card, both read as too small/blurred-together once the card itself
-    // doubled to 1200px. 340px keeps the same rough proportion the 220px
-    // logo had against the old 600px card, scaled up for the new width.
-    `<tr><td style="background:${EMAIL_BRAND_BLUE}; padding:24px 24px;"><img src="${logoUrl}" width="340" alt="Would You Please" style="display:block; border:0; outline:none; width:340px; max-width:100%; height:auto;"></td></tr>`,
+    // Logo width: 220px -> 340px -> 480px, 2026-08-22, second same-day
+    // follow-up — 340px still read as "run together" per Jim's own test
+    // (the wordmark/tagline are baked into this one raster image, not real
+    // HTML text, so there's no separate font-size knob to turn — width is
+    // the only lever). 480px approximates the proportion shown in his own
+    // enlarged reference mockup relative to the 1200px card.
+    //
+    // Header band switched from brand-blue to Strip, same day, third
+    // follow-up — Jim's own clarification: the logo's background in his
+    // reference mockup is the same Strip color already used for the rest
+    // of the card, with the logo itself in its normal brand-blue/navy
+    // "light background" coloring rather than the white-reversed "dark
+    // background" variant. See EMAIL_LOGO_PATH's own comment above.
+    `<tr><td style="background:${EMAIL_STRIP}; padding:28px 24px;"><img src="${logoUrl}" width="480" alt="Would You Please" style="display:block; border:0; outline:none; width:480px; max-width:100%; height:auto;"></td></tr>`,
     `<tr><td style="padding:28px 24px; color:${EMAIL_INK}; font-size:15px; line-height:1.5;">`,
     bodyHtml,
     '</td></tr>',
@@ -153,8 +167,18 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
 // ToDo, or the closing signup CTA); a digest's own per-row links stay
 // plain text (a button per <li> in a list of several reads as visual
 // noise, plain brand-blue link text doesn't).
+//
+// emailButtonRaw takes inner HTML rather than plain text, so
+// buildRequestEmailHtml can nest a de-emphasized <span> around the
+// Requestor's own name inside the button (2026-08-22) without that name
+// fighting the rest of the label for visual weight. emailButton is the
+// plain-text convenience wrapper every other call site still uses.
+function emailButtonRaw(href: string, innerHtml: string): string {
+  return `<a href="${href}" style="display:inline-block; background:${EMAIL_BRAND_BLUE}; color:#FFFFFF; text-decoration:none; font-weight:700; font-size:15px; padding:12px 22px; border-radius:8px; font-family:Arial, Helvetica, sans-serif;">${innerHtml}</a>`
+}
+
 function emailButton(href: string, text: string): string {
-  return `<a href="${href}" style="display:inline-block; background:${EMAIL_BRAND_BLUE}; color:#FFFFFF; text-decoration:none; font-weight:700; font-size:15px; padding:12px 22px; border-radius:8px; font-family:Arial, Helvetica, sans-serif;">${text}</a>`
+  return emailButtonRaw(href, text)
 }
 
 // Highlights the sender's own Description text in a white box against the
@@ -248,6 +272,13 @@ type RequestEmailBodyFields = {
   link: string
   reminderPromised: boolean
   siteUrl: string
+  // Added 2026-08-22 (same-day follow-up): the reminder sentence now names
+  // the actual Due Date/Time it's promising, and the CTA button now names
+  // the Requestor, per Jim's own literal wording — both need data this
+  // type didn't previously carry through from the caller.
+  dueDate: string
+  dueTime: string | null
+  ownerName: string | null
 }
 
 // Minimal HTML-escaping for the one piece of this email that's real user
@@ -263,14 +294,32 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// Both the button text and the reminder sentence below were extended
+// 2026-08-22 per Jim's own literal wording: "Click to respond or mark this
+// Request from <RequestorName> as completed" (the Requestor's name nested
+// in a de-emphasized <span> inside the button, since Outlook/Gmail both
+// render the Subject line far enough from the body that Jim didn't want to
+// rely on it alone for "whose Request is this"), and "A reminder email
+// will arrive the day before the Due Date of <DueDate>." / "...Due Date
+// and Time of <DueDate> <DueTime>." when a Due Time is set.
+function requestReminderSentence(dueDate: string, dueTime: string | null): string {
+  return dueTime && dueTime.trim() !== ''
+    ? `A reminder email will arrive the day before the Due Date and Time of ${formatMDY(dueDate)} ${formatTime12h(dueTime)}.`
+    : `A reminder email will arrive the day before the Due Date of ${formatMDY(dueDate)}.`
+}
+
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
+  const buttonInner = fields.ownerName
+    ? `Click to respond or mark this Request from <span style="font-weight:400;">${escapeHtml(fields.ownerName)}</span> as completed`
+    : 'Click to respond or mark this Request as completed'
+
   const parts = [
-    `<p style="margin:0 0 18px;">${emailButton(fields.link, 'Click to respond or mark this Request as completed')}</p>`,
+    `<p style="margin:0 0 18px;">${emailButtonRaw(fields.link, buttonInner)}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ]
 
   if (fields.reminderPromised) {
-    parts.push('<p style="margin:0 0 14px;">A reminder email will arrive the day before the Due Date.</p>')
+    parts.push(`<p style="margin:0 0 14px;">${requestReminderSentence(fields.dueDate, fields.dueTime)}</p>`)
   }
 
   parts.push(
@@ -288,10 +337,13 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
 // Same content and order as buildRequestEmailHtml, bare URLs instead of
 // anchors.
 export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
-  const lines = ['Click to respond or mark this Request as completed:', fields.link, '', fields.description]
+  const buttonLine = fields.ownerName
+    ? `Click to respond or mark this Request from ${fields.ownerName} as completed:`
+    : 'Click to respond or mark this Request as completed:'
+  const lines = [buttonLine, fields.link, '', fields.description]
 
   if (fields.reminderPromised) {
-    lines.push('', 'A reminder email will arrive the day before the Due Date.')
+    lines.push('', requestReminderSentence(fields.dueDate, fields.dueTime))
   }
 
   lines.push(

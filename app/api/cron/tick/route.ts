@@ -342,7 +342,15 @@ async function handle(request: Request) {
     }
     const ownerEmail = await getOwnerEmail(sb, row.owner_id)
     const ownerName = profile?.display_name ?? null
-    const bodyFields = { description: row.description, link, reminderPromised: false, siteUrl: siteUrl() }
+    const bodyFields = {
+      description: row.description,
+      link,
+      reminderPromised: false,
+      siteUrl: siteUrl(),
+      dueDate: row.due_date,
+      dueTime: row.due_time,
+      ownerName,
+    }
     const icsFields: IcsRequestFields = {
       id: row.id,
       description: row.description,

@@ -6,6 +6,104 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Header switched from brand-blue band to Strip background with the "light background" logo variant
+
+Fifth same-day follow-up, resolving an ambiguity from Jim's own phrase "I
+also like the logo not using the dark background" — genuinely unclear
+without more context, since it could have meant either (a) a compliment on
+the existing white-reversed logo simply not looking boxed-in against the
+blue band, or (b) a request to drop the blue band and use the counterpart
+"light background" logo variant instead — the second matching this exact
+session's own earlier terminology (the original header-style
+`AskUserQuestion` offered "Brand-blue band, reversed logo" against a
+rejected "white header, outlined variant"). Asked directly rather than
+guessing; Jim confirmed reading (b), specifically: the logo's background
+should be Strip (`#E5ECF7`, the same color already used for the rest of
+the card) rather than brand-blue, with the logo shown in its "standard"
+colors, which read well against that lighter background.
+
+`wyp_assets_source.md` (Project knowledge base) already had the needed
+asset documented but never pulled into this codebase:
+`wyp_logo_horizontal_light_bg.svg` — same 820×220 lockup as the dark
+variant already in use, but with an outlined (not filled) mark, wordmark in
+brand blue `#2A5FC8`, and tagline in ink-soft grey `#5A6675`, designed
+specifically for a light backdrop. Copied verbatim into
+`public/email/wyp-logo-horizontal-light.svg` and rasterized the same way
+the dark variant was (`convert -background none -density 300 ... -resize
+820x220`) to `public/email/wyp-logo-horizontal-light.png`. `EMAIL_LOGO_PATH`
+in `app/src/lib/email.ts` now points at the light variant, and the header
+`<td>`'s own background changed from `EMAIL_BRAND_BLUE` to `EMAIL_STRIP` —
+now matching the body area's background exactly, so the logo simply sits
+on the same Strip-colored surface as the rest of the card rather than its
+own distinct colored band. `EMAIL_BRAND_BLUE` itself is untouched and still
+used elsewhere (every button's fill color). `npx tsc --noEmit`/`npm run
+lint` clean.
+
+\---
+
+## 2026-08-22 — Reminder sentence names the actual Due Date/Time; CTA button names the Requestor; logo widened again (220→340→480px)
+
+Fourth same-day follow-up, from Jim's next live test (button wording and
+logo width both already fixed by the prior entry, testing against the real
+deployed site rather than localhost this time).
+
+**Reminder sentence now states the actual date.** "A reminder email will
+arrive the day before the Due Date." was silent on which date — extended
+per Jim's own wording to "...Due Date of `<DueDate>`." or, when a Due Time
+is set, "...Due Date and Time of `<DueDate>` `<DueTime>`." Implemented once
+as `requestReminderSentence(dueDate, dueTime)` in `app/src/lib/email.ts`,
+called from both `buildRequestEmailHtml` and `buildRequestEmailText`, and
+mirrored in `buildIcsDescription` (`app/src/lib/ics.ts`) — that field is
+deliberately kept in sync with the email body's own wording (established
+2026-08-16), so it needed the identical extension. `RequestEmailBodyFields`
+gained `dueDate`/`dueTime` to carry this through from the call site;
+`buildIcsDescription`'s signature changed from a positional
+`reminderPromised` boolean to an options object (`{ reminderPromised,
+dueDate, dueTime, ownerName }`) to accommodate the new fields cleanly —
+its one call site, inside `buildIcsContent`, already had all three off its
+own `payload`. `formatMDY`/`formatTime12h` are duplicated into `ics.ts`
+(the app's own per-file convention for these two formatters, already
+duplicated in several components and in `email.ts` itself) since `ics.ts`
+had no human-readable date formatter of its own before this.
+
+**CTA button now names the Requestor.** Jim's reasoning: both Gmail and
+Outlook render the Subject line far enough from the message body that he
+doesn't trust the recipient to notice or remember it, so "whose Request is
+this" needed to live in the body's own primary button, not just the
+Subject. Button text becomes "Click to respond or mark this Request from
+`<RequestorName>` as completed" when the sender has a Display Name on
+file (unchanged otherwise). In the HTML version the name is wrapped in a
+de-emphasized `<span style="font-weight:400;">` inside the otherwise-bold
+button label, so it reads as a secondary detail rather than fighting the
+core instruction for visual weight — required a new `emailButtonRaw()`
+that accepts inner HTML rather than auto-escaped plain text (the existing
+`emailButton()` becomes a thin plain-text wrapper around it, unchanged for
+every other call site). The Requestor's own Display Name is user-supplied
+text, escaped with the module's existing `escapeHtml()` before being
+nested in the button — everywhere else in this module already escapes
+`fields.description` the same way, so this isn't a new pattern, just a new
+place applying it. Plain-text and `.ics` versions get the equivalent
+unstyled `from <name>` insertion. `RequestEmailBodyFields` gained
+`ownerName`; the send-request route and the cron route's own day-before
+Reminder-to-Recipient call site (`app/api/cron/tick/route.ts`, which
+reuses this same template per the 2026-08-16 precedent) were both updated
+to pass it through.
+
+**Logo widened again, 340px → 480px.** Jim's own test showed the wordmark
+and tagline still "run together" at 340px — since both are baked into one
+raster image with no separate font-size control, width is the only lever
+available. 480px approximates the proportion shown in his own pasted
+reference mockup (a deliberately oversized crop of the header, annotated
+"The approximate sizing... would be ideal") relative to the 1200px card.
+
+Verified the button-name insertion and the date-aware reminder sentence
+directly via `npx tsx`, not just by inspection — both render as expected
+(escaped name in the nested span, `formatMDY`/`formatTime12h` applied
+correctly with and without a Due Time). `npx tsc --noEmit`/`npm run lint`
+clean.
+
+\---
+
 ## 2026-08-22 — Confirmed local-dev localhost URL as the real logo-broken cause; header logo widened; "Click to respond" button wording clarified
 
 Third same-day follow-up. Jim's test email (sent from `npm run dev`) was

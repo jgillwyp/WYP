@@ -21,6 +21,26 @@
 export const ICS_DEFAULT_DUE_TIME = '09:00'
 export const ICS_DURATION_MINUTES = 30
 
+// Human-readable MM-DD-YY / 12-hour time — matches the app-wide formatMDY/
+// formatTime12h convention already duplicated per-component elsewhere
+// (RequestDetailForm.tsx, app/src/lib/email.ts, ...); this file gets its
+// own copy for the same reason those do, needed here starting 2026-08-22
+// when buildIcsDescription's reminder sentence started naming the actual
+// Due Date/Time it promises.
+function formatMDY(value: string): string {
+  const [y, m, d] = value.slice(0, 10).split('-')
+  return `${m}-${d}-${y.slice(2)}`
+}
+
+function formatTime12h(value: string): string {
+  const [hStr, mStr] = value.split(':')
+  let h = parseInt(hStr, 10)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h}:${mStr} ${ampm}`
+}
+
 export function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
@@ -108,22 +128,45 @@ export function foldIcsLine(line: string): string {
 // most calendar/mail clients auto-linkify a bare URL in an event
 // description on their own.
 //
-// reminderPromised defaults to false — the two client-side "Add to
+// options.reminderPromised defaults to false — the two client-side "Add to
 // Calendar" call sites (RequestResponseForm.tsx, ResponseDetailForm.tsx)
 // only know a Request's due_date, never the sender's own reminder_enabled
 // preference, so they can't honestly promise a reminder either way; only
 // the emailed .ics (built server-side in send-request/route.ts, which has
 // already computed the real reminderPromised value) passes it explicitly.
+//
+// dueDate/dueTime/ownerName added 2026-08-22, matching
+// buildRequestEmailHtml/Text's own same-day changes (email.ts) — this
+// DESCRIPTION field is deliberately kept in sync with that email body's
+// wording, so both the "Click to respond..." opener and the reminder
+// sentence needed the identical extension: the button/link text now names
+// the Requestor, and the reminder sentence now names the actual Due
+// Date/Time it's promising rather than leaving it unstated.
 export function buildIcsDescription(
   description: string,
   link: string,
   siteUrl: string,
-  reminderPromised = false
+  options: {
+    reminderPromised?: boolean
+    dueDate?: string | null
+    dueTime?: string | null
+    ownerName?: string | null
+  } = {}
 ): string {
-  const parts = [`Click to respond or mark this Request as completed: ${link}`, description]
+  const { reminderPromised = false, dueDate, dueTime, ownerName } = options
+  const opener = ownerName
+    ? `Click to respond or mark this Request from ${ownerName} as completed: ${link}`
+    : `Click to respond or mark this Request as completed: ${link}`
+  const parts = [opener, description]
 
   if (reminderPromised) {
-    parts.push('A reminder email will arrive the day before the Due Date.')
+    const due =
+      dueTime && dueTime.trim() !== ''
+        ? `A reminder email will arrive the day before the Due Date and Time of ${formatMDY(dueDate ?? '')} ${formatTime12h(dueTime)}.`
+        : dueDate
+          ? `A reminder email will arrive the day before the Due Date of ${formatMDY(dueDate)}.`
+          : 'A reminder email will arrive the day before the Due Date.'
+    parts.push(due)
   }
 
   parts.push(
@@ -253,7 +296,14 @@ export function buildIcsContent(
     dtstartLine,
     dtendLine,
     `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
-    `DESCRIPTION:${icsEscapeText(buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, options?.reminderPromised))}`,
+    `DESCRIPTION:${icsEscapeText(
+      buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, {
+        reminderPromised: options?.reminderPromised,
+        dueDate: payload.due_date,
+        dueTime: payload.due_time,
+        ownerName: payload.owner_name,
+      })
+    )}`,
     `URL:${calendarLinkFor(link)}`,
     'END:VEVENT',
     'END:VCALENDAR',

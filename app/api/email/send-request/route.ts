@@ -170,7 +170,15 @@ export async function POST(request: Request) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
 
   const subject = buildRequestEmailSubject('initial', ownerName, reqRow.due_date, reqRow.due_time)
-  const emailBodyFields = { description: reqRow.description, link, reminderPromised, siteUrl }
+  const emailBodyFields = {
+    description: reqRow.description,
+    link,
+    reminderPromised,
+    siteUrl,
+    dueDate: reqRow.due_date,
+    dueTime: reqRow.due_time,
+    ownerName,
+  }
   const html = buildRequestEmailHtml(emailBodyFields)
   const text = buildRequestEmailText(emailBodyFields)
 
