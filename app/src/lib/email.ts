@@ -52,6 +52,63 @@ export function isReminderEligible(dueDate: string | null, now: Date = new Date(
 }
 
 // ----------------------------------------------------------------------------
+// Branded HTML wrapper (2026-08-22, owner request) — every HTML email body
+// this module builds gets passed through wrapEmailHtml() before being sent,
+// so the logo/colors live in one place rather than six. Table-based layout,
+// every rule inline — no <style> block, no flexbox/grid, since Outlook
+// desktop's Word rendering engine ignores both; this is the same
+// lowest-common-denominator approach every transactional-email guide
+// recommends. Logo is a PNG (public/email/wyp-logo-horizontal-dark.png,
+// rasterized from the canonical wyp_logo_horizontal_dark_bg.svg asset
+// source at 3.7x its 220px display width for retina sharpness, same
+// rasterize-high-display-small pattern already used for the PWA icons,
+// public/icons/icon-source.svg -> icon-192.png/icon-512.png) — SVG isn't
+// reliably supported in an email <img> (Outlook desktop doesn't render it
+// at all), so this follows the same PNG-fallback convention.
+//
+// Confirmed with the owner: brand-blue header band with the logo's white/
+// light-blue "dark background" variant reversed out of it, not a white
+// header with the outlined variant — see the decisions log for the
+// rejected alternative.
+//
+// siteUrl is required on every field type from here down (added to
+// TodoReminderEmailFields and the two digest builders' own signatures,
+// neither of which needed it before this batch) purely to build the
+// absolute logo URL — email clients don't resolve a relative image path.
+// ----------------------------------------------------------------------------
+const EMAIL_BRAND_BLUE = '#2A5FC8'
+const EMAIL_INK = '#1F2933'
+const EMAIL_LOGO_PATH = '/email/wyp-logo-horizontal-dark.png'
+
+function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
+  const logoUrl = `${siteUrl}${EMAIL_LOGO_PATH}`
+  return [
+    '<!DOCTYPE html>',
+    '<html>',
+    '<body style="margin:0; padding:0; background:#F4F5F7;">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="center" style="padding:24px 12px;">',
+    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#FFFFFF; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
+    `<tr><td style="background:${EMAIL_BRAND_BLUE}; padding:20px 24px;"><img src="${logoUrl}" width="220" alt="Would You Please" style="display:block; border:0; outline:none; width:220px; max-width:100%; height:auto;"></td></tr>`,
+    `<tr><td style="padding:28px 24px; color:${EMAIL_INK}; font-size:15px; line-height:1.5;">`,
+    bodyHtml,
+    '</td></tr>',
+    '</table>',
+    '</td></tr></table>',
+    '</body>',
+    '</html>',
+  ].join('\n')
+}
+
+// A single primary call-to-action rendered as a filled brand-blue button —
+// every email here has exactly one (Click to respond, Open Request, Open
+// ToDo); a digest's own per-row links stay plain text (a button per <li>
+// in a list of several reads as visual noise, plain brand-blue link text
+// doesn't).
+function emailButton(href: string, text: string): string {
+  return `<a href="${href}" style="display:inline-block; background:${EMAIL_BRAND_BLUE}; color:#FFFFFF; text-decoration:none; font-weight:700; font-size:15px; padding:12px 22px; border-radius:8px; font-family:Arial, Helvetica, sans-serif;">${text}</a>`
+}
+
+// ----------------------------------------------------------------------------
 // Formatting — MM-DD-YY / 12-hour time, matching the app-wide formatMDY /
 // formatTime12h convention already duplicated per-component elsewhere
 // (RequestDetailForm.tsx, RequestResponseForm.tsx, ...). This module is
@@ -142,20 +199,20 @@ function escapeHtml(s: string): string {
 
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
   const parts = [
-    `<p><a href="${fields.link}">Click to respond or mark as completed</a></p>`,
-    `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, 'Click to respond or mark as completed')}</p>`,
+    `<p style="margin:0 0 14px;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
   ]
 
   if (fields.reminderPromised) {
-    parts.push('<p>A reminder email will arrive the day before the Due Date.</p>')
+    parts.push('<p style="margin:0 0 14px;">A reminder email will arrive the day before the Due Date.</p>')
   }
 
   parts.push(
-    '<p>You can also see any attachments and add questions or comments to this Request with the above link.</p>',
-    `<p>New to <a href="${fields.siteUrl}">Would You Please</a>? click to set up a free account.</p>`
+    '<p style="margin:0 0 14px;">You can also see any attachments and add questions or comments to this Request with the above link.</p>',
+    `<p style="margin:0; color:#5A6675; font-size:13px;">New to <a href="${fields.siteUrl}" style="color:${EMAIL_BRAND_BLUE};">Would You Please</a>? click to set up a free account.</p>`
   )
 
-  return parts.join('\n')
+  return wrapEmailHtml(fields.siteUrl, parts.join('\n'))
 }
 
 // Plain-text alternative part — not something the owner asked for by name,
@@ -247,12 +304,13 @@ const OVERDUE_LINK_TEXT = 'Open Request to mark Done or to turn off notification
 
 export function buildOverdueRecipientEmailHtml(fields: OverdueRecipientEmailFields): string {
   const due = formatMDY(fields.dueDate) + (fields.dueTime ? ` ${formatTime12h(fields.dueTime)}` : '')
-  return [
-    `<p>The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.</p>`,
-    `<p><a href="${fields.link}">${OVERDUE_LINK_TEXT}</a></p>`,
-    `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
-    `<p>New to <a href="${fields.siteUrl}">Would You Please</a>? click to set up a free account.</p>`,
+  const body = [
+    `<p style="margin:0 0 18px;">The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, OVERDUE_LINK_TEXT)}</p>`,
+    `<p style="margin:0 0 14px;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+    `<p style="margin:0; color:#5A6675; font-size:13px;">New to <a href="${fields.siteUrl}" style="color:${EMAIL_BRAND_BLUE};">Would You Please</a>? click to set up a free account.</p>`,
   ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
 }
 
 export function buildOverdueRecipientEmailText(fields: OverdueRecipientEmailFields): string {
@@ -279,6 +337,7 @@ type TodoReminderEmailFields = {
   description: string
   dueDate: string
   link: string
+  siteUrl: string
 }
 
 export function buildTodoReminderEmailSubject(dueDate: string): string {
@@ -293,11 +352,12 @@ export function buildTodoReminderEmailSubject(dueDate: string): string {
 const TODO_REMINDER_LINK_TEXT = 'Open ToDo to mark Done'
 
 export function buildTodoReminderEmailHtml(fields: TodoReminderEmailFields): string {
-  return [
-    `<p>This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.</p>`,
-    `<p><a href="${fields.link}">${TODO_REMINDER_LINK_TEXT}</a></p>`,
-    `<p>${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
+  const body = [
+    `<p style="margin:0 0 18px;">This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, TODO_REMINDER_LINK_TEXT)}</p>`,
+    `<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`,
   ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
 }
 
 export function buildTodoReminderEmailText(fields: TodoReminderEmailFields): string {
@@ -339,7 +399,7 @@ export type DigestItem = {
 // the Reminder checkbox both genuinely live.
 function digestRowHtml(item: DigestItem): string {
   const time = item.dueTime ? ` &nbsp; ${formatTime12h(item.dueTime)}` : ''
-  return `<li><b>${escapeHtml(item.recipientName)}</b> — ${escapeHtml(item.description)}${time} — <a href="${item.link}">${OVERDUE_LINK_TEXT}</a></li>`
+  return `<li style="margin-bottom:10px;"><b>${escapeHtml(item.recipientName)}</b> — ${escapeHtml(item.description)}${time} — <a href="${item.link}" style="color:${EMAIL_BRAND_BLUE}; font-weight:600;">${OVERDUE_LINK_TEXT}</a></li>`
 }
 
 function digestRowText(item: DigestItem): string {
@@ -351,11 +411,12 @@ export function buildReminderDigestEmailSubject(): string {
   return 'Would You Please: Reminders Sent to Recipients'
 }
 
-export function buildReminderDigestEmailHtml(items: DigestItem[]): string {
-  return [
-    '<p>A day-before Reminder email was just sent to the Recipient of each of these Requests:</p>',
-    `<ul>${items.map(digestRowHtml).join('\n')}</ul>`,
+export function buildReminderDigestEmailHtml(items: DigestItem[], siteUrl: string): string {
+  const body = [
+    '<p style="margin:0 0 16px;">A day-before Reminder email was just sent to the Recipient of each of these Requests:</p>',
+    `<ul style="margin:0; padding-left:20px;">${items.map(digestRowHtml).join('\n')}</ul>`,
   ].join('\n')
+  return wrapEmailHtml(siteUrl, body)
 }
 
 export function buildReminderDigestEmailText(items: DigestItem[]): string {
@@ -370,11 +431,12 @@ export function buildOverdueDigestEmailSubject(): string {
   return 'Would You Please: Requests That Just Became Overdue'
 }
 
-export function buildOverdueDigestEmailHtml(items: DigestItem[]): string {
-  return [
-    '<p>These Requests just became Overdue — their Due Date has passed and they have not been reported as Done:</p>',
-    `<ul>${items.map(digestRowHtml).join('\n')}</ul>`,
+export function buildOverdueDigestEmailHtml(items: DigestItem[], siteUrl: string): string {
+  const body = [
+    '<p style="margin:0 0 16px;">These Requests just became Overdue — their Due Date has passed and they have not been reported as Done:</p>',
+    `<ul style="margin:0; padding-left:20px;">${items.map(digestRowHtml).join('\n')}</ul>`,
   ].join('\n')
+  return wrapEmailHtml(siteUrl, body)
 }
 
 export function buildOverdueDigestEmailText(items: DigestItem[]): string {

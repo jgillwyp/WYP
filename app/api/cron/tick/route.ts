@@ -395,7 +395,7 @@ async function handle(request: Request) {
       counts.errors += 1
       continue
     }
-    const fields = { description: row.description, dueDate: row.due_date, link: `${siteUrl()}/todos/${row.id}` }
+    const fields = { description: row.description, dueDate: row.due_date, link: `${siteUrl()}/todos/${row.id}`, siteUrl: siteUrl() }
     const sent = await sendMail({
       to: ownerEmail,
       subject: buildTodoReminderEmailSubject(row.due_date),
@@ -569,7 +569,7 @@ async function handle(request: Request) {
     const sent = await sendMail({
       to: ownerEmail,
       subject: buildReminderDigestEmailSubject(),
-      html: buildReminderDigestEmailHtml(items),
+      html: buildReminderDigestEmailHtml(items, siteUrl()),
       text: buildReminderDigestEmailText(items),
       fromName: 'Would You Please',
       replyTo: null,
@@ -584,7 +584,7 @@ async function handle(request: Request) {
     const sent = await sendMail({
       to: ownerEmail,
       subject: buildOverdueDigestEmailSubject(),
-      html: buildOverdueDigestEmailHtml(items),
+      html: buildOverdueDigestEmailHtml(items, siteUrl()),
       text: buildOverdueDigestEmailText(items),
       fromName: 'Would You Please',
       replyTo: null,

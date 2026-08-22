@@ -2304,3 +2304,16 @@ link is built only after the stack is proven on Add Contact.
   §6.42/§6.43 for the flagged gap. `npx tsc --noEmit` clean through every
   file in this batch; `npm run lint` not yet run for this batch as of this
   entry.
+- **Branded HTML emails (2026-08-22)** — `app/src/lib/email.ts` gained a
+  shared `wrapEmailHtml()`/`emailButton()` pair; all six HTML email builders
+  now render inside a brand-blue-header/white-body branded shell instead of
+  bare `<p>` tags, with their one primary link styled as a filled button.
+  New `public/email/wyp-logo-horizontal-dark.png` (+ `.svg` source),
+  rasterized from the canonical `wyp_logo_horizontal_dark_bg.svg` markup
+  already on file in the Project's own asset docs. The existing
+  `multipart/alternative` text fallback (every builder already had a paired
+  HTML/text version) is unchanged — confirmed with the owner it's still
+  worth keeping for deliverability, not something the new branding replaces.
+  See the decisions log's 2026-08-22 entry for the full write-up, including
+  the header-style choice confirmed via `AskUserQuestion`. `npx tsc
+  --noEmit`/`npm run lint` clean.

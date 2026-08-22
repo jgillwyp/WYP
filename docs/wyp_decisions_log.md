@@ -6,6 +6,69 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Branded HTML emails (logo + brand colors), all six templates
+
+Owner: wanted the WYP logo and brand colors in the automated emails, which
+had been going out as bare unstyled HTML (`<p>`/`<a>` tags with no CSS) —
+technically HTML, but visually indistinguishable from plain text. Also asked
+whether a plain-text fallback was still worth keeping once the HTML gets
+styled.
+
+**Answered directly, no code change needed there**: the fallback already
+existed. Every email builder in `email.ts` has had a paired HTML/text
+version since Week 5 (`buildRequestEmailHtml`/`Text`, and the same pair for
+Overdue notices, ToDo Reminders, and both digests), and
+`send-request/route.ts`'s/`cron/tick/route.ts`'s `sendMail()` calls already
+pass both `html` and `text` to nodemailer, which builds a proper
+`multipart/alternative` message automatically. Kept as-is — still a real
+deliverability signal (HTML-only messages score worse with many spam
+filters) and still covers the minority of readers with HTML display off.
+
+**Branding, built this batch.** New shared `wrapEmailHtml(siteUrl, bodyHtml)`
++ `emailButton(href, text)` helpers in `email.ts` — every one of the six HTML
+builders (`buildRequestEmailHtml`, `buildOverdueRecipientEmailHtml`,
+`buildTodoReminderEmailHtml`, `buildReminderDigestEmailHtml`,
+`buildOverdueDigestEmailHtml`, plus the shared `digestRowHtml` row) now
+routes its content through the wrapper rather than returning bare `<p>`
+tags. Table-based layout, every rule inline, no `<style>` block and no
+flexbox/grid — Outlook desktop's Word rendering engine supports neither,
+so this follows the standard lowest-common-denominator approach for
+transactional email. A single primary link per email (Click to respond /
+Open Request / Open ToDo) renders as a filled brand-blue button; a digest's
+several per-row links stay plain brand-blue text — a button per `<li>` in a
+list of many reads as noise.
+
+**Confirmed via `AskUserQuestion`**: brand-blue header band with the logo's
+white/light-blue "dark background" variant reversed out of it, over the
+alternative of a white header with the blue-outlined variant (closer to how
+the logo reads inside the app's own light-only UI, but quieter/less
+banner-like for an email).
+
+**Logo asset**: `public/email/wyp-logo-horizontal-dark.png` (+ its
+`.svg` source alongside), rasterized from the canonical
+`wyp_logo_horizontal_dark_bg.svg` markup already on file in this Project's
+own asset docs (`wyp_assets_source.md`) — not redrawn. SVG isn't reliably
+supported inside an email `<img>` (Outlook desktop doesn't render it at
+all), so it's rasterized to PNG at its native 820×220, displayed at
+`width="220"` for retina-sharp scaling — same rasterize-high-display-small
+convention already used for the PWA icons (`public/icons/icon-source.svg`
+-> `icon-192.png`/`icon-512.png`). Transparent background, since the white/
+light-blue artwork needs the brand-blue header band showing through around
+it.
+
+**`siteUrl` added to two email builders that didn't need it before**:
+`TodoReminderEmailFields` and both digest builders' own signatures
+(`buildReminderDigestEmailHtml(items, siteUrl)`,
+`buildOverdueDigestEmailHtml(items, siteUrl)`) — the only new requirement
+the branding introduced, since the logo `<img>` needs an absolute URL and
+email clients don't resolve a relative path. `cron/tick/route.ts` already
+had a `siteUrl()` helper in scope for all three call sites, so this was a
+one-line addition each.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-21 — Repeat (recurrence) for Requests and ToDos, built end to end
 
 Owner's own design doc (`WYP Repeat design.docx`), refined through a round of
