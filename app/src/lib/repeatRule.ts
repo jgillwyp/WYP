@@ -206,32 +206,41 @@ function stopPhrase(rule: RepeatRule): string {
 /** The single descriptive-text builder every consumer uses verbatim — the
  * Repeat band on Create Request/Request Detail/Create ToDo/ToDo Detail, the
  * recipient's read-only footnote, and the "Repeats: ..." print-report line.
- * One implementation means the wording can never drift between screens. */
+ * One implementation means the wording can never drift between screens.
+ *
+ * Each phrase is nbsp()'d as it's built, then joined with a plain breakable
+ * ", " — wrap only between phrases, never mid-phrase (Jim, 2026-08-21).
+ * Exception, same day: the week phrase ("Repeats every 2nd week on
+ * Wednesday") has no comma to break at and, unlike every other type's
+ * phrasing, runs long enough on its own to overlap the Edit Repeat button
+ * in the band. Built as two nbsp'd halves joined by one ordinary breakable
+ * space instead of one fully-rigid phrase, so it can wrap between "week"
+ * and "on" but nowhere else. */
 export function describeRepeat(rule: RepeatRule, dueDate: string): string {
   const phrases: string[] = []
   switch (rule.type) {
     case 'day': {
-      phrases.push(rule.interval === 1 ? 'Repeats every day' : `Repeats every ${ordinal(rule.interval)} day`)
-      if (rule.weekdaysOnly) phrases.push('M-F only')
+      phrases.push(nbsp(rule.interval === 1 ? 'Repeats every day' : `Repeats every ${ordinal(rule.interval)} day`))
+      if (rule.weekdaysOnly) phrases.push(nbsp('M-F only'))
       break
     }
     case 'week': {
       const dayName = dueDateWeekday(dueDate)
-      phrases.push(
-        rule.interval === 1 ? `Repeats every week on ${dayName}` : `Repeats every ${ordinal(rule.interval)} week on ${dayName}`
-      )
+      const lead = nbsp(rule.interval === 1 ? 'Repeats every week' : `Repeats every ${ordinal(rule.interval)} week`)
+      const tail = nbsp(`on ${dayName}`)
+      phrases.push(`${lead} ${tail}`)
       break
     }
     case 'month': {
-      phrases.push(rule.interval === 1 ? 'Repeats every month' : `Repeats every ${ordinal(rule.interval)} month`)
-      phrases.push(monthChipLabel(dueDate, rule.monthMode ?? 'day'))
+      phrases.push(nbsp(rule.interval === 1 ? 'Repeats every month' : `Repeats every ${ordinal(rule.interval)} month`))
+      phrases.push(nbsp(monthChipLabel(dueDate, rule.monthMode ?? 'day')))
       break
     }
     case 'year': {
-      phrases.push(rule.interval === 1 ? 'Repeats every year' : `Repeats every ${ordinal(rule.interval)} year`)
+      phrases.push(nbsp(rule.interval === 1 ? 'Repeats every year' : `Repeats every ${ordinal(rule.interval)} year`))
       break
     }
   }
-  phrases.push(stopPhrase(rule))
-  return phrases.map(nbsp).join(', ')
+  phrases.push(nbsp(stopPhrase(rule)))
+  return phrases.join(', ')
 }
