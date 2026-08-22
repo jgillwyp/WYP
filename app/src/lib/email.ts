@@ -104,6 +104,30 @@ const EMAIL_INK = '#1F2933'
 // background — see wyp_assets_source.md's own `wyp_logo_horizontal_light_
 // bg.svg` entry (Project knowledge base), copied into public/email/ the
 // same way the dark variant was.
+//
+// This copy of the wordmark diverges from the canonical asset in two ways,
+// both scoped to public/email/wyp-logo-horizontal-light.svg only — not
+// proposed as a change to wyp_assets_source.md or the live app's own header
+// (LandingPage.tsx), which render it as real vector SVG rather than a fixed-
+// resolution raster and may not have the same problem:
+//   1. Wordmark font-weight 800 -> 700. Jim's own test, at increasing
+//      display widths (220 -> 340 -> 480px), kept reading as "letters run
+//      together" regardless of size — the tell that this was never a
+//      resolution/blur problem sizing could fix, but Arial's synthetic-bold
+//      rendering at weight 800 visually crowding adjacent glyphs once
+//      rasterized. 700 reads as clearly separated letterforms at every size
+//      tested.
+//   2. viewBox/canvas widened 820x220 -> 900x220. Attempts to *loosen*
+//      letter-spacing (from the canonical -0.5 up toward 0 or positive)
+//      to fix the same symptom instead clipped the wordmark against the
+//      right edge of the 820-wide canvas — this rasterizer (ImageMagick's
+//      librsvg delegate) appears to apply letter-spacing values much more
+//      aggressively than a browser would, so even a small positive value
+//      pushed "Please" partly off-canvas. Left letter-spacing at 0 (safe,
+//      predictable) and gave the wordmark 80 extra units of room instead —
+//      the mark and text block's own coordinates are unchanged, only the
+//      canvas got wider. Verified visually (Read tool) before finalizing,
+//      not just by inspecting the SVG source.
 const EMAIL_LOGO_PATH = '/email/wyp-logo-horizontal-light.png'
 
 // Root-caused 2026-08-22, from Jim's own Outlook Web screenshot showing a
@@ -138,20 +162,26 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
     '<body style="margin:0; padding:0; background:#F4F5F7;">',
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F7;"><tr><td align="left" style="padding:24px 12px;">',
     `<table role="presentation" width="1200" cellpadding="0" cellspacing="0" style="max-width:1200px; width:100%; background:${EMAIL_STRIP}; border-radius:10px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">`,
-    // Logo width: 220px -> 340px -> 480px, 2026-08-22, second same-day
-    // follow-up — 340px still read as "run together" per Jim's own test
-    // (the wordmark/tagline are baked into this one raster image, not real
-    // HTML text, so there's no separate font-size knob to turn — width is
-    // the only lever). 480px approximates the proportion shown in his own
-    // enlarged reference mockup relative to the 1200px card.
+    // Logo width history: 220 -> 340 -> 480 -> 300px, 2026-08-22, fourth
+    // same-day follow-up. 480px was itself the overcorrection — Jim's next
+    // test called it "larger than desired" and flagged too much vertical
+    // space in the header. The real fix for "letters run together" turned
+    // out not to be size at all (see EMAIL_LOGO_PATH's comment: the
+    // wordmark's own font-weight was the actual cause), so once that was
+    // fixed at the source, the display width could come back down — 300px
+    // is comfortably smaller than either prior attempt.
     //
     // Header band switched from brand-blue to Strip, same day, third
     // follow-up — Jim's own clarification: the logo's background in his
     // reference mockup is the same Strip color already used for the rest
     // of the card, with the logo itself in its normal brand-blue/navy
     // "light background" coloring rather than the white-reversed "dark
-    // background" variant. See EMAIL_LOGO_PATH's own comment above.
-    `<tr><td style="background:${EMAIL_STRIP}; padding:28px 24px;"><img src="${logoUrl}" width="480" alt="Would You Please" style="display:block; border:0; outline:none; width:480px; max-width:100%; height:auto;"></td></tr>`,
+    // background" variant. See EMAIL_LOGO_PATH's own comment above. Header
+    // padding cut from 28px to 16px (top/bottom) in the same pass, to
+    // directly address "too much vertical space" — the smaller logo alone
+    // already reduces the header's height substantially, since it scales
+    // with width, but the padding was worth trimming too.
+    `<tr><td style="background:${EMAIL_STRIP}; padding:16px 24px;"><img src="${logoUrl}" width="300" alt="Would You Please" style="display:block; border:0; outline:none; width:300px; max-width:100%; height:auto;"></td></tr>`,
     `<tr><td style="padding:28px 24px; color:${EMAIL_INK}; font-size:15px; line-height:1.5;">`,
     bodyHtml,
     '</td></tr>',
@@ -297,11 +327,19 @@ function escapeHtml(s: string): string {
 // Both the button text and the reminder sentence below were extended
 // 2026-08-22 per Jim's own literal wording: "Click to respond or mark this
 // Request from <RequestorName> as completed" (the Requestor's name nested
-// in a de-emphasized <span> inside the button, since Outlook/Gmail both
-// render the Subject line far enough from the body that Jim didn't want to
-// rely on it alone for "whose Request is this"), and "A reminder email
-// will arrive the day before the Due Date of <DueDate>." / "...Due Date
-// and Time of <DueDate> <DueTime>." when a Due Time is set.
+// inline, since Outlook/Gmail both render the Subject line far enough from
+// the body that Jim didn't want to rely on it alone for "whose Request is
+// this"), and "A reminder email will arrive the day before the Due Date of
+// <DueDate>." / "...Due Date and Time of <DueDate> <DueTime>." when a Due
+// Time is set.
+//
+// The name was originally wrapped in a de-emphasized <span style="font-
+// weight:400;">, on the reasoning that a lighter weight would read as a
+// secondary detail rather than competing with the core instruction —
+// reversed same day per Jim's own test: against the button's bold 700
+// weight, the unbolded name read as a rendering/formatting error rather
+// than an intentional style choice. The name is now the same weight as
+// the rest of the label.
 function requestReminderSentence(dueDate: string, dueTime: string | null): string {
   return dueTime && dueTime.trim() !== ''
     ? `A reminder email will arrive the day before the Due Date and Time of ${formatMDY(dueDate)} ${formatTime12h(dueTime)}.`
@@ -310,7 +348,7 @@ function requestReminderSentence(dueDate: string, dueTime: string | null): strin
 
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
   const buttonInner = fields.ownerName
-    ? `Click to respond or mark this Request from <span style="font-weight:400;">${escapeHtml(fields.ownerName)}</span> as completed`
+    ? `Click to respond or mark this Request from ${escapeHtml(fields.ownerName)} as completed`
     : 'Click to respond or mark this Request as completed'
 
   const parts = [

@@ -6,6 +6,61 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Fixed the real cause of "letters run together" (font-weight, not size); logo shrunk back down; Requestor name un-bolded fix reversed
+
+Sixth same-day follow-up, comparing Jim's own reference mockup against a
+fresh live test of the Strip-background/light-logo header from the entry
+below. Three findings, all addressed:
+
+**"Run together" was never a sizing problem — root-caused instead of
+guessed at again.** Jim's own tests across three separate widths (220,
+340, 480px) all reported the same complaint, which is itself the tell: if
+it were a resolution/blur issue, a wider display size should have visibly
+helped at some point, and it never did. Tried loosening the wordmark's
+`letter-spacing` (from the canonical `-0.5` toward `0` and small positive
+values) as the fix instead of touching size — and hit a real, unexpected
+behavior in the raster pipeline (ImageMagick's librsvg SVG delegate):
+even a small positive `letter-spacing` clipped "Please" off the right edge
+of the 820-wide canvas, well before the values seemed like they should
+matter. Verified this with the `Read` tool against the actual rendered
+PNG at each step, not just by reading the SVG source — caught the
+clipping bug immediately rather than shipping it blind. Root cause
+instead: `font-weight="800"` (visually Arial "Black") synthetically
+bolded by the renderer crowds adjacent glyphs together once rasterized,
+independent of display size. Dropped to `font-weight="700"` and kept
+`letter-spacing` at a safe `0`, widening the SVG's own canvas from
+820×220 to 900×220 (mark and text-block coordinates unchanged) so the now-
+wider-at-any-tracking wordmark has room without clipping. Scoped
+entirely to `public/email/wyp-logo-horizontal-light.svg` — not proposed as
+a change to the canonical asset in `wyp_assets_source.md` or to
+`LandingPage.tsx`'s own live inline SVG, which renders as real vector
+text rather than a fixed-resolution raster and may not share the problem.
+
+**Logo shrunk back down, 480px -> 300px, header padding 28px -> 16px.**
+With the actual "run together" cause fixed at the source, there was no
+longer a legibility reason to keep the logo large — and Jim's own test
+called 480px "larger than desired" with "too much vertical space." 300px
+comfortably undercuts every prior attempt; the widened 900×220 canvas
+(vs. the original 820×220) also means the same display width now yields a
+slightly shorter rendered height, compounding with the smaller width and
+tighter padding to meaningfully cut the header's vertical footprint.
+
+**Requestor-name bolding reversed** — the button-text change earlier the
+same day wrapped the name in `<span style="font-weight:400;">`, reasoning
+that a lighter weight would read as secondary detail. Jim's own test
+found the opposite: against the button's bold 700 weight, the lighter
+name looked like a rendering error rather than a deliberate style choice.
+Removed the span entirely — the name is now the same weight as the rest
+of the button label.
+
+Verified the rasterized PNG directly via the `Read` tool at each
+iteration (weight/letter-spacing/canvas-width combination) before
+finalizing, the same discipline used earlier in this session for the
+button-name/reminder-date verification via `npx tsx`. `npx tsc --noEmit`/
+`npm run lint` clean.
+
+\---
+
 ## 2026-08-22 — Header switched from brand-blue band to Strip background with the "light background" logo variant
 
 Fifth same-day follow-up, resolving an ambiguity from Jim's own phrase "I
