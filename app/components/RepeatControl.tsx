@@ -55,6 +55,23 @@ function unitLabel(type: RepeatType, interval: number): string {
   return interval === 1 ? singular[type] : `${singular[type]}s`
 }
 
+// Android Chrome bug fix, 2026-08-21 — Jim reported the "1" in every
+// Repeats-every number field couldn't be cleared/retyped on his phone (only
+// worked via the desktop-only spinner arrows, which Android doesn't render
+// for number inputs at all — a platform default, not something this app
+// controls). Root cause: every field clamped via clampInterval() on every
+// keystroke, including the moment the field is emptied — Number('') is 0,
+// not NaN, so the clamp immediately snapped the controlled value back to
+// "1" before the person could type a replacement digit. Fixed by reading
+// e.target.valueAsNumber (NaN for an empty/invalid field, unlike
+// Number(e.target.value)) and deferring the clamp to onBlur — the field can
+// sit empty mid-edit and only gets clamped back to a valid 1-99 value once
+// editing is done, matching how every other numeric input in this app that
+// allows temporary emptiness already behaves.
+function numDisplay(n: number | null | undefined): number | string {
+  return n === null || n === undefined || Number.isNaN(n) ? '' : n
+}
+
 export default function RepeatControl({ rule, dueDate, onSave, onRemove, disabled, disabledReason }: Props) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<RepeatRule>(rule ?? defaultRepeatRule())
@@ -149,8 +166,12 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
                     className="repeat-number"
                     min={1}
                     max={99}
-                    value={draft.interval}
-                    onChange={(e) => setDraft((d) => ({ ...d, interval: clampInterval('day', Number(e.target.value)) }))}
+                    value={numDisplay(draft.interval)}
+                    onChange={(e) => {
+                      const raw = e.target.valueAsNumber
+                      setDraft((d) => ({ ...d, interval: Number.isFinite(raw) ? clampInterval('day', raw) : raw }))
+                    }}
+                    onBlur={() => setDraft((d) => ({ ...d, interval: clampInterval('day', d.interval) }))}
                   />
                   <span>{unitLabel('day', draft.interval)}</span>
                 </div>
@@ -174,8 +195,12 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
                     className="repeat-number"
                     min={1}
                     max={99}
-                    value={draft.interval}
-                    onChange={(e) => setDraft((d) => ({ ...d, interval: clampInterval('week', Number(e.target.value)) }))}
+                    value={numDisplay(draft.interval)}
+                    onChange={(e) => {
+                      const raw = e.target.valueAsNumber
+                      setDraft((d) => ({ ...d, interval: Number.isFinite(raw) ? clampInterval('week', raw) : raw }))
+                    }}
+                    onBlur={() => setDraft((d) => ({ ...d, interval: clampInterval('week', d.interval) }))}
                   />
                   <span>{unitLabel('week', draft.interval)}</span>
                 </div>
@@ -192,8 +217,12 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
                     className="repeat-number"
                     min={1}
                     max={99}
-                    value={draft.interval}
-                    onChange={(e) => setDraft((d) => ({ ...d, interval: clampInterval('month', Number(e.target.value)) }))}
+                    value={numDisplay(draft.interval)}
+                    onChange={(e) => {
+                      const raw = e.target.valueAsNumber
+                      setDraft((d) => ({ ...d, interval: Number.isFinite(raw) ? clampInterval('month', raw) : raw }))
+                    }}
+                    onBlur={() => setDraft((d) => ({ ...d, interval: clampInterval('month', d.interval) }))}
                   />
                   <span>{unitLabel('month', draft.interval)}</span>
                 </div>
@@ -231,8 +260,12 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
                   className="repeat-number"
                   min={1}
                   max={10}
-                  value={draft.interval}
-                  onChange={(e) => setDraft((d) => ({ ...d, interval: clampInterval('year', Number(e.target.value)) }))}
+                  value={numDisplay(draft.interval)}
+                  onChange={(e) => {
+                    const raw = e.target.valueAsNumber
+                    setDraft((d) => ({ ...d, interval: Number.isFinite(raw) ? clampInterval('year', raw) : raw }))
+                  }}
+                  onBlur={() => setDraft((d) => ({ ...d, interval: clampInterval('year', d.interval) }))}
                 />
                 <span>{unitLabel('year', draft.interval)}</span>
               </div>
@@ -278,8 +311,14 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
                   className="repeat-number"
                   min={1}
                   disabled={draft.stopType !== 'after'}
-                  value={draft.stopCount ?? 1}
-                  onChange={(e) => setDraft((d) => ({ ...d, stopCount: Math.max(1, Number(e.target.value) || 1) }))}
+                  value={numDisplay(draft.stopCount ?? 1)}
+                  onChange={(e) => setDraft((d) => ({ ...d, stopCount: e.target.valueAsNumber }))}
+                  onBlur={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      stopCount: Number.isFinite(d.stopCount) && (d.stopCount as number) >= 1 ? Math.round(d.stopCount as number) : 1,
+                    }))
+                  }
                 />
                 <span>times</span>
               </label>
