@@ -51,6 +51,25 @@ export function isReminderEligible(dueDate: string | null, now: Date = new Date(
   return daysUntilDue >= MIN_DAYS_FOR_REMINDER
 }
 
+// Added 2026-08-22 — owner: on Create Request/Request Detail, the "morning
+// before" Reminder checkbox shouldn't need a Contact selected first (only to
+// know the recipient's time zone) if the Due Date already has a wide enough
+// margin that a time-zone shift can't push it out of eligibility either way.
+// One day of buffer past MIN_DAYS_FOR_REMINDER's own 3-day floor comfortably
+// absorbs any real-world zone difference (at most a calendar day). Below
+// this threshold, Contact is still required — close to the floor, a zone
+// shift really could flip eligibility, so the UI keeps asking for it.
+export const MIN_DAYS_TO_SKIP_CONTACT_CHECK = 4
+
+export function hasAmpleReminderLeadTime(dueDate: string | null, now: Date = new Date()): boolean {
+  if (!dueDate) return false
+  const [y, m, d] = dueDate.slice(0, 10).split('-').map(Number)
+  const due = new Date(y, m - 1, d)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const daysUntilDue = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  return daysUntilDue >= MIN_DAYS_TO_SKIP_CONTACT_CHECK
+}
+
 // ----------------------------------------------------------------------------
 // Branded HTML wrapper (2026-08-22, owner request) — every HTML email body
 // this module builds gets passed through wrapEmailHtml() before being sent,
@@ -283,8 +302,15 @@ function formatTime12h(value: string): string {
 // description fallback" (buildIcsDescription in ics.ts). Reminder: identical
 // subject, prefixed "REMINDER: ".
 // ----------------------------------------------------------------------------
+// 'reminder_day_of' added 2026-08-22 (owner's own follow-up to the itemized-
+// docx batch) — the third Reminders-until-Done checkbox, "Day of." Reuses
+// this same subject builder and the same buildRequestEmailHtml/Text body
+// as 'reminder' (the day-before Reminder) — only the subject prefix differs
+// ("DUE TODAY:" rather than "REMINDER:"), since "reminder" as a prefix on
+// an email arriving the same morning something is due reads as ambiguous
+// about how much runway is left; "DUE TODAY" doesn't.
 export function buildRequestEmailSubject(
-  kind: 'initial' | 'reminder',
+  kind: 'initial' | 'reminder' | 'reminder_day_of',
   ownerName: string | null,
   dueDate: string,
   dueTime: string | null
@@ -292,7 +318,9 @@ export function buildRequestEmailSubject(
   const from = ownerName ? ` from ${ownerName}` : ''
   const due = formatMDY(dueDate) + (dueTime && dueTime.trim() !== '' ? ` ${formatTime12h(dueTime)}` : '')
   const base = `A Would You Please Request${from}, Due: ${due}`
-  return kind === 'reminder' ? `REMINDER: ${base}` : base
+  if (kind === 'reminder') return `REMINDER: ${base}`
+  if (kind === 'reminder_day_of') return `DUE TODAY: ${base}`
+  return base
 }
 
 // ----------------------------------------------------------------------------
@@ -327,7 +355,19 @@ export function buildRequestEmailSubject(
 type RequestEmailBodyFields = {
   description: string
   link: string
-  reminderPromised: boolean
+  // Replaced 2026-08-22 (second same-day follow-up) — was a single boolean
+  // (reminderPromised) gating one fixed "day before" sentence. Now a full
+  // ReminderSchedule describing all three independent Reminders-until-Done
+  // checkboxes, since the old sentence went stale the moment "Day of" and
+  // "Daily thereafter" existed as options of their own. null/undefined
+  // omits the sentence entirely — used by the day-before/day-of Reminder
+  // emails themselves (app/api/cron/tick/route.ts Phases A1/A1b), which
+  // don't restate the full schedule inside a reminder that's already part
+  // of it. A real ReminderSchedule value always renders a sentence, even
+  // when every flag is false, per Jim's own explicit "none" example — the
+  // Initial Request email (the only current caller that supplies one)
+  // should say "no Reminders" rather than stay silent about it.
+  reminderSchedule?: ReminderSchedule | null
   siteUrl: string
   // Added 2026-08-22 (same-day follow-up): the reminder sentence now names
   // the actual Due Date/Time it's promising, and the CTA button now names
@@ -367,10 +407,66 @@ function escapeHtml(s: string): string {
 // weight, the unbolded name read as a rendering/formatting error rather
 // than an intentional style choice. The name is now the same weight as
 // the rest of the label.
-function requestReminderSentence(dueDate: string, dueTime: string | null): string {
-  return dueTime && dueTime.trim() !== ''
-    ? `A reminder email will arrive the day before the Due Date and Time of ${formatMDY(dueDate)} ${formatTime12h(dueTime)}.`
-    : `A reminder email will arrive the day before the Due Date of ${formatMDY(dueDate)}.`
+// Replaced 2026-08-22 (second same-day follow-up), then simplified again
+// the same day when "Daily thereafter" itself was retired — Jim's own
+// spam-complaint concern about an open-ended recurring nudge — in favor of
+// a single-shot "Day after" notice, the direct replacement for what used
+// to be the automatic Overdue-transition email (cron Phase B/C). This
+// collapses what had been a deliberately asymmetric three-way branch (Day
+// before/Day of took an "on the day ___" phrase, Daily thereafter took a
+// bare adverb with no "on") into one uniform shape — all three Reminder
+// types are now "on the day ___", so a single withOn() helper handles
+// every case:
+//   none:      "...you are scheduled to receive no Reminders."
+//   one:       "...Reminders only on the day before." / "...only on the
+//              day of." / "...only on the day after."
+//   two:       "...Reminders: <A> and <B>." (whichever two)
+//   all three: "...Reminders: the day before, the day of, and the day
+//              after."
+//
+// Jim confirmed separately: the "Day of" Reminder needs no Due-Time-passed
+// check of its own — a morning-of notice is sufficient regardless of
+// whether the Due Time later passes that same day; the new "Day after"
+// notice (once, the calendar day following Due Date) is what covers a
+// lapsed Due Time, not a same-day check.
+//
+// Exported so app/src/lib/ics.ts's buildIcsDescription (the .ics
+// attachment's own DESCRIPTION field, kept deliberately in sync with this
+// email body's wording since 2026-08-16) can call this directly rather
+// than duplicate an 8-branch sentence generator a second time and risk the
+// two drifting apart — the same kind of exception ics.ts's own module
+// comment already carves out of this app's usual per-file-duplication
+// convention for exactly this reason (shared, non-trivial logic with more
+// than one real caller).
+export type ReminderSchedule = {
+  dayBefore: boolean
+  dayOf: boolean
+  dayAfter: boolean
+}
+
+export function buildReminderScheduleSentence(
+  dueDate: string,
+  dueTime: string | null,
+  schedule: ReminderSchedule
+): string {
+  const due = formatMDY(dueDate) + (dueTime && dueTime.trim() !== '' ? ` ${formatTime12h(dueTime)}` : '')
+  const dateLabel = dueTime && dueTime.trim() !== '' ? 'Due Date and Time' : 'Due Date'
+  const prefix = `For the ${dateLabel} of ${due}, you are scheduled to receive `
+
+  type Key = 'dayBefore' | 'dayOf' | 'dayAfter'
+  const active: Key[] = []
+  if (schedule.dayBefore) active.push('dayBefore')
+  if (schedule.dayOf) active.push('dayOf')
+  if (schedule.dayAfter) active.push('dayAfter')
+
+  if (active.length === 0) return `${prefix}no Reminders.`
+
+  const noun = (key: Key): string => (key === 'dayBefore' ? 'day before' : key === 'dayOf' ? 'day of' : 'day after')
+  const withOn = (key: Key): string => `on the ${noun(key)}`
+
+  if (active.length === 1) return `${prefix}Reminders only ${withOn(active[0])}.`
+  if (active.length === 2) return `${prefix}Reminders: ${withOn(active[0])} and ${withOn(active[1])}.`
+  return `${prefix}Reminders: the day before, the day of, and the day after.`
 }
 
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
@@ -383,8 +479,10 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ]
 
-  if (fields.reminderPromised) {
-    parts.push(`<p style="margin:0 0 14px;">${requestReminderSentence(fields.dueDate, fields.dueTime)}</p>`)
+  if (fields.reminderSchedule) {
+    parts.push(
+      `<p style="margin:0 0 14px;">${buildReminderScheduleSentence(fields.dueDate, fields.dueTime, fields.reminderSchedule)}</p>`
+    )
   }
 
   parts.push(
@@ -407,8 +505,8 @@ export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
     : 'Click to respond or mark this Request as completed:'
   const lines = [buttonLine, fields.link, '', fields.description]
 
-  if (fields.reminderPromised) {
-    lines.push('', requestReminderSentence(fields.dueDate, fields.dueTime))
+  if (fields.reminderSchedule) {
+    lines.push('', buildReminderScheduleSentence(fields.dueDate, fields.dueTime, fields.reminderSchedule))
   }
 
   lines.push(
@@ -449,13 +547,15 @@ export function buildRequestEmailFromName(ownerName: string | null): string {
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-// Overdue notice/nudge — sent to a Request's Recipient. One template covers
-// both the first individual Overdue notice (owner's own ask: "Individual
-// emails would be sent to Recipients when a Request is overdue") and every
-// later hourly/daily nudge for a Due-Time Request (owner: "an hourly process
-// could send a reminder email to the Recipient advising them the Due Date
-// and Time have passed... providing a link to do so") — the wording already
-// works unchanged for a repeat send, so there's no separate "nudge" template.
+// "Day after" notice — sent once to a Request's Recipient, the calendar day
+// following Due Date. Originally built 2026-08-17 as an open-ended
+// hourly-then-daily recurring "Overdue nudge"; simplified 2026-08-22 (Jim's
+// own spam-complaint concern) into a single-shot send, the direct
+// replacement for the old moment-of-lapse Overdue transition email —
+// function/variable names below still say "Overdue" since the wording
+// itself ("the Due Date... has passed and it has not been reported as
+// Done") is equally accurate for a single day-after send; only the cron
+// route's own call pattern changed, not this template.
 // ----------------------------------------------------------------------------
 type OverdueRecipientEmailFields = {
   ownerName: string | null
@@ -548,6 +648,97 @@ export function buildTodoReminderEmailText(fields: TodoReminderEmailFields): str
     `This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.`,
     '',
     `${TODO_REMINDER_LINK_TEXT}:`,
+    fields.link,
+    '',
+    fields.description,
+  ].join('\n')
+}
+
+// ----------------------------------------------------------------------------
+// ToDo "Day of" Reminder — same shape as the day-before Reminder above, sent
+// the morning the ToDo is actually due rather than the morning before.
+// Added 2026-08-22 alongside the third Reminders-until-Done checkbox
+// (reminder_day_of_enabled, migration 042) — owner's own follow-up: still
+// using ToDos for real business needs, a day-before Reminder alone isn't
+// always enough lead time, and a same-day option was requested. Gated by
+// the cron route on both profiles.todo_reminders_enabled and the per-ToDo
+// reminder_day_of_enabled column, independent of the day-before Reminder's
+// own reminder_enabled/reminder_sent_at.
+// ----------------------------------------------------------------------------
+type TodoDayOfEmailFields = {
+  description: string
+  dueDate: string
+  link: string
+  siteUrl: string
+}
+
+export function buildTodoDayOfEmailSubject(dueDate: string): string {
+  return `DUE TODAY: Your Would You Please ToDo, Due: ${formatMDY(dueDate)}`
+}
+
+export function buildTodoDayOfEmailHtml(fields: TodoDayOfEmailFields): string {
+  const body = [
+    `<p style="margin:0 0 18px;">This ToDo is due today, ${formatMDY(fields.dueDate)}.</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, TODO_REMINDER_LINK_TEXT)}</p>`,
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
+  ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
+}
+
+export function buildTodoDayOfEmailText(fields: TodoDayOfEmailFields): string {
+  return [
+    `This ToDo is due today, ${formatMDY(fields.dueDate)}.`,
+    '',
+    `${TODO_REMINDER_LINK_TEXT}:`,
+    fields.link,
+    '',
+    fields.description,
+  ].join('\n')
+}
+
+// ----------------------------------------------------------------------------
+// ToDo "Day after" notice — the ToDo counterpart to a Request's own "Day
+// after" notice above. Sent once, the calendar day after Due Date, to the
+// owner's own account email — same recipient as the day-before/day-of ToDo
+// Reminders, since a ToDo has no Recipient of its own. Gated by the cron
+// route on profiles.todo_reminders_enabled AND the per-ToDo
+// overdue_reminder_enabled column (shared with Requests, same table).
+// Originally built 2026-08-22 as "Daily thereafter" (a genuine recurring
+// daily cadence — the first new-capability piece added for ToDos, since
+// they'd never had any Overdue mechanism before that batch); simplified to
+// single-shot the same day, alongside the Request-side change, per Jim's
+// own spam-complaint concern. Function/variable names below still say
+// "Overdue" for the same reason the Request-side template comment gives.
+// ----------------------------------------------------------------------------
+type TodoOverdueEmailFields = {
+  description: string
+  dueDate: string
+  link: string
+  siteUrl: string
+}
+
+export function buildTodoOverdueEmailSubject(dueDate: string): string {
+  return `OVERDUE: Your Would You Please ToDo, Due: ${formatMDY(dueDate)}`
+}
+
+// Same action-oriented wording and reasoning as OVERDUE_LINK_TEXT above,
+// scoped to what a ToDo Detail screen actually offers.
+const TODO_OVERDUE_LINK_TEXT = 'Open ToDo to mark Done or to turn off notifications'
+
+export function buildTodoOverdueEmailHtml(fields: TodoOverdueEmailFields): string {
+  const body = [
+    `<p style="margin:0 0 18px;">The Due Date for this ToDo has passed (${formatMDY(fields.dueDate)}) and it has not been marked Done.</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, TODO_OVERDUE_LINK_TEXT)}</p>`,
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
+  ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
+}
+
+export function buildTodoOverdueEmailText(fields: TodoOverdueEmailFields): string {
+  return [
+    `The Due Date for this ToDo has passed (${formatMDY(fields.dueDate)}) and it has not been marked Done.`,
+    '',
+    `${TODO_OVERDUE_LINK_TEXT}:`,
     fields.link,
     '',
     fields.description,

@@ -81,6 +81,23 @@ import { supabase } from '@/lib/supabaseClient'
  * different questions). `can_toggle_tier()` is called on mount so the row
  * is hidden entirely for anyone not allowed, rather than shown and then
  * failing on click.
+ *
+ * profiles.reminder_default_day_before/day_of/day_after (migration 043,
+ * 2026-08-22) — the "Daily thereafter" recurring Overdue-nudge system
+ * (Phase C, cron/tick/route.ts) was dropped outright per the owner's own
+ * spam-complaint concern and replaced by a single one-time "Day after"
+ * send, sharing the same three-checkbox Reminders-until-Done shape
+ * (Day before / Day of / Day after) across both Requests and ToDos.
+ * Owner: "One Account option (or 3 options) could be the default settings
+ * of the three checkboxes for Reminders (for both Requests and ToDos)."
+ * Three separate toggles chosen for direct 1:1 symmetry — each is read
+ * once by Create Request/Create ToDo on mount to pre-fill their own
+ * per-item checkboxes; changing a default here never touches an
+ * already-created Request or ToDo, and never gates sending at cron time
+ * the way todo_reminders_enabled or overdue_reminder_enabled do. Day
+ * before defaults true (matches reminder_enabled's own existing true
+ * default); Day of and Day after both default false, same
+ * spam-consciousness reasoning as migration 042's own default flip.
  */
 export default function AccountForm() {
   const router = useRouter()
@@ -92,11 +109,31 @@ export default function AccountForm() {
   // Default flipped to false, migration 023 — see the file-level comment.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(false)
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — owner's
+  // own itemized request: only meaningful, and only shown enabled, once
+  // todoDatesEnabled is also on (a ToDo has no Due Date to remind about
+  // otherwise). Reuses the same reminder_enabled/overdue_reminder_enabled
+  // columns a Request already uses, on the shared `requests` table.
+  const [todoRemindersEnabled, setTodoRemindersEnabled] = useState(false)
   // profiles.reminder_digest_enabled (migration 032, 2026-08-17) — off by
   // default, same "opt-in, plain boolean, immediate write" pattern as every
   // toggle above. See app/api/cron/tick/route.ts's own header comment for
   // the full Chron notification design.
   const [reminderDigestEnabled, setReminderDigestEnabled] = useState(false)
+  // profiles.reminder_default_day_before/day_of/day_after (migration 043,
+  // 2026-08-22) — pre-fill only, never a live gate. Owner: "One Account
+  // option (or 3 options) could be the default settings of the three
+  // checkboxes for Reminders (for both Requests and ToDos)." Three
+  // separate toggles chosen over one combined preset, for direct 1:1
+  // symmetry with the three per-item checkboxes — same
+  // handleToggle/immediate-write pattern as every boolean toggle above.
+  // Read once by Create Request/Create ToDo on their own mount, to set
+  // the initial state of their own Reminders-until-Done checkboxes;
+  // changing a value here never touches any already-created Request or
+  // ToDo.
+  const [reminderDefaultDayBefore, setReminderDefaultDayBefore] = useState(true)
+  const [reminderDefaultDayOf, setReminderDefaultDayOf] = useState(false)
+  const [reminderDefaultDayAfter, setReminderDefaultDayAfter] = useState(false)
   // Testing-only tier toggle (migration 024) — the DB column is text
   // ('free'/'subscriber'), not boolean, so it gets its own state and
   // handler rather than joining the shared boolean handleToggle below.
@@ -128,7 +165,9 @@ export default function AccountForm() {
 
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('private_category_enabled, request_time_enabled, todo_dates_enabled, reminder_digest_enabled, tier')
+        .select(
+          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, reminder_default_day_before, reminder_default_day_of, reminder_default_day_after, tier'
+        )
         .eq('id', userData.user.id)
         .single()
 
@@ -143,7 +182,11 @@ export default function AccountForm() {
       setCategoriesEnabled(data?.private_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? false)
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+      setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
       setReminderDigestEnabled(data?.reminder_digest_enabled ?? false)
+      setReminderDefaultDayBefore(data?.reminder_default_day_before ?? true)
+      setReminderDefaultDayOf(data?.reminder_default_day_of ?? false)
+      setReminderDefaultDayAfter(data?.reminder_default_day_after ?? false)
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
 
       // can_toggle_tier() (migration 035) — a failure here (RPC missing,
@@ -163,7 +206,15 @@ export default function AccountForm() {
   }, [])
 
   async function handleToggle(
-    field: 'private_category_enabled' | 'request_time_enabled' | 'todo_dates_enabled' | 'reminder_digest_enabled',
+    field:
+      | 'private_category_enabled'
+      | 'request_time_enabled'
+      | 'todo_dates_enabled'
+      | 'todo_reminders_enabled'
+      | 'reminder_digest_enabled'
+      | 'reminder_default_day_before'
+      | 'reminder_default_day_of'
+      | 'reminder_default_day_after',
     next: boolean,
     setLocal: (value: boolean) => void,
   ) {
@@ -308,6 +359,30 @@ export default function AccountForm() {
             </span>
           </label>
 
+          <label
+            className={`checkrow${!todoDatesEnabled ? ' checkrow-disabled' : ''}`}
+            title={!todoDatesEnabled ? 'Please turn on Show Due/Done Dates (ToDos) first.' : undefined}
+          >
+            <input
+              type="checkbox"
+              checked={todoRemindersEnabled}
+              disabled={saving || !todoDatesEnabled}
+              onChange={(e) =>
+                handleToggle('todo_reminders_enabled', e.target.checked, setTodoRemindersEnabled)
+              }
+            />
+            <span className="checktext">
+              Add Reminders (ToDos)
+              <span className="checknote">
+                Adds a Reminders until Done panel (Day before / Day of / Day after)
+                to Create ToDo and ToDo Detail, same as a Request&rsquo;s own Reminders.
+                Sent to your own account email — a ToDo has no recipient. Off by
+                default, and only available once Show Due/Done Dates (ToDos) above is
+                turned on.
+              </span>
+            </span>
+          </label>
+
           <label className="checkrow">
             <input
               type="checkbox"
@@ -323,6 +398,61 @@ export default function AccountForm() {
                 A daily summary email listing which of your Sent Requests just had a
                 day-before Reminder go out to their Recipient, with a link to each
                 Request. Off by default.
+              </span>
+            </span>
+          </label>
+
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={reminderDefaultDayBefore}
+              disabled={saving}
+              onChange={(e) =>
+                handleToggle('reminder_default_day_before', e.target.checked, setReminderDefaultDayBefore)
+              }
+            />
+            <span className="checktext">
+              Default: Day Before Reminder
+              <span className="checknote">
+                Pre-fills the &ldquo;Day before&rdquo; Reminder checkbox when you create a
+                new Request or ToDo. You can still change it per item. Changing this
+                setting never affects anything already created. On by default.
+              </span>
+            </span>
+          </label>
+
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={reminderDefaultDayOf}
+              disabled={saving}
+              onChange={(e) =>
+                handleToggle('reminder_default_day_of', e.target.checked, setReminderDefaultDayOf)
+              }
+            />
+            <span className="checktext">
+              Default: Day Of Reminder
+              <span className="checknote">
+                Pre-fills the &ldquo;Day of&rdquo; Reminder checkbox when you create a new
+                Request or ToDo. You can still change it per item. Off by default.
+              </span>
+            </span>
+          </label>
+
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={reminderDefaultDayAfter}
+              disabled={saving}
+              onChange={(e) =>
+                handleToggle('reminder_default_day_after', e.target.checked, setReminderDefaultDayAfter)
+              }
+            />
+            <span className="checktext">
+              Default: Day After Reminder
+              <span className="checknote">
+                Pre-fills the &ldquo;Day after&rdquo; Reminder checkbox when you create a
+                new Request or ToDo. You can still change it per item. Off by default.
               </span>
             </span>
           </label>

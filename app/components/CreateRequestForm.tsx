@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import RepeatControl from './RepeatControl'
 import { supabase } from '@/lib/supabaseClient'
-import { isReminderEligible } from '@/lib/email'
+import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import {
   MAX_ATTACHMENT_BYTES,
@@ -77,17 +77,30 @@ import {
  * meantime, same as the two never being able to disagree that the old
  * tightWindow note relied on.
  *
- * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20) —
- * owner's own new design (two pasted mockups) pairs the checkbox above
- * ("Morning before") with a second, independent one ("Daily thereafter",
- * overdueReminderEnabled) inside one .reminderbanner box. "Daily thereafter"
- * gates the automatic post-Due-Date Overdue notification system (migrations
- * 032/033) for this Request — unchecking it silences the Recipient's
- * one-time "just became overdue" notice AND every recurring nudge after it,
- * confirmed with the owner via chat 2026-08-20. Always enabled here (no
+ * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20;
+ * extended with "Day of" migration 042, then simplified again the same day
+ * migration 042 shipped) — three checkboxes in one .reminderbanner box: Day
+ * before, Day of, and Day after (overdueReminderEnabled). "Day after" was
+ * originally "Daily thereafter," an open-ended recurring nudge; Jim's own
+ * spam-complaint concern ("I don't have any way to know, but the Daily
+ * thereafter is most likely to cause spam complaints") replaced it with a
+ * single one-time send, the calendar day following Due Date — the direct,
+ * simpler successor to the old moment-of-lapse Overdue transition email
+ * this same checkbox already gated. Column name unchanged (migration 043's
+ * own header comment) — a UI relabel, not a schema rename, same precedent
+ * "Morning before" -> "Day before" already set. Always enabled here (no
  * eligibility rule of its own — this is a brand-new Request, nothing can be
  * overdue yet); Request Detail's own copy of this banner adds the
  * archived-Request grey-out that already existed for the single checkbox.
+ *
+ * All three checkboxes default from the signed-in owner's own
+ * profiles.reminder_default_day_before/day_of/day_after (migration 043) —
+ * read once on mount and applied on top of initialState's own hardcoded
+ * fallback values, same "async profile read overrides a synchronous
+ * default" pattern this file already uses for requestTimeEnabled/
+ * categoriesEnabled/tier below. These are defaults only, applied once at
+ * Create time — not a live gate; Request Detail/Response Detail/Request
+ * Response read each item's own already-saved values instead.
  */
 
 type Contact = {
@@ -108,21 +121,30 @@ type RequestFormState = {
   categoryName: string
   description: string
   reminderEnabled: boolean
-  // "Daily thereafter" (§6.41, migration 037, 2026-08-20) — see the
+  // "Day of" (migration 042, 2026-08-22) — a third, independent Reminders-
+  // until-Done checkbox; see the reminderBanner comment below.
+  reminderDayOfEnabled: boolean
+  // "Day after" (§6.41, migration 037, 2026-08-20; simplified from "Daily
+  // thereafter" to a single one-time send, migration 043) — see the
   // Reminders-until-Done banner comment below for the full reasoning.
   overdueReminderEnabled: boolean
 }
 
+// Hardcoded fallback values, matching this app's own spam-conscious
+// defaults ("Day before" only) — overwritten on mount, once the owner's
+// own profiles.reminder_default_day_before/day_of/day_after (migration 043)
+// load, by the profiles-fetch effect below. Kept here rather than left
+// blank/false so the banner renders something sensible for the brief
+// window before that fetch resolves.
 const initialState: RequestFormState = {
   recipientName: '',
   dueDate: '',
   dueTime: '',
   categoryName: '',
   description: '',
-  // Default checked, matching the owner's own mockup — see the file-level
-  // comment on the Reminder checkbox.
   reminderEnabled: true,
-  overdueReminderEnabled: true,
+  reminderDayOfEnabled: false,
+  overdueReminderEnabled: false,
 }
 
 const CATEGORY_CAP = 20
@@ -516,13 +538,25 @@ export default function CreateRequestForm() {
     // on for display_name.
     supabase
       .from('profiles')
-      .select('display_name, private_category_enabled, request_time_enabled, tier')
+      .select(
+        'display_name, private_category_enabled, request_time_enabled, tier, reminder_default_day_before, reminder_default_day_of, reminder_default_day_after'
+      )
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.private_category_enabled ?? false)
         setRequestTimeEnabled(data?.request_time_enabled ?? true)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
+        // Reminders-until-Done defaults (migration 043) — applied on top of
+        // initialState's own hardcoded fallback, functional update so any
+        // Description/Recipient/etc. the owner already typed in the brief
+        // window before this resolves is preserved.
+        setForm((f) => ({
+          ...f,
+          reminderEnabled: data?.reminder_default_day_before ?? f.reminderEnabled,
+          reminderDayOfEnabled: data?.reminder_default_day_of ?? f.reminderDayOfEnabled,
+          overdueReminderEnabled: data?.reminder_default_day_after ?? f.overdueReminderEnabled,
+        }))
       })
     // router is stable across renders (Next's useRouter()) and this effect
     // must run once on mount only, same as every other "load once" effect
@@ -681,14 +715,25 @@ export default function CreateRequestForm() {
     setDictating(true)
   }
 
-  // Reminder checkbox availability (PRD §7.3, revised 2026-08-15) — three
-  // states: (1) no Contact and/or Due Date yet, so there's nothing to
-  // evaluate eligibility against; (2) both present but the Due Date is too
-  // soon (isReminderEligible, @/lib/email — more than two calendar days out
-  // required); (3) available. Only state 3 lets the checkbox be toggled;
-  // states 1 and 2 grey it out with a different native title tooltip each,
-  // per the owner's own exact wording.
-  const reminderPrereqsMissing = !selectedContact || form.dueDate.trim() === ''
+  // Reminder checkbox availability (PRD §7.3, revised 2026-08-15; relaxed
+  // 2026-08-22) — three states: (1) no Due Date yet (or a Due Date close
+  // enough that knowing the Contact's time zone actually matters), so
+  // there's nothing to evaluate eligibility against; (2) a Due Date present
+  // but too soon (isReminderEligible, @/lib/email — more than two calendar
+  // days out required); (3) available. Only state 3 lets the checkbox be
+  // toggled; states 1 and 2 grey it out with a different native title
+  // tooltip each, per the owner's own exact wording.
+  //
+  // Contact no longer strictly required, 2026-08-22 — owner: if the Due
+  // Date is already 4+ days out, the checkbox doesn't need to wait on
+  // knowing the Contact (and, through them, their time zone) first — a
+  // margin that wide swallows any real-world zone shift either way.
+  // hasAmpleReminderLeadTime (@/lib/email) is the same day-diff arithmetic
+  // as isReminderEligible, one day more generous. Below that margin, Contact
+  // is still required, since a zone shift really could flip eligibility
+  // there.
+  const reminderPrereqsMissing =
+    form.dueDate.trim() === '' || (!selectedContact && !hasAmpleReminderLeadTime(form.dueDate))
   const reminderIneligible = !reminderPrereqsMissing && !isReminderEligible(form.dueDate)
   const reminderDisabled = reminderPrereqsMissing || reminderIneligible
   const reminderTooltip = reminderPrereqsMissing
@@ -697,11 +742,24 @@ export default function CreateRequestForm() {
       ? 'A Reminder is not available due to the short lead time.'
       : undefined
 
-  // Reminders until Done banner (§6.41 PROPOSED, 2026-08-20) — replaces the
-  // single reminderCheckbox() with two independent .reminderitem toggles in
-  // one .reminderbanner box. "Daily thereafter" has no eligibility rule of
-  // its own on this screen (a brand-new Request, nothing can be overdue
-  // yet) — always enabled, default checked.
+  // "Day of" (migration 042, 2026-08-22) — no MIN_DAYS_FOR_REMINDER-style
+  // eligibility floor, unlike Day before: the whole point is same-day, so a
+  // Due Date of today or tomorrow is exactly the case this exists for.
+  // Contact is always required here, with no hasAmpleReminderLeadTime-style
+  // relaxation — a same-day send needs the Recipient's own time zone to
+  // know what "today" means, and that need is, if anything, greater at
+  // short lead times, not smaller.
+  const dayOfPrereqsMissing = form.dueDate.trim() === '' || !selectedContact
+  const dayOfTooltip = dayOfPrereqsMissing
+    ? 'Please select Contact and Due Date before modifying the Reminder.'
+    : undefined
+
+  // Reminders until Done banner (§6.41 PROPOSED, 2026-08-20; extended with a
+  // third "Day of" checkbox 2026-08-22, then relabeled "Day after"
+  // 2026-08-22) — three independent .reminderitem toggles in one
+  // .reminderbanner box. "Day after" has no eligibility rule of its own on
+  // this screen (a brand-new Request, nothing can be overdue yet) — always
+  // enabled.
   function reminderBanner(inline: boolean) {
     return (
       <div className={`reminderbanner${inline ? ' reminderbanner-inline' : ''}`}>
@@ -717,7 +775,19 @@ export default function CreateRequestForm() {
               disabled={reminderDisabled}
               onChange={(e) => set('reminderEnabled', e.target.checked)}
             />
-            <span>Morning before</span>
+            <span>Day before</span>
+          </label>
+          <label
+            className={`reminderitem${dayOfPrereqsMissing ? ' reminderitem-disabled' : ''}`}
+            title={dayOfTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderDayOfEnabled}
+              disabled={dayOfPrereqsMissing}
+              onChange={(e) => set('reminderDayOfEnabled', e.target.checked)}
+            />
+            <span>Day of</span>
           </label>
           <label className="reminderitem">
             <input
@@ -725,7 +795,7 @@ export default function CreateRequestForm() {
               checked={form.overdueReminderEnabled}
               onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
             />
-            <span>Daily thereafter</span>
+            <span>Day after</span>
           </label>
         </div>
       </div>
@@ -884,6 +954,7 @@ export default function CreateRequestForm() {
         due_date: form.dueDate,
         due_time: form.dueTime.trim() === '' ? null : form.dueTime,
         reminder_enabled: form.reminderEnabled,
+        reminder_day_of_enabled: form.reminderDayOfEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? 1 : null,

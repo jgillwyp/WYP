@@ -9,6 +9,7 @@ import {
   buildRequestEmailSubject,
   buildRequestEmailText,
   isReminderEligible,
+  type ReminderSchedule,
 } from '@/lib/email'
 
 // nodemailer needs Node's net/tls modules — not available on Next's Edge
@@ -126,7 +127,9 @@ export async function POST(request: Request) {
   // convention (CLAUDE.md, Database section).
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
-    .select('id, description, due_date, due_time, reminder_enabled, contacts(email)')
+    .select(
+      'id, description, due_date, due_time, reminder_enabled, reminder_day_of_enabled, overdue_reminder_enabled, contacts(email)'
+    )
     .eq('id', requestId)
     .single()
 
@@ -140,6 +143,8 @@ export async function POST(request: Request) {
     due_date: string | null
     due_time: string | null
     reminder_enabled: boolean
+    reminder_day_of_enabled: boolean
+    overdue_reminder_enabled: boolean
     contacts: { email: string } | null
   }
   const reqRow = reqRes as unknown as Row | null
@@ -160,20 +165,31 @@ export async function POST(request: Request) {
   const ownerName = profile?.display_name ?? null
   const ownerEmail = userData.user.email ?? ''
 
-  // A reminder is only ever promised in this email when it's both possible
-  // (isReminderEligible — Due Date more than two calendar days out) AND the
-  // sender left the Reminder checkbox on (reminder_enabled, migration 031,
-  // default true). The actual day-before send itself is still unbuilt — see
-  // CLAUDE.md's Known gaps — so this only governs whether the Initial
-  // email's own "a reminder will arrive" sentence is honest.
-  const reminderPromised = isReminderEligible(reqRow.due_date) && reqRow.reminder_enabled
+  // Reports the actual Reminders-until-Done schedule, not just a single
+  // yes/no promise (2026-08-22, second same-day follow-up — see the
+  // decisions log). "Day before" is still gated on isReminderEligible
+  // (Due Date more than two calendar days out) — the same eligibility
+  // check Create Request's own checkbox uses, since a value left checked
+  // from before the Due Date was edited down shouldn't be reported as
+  // active if it's now too close to fire. "Day of" and "Day after" have no
+  // eligibility floor of their own (by design — see email.ts's
+  // buildReminderScheduleSentence and CreateRequestForm.tsx's own
+  // dayOfPrereqsMissing), so their stored flags are reported as-is.
+  // dayAfter still reads the overdue_reminder_enabled column — renamed in
+  // meaning, not in the database, when "Daily thereafter" was simplified
+  // to a single day-after send (2026-08-22).
+  const reminderSchedule: ReminderSchedule = {
+    dayBefore: isReminderEligible(reqRow.due_date) && reqRow.reminder_enabled,
+    dayOf: reqRow.reminder_day_of_enabled,
+    dayAfter: reqRow.overdue_reminder_enabled,
+  }
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
 
   const subject = buildRequestEmailSubject('initial', ownerName, reqRow.due_date, reqRow.due_time)
   const emailBodyFields = {
     description: reqRow.description,
     link,
-    reminderPromised,
+    reminderSchedule,
     siteUrl,
     dueDate: reqRow.due_date,
     dueTime: reqRow.due_time,
@@ -189,7 +205,7 @@ export async function POST(request: Request) {
     due_time: reqRow.due_time,
     owner_name: ownerName,
   }
-  const icsContent = buildIcsContent(icsFields, link, { reminderPromised })
+  const icsContent = buildIcsContent(icsFields, link, { reminderSchedule })
 
   const transporter = getSmtpTransport()
   if (!transporter) {

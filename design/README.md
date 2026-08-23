@@ -273,3 +273,56 @@ also flagged by the initial audit pass as "missing" — checked and confirmed
 priority/category columns were never meant to carry their own rule, relying
 on the grid's own default alignment. The mockup matches the live app
 exactly here.
+
+## 2026-08-22 — Five-item batch from Jim's docx: no mockups updated
+
+Add Location's conversion to a modal (Create ToDo, and Attachments/
+Locations panel wherever it appears), the relaxed Reminder-checkbox
+lead-time logic on Create Request, the Daily-thereafter-greys-when-Done
+fix (Request Detail, Response Detail, Request Response), the search
+hidden-field exclusion fix (Main Screen), and the new ToDo Reminders
+feature (Account toggle + Reminders-until-Done panel on Create ToDo/ToDo
+Detail) were all built directly in their live components. None of the
+affected mockups (`WYP_create_todo_palette1.html`,
+`WYP_todo_detail_palette1.html`, `WYP_create_request_palette1.html`,
+`WYP_request_detail_palette1.html`, `WYP_response_detail_palette1.html`,
+`WYP_respond_to_request_palette1.html`) were updated to reflect any of
+these five changes. See the decisions log's 2026-08-22 entry for the full
+write-up.
+
+## 2026-08-22 — "Day of" Reminder (third Reminders-until-Done checkbox): §6.41 extended, no mockups updated
+
+§6.41's `.reminderbanner` now renders three `.reminderitem`s instead of two
+— "Day before" (renamed from "Morning before," `reminder_enabled`), a new
+"Day of" (`reminder_day_of_enabled`/`reminder_day_of_sent_at`, migration
+042), and "Daily thereafter" (`overdue_reminder_enabled`) — across all six
+screens the banner already appears on: Create Request, Request Detail,
+Response Detail, Request Response, Create ToDo, ToDo Detail (the §6.41
+table row above still lists only the first four Screens — it predates the
+ToDo Reminders feature added earlier the same day; flagged here rather than
+edited retroactively, since that row's own history already documents the
+banner's original two-checkbox shape). No new CSS class — the existing
+`.reminderitem`/`.reminderitem-disabled` shape accommodates a third item
+without change. None of the six mockups drew the Reminders-until-Done
+banner in either its two- or three-checkbox form, so none needed updating.
+See the decisions log's second 2026-08-22 entry for the full write-up,
+including the still-unresolved question of whether "Day of" should connect
+to the Overdue-notification system.
+
+## 2026-08-22 — "Daily thereafter" renamed "Day after" and simplified to a single one-time send; §6.41 label updated, no mockups updated
+
+Resolves the open question flagged in the entry above: Jim decided against
+connecting "Day of" to the Overdue system and instead replaced the whole
+recurring-nudge Overdue mechanism with a third, symmetric one-time
+Reminder — "Day after," fired once, the calendar day following Due Date.
+§6.41's `.reminderbanner` now reads "Day before" / "Day of" / "Day after"
+on all six screens the banner appears on; no CSS or markup shape changed,
+only the third item's label text (`overdue_reminder_enabled` is the same
+column "Daily thereafter" used, reused in place rather than renamed —
+migration 043's own header comment has the full reasoning). New Account
+toggles (three, for the checkboxes' own default state on a fresh Create
+Request/Create ToDo) have no drawn precedent in `WYP_your_account_
+palette1_floating.html` either. As with every earlier Reminders-until-Done
+batch, none of the six source mockups have interactive JS for this banner,
+so none needed updating. See the decisions log's fourth 2026-08-22 entry
+for the full write-up.

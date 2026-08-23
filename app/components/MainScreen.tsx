@@ -1122,19 +1122,28 @@ export default function MainScreen() {
     })
   }, [received, receivedFilter, query, isSearching, searchScope, fromDate, toDate])
 
+  // Hidden fields excluded from search (2026-08-22, owner) — a ToDo's
+  // due_date/category_id can still hold a value from before the owner
+  // turned Show Due/Done Dates (ToDos) or Private Category off (CLAUDE.md's
+  // own documented convention: the underlying data stays put, only the UI
+  // stops showing/editing it). Matching against a field the account can't
+  // currently see would surface a ToDo the searcher has no way to make
+  // sense of. Sent/Received never matched Category at all (neither screen
+  // shows it, matching PRD §2.3's own recipient-visibility rule), so no
+  // change needed there.
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
       if (!isSearching) {
         if (t.archived_at) return false
         return matchesStatusFilter(todoStatus(t), todoFilter)
       }
-      if (searchScope === 'daterange') return matchesDateRange(t.due_date, fromDate, toDate)
+      if (searchScope === 'daterange') return todoDatesEnabled && matchesDateRange(t.due_date, fromDate, toDate)
       return (
         t.description.toLowerCase().includes(query) ||
-        (t.categories?.name ?? '').toLowerCase().includes(query)
+        (categoriesEnabled && (t.categories?.name ?? '').toLowerCase().includes(query))
       )
     })
-  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate])
+  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate, todoDatesEnabled, categoriesEnabled])
 
   // Sorted on top of the already-filtered rows — filtering and sorting are
   // independent concerns (which rows show vs. what order they show in), so

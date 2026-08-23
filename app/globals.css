@@ -1317,11 +1317,13 @@ body {
 /* ============================================================================
    REMINDERS UNTIL DONE BANNER — §6.41 PROPOSED, 2026-08-20. Owner's own new
    design (two pasted mockups: Create Request, Response Detail) supersedes
-   §6.37's single .checkrow Reminder control with two independent toggles —
-   "Morning before" (the existing reminder_enabled day-before Reminder) and
-   "Daily thereafter" (new overdue_reminder_enabled, migration 037 — gates
-   the Recipient's automatic post-Due-Date Overdue notice and every
-   recurring nudge after it, entirely, when off).
+   §6.37's single .checkrow Reminder control with independent toggles — now
+   three: "Day before" (renamed from "Morning before," the existing
+   reminder_enabled day-before Reminder), "Day of" (reminder_day_of_enabled,
+   migration 042), and "Day after" (renamed from "Daily thereafter,"
+   migration 043, 2026-08-22 — overdue_reminder_enabled, column unchanged,
+   meaning simplified from a recurring cron nudge to a single send the
+   calendar day after Due Date, per the owner's own spam-complaint concern).
    .reminderbanner reuses .checkrow's own Strip-tint box (background,
    radius, padding) rather than inventing a new container. .reminderitem is
    a `white-space: nowrap` inline-flex unit — the owner's own explicit

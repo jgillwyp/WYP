@@ -7,6 +7,7 @@ import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
 import RepeatControl from './RepeatControl'
 import { supabase } from '@/lib/supabaseClient'
+import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
@@ -60,6 +61,9 @@ type TodoFormState = {
   doneDate: string
   categoryName: string
   description: string
+  reminderEnabled: boolean
+  reminderDayOfEnabled: boolean
+  overdueReminderEnabled: boolean
 }
 
 const CATEGORY_CAP = 20
@@ -233,6 +237,9 @@ export default function TodoDetailForm() {
     doneDate: '',
     categoryName: '',
     description: '',
+    reminderEnabled: true,
+    reminderDayOfEnabled: false,
+    overdueReminderEnabled: true,
   })
 
   // Private Category is now an opt-in account preference (migration 018,
@@ -245,6 +252,15 @@ export default function TodoDetailForm() {
   // form.doneDate afterward, since when this is off the Due/Done Date
   // fields it would otherwise sync with aren't rendered at all.
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — see
+  // AccountForm.tsx's identical gate.
+  const [todoRemindersEnabled, setTodoRemindersEnabled] = useState(false)
+  // reminder_sent_at (shared with Requests, already read by the cron
+  // route's own Phase A2) — "already sent" grey-out for Day before, same
+  // rule as RequestDetailForm.tsx's identical addition. reminderDayOfSentAt
+  // (migration 042, 2026-08-22) is the identical marker for "Day of."
+  const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
+  const [reminderDayOfSentAt, setReminderDayOfSentAt] = useState<string | null>(null)
   const [todoStatus, setTodoStatus] = useState<'open' | 'done'>('open')
   // Un-archive-on-clear (owner request, 2026-08-17) — the row's own
   // archived_at as loaded, carried unchanged through Save unless Done
@@ -413,6 +429,9 @@ export default function TodoDetailForm() {
     description: string
     todoStatus: 'open' | 'done'
     repeatRule: RepeatRule | null
+    reminderEnabled: boolean
+    reminderDayOfEnabled: boolean
+    overdueReminderEnabled: boolean
   } | null>(null)
   const hasChanges =
     initialFormRef.current !== null &&
@@ -422,7 +441,10 @@ export default function TodoDetailForm() {
       form.description !== initialFormRef.current.description ||
       todoStatus !== initialFormRef.current.todoStatus ||
       (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId ||
-      JSON.stringify(repeatRule) !== JSON.stringify(initialFormRef.current.repeatRule))
+      JSON.stringify(repeatRule) !== JSON.stringify(initialFormRef.current.repeatRule) ||
+      form.reminderEnabled !== initialFormRef.current.reminderEnabled ||
+      form.reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
+      form.overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
 
   // Quick-Done band (§6.31) — added 2026-08-11, matching CreateTodoForm.tsx's
   // identical handleQuickDone: this screen never got the band ported over
@@ -433,6 +455,96 @@ export default function TodoDetailForm() {
   function handleQuickDone() {
     set('doneDate', todayISODate())
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  // ToDo Reminders (migration 041, 2026-08-22) — same shape as
+  // RequestDetailForm.tsx's own reminderBanner, minus the Contact-related
+  // states a ToDo doesn't have. reminderArchived reuses this screen's own
+  // archivedAt (already fetched for the un-archive-on-clear feature);
+  // reminderAlreadySent reuses reminderSentAt, the same column the cron
+  // route's own ToDo Reminder phase already reads/writes.
+  const todoReminderArchived = archivedAt !== null
+  const todoReminderPrereqsMissing = form.dueDate.trim() === ''
+  const todoReminderIneligible = !todoReminderPrereqsMissing && !isReminderEligible(form.dueDate)
+  const todoReminderAlreadySent = reminderSentAt !== null
+  const todoReminderDisabled =
+    todoReminderArchived || todoReminderPrereqsMissing || todoReminderIneligible || todoReminderAlreadySent
+  const todoReminderTooltip = todoReminderArchived
+    ? 'Reminders are not available for archived ToDos.'
+    : todoReminderPrereqsMissing
+      ? 'Please select a Due Date before modifying the Reminder.'
+      : todoReminderIneligible
+        ? 'A Reminder is not available due to the short lead time.'
+        : todoReminderAlreadySent
+          ? 'The day-before Reminder has already been sent for this ToDo.'
+          : undefined
+
+  // "Day of" (migration 042, 2026-08-22) — no lead-time eligibility floor;
+  // the only prereqs are a Due Date and not-yet-archived. todoDayOfAlreadySent
+  // mirrors todoReminderAlreadySent's own shape, keyed off the independent
+  // reminder_day_of_sent_at column.
+  const todoDayOfAlreadySent = reminderDayOfSentAt !== null
+  const todoDayOfDisabled = todoReminderArchived || todoReminderPrereqsMissing || todoDayOfAlreadySent
+  const todoDayOfTooltip = todoReminderArchived
+    ? 'Reminders are not available for archived ToDos.'
+    : todoReminderPrereqsMissing
+      ? 'Please select a Due Date before modifying the Reminder.'
+      : todoDayOfAlreadySent
+        ? 'The day-of Reminder has already been sent for this ToDo.'
+        : undefined
+
+  const todoOverdueReminderDone = form.doneDate.trim() !== ''
+  const todoOverdueReminderDisabled = todoReminderArchived || todoOverdueReminderDone
+  const todoOverdueReminderTooltip = todoReminderArchived
+    ? 'Reminders are not available for archived ToDos.'
+    : todoOverdueReminderDone
+      ? 'This ToDo is already marked Done.'
+      : undefined
+
+  function todoReminderBanner() {
+    return (
+      <div className="reminderbanner">
+        <p className="reminderbanner-title">Reminders until Done</p>
+        <div className="reminderbanner-items">
+          <label
+            className={`reminderitem${todoReminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={todoReminderTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderEnabled}
+              disabled={todoReminderDisabled}
+              onChange={(e) => set('reminderEnabled', e.target.checked)}
+            />
+            <span>Day before</span>
+          </label>
+          <label
+            className={`reminderitem${todoDayOfDisabled ? ' reminderitem-disabled' : ''}`}
+            title={todoDayOfTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderDayOfEnabled}
+              disabled={todoDayOfDisabled}
+              onChange={(e) => set('reminderDayOfEnabled', e.target.checked)}
+            />
+            <span>Day of</span>
+          </label>
+          <label
+            className={`reminderitem${todoOverdueReminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={todoOverdueReminderTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.overdueReminderEnabled}
+              disabled={todoOverdueReminderDisabled}
+              onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
+            />
+            <span>Day after</span>
+          </label>
+        </div>
+      </div>
+    )
   }
 
   async function loadDialog() {
@@ -474,11 +586,16 @@ export default function TodoDetailForm() {
       const [todoRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, categories(name)')
+          .select(
+            'id, description, priority, due_date, done_date, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, categories(name)'
+          )
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
-        supabase.from('profiles').select('display_name, private_category_enabled, todo_dates_enabled, tier').single(),
+        supabase
+          .from('profiles')
+          .select('display_name, private_category_enabled, todo_dates_enabled, todo_reminders_enabled, tier')
+          .single(),
         // Print (2026-08-15) — same reasoning as RequestDetailForm.tsx's
         // identical addition.
         supabase
@@ -514,6 +631,11 @@ export default function TodoDetailForm() {
         archived_at: string | null
         repeat_rule: RepeatRule | null
         repeat_occurrence_index: number | null
+        reminder_enabled: boolean
+        overdue_reminder_enabled: boolean
+        reminder_sent_at: string | null
+        reminder_day_of_enabled: boolean
+        reminder_day_of_sent_at: string | null
         categories: { name: string } | null
       }
       const row = todoRes.data as unknown as Row
@@ -524,6 +646,9 @@ export default function TodoDetailForm() {
         doneDate: row.done_date ?? '',
         categoryName: row.categories?.name ?? '',
         description: row.description ?? '',
+        reminderEnabled: row.reminder_enabled,
+        reminderDayOfEnabled: row.reminder_day_of_enabled,
+        overdueReminderEnabled: row.overdue_reminder_enabled,
       })
       setCreatedAt(row.created_at)
       if (row.category_id && row.categories) {
@@ -533,6 +658,9 @@ export default function TodoDetailForm() {
       setOwnerName(ownerRes.data?.display_name ?? null)
       setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
       setTodoDatesEnabled(ownerRes.data?.todo_dates_enabled ?? false)
+      setTodoRemindersEnabled(ownerRes.data?.todo_reminders_enabled ?? false)
+      setReminderSentAt(row.reminder_sent_at)
+      setReminderDayOfSentAt(row.reminder_day_of_sent_at)
       setTier(ownerRes.data?.tier === 'subscriber' ? 'subscriber' : 'free')
       const initialTodoStatus = row.done_date ? 'done' : 'open'
       setTodoStatus(initialTodoStatus)
@@ -547,6 +675,9 @@ export default function TodoDetailForm() {
         description: row.description ?? '',
         todoStatus: initialTodoStatus,
         repeatRule: row.repeat_rule,
+        reminderEnabled: row.reminder_enabled,
+        reminderDayOfEnabled: row.reminder_day_of_enabled,
+        overdueReminderEnabled: row.overdue_reminder_enabled,
       }
 
       await loadDialog()
@@ -750,6 +881,9 @@ export default function TodoDetailForm() {
         description: form.description.trim(),
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? (repeatOccurrenceIndex ?? 1) : null,
+        reminder_enabled: form.reminderEnabled,
+        reminder_day_of_enabled: form.reminderDayOfEnabled,
+        overdue_reminder_enabled: form.overdueReminderEnabled,
         // Un-archive-on-clear (owner request, 2026-08-17): a ToDo that was
         // archived returns to active status the moment Done Date is
         // cleared — whether that happens via the plain Done Date field
@@ -892,6 +1026,13 @@ export default function TodoDetailForm() {
                     Done
                   </button>
                 </div>
+
+                {/* ToDo Reminders panel (migration 041, 2026-08-22) — shown
+                    above the Due/Done Dates row, per the owner's own
+                    instruction, only once the account has both Show
+                    Due/Done Dates (ToDos) and Add Reminders (ToDos) turned
+                    on. */}
+                {todoRemindersEnabled && todoReminderBanner()}
 
                 {/* Due Date + Done Date, combined into one row 2026-08-10 (owner's
                     own rough draft) — both optional (.opt, grey while empty,

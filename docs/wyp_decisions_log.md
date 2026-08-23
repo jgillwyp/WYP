@@ -6,6 +6,389 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — "Daily thereafter" replaced by a single one-time "Day after" notice, for both Requests and ToDos; Account-level default toggles for the three Reminder checkboxes
+
+Jim, working from a pasted screenshot of Request Detail plus two numbered
+requests, first proposed that "Day of" replace the automatic lapsed-
+Due-Time Overdue notice system entirely, framing it as giving the
+Requestor "full control over reminders," and separately asked for a
+Request Detail "Send Reminder" button for a manual, non-automated send.
+A design synthesis, then a visual mockup (via the visualize tool, built
+from this app's own real design tokens) of a two-gate Account-toggle-
+plus-per-item-checkbox model followed. Jim asked a clarifying question
+about the mechanics ("if a Request was marked Day of... unless this is
+turned on, it will be ignored?"), confirmed yes, and then reversed
+course on complexity grounds: "It is sufficiently complicated that
+end-users would easily get confused. So, I think we should drop
+time-lapse notices and just offer a Day of Reminder option on a per
+Request basis."
+
+A follow-up recommendation proposed dropping the recurring-nudge cron
+phases (old Phase B/C for Requests, old Phase A3 for ToDos) outright
+rather than leaving them dormant, keeping the underlying DB columns
+rather than dropping them, and asked one narrow clarifying question:
+did the scope apply to ToDos too. Jim's answer was the authoritative,
+comprehensive spec for the whole batch:
+
+> "The 'Daily thereafter' should be replaced by the 'Day after'. I don't
+> have any way to know, but the Daily thereafter is most likely to cause
+> spam complaints. The same three Reminder options should be available
+> for ToDos - and send the reminder to the Account holder. One Account
+> option (or 3 options) could be the default settings of the three
+> checkboxes for Reminders (for both Requests and ToDos). I expect there
+> will be other reasons for cron functionality in the app - even perhaps
+> from a system management perspective (so, I wouldn't encourage
+> dropping the underlying structure)."
+
+**What changed.** "Day after" (label only — `overdue_reminder_enabled`/
+`overdue_notified_at`, migration 037/032, reused in place rather than
+renamed, same precedent as every earlier UI-label rename in this app)
+now fires exactly once, the calendar day following Due Date, instead of
+an open-ended hourly-then-daily (Requests) or daily (ToDos) recurring
+nudge. `cron/tick/route.ts`'s old Phase B (moment-of-lapse transition)
+and Phase C (recurring nudges, both the hourly Due-Time-only C1 branch
+and the daily C2 branch) are collapsed into one simplified Phase B: a
+single send, gated on `overdue_reminder_enabled`, idempotent on
+`overdue_notified_at` alone. ToDo Phase A3 gets the identical treatment
+— single send instead of daily-recurring, same idempotency column. A
+checkbox left off past its own eligible day, or turned on afterward,
+produces no catch-up send, matching how "Day of" already behaved.
+`last_overdue_nudge_at` (migration 032) is now unused by this route —
+left in the schema per Jim's own "don't drop the underlying structure"
+instruction, and the `hoursSinceLocalDateTime` cron-time helper (only
+ever used by the old hourly C1 branch) is unimported but not deleted
+from `app/src/lib/cronTime.ts`.
+
+**Timing changed from the owner's zone to the Recipient's zone for
+Requests' "Day after."** The old Phase B fired at the owner's own local
+midnight-after ("whose day just ended"). The new single-send model is a
+Recipient-facing notice, same audience as "Day before"/"Day of," so it
+now uses the Recipient's own zone (`contacts.time_zone`, falling back to
+the owner's) for consistency with Phase A1/A1b. This is a reasoned
+change, not something Jim explicitly confirmed — flagged in the route's
+own header comment for visibility.
+
+**Migration 043** (drafted, not yet confirmed run) adds
+`profiles.reminder_default_day_before`/`day_of`/`day_after` (booleans,
+defaults true/false/false, matching the existing per-item checkbox
+defaults) with the standard per-column `grant update` for `authenticated`.
+These are pre-fill-only — read once by Create Request/Create ToDo on
+mount to set their own Reminders-until-Done checkboxes' initial state —
+never a live send-time gate, which is what distinguishes this from the
+earlier, ultimately-rejected "Send Day-of Reminders" account-level kill
+switch mocked up earlier in the same conversation. Three separate
+toggles were chosen over one combined preset, for direct 1:1 symmetry
+with the three per-item checkboxes.
+
+**Applied across all six Reminders-until-Done screens** (Create Request,
+Request Detail, Response Detail, Request Response, Create ToDo, ToDo
+Detail) plus `email.ts` (`ReminderSchedule.dailyThereafter` →
+`dayAfter`, `buildReminderScheduleSentence` simplified to a uniform "on
+the day ___" phrasing for all three types, dropping the old
+"daily thereafter has no 'on' prefix" special case), `send-request/
+route.ts`, `globals.css`'s `.reminderbanner` doc comment, and
+`AccountForm.tsx` (three new toggles added after "Notify Me When
+Reminders Are Sent," before the testing-only Subscribed toggle; the
+existing "Add Reminders (ToDos)" checknote's stale "Morning before /
+Daily thereafter" wording corrected to the current three-name set in
+the same pass). `npx tsc --noEmit`/`npm run lint` clean across the
+whole batch.
+
+\---
+
+## 2026-08-22 — Initial Request email's reminder sentence rewritten to describe the full Reminders-until-Done schedule (all 8 combinations)
+
+Third same-day follow-up to the "Day of" Reminder batch above. Jim: the
+Initial Request email's old fixed sentence — "A reminder will be sent the
+day before the Due Date of xx/xx/xxxx." — described only the "Day before"
+Reminder, which stopped being the whole story once "Day of" and "Daily
+thereafter" existed as independent checkboxes. He supplied the exact
+structure for all four shapes the sentence can take (none / one / two /
+all three active), with bracketed placeholders showing where each
+combination's wording differs, and one clarifying note: "Day of" needs no
+Due-Time-passed check of its own — a morning-of notice is sufficient
+regardless of whether the Due Time later passes that same day, since the
+next day's Overdue notice already covers that case. That confirms rather
+than changes anything already built — Phase A1b (cron/tick/route.ts) never
+checked Due Time to begin with.
+
+**New `buildReminderScheduleSentence(dueDate, dueTime, schedule)`**
+(`app/src/lib/email.ts`), replacing the old fixed `requestReminderSentence`.
+Takes a `ReminderSchedule` (`{ dayBefore, dayOf, dailyThereafter }`, all
+booleans) and returns the matching sentence:
+
+- none: "...you are scheduled to receive no Reminders."
+- one: "...Reminders only on the day before." / "...only on the day of."
+  / "...only daily thereafter."
+- two: "...Reminders: `<A>` and `<B>`." (e.g. "on the day of and daily
+  thereafter" — Jim's own literal example, reproduced exactly)
+- all three: "...Reminders: the day before, the day of, and daily
+  thereafter."
+
+"On" precedes "the day before"/"the day of" but never "daily thereafter"
+("on daily thereafter" isn't idiomatic), built per-key. One small,
+flagged deviation from Jim's literal bracket text: the single-item "daily
+thereafter" case gets "only" added for consistency with the other two
+single-item variants ("Reminders only daily thereafter."), where his own
+example omitted it ("[daily thereafter.]"). He framed the examples as
+showing structure, not final copy, so this reads as a reasonable
+consistency call rather than a misread of intent — easy to revert if he'd
+rather match the literal text.
+
+**Scope: the Initial Request email and its `.ics` attachment only** — not
+the actual day-before/day-of Reminder emails themselves (Phases A1/A1b,
+`app/api/cron/tick/route.ts`), which don't restate the full schedule
+inside a reminder that's already part of it. The old boolean
+`reminderPromised` field on `RequestEmailBodyFields` is now
+`reminderSchedule?: ReminderSchedule | null` — `null`/omitted skips the
+sentence entirely (the two Reminder-email cron phases), a real
+`ReminderSchedule` always renders one, including the "no Reminders" case
+(only the Initial email, `app/api/email/send-request/route.ts`, currently
+supplies one).
+
+**Eligibility gating preserved for "Day before" only.** `send-request/
+route.ts` computes `dayBefore: isReminderEligible(due_date) &&
+reminder_enabled` — same check as before this batch — since Create
+Request's own checkbox can be left checked-but-greyed when the Due Date is
+later edited too close, and the sentence should describe what will
+actually happen, not just the raw stored flag. "Day of" and "Daily
+thereafter" have no eligibility floor of their own (by design — see
+CreateRequestForm.tsx's `dayOfPrereqsMissing`, which only requires Due
+Date + Contact, and "Daily thereafter"'s own unconditional availability),
+so those two are reported as their stored column values directly.
+
+**`app/src/lib/ics.ts`'s `buildIcsDescription` now imports and calls
+`buildReminderScheduleSentence` directly** rather than carrying a second,
+separately-maintained copy of the same 8-branch logic — the same kind of
+cross-file exception this module's own header comment already carves out
+of the app's usual per-file-duplication convention (shared, non-trivial
+logic with more than one real caller). This removed `ics.ts`'s own local
+`formatMDY`/`formatTime12h` copies, which had no other caller once the old
+inline sentence logic was gone. `buildIcsContent`'s options field renamed
+`reminderPromised` → `reminderSchedule` to match; the two client-side "Add
+to Calendar" call sites (`RequestResponseForm.tsx`, `ResponseDetailForm.tsx`)
+were already omitting this option and needed no change.
+
+Verified the full 8-combination output against Jim's literal examples with
+a standalone script before shipping — every branch matches, including both
+of his exact quoted sentences ("on the day of and daily thereafter"; "the
+day before, the day of, and daily thereafter"). `npx tsc --noEmit`/`npm
+run lint` both clean.
+
+\---
+
+## 2026-08-22 — "Day of" Reminder (third Reminders-until-Done checkbox), "Morning before" renamed "Day before", spam-conscious default flip, real reminder_sent_at bug found and fixed
+
+Jim, still using ToDos for real business needs: a day-before Reminder alone
+isn't always enough lead time, so he asked for a same-day option alongside
+it — a third checkbox in the existing "Reminders until Done" banner
+(§6.41), on both Requests and ToDos. Renamed "Morning before" to "Day
+before" in every UI label (the email body wording that already says "the
+day before" is unchanged — Jim's own instruction, cosmetic label only).
+
+**Genuinely ambiguous connection, raised by Jim, not resolved.** His
+opening message also said: "This would also apply to the overdue notice
+related to a lapsed Due Time being (Reminder/Overdue are close in
+meaning)." An `AskUserQuestion` call to clarify was interrupted (Jim hit
+Escape by accident trying to read it in a dropped-in text box) and he then
+had to step away for two hours without answering. Rather than guess at a
+real behavioral change, "Day of" was built **fully independent** of the
+existing Overdue/"Daily thereafter" cron mechanics (Phases B/C for
+Requests, Phase A3 for ToDos) — its own column pair
+(`reminder_day_of_enabled`/`reminder_day_of_sent_at`), its own cron phases
+(A1b/A2b), no interaction with `overdue_notified_at`/
+`last_overdue_nudge_at` at all. Flagged in code comments at both new cron
+phases for Jim to revisit once he clarifies the intended relationship.
+
+**Default flipped to opt-out-of-most, not opt-in-to-most — Jim's own
+mid-thread instruction, applying to both Requests and ToDos.** "To avoid
+having a spam reaction from recipients, the default setting for Reminders
+should probably be the 'Day before' only." "Day of" defaults unchecked
+(new capability, no prior default to preserve). More significantly,
+"Daily thereafter" (`overdue_reminder_enabled`) — checked by default since
+migration 037 (2026-08-20) — now also defaults to **unchecked** for new
+rows; migration 042 flips the column's own `default` via `alter column ...
+set default false`, which only affects rows inserted from here on, not
+retroactively changing any existing Request/ToDo. All three screen-level
+`initialState` objects (`CreateRequestForm.tsx`, `CreateTodoForm.tsx`) were
+updated to match: `reminderEnabled: true, reminderDayOfEnabled: false,
+overdueReminderEnabled: false`.
+
+**"Day of" has no lead-time floor, unlike "Day before."**
+`isReminderEligible()`'s 3-day minimum exists so a day-before Reminder
+always has a real day-before to land on — same-day is the entire premise
+of "Day of," so there's nothing to be too close to. On Create Request, "Day
+of" was deliberately **not** given the same Contact-required waiver
+"Day before" got in the prior batch (`hasAmpleReminderLeadTime`,
+2026-08-22 earlier batch) — at short lead times a time-zone shift matters
+*more*, not less, and same-day sends are exactly the short-lead-time case,
+so Contact stays required for "Day of" regardless of how far out Due Date
+is. Request Detail's own "Day of" has no such question — Recipient is
+already fixed there, same as "Day before."
+
+**Real, pre-existing bug found and fixed in the same migration pass, not
+deferred.** While wiring the new fields into `get_request_by_token`/
+`get_received_request`, found that `reminder_sent_at` — read by both
+`ResponseDetailForm.tsx` and `RequestResponseForm.tsx` since the
+2026-08-20 grey-out feature shipped — was never actually added to either
+function's jsonb payload in any migration back to 036 (checked every
+version). At runtime `payload.reminder_sent_at` was always `undefined`,
+and `undefined !== null` evaluates `true` in JS, so `reminderAlreadySent`
+has been permanently `true` and "Day before" has been permanently
+disabled/greyed-out on both recipient-facing screens since that feature
+shipped — invisible to `tsc` because the RPC response is read through an
+`as` type assertion, which promises a shape without enforcing it at
+runtime. Fixed by adding `r.reminder_sent_at` to both functions' select
+lists and jsonb payloads in migration 042, alongside the new Day-of
+columns — this codebase's established "fix what you find while scoping
+this task" convention, not a separate migration.
+
+**Blocked, not built this batch:** Jim's own instruction to reword the
+Initial Request email's reminder-promise sentence ("For the Due Date [and
+Time] of xx/xx/xxxx, you are scheduled to receiv...") was cut off
+mid-word by an accidental Enter; he said he'd finish the thought next
+message. `requestReminderSentence()` in `app/src/lib/email.ts` is
+untouched pending that — now a more complex question than it was before
+this batch, since there are potentially three independent Reminder types
+to describe (Day before/Day of/Daily thereafter) rather than one.
+
+**Migration 042** (`docs/Week6 - SQL history.txt`) — DRAFTED, confirmed run
+by Jim ("migration 41 is run" referred to migration 041 from the prior
+batch; migration 042 was drafted and run in this same session). Adds
+`reminder_day_of_enabled`/`reminder_day_of_sent_at` to `requests`, flips
+`overdue_reminder_enabled`'s default, and re-creates `get_request_by_token`/
+`get_received_request` (both `returns jsonb`, safe to `create or replace`)
+and `set_response_done_by_token`/`set_response_done_as_recipient` (gained a
+sixth parameter, `p_reminder_day_of_enabled`).
+
+**Built across all six Reminders-until-Done screens**: Create Request,
+Request Detail, Response Detail, Request Response (anonymous), Create
+ToDo, ToDo Detail — each following its own screen's existing eligibility-
+gating idiom (Contact-required-or-not, Archived-or-not, own vs. RPC save
+path) rather than one shared pattern, matching how the original two-
+checkbox banner (migration 037/2026-08-20) was itself built per-screen.
+`app/api/cron/tick/route.ts` gained two new phases, A1b (Request Day-of,
+Recipient's own time zone) and A2b (ToDo Day-of, owner's own time zone),
+inserted without touching Phase B/C/A3's existing logic or numbering.
+Day-of sends are deliberately **not** added to the opt-in "Reminders sent"
+digest — its fixed wording ("A day-before Reminder email was just
+sent...") would misdescribe a same-day send; left out rather than reworded
+until Jim confirms he wants it included. No mockups updated — none of the
+six screens' static HTML models the Reminders-until-Done banner at all
+(same gap already flagged for the two-checkbox version). `npx tsc
+--noEmit`/`npm run lint` both clean.
+
+\---
+
+## 2026-08-22 — Five itemized fixes from Jim's uploaded doc: Add Location modal, Reminder-checkbox lead-time waiver, Daily-thereafter-when-Done grey-out, search hidden-field exclusion, ToDo Reminders (new feature)
+
+Jim uploaded `addl items as of 8-22-26.docx` itemizing five areas needing
+attention, two with embedded reference images. All five built directly
+(no mockups exist for any of these interactions to update from — each is
+flagged below rather than silently skipped).
+
+**1. Add Location converted to a modal, matching Add Dialog's pattern.**
+Jim's own stated second reason — "it will solve the problem of having a
+Location entered, not clicking the save button, and it being discarded)" —
+was the real motivator: the old inline Add Location box let a typed
+Description/Location sit in local form state indefinitely with no save
+prompt, silently lost on navigation. Rebuilt as a `.scrim`/`.modal` overlay
+(title + Cancel/Save row, fields below, inline `.ferror`) identical in
+structure to the existing Add Dialog modal — applied to both
+`CreateTodoForm.tsx` (staged-entry version, written on ToDo Save) and
+`AttachmentsPanel.tsx` (live-insert version, used by ToDo Detail/Response
+Detail/Request Response/Request Detail wherever Locations or real
+Attachments render). The empty-state and populated-state Add Location
+buttons both now open the modal instead of an inline box; a `closeRefForm`/
+`closeLocationModal` helper resets the fields on Cancel without discarding
+silently — the same "explicit save or explicit cancel, no third state"
+guarantee Add Dialog already had.
+
+**2. Reminder "Morning before" checkbox: Contact no longer required when
+Due Date is comfortably far out.** Jim's exact framing: on Create Request,
+if Due Date alone (no Contact yet) is 4+ days ahead of today, the checkbox
+should stop being greyed out for lack of a Contact. New
+`hasAmpleReminderLeadTime()`/`MIN_DAYS_TO_SKIP_CONTACT_CHECK = 4`
+(`app/src/lib/email.ts`), separate from the existing 3-day
+`isReminderEligible()` used for the Reminder's actual send-eligibility
+check — deliberately two different thresholds for two different questions
+("can this ever fire" vs. "do we need a Contact selected before showing the
+checkbox as available at all"). Applied only to Create Request — Request
+Detail's Recipient is already fixed by the time that screen is reached, so
+the Contact-gating branch this fix targets doesn't exist there. **Contact's
+own time zone is still used for the Reminder's actual send time once one is
+selected** — this only relaxes the *display* gate, not the eventual
+recipient-zone timing logic in the cron route, which is unaffected.
+
+**3. "Daily thereafter" checkbox greys out once Done.** Jim: for the
+Reminders-until-Done banner, Daily thereafter should grey out if the
+Request is already marked Done — continuing to offer an Overdue nudge
+toggle for an item that can't become Overdue again reads as a dead control.
+Applied to Request Detail, Response Detail, and Request Response (the three
+screens where a Done state is reachable) — not Create Request, which can't
+yet be Done. Each screen's own existing "archived" disable-reason takes
+priority in the tooltip when both apply; otherwise the tooltip reads "This
+Request is already marked Done."
+
+**4. Search no longer matches hidden Category/Date values.** Jim: if
+Private Categories are off (Account toggle), Category shouldn't be a
+searchable field even though it was still being matched; same for a
+ToDo's Due Date when Show Due/Done Dates (ToDos) is off. Fixed in
+`MainScreen.tsx`'s `filteredTodos` — the text-query branch now excludes
+Category from its `.includes(query)` check when `categoriesEnabled` is
+false, and the Date Range branch returns nothing for ToDos at all when
+`todoDatesEnabled` is false (there's no due_date to range-match against
+once it's conceptually hidden). Sent/Received were checked and don't need
+the same fix — neither section's search ever matched against Category
+text to begin with.
+
+**5. ToDo Reminders — new feature, not in any prior design pass.** Jim's
+image showed a "Reminders until Done" panel (Morning before / Daily
+thereafter) for ToDos, gated on Show Due/Done Dates (ToDos) being on. Built
+as a close mirror of the existing Request-side feature:
+
+- **Migration 041** (`profiles.todo_reminders_enabled boolean not null
+  default false`) — **DRAFTED, NOT YET CONFIRMED RUN.** No schema change
+  needed for the per-ToDo columns themselves — `reminder_enabled`/
+  `overdue_reminder_enabled`/`reminder_sent_at`/`overdue_notified_at`/
+  `last_overdue_nudge_at` already exist on `requests` from the Request-side
+  work (migrations 031/032/037), since ToDos and Requests share one table.
+- New Account toggle, "Add Reminders (ToDos)" — greyed out until Show
+  Due/Done Dates (ToDos) is on, same `.checkrow-disabled` convention as
+  every other prerequisite-gated toggle in this file.
+- New `todoReminderBanner()` on both Create ToDo and ToDo Detail, reusing
+  the existing `.reminderbanner`/`.reminderitem` CSS verbatim (no new
+  styling needed). Morning-before eligibility reuses `isReminderEligible()`
+  (3-day lead time, same rule as Requests); Daily-thereafter greys out once
+  the ToDo's own Done Date is filled, matching fix #3 above.
+- **Scope judgment call, flagged rather than silently assumed**: "Daily
+  thereafter" nomenclature implies ToDos need a real recurring
+  Overdue-nudge mechanism, which did not exist for ToDos before this batch
+  (only a one-time day-before Reminder did). Built it as a genuine new cron
+  phase rather than a checkbox with no backing behavior — new
+  `buildTodoOverdueEmailSubject/Html/Text` templates (`app/src/lib/email.ts`)
+  and a new Phase A3 in `app/api/cron/tick/route.ts`: daily-only cadence (no
+  hourly first-nudge branch, since ToDos have no `due_time` the way
+  Requests do), gated on both `profile.todo_reminders_enabled` and the
+  row's own `overdue_reminder_enabled`, sent to the owner's own account
+  email, first firing the day after Due Date and then once per local
+  calendar day thereafter — mirroring Requests' own Phase B/C but combined
+  into one loop since there's no Due-Time/Due-Date-only split to make for
+  ToDos. New `counts.todoOverdueNotices`/`todoOverdueNudges` in the route's
+  summary response. **If this scope inference is wrong — if Jim only wanted
+  the UI checkbox with no real send behind it yet — this is the piece to
+  walk back**, not any of the other four items.
+
+`npx tsc --noEmit`/`npm run lint` clean across the whole 5-item batch.
+
+**No mockups updated for any of these five items** — none of the affected
+mockups (Create ToDo, ToDo Detail, Create Request, Request Detail, Response
+Detail, Request Response) model Add Location as a modal, the relaxed
+Reminder-checkbox logic, the Done-greyed Daily-thereafter state, or the new
+ToDo Reminders panel. Flagged in `design/README.md`, not silently skipped.
+
+\---
+
 ## 2026-08-22 — Cache-busted the email logo asset (eighth same-day follow-up)
 
 Jim confirmed two of the three fixes from the same-day batch immediately

@@ -18,28 +18,10 @@
  * convention.
  */
 
+import { buildReminderScheduleSentence, type ReminderSchedule } from './email'
+
 export const ICS_DEFAULT_DUE_TIME = '09:00'
 export const ICS_DURATION_MINUTES = 30
-
-// Human-readable MM-DD-YY / 12-hour time — matches the app-wide formatMDY/
-// formatTime12h convention already duplicated per-component elsewhere
-// (RequestDetailForm.tsx, app/src/lib/email.ts, ...); this file gets its
-// own copy for the same reason those do, needed here starting 2026-08-22
-// when buildIcsDescription's reminder sentence started naming the actual
-// Due Date/Time it promises.
-function formatMDY(value: string): string {
-  const [y, m, d] = value.slice(0, 10).split('-')
-  return `${m}-${d}-${y.slice(2)}`
-}
-
-function formatTime12h(value: string): string {
-  const [hStr, mStr] = value.split(':')
-  let h = parseInt(hStr, 10)
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  h = h % 12
-  if (h === 0) h = 12
-  return `${h}:${mStr} ${ampm}`
-}
 
 export function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -128,12 +110,12 @@ export function foldIcsLine(line: string): string {
 // most calendar/mail clients auto-linkify a bare URL in an event
 // description on their own.
 //
-// options.reminderPromised defaults to false — the two client-side "Add to
+// options.reminderSchedule defaults to null — the two client-side "Add to
 // Calendar" call sites (RequestResponseForm.tsx, ResponseDetailForm.tsx)
-// only know a Request's due_date, never the sender's own reminder_enabled
-// preference, so they can't honestly promise a reminder either way; only
+// only know a Request's due_date, never the sender's own three Reminder
+// settings, so they can't honestly describe a schedule either way; only
 // the emailed .ics (built server-side in send-request/route.ts, which has
-// already computed the real reminderPromised value) passes it explicitly.
+// already computed the real ReminderSchedule) passes it explicitly.
 //
 // dueDate/dueTime/ownerName added 2026-08-22, matching
 // buildRequestEmailHtml/Text's own same-day changes (email.ts) — this
@@ -142,31 +124,33 @@ export function foldIcsLine(line: string): string {
 // sentence needed the identical extension: the button/link text now names
 // the Requestor, and the reminder sentence now names the actual Due
 // Date/Time it's promising rather than leaving it unstated.
+//
+// Replaced 2026-08-22 (second same-day follow-up) — was a single boolean
+// (reminderPromised) gating one fixed "day before" sentence; now the same
+// ReminderSchedule shape buildRequestEmailHtml/Text take, rendered through
+// email.ts's own buildReminderScheduleSentence rather than a second,
+// separately-maintained copy of its 8-branch logic. Requires dueDate to be
+// non-null when reminderSchedule is supplied — every real caller (send-
+// request/route.ts) already guards on that before calling in.
 export function buildIcsDescription(
   description: string,
   link: string,
   siteUrl: string,
   options: {
-    reminderPromised?: boolean
+    reminderSchedule?: ReminderSchedule | null
     dueDate?: string | null
     dueTime?: string | null
     ownerName?: string | null
   } = {}
 ): string {
-  const { reminderPromised = false, dueDate, dueTime, ownerName } = options
+  const { reminderSchedule = null, dueDate, dueTime, ownerName } = options
   const opener = ownerName
     ? `Click to respond or mark this Request from ${ownerName} as completed: ${link}`
     : `Click to respond or mark this Request as completed: ${link}`
   const parts = [opener, description]
 
-  if (reminderPromised) {
-    const due =
-      dueTime && dueTime.trim() !== ''
-        ? `A reminder email will arrive the day before the Due Date and Time of ${formatMDY(dueDate ?? '')} ${formatTime12h(dueTime)}.`
-        : dueDate
-          ? `A reminder email will arrive the day before the Due Date of ${formatMDY(dueDate)}.`
-          : 'A reminder email will arrive the day before the Due Date.'
-    parts.push(due)
+  if (reminderSchedule && dueDate) {
+    parts.push(buildReminderScheduleSentence(dueDate, dueTime ?? null, reminderSchedule))
   }
 
   parts.push(
@@ -230,11 +214,11 @@ export function cameFromCalendarLink(search: string): boolean {
   return new URLSearchParams(search).get('src') === 'calendar'
 }
 
-// options.reminderPromised is passed through to buildIcsDescription — only
+// options.reminderSchedule is passed through to buildIcsDescription — only
 // the server-side send-request route has a real value to give it (it
-// already computes reminderPromised for the email body); the two
+// already computes the ReminderSchedule for the email body); the two
 // client-side "Add to Calendar" call sites (RequestResponseForm.tsx,
-// ResponseDetailForm.tsx) omit it and get the function's own false default,
+// ResponseDetailForm.tsx) omit it and get the function's own null default,
 // same reasoning as buildIcsDescription's own doc comment above. siteUrl is
 // derived from the response link's own origin rather than threaded through
 // as a required parameter, since every caller already has a full link and
@@ -242,7 +226,7 @@ export function cameFromCalendarLink(search: string): boolean {
 export function buildIcsContent(
   payload: IcsRequestFields,
   link: string,
-  options?: { reminderPromised?: boolean }
+  options?: { reminderSchedule?: ReminderSchedule | null }
 ): string {
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
   const hasTime = payload.due_time != null && payload.due_time.trim() !== ''
@@ -298,7 +282,7 @@ export function buildIcsContent(
     `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
     `DESCRIPTION:${icsEscapeText(
       buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, {
-        reminderPromised: options?.reminderPromised,
+        reminderSchedule: options?.reminderSchedule,
         dueDate: payload.due_date,
         dueTime: payload.due_time,
         ownerName: payload.owner_name,

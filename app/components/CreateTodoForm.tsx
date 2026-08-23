@@ -8,6 +8,7 @@ import RepeatControl from './RepeatControl'
 import { supabase } from '@/lib/supabaseClient'
 import { insertAttachmentReference } from '@/lib/attachmentsClient'
 import { urlLocationHref } from '@/lib/attachments'
+import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule } from '@/lib/repeatRule'
 
 /**
@@ -72,6 +73,9 @@ type TodoFormState = {
   doneDate: string
   categoryName: string
   description: string
+  reminderEnabled: boolean
+  reminderDayOfEnabled: boolean
+  overdueReminderEnabled: boolean
 }
 
 const initialState: TodoFormState = {
@@ -84,6 +88,17 @@ const initialState: TodoFormState = {
   doneDate: '',
   categoryName: '',
   description: '',
+  // ToDo Reminders (migration 041, 2026-08-22; extended with "Day of" and
+  // new defaults, migration 042, 2026-08-22 same day; "Daily thereafter"
+  // renamed "Day after" and simplified to a single send, migration 043,
+  // 2026-08-22 same day) — hardcoded fallback only, overwritten on mount
+  // by the account's own reminder_default_day_before/day_of/day_after
+  // columns (profiles, migration 043). Only shown/editable when the
+  // account's todo_reminders_enabled is on; the columns themselves are
+  // shared with Requests on the `requests` table.
+  reminderEnabled: true,
+  reminderDayOfEnabled: false,
+  overdueReminderEnabled: false,
 }
 
 const CATEGORY_CAP = 20
@@ -197,6 +212,11 @@ export default function CreateTodoForm() {
   // initial state; there's no existing done_date to derive an initial
   // 'done' status from here, unlike TodoDetailForm.tsx.
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — see
+  // AccountForm.tsx's identical gate. Only meaningful alongside
+  // todoDatesEnabled — a brand-new ToDo with dates off has no Due Date for
+  // a Reminder to anchor on either way.
+  const [todoRemindersEnabled, setTodoRemindersEnabled] = useState(false)
   const [todoStatus, setTodoStatus] = useState<'open' | 'done'>('open')
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
@@ -268,15 +288,29 @@ export default function CreateTodoForm() {
       .order('name')
       .then(({ data }) => setCategories(data ?? []))
 
+    // reminder_default_day_before/day_of/day_after (migration 043,
+    // 2026-08-22) pre-fill the three Reminders-until-Done checkboxes below
+    // — read once here, same as CreateRequestForm.tsx's identical
+    // addition, never a live gate (see that file's own comment for the
+    // full reasoning).
     supabase
       .from('profiles')
-      .select('display_name, private_category_enabled, todo_dates_enabled, tier')
+      .select(
+        'display_name, private_category_enabled, todo_dates_enabled, todo_reminders_enabled, tier, reminder_default_day_before, reminder_default_day_of, reminder_default_day_after'
+      )
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.private_category_enabled ?? false)
         setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+        setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
+        setForm((f) => ({
+          ...f,
+          reminderEnabled: data?.reminder_default_day_before ?? f.reminderEnabled,
+          reminderDayOfEnabled: data?.reminder_default_day_of ?? f.reminderDayOfEnabled,
+          overdueReminderEnabled: data?.reminder_default_day_after ?? f.overdueReminderEnabled,
+        }))
       })
   }, [])
 
@@ -376,6 +410,21 @@ export default function CreateTodoForm() {
     setLocationFormOpen(false)
   }
 
+  // Add Location closed via Cancel or the scrim — same reset as a
+  // successful Save, minus the append. 2026-08-22: Add Location converted
+  // from an always-visible inline box to a real modal (scrim + .modal),
+  // matching Add Dialog/Add Category exactly — owner's own request, for UI
+  // consistency and because an inline box let a typed-but-unsaved Location
+  // get silently lost (scrolled past, or the outer Save clicked instead of
+  // this box's own Save); a modal's scrim makes "still open, not yet saved"
+  // impossible to miss.
+  function closeLocationModal() {
+    setLocationFormOpen(false)
+    setLocationDescription('')
+    setLocationValue('')
+    setLocationError(null)
+  }
+
   function removeStagedLocation(index: number) {
     setStagedLocations((entries) => entries.filter((_, i) => i !== index))
   }
@@ -439,6 +488,83 @@ export default function CreateTodoForm() {
   function handleQuickDone() {
     set('doneDate', todayISODate())
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  // ToDo Reminders (migration 041, 2026-08-22, owner's own itemized
+  // request) — same shape as CreateRequestForm.tsx's own reminderBanner,
+  // minus the Contact-related grey-out states a ToDo doesn't have (no
+  // Recipient here). "Day before" greys out until a Due Date is filled
+  // in and eligible (isReminderEligible, same 3-day floor as a Request's
+  // own); "Day after" (renamed from "Daily thereafter," migration 043,
+  // 2026-08-22 — column unchanged, meaning simplified to a single send)
+  // greys out once Done Date already holds a value — nothing left to
+  // notify about on a ToDo that's already done.
+  const todoReminderPrereqsMissing = form.dueDate.trim() === ''
+  const todoReminderIneligible = !todoReminderPrereqsMissing && !isReminderEligible(form.dueDate)
+  const todoReminderDisabled = todoReminderPrereqsMissing || todoReminderIneligible
+  const todoReminderTooltip = todoReminderPrereqsMissing
+    ? 'Please select a Due Date before modifying the Reminder.'
+    : todoReminderIneligible
+      ? 'A Reminder is not available due to the short lead time.'
+      : undefined
+
+  // "Day of" (migration 042, 2026-08-22) — no lead-time eligibility floor;
+  // the only prereq is a Due Date, same reasoning as the Request-side
+  // screens' own "Day of" addition.
+  const todoDayOfDisabled = todoReminderPrereqsMissing
+  const todoDayOfTooltip = todoDayOfDisabled
+    ? 'Please select a Due Date before modifying the Reminder.'
+    : undefined
+
+  const todoOverdueReminderDisabled = form.doneDate.trim() !== ''
+  const todoOverdueReminderTooltip = todoOverdueReminderDisabled
+    ? 'This ToDo is already marked Done.'
+    : undefined
+
+  function todoReminderBanner() {
+    return (
+      <div className="reminderbanner">
+        <p className="reminderbanner-title">Reminders until Done</p>
+        <div className="reminderbanner-items">
+          <label
+            className={`reminderitem${todoReminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={todoReminderTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderEnabled}
+              disabled={todoReminderDisabled}
+              onChange={(e) => set('reminderEnabled', e.target.checked)}
+            />
+            <span>Day before</span>
+          </label>
+          <label
+            className={`reminderitem${todoDayOfDisabled ? ' reminderitem-disabled' : ''}`}
+            title={todoDayOfTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderDayOfEnabled}
+              disabled={todoDayOfDisabled}
+              onChange={(e) => set('reminderDayOfEnabled', e.target.checked)}
+            />
+            <span>Day of</span>
+          </label>
+          <label
+            className={`reminderitem${todoOverdueReminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={todoOverdueReminderTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.overdueReminderEnabled}
+              disabled={todoOverdueReminderDisabled}
+              onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
+            />
+            <span>Day after</span>
+          </label>
+        </div>
+      </div>
+    )
   }
 
   const categoryQueryEmpty = form.categoryName.trim() === ''
@@ -562,6 +688,9 @@ export default function CreateTodoForm() {
         priority: form.priority,
         due_date: form.dueDate.trim() === '' ? null : form.dueDate,
         done_date: effectiveDoneDate,
+        reminder_enabled: form.reminderEnabled,
+        reminder_day_of_enabled: form.reminderDayOfEnabled,
+        overdue_reminder_enabled: form.overdueReminderEnabled,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? 1 : null,
       })
@@ -726,6 +855,13 @@ export default function CreateTodoForm() {
                     Done
                   </button>
                 </div>
+
+                {/* ToDo Reminders panel (migration 041, 2026-08-22) — shown
+                    above the Due/Done Dates row, per the owner's own
+                    instruction, only once the account has both Show
+                    Due/Done Dates (ToDos) and Add Reminders (ToDos) turned
+                    on. */}
+                {todoRemindersEnabled && todoReminderBanner()}
 
                 {/* Due Date + Done Date, combined into one row (owner's own rough
                     draft) — both optional, so no .req border and no
@@ -1018,7 +1154,7 @@ export default function CreateTodoForm() {
                 which stays reserved for the locked (free-tier) case below. */}
             {tier === 'subscriber' ? (
               <div className="fgroup">
-                {stagedLocations.length === 0 && !locationFormOpen && (
+                {stagedLocations.length === 0 && (
                   <div className="frow">
                     <span className="actlabel">Locations are URLs or File paths.</span>
                     <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
@@ -1026,55 +1162,15 @@ export default function CreateTodoForm() {
                     </button>
                   </div>
                 )}
-                {stagedLocations.length > 0 && !locationFormOpen && (
+                {stagedLocations.length > 0 && (
                   <div className="fieldact">
                     <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
                       Add Location
                     </button>
                   </div>
                 )}
-                {(stagedLocations.length > 0 || locationFormOpen) && (
+                {stagedLocations.length > 0 && (
                   <>
-                    {locationFormOpen && (
-                      <div className="dlgstaged">
-                        <div className="fgroup ffloat">
-                          <input
-                            className="finput"
-                            placeholder=" "
-                            value={locationDescription}
-                            onChange={(e) => setLocationDescription(e.target.value)}
-                          />
-                          <label className="flabel">Description</label>
-                        </div>
-                        <div className="fgroup ffloat">
-                          <input
-                            className="finput"
-                            placeholder=" "
-                            value={locationValue}
-                            onChange={(e) => setLocationValue(e.target.value)}
-                          />
-                          <label className="flabel">Location (path or URL)</label>
-                        </div>
-                        {locationError && <p className="ferror">{locationError}</p>}
-                        <div className="bandcluster">
-                          <button className="btn" type="button" onClick={saveStagedLocation}>
-                            Save
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            type="button"
-                            onClick={() => {
-                              setLocationFormOpen(false)
-                              setLocationDescription('')
-                              setLocationValue('')
-                              setLocationError(null)
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
                     <div className="dlgstaged">
                       {stagedLocations.map((entry, i) => {
                         const href = urlLocationHref(entry.location)
@@ -1280,6 +1376,51 @@ export default function CreateTodoForm() {
                 </p>
               </div>
               {dialogModalError && <p className="ferror" style={{ marginTop: -8 }}>{dialogModalError}</p>}
+            </div>
+          </>
+        )}
+
+        {/* Add Location modal — converted from an inline box to a real
+            modal, 2026-08-22 (owner's own request; see closeLocationModal's
+            comment above). Same shape as Add Dialog's modal just above:
+            title + Cancel/Save on one header row, fields below. */}
+        {locationFormOpen && (
+          <>
+            <div className="scrim" onClick={closeLocationModal} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="addloc-title">
+              <div className="modalhead">
+                <p className="modal-title" id="addloc-title">
+                  Add Location
+                </p>
+                <div className="modalacts">
+                  <button className="btn-secondary" type="button" onClick={closeLocationModal}>
+                    Cancel
+                  </button>
+                  <button className="btn" type="button" onClick={saveStagedLocation}>
+                    Save
+                  </button>
+                </div>
+              </div>
+              <div className="fgroup ffloat">
+                <input
+                  className="finput"
+                  placeholder=" "
+                  value={locationDescription}
+                  onChange={(e) => setLocationDescription(e.target.value)}
+                  autoFocus
+                />
+                <label className="flabel">Description</label>
+              </div>
+              <div className="fgroup ffloat">
+                <input
+                  className="finput"
+                  placeholder=" "
+                  value={locationValue}
+                  onChange={(e) => setLocationValue(e.target.value)}
+                />
+                <label className="flabel">Location (path or URL)</label>
+              </div>
+              {locationError && <p className="ferror" style={{ marginTop: -8 }}>{locationError}</p>}
             </div>
           </>
         )}

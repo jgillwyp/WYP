@@ -40,21 +40,22 @@ import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
  * (a side-by-side Date/Recipient + control layout was tried and reverted
  * here once already, .metatop/.metacol, 2026-08-10, over Android word-wrap).
  *
- * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20) —
- * the single Reminder checkbox above is superseded by a two-checkbox
- * "Reminders until Done" banner (.reminderbanner/.reminderitem, globals.css):
- * "Morning before" is the existing day-before Reminder (reminder_enabled,
- * unchanged rules), "Daily thereafter" is a new opt-OUT of the existing
- * unconditional Overdue-notification cron system (overdue_reminder_enabled,
- * default true — this is a behavior-preserving default, not a neutral
- * opt-in one, since that system has been unconditional since 2026-08-17).
- * Confirmed with the owner: unchecking "Daily thereafter" stops the
- * Recipient's Overdue emails entirely, including the first notice, not just
- * the repeating nudges after it (see app/api/cron/tick/route.ts Phase B/C).
- * "Morning before" gains a second, independent grey-out condition here —
- * reminder_sent_at (fetched below) is not null, i.e. it has already gone out
- * for this Request — layered on top of the existing eligibility checks;
- * "Daily thereafter" has no eligibility gate of its own on this screen.
+ * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20;
+ * extended to three checkboxes with "Day of," migration 042, 2026-08-22) —
+ * the single Reminder checkbox above is superseded by a "Reminders until
+ * Done" banner (.reminderbanner/.reminderitem, globals.css): "Day before"
+ * (renamed from "Morning before") is the existing day-before Reminder
+ * (reminder_enabled, unchanged rules), "Day of" fires the same morning as
+ * Due Date (reminder_day_of_enabled), and "Day after" (renamed from "Daily
+ * thereafter," migration 043, 2026-08-22 — see that migration's own header
+ * comment) fires once, the calendar day following Due Date
+ * (overdue_reminder_enabled, column unchanged, meaning simplified from a
+ * recurring cron nudge to a single send — Jim's own spam-complaint
+ * concern). "Day before" gains a second, independent grey-out condition
+ * here — reminder_sent_at (fetched below) is not null, i.e. it has already
+ * gone out for this Request — layered on top of the existing eligibility
+ * checks; "Day of" and "Day after" have no eligibility gate of their own on
+ * this screen beyond the shared archived-Request grey-out.
  */
 
 type Kind = 'question' | 'answer' | 'comment'
@@ -90,6 +91,7 @@ type RequestFormState = {
   categoryName: string
   description: string
   reminderEnabled: boolean
+  reminderDayOfEnabled: boolean
   overdueReminderEnabled: boolean
 }
 
@@ -284,11 +286,14 @@ export default function RequestDetailForm() {
   // there's no Archive/Un-archive control on this screen, only the
   // side-effect of clearing Done Date.
   const [archivedAt, setArchivedAt] = useState<string | null>(null)
-  // Reminders until Done banner (2026-08-20) — when "Morning before" already
+  // Reminders until Done banner (2026-08-20) — when "Day before" already
   // went out for this Request, per the owner's own new grey-out rule. Not
   // itself editable; loaded once and compared against, same shape as
-  // archivedAt above.
+  // archivedAt above. reminderDayOfSentAt (migration 042, 2026-08-22) is the
+  // identical idempotency marker for the new "Day of" checkbox — independent
+  // of reminderSentAt, since the two Reminders fire on different days.
   const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
+  const [reminderDayOfSentAt, setReminderDayOfSentAt] = useState<string | null>(null)
 
   // Repeat (Jim's own recurrence-method design, 2026-08-21) — loaded from
   // the row itself, edited via RepeatControl's own modal, written back on
@@ -307,6 +312,7 @@ export default function RequestDetailForm() {
     categoryName: '',
     description: '',
     reminderEnabled: true,
+    reminderDayOfEnabled: false,
     overdueReminderEnabled: true,
   })
 
@@ -481,6 +487,7 @@ export default function RequestDetailForm() {
     categoryId: string | null
     description: string
     reminderEnabled: boolean
+    reminderDayOfEnabled: boolean
     overdueReminderEnabled: boolean
     repeatRule: RepeatRule | null
   } | null>(null)
@@ -492,6 +499,7 @@ export default function RequestDetailForm() {
       form.doneTime !== initialFormRef.current.doneTime ||
       form.description !== initialFormRef.current.description ||
       form.reminderEnabled !== initialFormRef.current.reminderEnabled ||
+      form.reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
       form.overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled ||
       (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId ||
       JSON.stringify(repeatRule) !== JSON.stringify(initialFormRef.current.repeatRule))
@@ -544,7 +552,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, archived_at, repeat_rule, repeat_occurrence_index, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, archived_at, repeat_rule, repeat_occurrence_index, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -588,6 +596,8 @@ export default function RequestDetailForm() {
         reminder_enabled: boolean
         overdue_reminder_enabled: boolean
         reminder_sent_at: string | null
+        reminder_day_of_enabled: boolean
+        reminder_day_of_sent_at: string | null
         archived_at: string | null
         repeat_rule: RepeatRule | null
         repeat_occurrence_index: number | null
@@ -600,6 +610,7 @@ export default function RequestDetailForm() {
       setCreatedAt(row.created_at)
       setArchivedAt(row.archived_at)
       setReminderSentAt(row.reminder_sent_at)
+      setReminderDayOfSentAt(row.reminder_day_of_sent_at)
       setRepeatRule(row.repeat_rule)
       setRepeatOccurrenceIndex(row.repeat_occurrence_index)
       setForm({
@@ -610,6 +621,7 @@ export default function RequestDetailForm() {
         categoryName: row.categories?.name ?? '',
         description: row.description ?? '',
         reminderEnabled: row.reminder_enabled,
+        reminderDayOfEnabled: row.reminder_day_of_enabled,
         overdueReminderEnabled: row.overdue_reminder_enabled,
       })
       initialFormRef.current = {
@@ -620,6 +632,7 @@ export default function RequestDetailForm() {
         categoryId: row.category_id ?? null,
         description: row.description ?? '',
         reminderEnabled: row.reminder_enabled,
+        reminderDayOfEnabled: row.reminder_day_of_enabled,
         overdueReminderEnabled: row.overdue_reminder_enabled,
         repeatRule: row.repeat_rule,
       }
@@ -825,7 +838,7 @@ export default function RequestDetailForm() {
   const reminderPrereqsMissing = form.dueDate.trim() === ''
   const reminderIneligible = !reminderPrereqsMissing && !isReminderEligible(form.dueDate)
   // "has been sent already for today" (owner, 2026-08-20) — a second,
-  // independent grey-out for "Morning before" only: once reminder_sent_at is
+  // independent grey-out for "Day before" only: once reminder_sent_at is
   // set, re-checking the box wouldn't undo an email that already went out.
   const reminderAlreadySent = reminderSentAt !== null
   const reminderDisabled = reminderArchived || reminderPrereqsMissing || reminderIneligible || reminderAlreadySent
@@ -836,8 +849,37 @@ export default function RequestDetailForm() {
       : reminderIneligible
         ? 'A Reminder is not available due to the short lead time.'
         : reminderAlreadySent
-          ? 'The morning-before Reminder has already been sent for this Request.'
+          ? 'The day-before Reminder has already been sent for this Request.'
           : undefined
+
+  // "Day of" (migration 042, 2026-08-22) — no lead-time eligibility floor;
+  // Recipient/Contact is already fixed on this screen, so the only prereqs
+  // are Due Date and not-yet-archived. dayOfAlreadySent mirrors
+  // reminderAlreadySent's own shape, keyed off the independent
+  // reminder_day_of_sent_at column.
+  const dayOfPrereqsMissing = form.dueDate.trim() === ''
+  const dayOfAlreadySent = reminderDayOfSentAt !== null
+  const dayOfDisabled = reminderArchived || dayOfPrereqsMissing || dayOfAlreadySent
+  const dayOfTooltip = reminderArchived
+    ? 'Reminders are not available for archived Requests.'
+    : dayOfPrereqsMissing
+      ? 'Please select Contact and Due Date before modifying the Reminder.'
+      : dayOfAlreadySent
+        ? 'The day-of Reminder has already been sent for this Request.'
+        : undefined
+
+  // "Day after" grey-out, 2026-08-22 (owner) — once a Request is marked
+  // Done, there's nothing left to notify the Recipient about, so the
+  // checkbox itself should stop being editable rather than just going inert
+  // server-side. reminderArchived still layers on top, same as "Day
+  // before" — an archived Request's Reminders are moot regardless of Done.
+  const overdueReminderDone = form.doneDate.trim() !== ''
+  const overdueReminderDisabled = reminderArchived || overdueReminderDone
+  const overdueReminderTooltip = reminderArchived
+    ? 'Reminders are not available for archived Requests.'
+    : overdueReminderDone
+      ? 'This Request is already marked Done.'
+      : undefined
 
   function reminderBanner() {
     return (
@@ -854,15 +896,31 @@ export default function RequestDetailForm() {
               disabled={reminderDisabled}
               onChange={(e) => set('reminderEnabled', e.target.checked)}
             />
-            <span>Morning before</span>
+            <span>Day before</span>
           </label>
-          <label className="reminderitem">
+          <label
+            className={`reminderitem${dayOfDisabled ? ' reminderitem-disabled' : ''}`}
+            title={dayOfTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderDayOfEnabled}
+              disabled={dayOfDisabled}
+              onChange={(e) => set('reminderDayOfEnabled', e.target.checked)}
+            />
+            <span>Day of</span>
+          </label>
+          <label
+            className={`reminderitem${overdueReminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={overdueReminderTooltip}
+          >
             <input
               type="checkbox"
               checked={form.overdueReminderEnabled}
+              disabled={overdueReminderDisabled}
               onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
             />
-            <span>Daily thereafter</span>
+            <span>Day after</span>
           </label>
         </div>
       </div>
@@ -886,6 +944,7 @@ export default function RequestDetailForm() {
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
         reminder_enabled: form.reminderEnabled,
+        reminder_day_of_enabled: form.reminderDayOfEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? (repeatOccurrenceIndex ?? 1) : null,

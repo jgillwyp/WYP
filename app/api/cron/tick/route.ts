@@ -17,6 +17,12 @@ import {
   buildTodoReminderEmailSubject,
   buildTodoReminderEmailHtml,
   buildTodoReminderEmailText,
+  buildTodoOverdueEmailSubject,
+  buildTodoOverdueEmailHtml,
+  buildTodoOverdueEmailText,
+  buildTodoDayOfEmailSubject,
+  buildTodoDayOfEmailHtml,
+  buildTodoDayOfEmailText,
   buildReminderDigestEmailSubject,
   buildReminderDigestEmailHtml,
   buildReminderDigestEmailText,
@@ -25,7 +31,7 @@ import {
   buildOverdueDigestEmailText,
   type DigestItem,
 } from '@/lib/email'
-import { addDaysISO, hasLocalDateTimePassed, hoursSinceLocalDateTime, localDateISO, localHour } from '@/lib/cronTime'
+import { addDaysISO, hasLocalDateTimePassed, localDateISO, localHour } from '@/lib/cronTime'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -40,20 +46,41 @@ export const maxDuration = 60
  * GET/POST /api/cron/tick — the entire Chron notification system in one
  * route, invoked hourly by Vercel Cron (vercel.json). Owner's original
  * design pass, 2026-08-17 (see migration 032/033's header comments and the
- * decisions log): day-before Reminders (Sent Request Recipients, and ToDo/
- * Received-Request owners), a daily "just became Overdue" transition (an
- * individual notice to the Recipient, plus an un-gated digest to the
- * Requestor), and a recurring Overdue nudge to the Recipient (hourly-then-
- * daily for a Due-Time Request, daily-only for a Due-Date-only one) — plus
- * an opt-in "your Reminders just went out" digest to the Requestor.
+ * decisions log), since simplified, 2026-08-22 — see the "Day after"
+ * paragraph below: Reminders-until-Done for both Requests and ToDos, each
+ * with three independent, one-time checkboxes — "Day before" (Requests:
+ * Phase A1; ToDos: Phase A2), "Day of" (Phase A1b/A2b), and "Day after"
+ * (Phase B for Requests, Phase A3 for ToDos) — plus two opt-in/un-gated
+ * digests to the Requestor (Phase D) and Repeat generation (Phase E).
  *
  * Single hourly invocation, not one cron schedule per job — Vercel Cron
- * entries are fixed to one UTC time each, but "morning" and "the morning
- * after" have to mean each OWNER's own local hour, not one fixed clock time
+ * entries are fixed to one UTC time each, but "morning" and "the day after"
+ * have to mean each recipient's own local hour, not one fixed clock time
  * for every account. Running every hour and checking each candidate row's
  * own local hour (app/src/lib/cronTime.ts) correctly serves every time zone
  * from one schedule, at the cost of this route doing more branching per run
- * than three separate single-purpose routes would.
+ * than several separate single-purpose routes would. The owner has said he
+ * expects other cron-based features later — possibly even system-
+ * management ones — so this hourly scaffolding is kept intact even as
+ * individual phases below are rewritten or simplified; only the Phase
+ * bodies change, never the single-invocation structure itself.
+ *
+ * "Day after" simplification (2026-08-22) — the owner found the original
+ * "Daily thereafter" open-ended recurring Overdue-nudge design (old Phase
+ * B/C for Requests, old Phase A3 for ToDos: an individual notice the moment
+ * a Due Date lapsed, then an hourly-then-daily or daily-only nudge forever
+ * after) too likely to trigger spam complaints, with no way to know for
+ * sure. Replaced outright by a single, one-time "Day after" send — the
+ * calendar day following Due Date, never repeating — sharing the exact same
+ * three-checkbox shape as "Day before"/"Day of" and now available on ToDos
+ * too (sent to the owner's own account email, since a ToDo has no
+ * Recipient), not just Requests. overdue_reminder_enabled/
+ * overdue_notified_at (migration 037/032) are reused in place, not renamed
+ * — same "UI label change never means a DB rename" precedent this app has
+ * followed throughout (see migration 043's own header comment).
+ * last_overdue_nudge_at (migration 032) is now unused by this route — left
+ * in the schema rather than dropped, per the owner's own instruction not to
+ * remove the underlying cron structure.
  *
  * service_role (SUPABASE_SERVICE_ROLE_KEY) is required and used throughout
  * — a cron run has no user session for RLS to scope to at all, unlike every
@@ -64,11 +91,16 @@ export const maxDuration = 60
  * for.
  *
  * Idempotency: every phase reads and, on success only, writes one of
- * requests.reminder_sent_at / overdue_notified_at / last_overdue_nudge_at
- * (migration 032) — a send that fails (SMTP error, not-yet-configured) is
- * simply retried on the next hourly run rather than marked sent, matching
- * app/api/email/send-request/route.ts's own "never mark done unless it
- * really went out" posture.
+ * requests.reminder_sent_at / reminder_day_of_sent_at / overdue_notified_at
+ * (migration 032/042) — a send that fails (SMTP error, not-yet-configured)
+ * is simply retried on the next hourly run rather than marked sent,
+ * matching app/api/email/send-request/route.ts's own "never mark done
+ * unless it really went out" posture. Each of the three Reminder types is a
+ * true one-shot: once its own eligibility window (a specific calendar day,
+ * at the target local hour) has passed uncaptured, it does not retroactively
+ * fire later — turning a checkbox on after its own day has passed produces
+ * no catch-up send, by design, same as "Day of" already worked before this
+ * batch.
  *
  * Manual test: `curl -X POST https://<host>/api/cron/tick -H "Authorization:
  * Bearer $CRON_SECRET"` — returns a per-phase count summary, never 500s on
@@ -120,6 +152,7 @@ type ProfileRow = {
   display_name: string | null
   time_zone: string | null
   todo_dates_enabled: boolean
+  todo_reminders_enabled: boolean
   reminder_digest_enabled: boolean
 }
 
@@ -167,9 +200,19 @@ type RequestRow = {
   due_time: string | null
   reminder_enabled: boolean
   reminder_sent_at: string | null
+  // "Day of" (migration 042, 2026-08-22) — independent third Reminders-
+  // until-Done checkbox, own idempotency marker, no lead-time floor.
+  reminder_day_of_enabled: boolean
+  reminder_day_of_sent_at: string | null
+  // "Day after" (renamed from "Daily thereafter," migration 043,
+  // 2026-08-22 — column unchanged, meaning simplified from a recurring
+  // cron nudge to a single one-time send). overdue_notified_at is now this
+  // checkbox's own idempotency marker; last_overdue_nudge_at (migration
+  // 032) is no longer read or written by this route — left in the schema
+  // per the owner's own instruction not to drop the underlying cron
+  // structure, but this route has nothing left to use it for.
   overdue_reminder_enabled: boolean
   overdue_notified_at: string | null
-  last_overdue_nudge_at: string | null
   contacts: ContactInfo
 }
 
@@ -193,9 +236,14 @@ async function handle(request: Request) {
 
   const counts = {
     requestReminders: 0,
+    requestDayOfReminders: 0,
     todoReminders: 0,
-    overdueNotices: 0,
-    overdueNudges: 0,
+    todoDayOfReminders: 0,
+    // "Day after" simplification, 2026-08-22 — replaces the old four-way
+    // notice/nudge split (overdueNotices/overdueNudges/todoOverdueNotices/
+    // todoOverdueNudges) with two counters, one per one-time send.
+    requestDayAfterReminders: 0,
+    todoDayAfterReminders: 0,
     reminderDigests: 0,
     overdueDigests: 0,
     repeatsGenerated: 0,
@@ -213,7 +261,7 @@ async function handle(request: Request) {
   const { data: reqData, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, overdue_reminder_enabled, overdue_notified_at, last_overdue_nudge_at, contacts(email, display_name, time_zone)'
+      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, overdue_reminder_enabled, overdue_notified_at, contacts(email, display_name, time_zone)'
     )
     .not('contact_id', 'is', null)
     .is('done_date', null)
@@ -222,7 +270,9 @@ async function handle(request: Request) {
 
   const { data: todoData, error: todoError } = await sb
     .from('requests')
-    .select('id, owner_id, description, due_date, reminder_sent_at')
+    .select(
+      'id, owner_id, description, due_date, reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, overdue_reminder_enabled, overdue_notified_at'
+    )
     .is('contact_id', null)
     .is('done_date', null)
     .is('archived_at', null)
@@ -236,7 +286,18 @@ async function handle(request: Request) {
   }
 
   const requestRows = (reqData ?? []) as unknown as RequestRow[]
-  const todoRows = (todoData ?? []) as { id: string; owner_id: string; description: string; due_date: string; reminder_sent_at: string | null }[]
+  const todoRows = (todoData ?? []) as {
+    id: string
+    owner_id: string
+    description: string
+    due_date: string
+    reminder_enabled: boolean
+    reminder_sent_at: string | null
+    reminder_day_of_enabled: boolean
+    reminder_day_of_sent_at: string | null
+    overdue_reminder_enabled: boolean
+    overdue_notified_at: string | null
+  }[]
 
   // --------------------------------------------------------------------
   // Owner profiles, one batch query for every distinct owner touched.
@@ -249,7 +310,7 @@ async function handle(request: Request) {
   if (ownerIds.length > 0) {
     const { data: profileData } = await sb
       .from('profiles')
-      .select('id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled')
+      .select('id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled')
       .in('id', ownerIds)
     for (const p of (profileData ?? []) as ProfileRow[]) profileMap.set(p.id, p)
   }
@@ -345,7 +406,10 @@ async function handle(request: Request) {
     const bodyFields = {
       description: row.description,
       link,
-      reminderPromised: false,
+      // reminderSchedule omitted (2026-08-22, second same-day follow-up) —
+      // a Reminder email doesn't restate the full Reminders-until-Done
+      // schedule inside itself; only the Initial Request email
+      // (send-request/route.ts) does that.
       siteUrl: siteUrl(),
       dueDate: row.due_date,
       dueTime: row.due_time,
@@ -366,7 +430,7 @@ async function handle(request: Request) {
       text: buildRequestEmailText(bodyFields),
       fromName: buildRequestEmailFromName(ownerName),
       replyTo: ownerEmail,
-      icsContent: buildIcsContent(icsFields, link, { reminderPromised: false }),
+      icsContent: buildIcsContent(icsFields, link),
     })
 
     if (sent) {
@@ -384,16 +448,96 @@ async function handle(request: Request) {
   }
 
   // ======================================================================
+  // Phase A1b — Sent Request "Day of" Reminder, to the Recipient. New
+  // 2026-08-22 (migration 042) — a fully independent third Reminders-
+  // until-Done checkbox alongside "Day before"/A1 above and "Daily
+  // thereafter"/Phase B-C. Deliberately NOT linked to the Overdue
+  // machinery below, even though Jim's own original request raised the
+  // question of a connection ("This would also apply to the overdue
+  // notice related to a lapsed Due Time... Reminder/Overdue are close in
+  // meaning") — that question was never resolved before he stepped away,
+  // so this phase is scoped narrowly: it only ever sends once, gated on
+  // reminder_day_of_enabled/reminder_day_of_sent_at, the same day the
+  // Request is due, and never touches overdue_notified_at/
+  // last_overdue_nudge_at or Phase B/C's own eligibility. Revisit once
+  // Jim clarifies the intended relationship. No lead-time floor (unlike
+  // isReminderEligible's 3-day minimum for Day-before) — same-day is the
+  // entire point of this checkbox, so there is nothing to be "too close"
+  // to. Same Recipient-zone timing as Phase A1, same reused
+  // buildRequestEmailSubject/Html/Text (day-before and day-of share one
+  // body template, differing only in the subject line's "DUE TODAY:"
+  // prefix — reminderSchedule is omitted either way, since it only ever
+  // governs the Initial email's own schedule sentence).
+  // Deliberately NOT added to the opt-in "Reminders sent" digest — that
+  // digest's own fixed wording ("A day-before Reminder email was just
+  // sent...") would misdescribe a same-day send; left out rather than
+  // reworded until Jim confirms he wants Day-of included there too.
+  // ======================================================================
+  for (const row of requestRows) {
+    if (!row.reminder_day_of_enabled || row.reminder_day_of_sent_at || !row.due_date || !row.contacts) continue
+    const profile = profileMap.get(row.owner_id) ?? null
+    const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
+    if (row.due_date !== localDateISO(zone, now) || localHour(zone, now) !== MORNING_HOUR) continue
+
+    const link = await mintLink(sb, row.id)
+    if (!link) {
+      counts.errors += 1
+      continue
+    }
+    const ownerEmail = await getOwnerEmail(sb, row.owner_id)
+    const ownerName = profile?.display_name ?? null
+    const bodyFields = {
+      description: row.description,
+      link,
+      // reminderSchedule omitted (2026-08-22, second same-day follow-up) —
+      // a Reminder email doesn't restate the full Reminders-until-Done
+      // schedule inside itself; only the Initial Request email
+      // (send-request/route.ts) does that.
+      siteUrl: siteUrl(),
+      dueDate: row.due_date,
+      dueTime: row.due_time,
+      ownerName,
+    }
+    const icsFields: IcsRequestFields = {
+      id: row.id,
+      description: row.description,
+      due_date: row.due_date,
+      due_time: row.due_time,
+      owner_name: ownerName,
+    }
+
+    const sent = await sendMail({
+      to: row.contacts.email,
+      subject: buildRequestEmailSubject('reminder_day_of', ownerName, row.due_date, row.due_time),
+      html: buildRequestEmailHtml(bodyFields),
+      text: buildRequestEmailText(bodyFields),
+      fromName: buildRequestEmailFromName(ownerName),
+      replyTo: ownerEmail,
+      icsContent: buildIcsContent(icsFields, link),
+    })
+
+    if (sent) {
+      await sb.from('requests').update({ reminder_day_of_sent_at: now.toISOString() }).eq('id', row.id)
+      counts.requestDayOfReminders += 1
+    }
+  }
+
+  // ======================================================================
   // Phase A2 — ToDo day-before Reminder, to the owner's own account email.
-  // No Recipient, so no per-row Reminder checkbox either (migration 031's
-  // reminder_enabled is a Request-only UI concept even though the column
-  // is shared) — gated purely on the owner's own todo_dates_enabled
-  // (owner: "Gated on ToDo Dates enabled"), timed to the OWNER's own zone.
+  // No Recipient, so no per-row "who to notify" question — but the ToDo
+  // Reminders feature (Account toggle + per-ToDo Reminders-until-Done
+  // panel, 2026-08-22) now gates this on BOTH the owner's own
+  // todo_reminders_enabled account flag AND the individual row's own
+  // reminder_enabled ("Day before") checkbox, same shape as a
+  // Request's own Phase A1 gate — todo_dates_enabled is checked too since
+  // todo_reminders_enabled can never be true without it (AccountForm.tsx
+  // greys the toggle out otherwise, but this is the enforcement that
+  // actually matters). Timed to the OWNER's own zone.
   // ======================================================================
   for (const row of todoRows) {
-    if (row.reminder_sent_at || !row.due_date) continue
+    if (row.reminder_sent_at || !row.due_date || !row.reminder_enabled) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    if (!profile?.todo_dates_enabled) continue
+    if (!profile?.todo_dates_enabled || !profile?.todo_reminders_enabled) continue
     const zone = profile.time_zone
     const tomorrow = addDaysISO(localDateISO(zone, now), 1)
     if (row.due_date !== tomorrow || localHour(zone, now) !== MORNING_HOUR) continue
@@ -419,40 +563,115 @@ async function handle(request: Request) {
   }
 
   // ======================================================================
-  // Phase B — Overdue transition (individual Recipient notice + un-gated
-  // Requestor digest of newly-Overdue items). Timing: the OWNER's own
-  // local zone — "12:01am the morning after" is naturally about whose day
-  // just ended, i.e. the Requestor's, not the Recipient's.
-  //
-  // Gated on overdue_reminder_enabled (migration 037, "Daily thereafter"
-  // checkbox, 2026-08-20) — confirmed with the owner: unchecking it stops
-  // the Recipient's overdue emails ENTIRELY, including this first one, not
-  // just the recurring nudges in Phase C below. When false, the transition
-  // still advances (overdue_notified_at/last_overdue_nudge_at get set) so
-  // Phase C's own state machine and idempotency stay correct if the toggle
-  // is turned back on later — only the actual send and the Requestor digest
-  // item are skipped. The Requestor's own un-gated digest is otherwise
-  // unaffected by this toggle either way — that's the Requestor's own
-  // visibility into their account, not the Recipient's to silence.
+  // Phase A2b — ToDo "Day of" Reminder, to the owner's own account email.
+  // New 2026-08-22 (migration 042), mirrors Phase A1b's own independence
+  // from the Overdue machinery — a fully separate third checkbox from
+  // Phase A2's day-before Reminder above, own idempotency marker
+  // (reminder_day_of_sent_at), no lead-time floor (fires the very morning
+  // the ToDo is due). Same gating shape as Phase A2: both
+  // profile.todo_dates_enabled and profile.todo_reminders_enabled must be
+  // on, plus the row's own reminder_day_of_enabled. Timed to the OWNER's
+  // own zone, same as Phase A2 and A3.
   // ======================================================================
-  for (const row of requestRows) {
-    if (row.overdue_notified_at || !row.due_date || !row.contacts) continue
+  for (const row of todoRows) {
+    if (row.reminder_day_of_sent_at || !row.due_date || !row.reminder_day_of_enabled) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    const zone = profile?.time_zone ?? null
-    if (localHour(zone, now) !== OVERDUE_HOUR) continue
-    if (!hasLocalDateTimePassed(zone, row.due_date, row.due_time, now)) continue
+    if (!profile?.todo_dates_enabled || !profile?.todo_reminders_enabled) continue
+    const zone = profile.time_zone
+    if (row.due_date !== localDateISO(zone, now) || localHour(zone, now) !== MORNING_HOUR) continue
 
-    if (!row.overdue_reminder_enabled) {
-      const nowIso = now.toISOString()
-      await sb
-        .from('requests')
-        .update({
-          overdue_notified_at: nowIso,
-          last_overdue_nudge_at: row.due_time ? row.last_overdue_nudge_at : nowIso,
-        })
-        .eq('id', row.id)
+    const ownerEmail = await getOwnerEmail(sb, row.owner_id)
+    if (!ownerEmail) {
+      counts.errors += 1
       continue
     }
+    const fields = { description: row.description, dueDate: row.due_date, link: `${siteUrl()}/todos/${row.id}`, siteUrl: siteUrl() }
+    const sent = await sendMail({
+      to: ownerEmail,
+      subject: buildTodoDayOfEmailSubject(row.due_date),
+      html: buildTodoDayOfEmailHtml(fields),
+      text: buildTodoDayOfEmailText(fields),
+      fromName: 'Would You Please',
+      replyTo: null,
+    })
+    if (sent) {
+      await sb.from('requests').update({ reminder_day_of_sent_at: now.toISOString() }).eq('id', row.id)
+      counts.todoDayOfReminders += 1
+    }
+  }
+
+  // ======================================================================
+  // Phase A3 — ToDo "Day after" notice, to the owner's own account email.
+  // Single one-time send on the calendar day after Due Date, at
+  // OVERDUE_HOUR — replaces the old open-ended recurring-Overdue-nudge
+  // design entirely, per the owner's own 2026-08-22 spam-complaint
+  // concern (see this file's header comment). overdue_notified_at is the
+  // idempotency marker; a checkbox turned on after its own day-after date
+  // has already passed produces no catch-up send, same as "Day of."
+  // Gated on both profile.todo_reminders_enabled and the row's own
+  // overdue_reminder_enabled ("Day after" checkbox) — no separate
+  // Recipient whose own visibility is independent of the owner's
+  // checkbox here, it's the same person either way.
+  // ======================================================================
+  for (const row of todoRows) {
+    if (row.overdue_notified_at || !row.due_date || !row.overdue_reminder_enabled) continue
+    const profile = profileMap.get(row.owner_id) ?? null
+    if (!profile?.todo_dates_enabled || !profile?.todo_reminders_enabled) continue
+    const zone = profile.time_zone
+    if (localHour(zone, now) !== OVERDUE_HOUR) continue
+    if (localDateISO(zone, now) <= row.due_date) continue
+
+    const ownerEmail = await getOwnerEmail(sb, row.owner_id)
+    if (!ownerEmail) {
+      counts.errors += 1
+      continue
+    }
+    const fields = { description: row.description, dueDate: row.due_date, link: `${siteUrl()}/todos/${row.id}`, siteUrl: siteUrl() }
+    const sent = await sendMail({
+      to: ownerEmail,
+      subject: buildTodoOverdueEmailSubject(row.due_date),
+      html: buildTodoOverdueEmailHtml(fields),
+      text: buildTodoOverdueEmailText(fields),
+      fromName: 'Would You Please',
+      replyTo: null,
+    })
+    if (sent) {
+      await sb.from('requests').update({ overdue_notified_at: now.toISOString() }).eq('id', row.id)
+      counts.todoDayAfterReminders += 1
+    }
+  }
+
+  // ======================================================================
+  // Phase B — Request "Day after" notice, to the Recipient, plus an
+  // un-gated Requestor digest of the same items. Single one-time send —
+  // replaces the old moment-of-lapse-transition-plus-open-ended-recurring-
+  // nudge design (formerly Phase B/C combined) entirely, per the owner's
+  // own 2026-08-22 instruction: "The 'Daily thereafter' should be replaced
+  // by the 'Day after'. I don't have any way to know, but the Daily
+  // thereafter is most likely to cause spam complaints." Gated on
+  // overdue_reminder_enabled (the "Day after" checkbox, migration 037
+  // column reused in place — see this file's own header comment and
+  // migration 043's); overdue_notified_at (migration 032) is the
+  // idempotency marker, now meaning "the Day-after notice has been sent,"
+  // not "the Request transitioned to Overdue." A checkbox left off past
+  // its own eligible day, or turned on afterward, produces no send and no
+  // catch-up — the eligibility window (local date now > due_date, at
+  // OVERDUE_HOUR) only exists once.
+  //
+  // Timing: the RECIPIENT's own local zone (contacts.time_zone, falling
+  // back to the owner's own profiles.time_zone) — same reasoning as Phase
+  // A1/A1b above, since this notice, like Day before/Day of, is read by
+  // the Recipient, not the owner. This is a deliberate change from the old
+  // Phase B's owner-zone timing, which made sense for an owner-facing
+  // "just became Overdue" transition event that no longer exists; not
+  // explicitly confirmed with the owner, flagged here for visibility.
+  // ======================================================================
+  for (const row of requestRows) {
+    if (row.overdue_notified_at || !row.overdue_reminder_enabled || !row.due_date || !row.contacts) continue
+    const profile = profileMap.get(row.owner_id) ?? null
+    const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
+    if (localHour(zone, now) !== OVERDUE_HOUR) continue
+    if (!hasLocalDateTimePassed(zone, row.due_date, row.due_time, now)) continue
 
     const link = await mintLink(sb, row.id)
     if (!link) {
@@ -480,87 +699,14 @@ async function handle(request: Request) {
     })
 
     if (sent) {
-      const nowIso = now.toISOString()
-      // A Due-Date-only Request's first nudge IS this same transition
-      // event (migration 032's own header comment) — set
-      // last_overdue_nudge_at here too so Phase C's daily-cadence branch
-      // picks up from tomorrow, not tonight. A Due-Time Request's first
-      // nudge is a separate, later event ("the hour after") — left null
-      // for Phase C to set.
-      await sb
-        .from('requests')
-        .update({
-          overdue_notified_at: nowIso,
-          last_overdue_nudge_at: row.due_time ? row.last_overdue_nudge_at : nowIso,
-        })
-        .eq('id', row.id)
-      counts.overdueNotices += 1
+      await sb.from('requests').update({ overdue_notified_at: now.toISOString() }).eq('id', row.id)
+      counts.requestDayAfterReminders += 1
       pushDigestItem(overdueDigestItems, row.owner_id, {
         recipientName: row.contacts.display_name ?? row.contacts.email,
         description: row.description,
         dueTime: row.due_time,
         link,
       })
-    }
-  }
-
-  // ======================================================================
-  // Phase C — Recurring Overdue nudges to the Recipient, for Requests
-  // already past their one-time overdue_notified_at transition. Owner's
-  // own cadence: "the hour after for Due Time Overdues, daily thereafter.
-  // The next day and daily thereafter for Due Date only Requests" — the
-  // Due-Date-only "next day" half is already covered by Phase B setting
-  // last_overdue_nudge_at at the same moment as overdue_notified_at, so
-  // every row reaching this phase (C2) just needs the recurring daily
-  // check; only C1 (Due-Time's own first nudge) is genuinely hourly.
-  // ======================================================================
-  for (const row of requestRows) {
-    if (!row.overdue_notified_at || !row.due_date || !row.contacts) continue
-    if (!row.overdue_reminder_enabled) continue
-    const profile = profileMap.get(row.owner_id) ?? null
-    const zone = profile?.time_zone ?? null
-
-    let shouldNudge = false
-    if (row.due_time && !row.last_overdue_nudge_at) {
-      // C1 — Due-Time Request's own first nudge, "the hour after."
-      shouldNudge = hoursSinceLocalDateTime(zone, row.due_date, row.due_time, now) >= 1
-    } else if (row.last_overdue_nudge_at) {
-      // C2 — recurring daily cadence, both populations, gated to one
-      // local calendar day apart so an hourly run doesn't re-fire on
-      // every tick.
-      const lastNudgeLocalDate = localDateISO(zone, new Date(row.last_overdue_nudge_at))
-      shouldNudge = localHour(zone, now) === OVERDUE_HOUR && localDateISO(zone, now) > lastNudgeLocalDate
-    }
-    if (!shouldNudge) continue
-
-    const link = await mintLink(sb, row.id)
-    if (!link) {
-      counts.errors += 1
-      continue
-    }
-    const ownerEmail = await getOwnerEmail(sb, row.owner_id)
-    const ownerName = profile?.display_name ?? null
-    const fields = {
-      ownerName,
-      description: row.description,
-      dueDate: row.due_date,
-      dueTime: row.due_time,
-      link,
-      siteUrl: siteUrl(),
-    }
-
-    const sent = await sendMail({
-      to: row.contacts.email,
-      subject: buildOverdueRecipientEmailSubject(ownerName, row.due_date, row.due_time),
-      html: buildOverdueRecipientEmailHtml(fields),
-      text: buildOverdueRecipientEmailText(fields),
-      fromName: buildRequestEmailFromName(ownerName),
-      replyTo: ownerEmail,
-    })
-
-    if (sent) {
-      await sb.from('requests').update({ last_overdue_nudge_at: now.toISOString() }).eq('id', row.id)
-      counts.overdueNudges += 1
     }
   }
 
@@ -628,7 +774,7 @@ async function handle(request: Request) {
   if (repeatOwnerIds.length > 0) {
     const { data: moreProfiles } = await sb
       .from('profiles')
-      .select('id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled')
+      .select('id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled')
       .in('id', Array.from(new Set(repeatOwnerIds)))
     for (const p of (moreProfiles ?? []) as ProfileRow[]) profileMap.set(p.id, p)
   }

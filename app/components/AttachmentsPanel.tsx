@@ -260,6 +260,21 @@ export default function AttachmentsPanel({
     setRefFormOpen(false)
   }
 
+  // Closed via Cancel or the scrim — same reset as a successful Save, minus
+  // the insert. 2026-08-22: Add Location converted from an always-visible
+  // inline card to a real modal, matching CreateTodoForm.tsx's identical
+  // conversion (see that file's closeLocationModal comment for the full
+  // reasoning) — this panel is the shared Locations UI for every existing-
+  // item screen (ToDo Detail, and mode='file' Attachments on Request
+  // Detail/Response/Response Detail, which keeps its own separate file-
+  // picker flow untouched by this change).
+  function closeRefForm() {
+    setRefFormOpen(false)
+    setRefDescription('')
+    setRefLocation('')
+    setRefError(null)
+  }
+
   const items = rows
   const label = emptyLabel[mode]
   const addText = addLabel[mode]
@@ -297,7 +312,7 @@ export default function AttachmentsPanel({
 
   return (
     <div className="fgroup">
-      {items.length === 0 && !refFormOpen ? (
+      {items.length === 0 ? (
         canAdd ? (
           // Same bordered .actlabel box for both modes now (2026-08-14,
           // owner-reported, screenshots comparing ToDo Detail's tinted
@@ -357,51 +372,11 @@ export default function AttachmentsPanel({
               </button>
             </div>
           )}
-          {canAdd && mode === 'reference' && items.length > 0 && !refFormOpen && (
+          {canAdd && mode === 'reference' && items.length > 0 && (
             <div className="fieldact" style={rowPad}>
               <button className="btn" type="button" onClick={() => setRefFormOpen(true)}>
                 {addText}
               </button>
-            </div>
-          )}
-          {refFormOpen && (
-            <div className="dlgstaged" style={cardMargin}>
-              <div className="fgroup ffloat">
-                <input
-                  className="finput"
-                  placeholder=" "
-                  value={refDescription}
-                  onChange={(e) => setRefDescription(e.target.value)}
-                />
-                <label className="flabel">Description</label>
-              </div>
-              <div className="fgroup ffloat">
-                <input
-                  className="finput"
-                  placeholder=" "
-                  value={refLocation}
-                  onChange={(e) => setRefLocation(e.target.value)}
-                />
-                <label className="flabel">Location (path or URL)</label>
-              </div>
-              {refError && <p className="ferror">{refError}</p>}
-              <div className="bandcluster">
-                <button className="btn" type="button" disabled={refSaving} onClick={handleSaveReference}>
-                  Save
-                </button>
-                <button
-                  className="btn-secondary"
-                  type="button"
-                  onClick={() => {
-                    setRefFormOpen(false)
-                    setRefDescription('')
-                    setRefLocation('')
-                    setRefError(null)
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
             </div>
           )}
           <div className="dlgstaged" style={cardMargin}>
@@ -508,6 +483,51 @@ export default function AttachmentsPanel({
         />
       )}
       {error && <p className="ferror">{error}</p>}
+
+      {/* Add Location modal (mode='reference' only) — converted from an
+          always-visible inline card to a real modal, 2026-08-22, matching
+          CreateTodoForm.tsx's identical conversion. See closeRefForm's own
+          comment above for the full reasoning. */}
+      {refFormOpen && (
+        <>
+          <div className="scrim" onClick={closeRefForm} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="addloc-title">
+            <div className="modalhead">
+              <p className="modal-title" id="addloc-title">
+                Add Location
+              </p>
+              <div className="modalacts">
+                <button className="btn-secondary" type="button" onClick={closeRefForm}>
+                  Cancel
+                </button>
+                <button className="btn" type="button" disabled={refSaving} onClick={handleSaveReference}>
+                  {refSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+            <div className="fgroup ffloat">
+              <input
+                className="finput"
+                placeholder=" "
+                value={refDescription}
+                onChange={(e) => setRefDescription(e.target.value)}
+                autoFocus
+              />
+              <label className="flabel">Description</label>
+            </div>
+            <div className="fgroup ffloat">
+              <input
+                className="finput"
+                placeholder=" "
+                value={refLocation}
+                onChange={(e) => setRefLocation(e.target.value)}
+              />
+              <label className="flabel">Location (path or URL)</label>
+            </div>
+            {refError && <p className="ferror" style={{ marginTop: -8 }}>{refError}</p>}
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -1762,3 +1762,514 @@ commit;
 --   Received Request whose issuer has set a Repeat — the printed record
 --   should show a "Repeats: ..." line preceding Dialog.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 041 — profiles.todo_reminders_enabled
+-- DRAFTED 2026-08-22 — NOT YET CONFIRMED RUN.
+--
+-- Owner's own itemized request (docx, "addl items as of 8-22-26"): a new
+-- Account toggle, "Add Reminders (ToDos)," greyed out unless Show Due/Done
+-- Dates (ToDos) (migration 022) is on; when checked, Create ToDo/ToDo Detail
+-- show a "Reminders until Done" panel (Morning before / Daily thereafter)
+-- above the Due/Done Dates row, matching a Request's own §6.41 banner
+-- exactly. Same "boolean, default false" shape as todo_dates_enabled itself
+-- (migration 022) — off by default, a brand-new opt-in, not a
+-- behavior-preserving flip like migration 023's request_time_enabled.
+--
+-- No new columns on `requests` needed — reminder_enabled/
+-- overdue_reminder_enabled/reminder_sent_at/overdue_notified_at/
+-- last_overdue_nudge_at (migrations 031/032/037) already live on that table
+-- and are already shared between Requests and ToDos (both are `requests`
+-- rows); this migration only adds the account-level gate that decides
+-- whether a ToDo's own copies of those columns are ever shown, edited, or
+-- acted on by the cron route.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists todo_reminders_enabled boolean not null default false;
+
+comment on column public.profiles.todo_reminders_enabled is
+  'Default false. Only meaningful when todo_dates_enabled is also true (a ToDo has no Due Date to remind about otherwise). When true, Create ToDo/ToDo Detail show a Reminders-until-Done panel (Morning before / Daily thereafter, reusing requests.reminder_enabled/overdue_reminder_enabled -- same columns a Request uses) and the cron route (app/api/cron/tick) sends day-before and recurring-Overdue ToDo emails to the owner''s own account address. When false, neither the UI panel nor any cron send happens for this owner''s ToDos, regardless of what the per-ToDo columns themselves hold.';
+
+grant update (todo_reminders_enabled) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'todo_reminders_enabled';
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles' and column_name = 'todo_reminders_enabled';
+--
+-- Verify as a client, not here:
+--   Account screen shows a new "Add Reminders (ToDos)" row, greyed out
+--   until Show Due/Done Dates (ToDos) is checked. Turning both on and
+--   opening Create ToDo/ToDo Detail should show the Reminders-until-Done
+--   panel above the Due/Done Dates row.
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 042 — requests.reminder_day_of_enabled / reminder_day_of_
+-- sent_at ("Day of" Reminder, third checkbox); overdue_reminder_enabled's
+-- default flipped to false. DRAFTED 2026-08-22 — NOT YET CONFIRMED RUN.
+--
+-- Owner's own follow-up to the itemized-docx batch (migration 041): "Day
+-- before" (renamed from "Morning before" — UI wording only, no column
+-- rename) still isn't enough lead time for a Request/ToDo due very soon —
+-- owner is now using ToDos for real business needs and wants a same-day
+-- option too, while still fitting the Reminders-until-Done panel on two
+-- lines on a phone. A "Day of" Reminder fires the same morning as the Due
+-- Date itself (MORNING_HOUR, same target hour as "Day before"), independent
+-- of reminder_enabled/reminder_sent_at — a Request/ToDo can have Day before
+-- AND Day of both checked, both firing on their own schedule with their own
+-- idempotency marker, same "one boolean + one sent_at" shape reminder_
+-- enabled/reminder_sent_at already established (migration 031/032).
+--
+-- No MIN_DAYS_FOR_REMINDER-style eligibility floor for Day of — the whole
+-- point is same-day, so a Due Date of today or tomorrow is exactly the case
+-- Day of exists for, unlike Day before's 3-day minimum. On Create Request,
+-- Day of always requires a Contact selected (no hasAmpleReminderLeadTime-
+-- style relaxation): a same-day send needs the Recipient's own time zone to
+-- know what "today" even means, and that need doesn't shrink the way it
+-- does for Day before's longer lead time — if anything a same-day send is
+-- MORE exposed to a zone-shift miscalculation, not less.
+--
+-- Default false, unlike reminder_enabled's own true default (migration
+-- 031) — owner's own follow-up, same day: "To avoid having a spam reaction
+-- from recipients, the default setting for Reminders should probably be
+-- the 'Day before' only" — confirmed to apply to both Requests and ToDos.
+-- overdue_reminder_enabled ("Daily thereafter", migration 037) shipped
+-- default true; its DEFAULT is flipped to false here too, so a brand-new
+-- Request/ToDo going forward starts with only Day before checked, matching
+-- the owner's stated intent. This is a column DEFAULT change only — every
+-- existing row keeps whatever value it already has (same non-retroactive
+-- precedent as migration 023's request_time_enabled default flip); nothing
+-- already sending stops sending because of this migration alone. The
+-- client-side initialState defaults in CreateRequestForm.tsx/
+-- CreateTodoForm.tsx are changed in the same commit as this migration, so
+-- client and column defaults move together rather than drifting.
+--
+-- get_request_by_token and get_received_request both return jsonb — plain
+-- create-or-replace, no OUT-parameter hazard (migration-011/020/039
+-- precedent). get_received_requests() (RETURNS TABLE, list-view RPC) is
+-- deliberately NOT touched, same reasoning migration 039's own header
+-- comment already gives for reminder_enabled/overdue_reminder_enabled and
+-- repeat_rule: no Reminder state is shown on any list row, only on
+-- Detail-shaped screens.
+--
+-- set_response_done_by_token and set_response_done_as_recipient both gain a
+-- fourth trailing parameter, p_reminder_day_of_enabled, coalesced against
+-- the existing column exactly like p_reminder_enabled/p_overdue_reminder_
+-- enabled already are — an unpassed value leaves the column untouched.
+--
+-- Real pre-existing bug found and fixed in the same pass: ResponseDetailForm.
+-- tsx and RequestResponseForm.tsx have both read `payload.reminder_sent_at`
+-- since the "already sent" grey-out was added to those two screens
+-- (2026-08-20) — but reminder_sent_at was never actually added to either
+-- get_request_by_token's or get_received_request's jsonb payload in any
+-- migration (checked every version back to 036). At runtime that field was
+-- always `undefined`, and `undefined !== null` is `true` in JS, so
+-- reminderAlreadySent has been permanently true and Day before has been
+-- permanently disabled on both recipient-facing screens since that feature
+-- shipped — a real, live bug, not a hypothetical one. TypeScript's own `as`
+-- cast on the RPC response is why tsc never caught it: a type assertion
+-- promises a shape, it doesn't enforce one at runtime. Fixed here by adding
+-- r.reminder_sent_at to both functions' select list and jsonb payload,
+-- since this migration was already touching both for reminder_day_of_
+-- enabled — not deferred to a separate migration.
+-- ============================================================================
+
+begin;
+
+alter table public.requests
+  add column if not exists reminder_day_of_enabled boolean not null default false,
+  add column if not exists reminder_day_of_sent_at timestamptz;
+
+comment on column public.requests.reminder_day_of_enabled is
+  'The "Day of" Reminder checkbox (Reminders-until-Done panel, third item alongside Day before/reminder_enabled and Daily thereafter/overdue_reminder_enabled). Default false. When true, the cron route sends a same-day Reminder email at MORNING_HOUR on the Due Date itself, independent of reminder_enabled/reminder_sent_at.';
+
+comment on column public.requests.reminder_day_of_sent_at is
+  'Set once, the cron run a Day-of Reminder email actually goes out for this Request/ToDo. Null = not sent yet. Independent idempotency marker from reminder_sent_at (Day before) -- a row can have both set, on different dates.';
+
+-- Default-only change, 2026-08-22: new Requests/ToDos going forward start
+-- with only Day before checked, per the owner's own spam-risk concern.
+-- Existing rows keep whatever value they already have.
+alter table public.requests
+  alter column overdue_reminder_enabled set default false;
+
+-- ----------------------------------------------------------------------------
+-- get_request_by_token — add reminder_day_of_enabled/reminder_day_of_sent_at
+-- to the jsonb payload.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled, r.reminder_day_of_enabled,
+         r.reminder_day_of_sent_at, r.repeat_rule,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_received_request — same addition, signed-in recipient path.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at, r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled,
+         r.reminder_day_of_enabled, r.reminder_day_of_sent_at, r.repeat_rule,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_by_token — gains p_reminder_day_of_enabled, same
+-- coalesce-against-existing-column pattern as p_reminder_enabled/
+-- p_overdue_reminder_enabled.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_by_token(
+  p_token text,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null,
+  p_overdue_reminder_enabled boolean default null,
+  p_reminder_day_of_enabled boolean default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    where r.link_token_hash = v_hash
+      and r.link_revoked_at is null
+      and r.link_expires_at > now();
+
+  if v_request_id is null then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled),
+        overdue_reminder_enabled = coalesce(p_overdue_reminder_enabled, overdue_reminder_enabled),
+        reminder_day_of_enabled = coalesce(p_reminder_day_of_enabled, reminder_day_of_enabled)
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request_id, v_request_id, 'response_saved',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'overdue_reminder_enabled', p_overdue_reminder_enabled, 'reminder_day_of_enabled', p_reminder_day_of_enabled));
+end;
+$$;
+
+revoke all on function public.set_response_done_by_token(text, date, time, boolean, boolean, boolean) from public;
+grant execute on function public.set_response_done_by_token(text, date, time, boolean, boolean, boolean) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_as_recipient — same addition, signed-in recipient path.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_as_recipient(
+  p_request_id uuid,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null,
+  p_overdue_reminder_enabled boolean default null,
+  p_reminder_day_of_enabled boolean default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_contact_email text;
+begin
+  select lower(trim(c.email)) into v_contact_email
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id;
+
+  if v_email = '' or v_contact_email is null or v_contact_email <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        received_archived_at = case when p_done_date is null then received_archived_at else null end,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled),
+        overdue_reminder_enabled = coalesce(p_overdue_reminder_enabled, overdue_reminder_enabled),
+        reminder_day_of_enabled = coalesce(p_reminder_day_of_enabled, reminder_day_of_enabled)
+    where id = p_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', p_request_id, p_request_id, 'response_saved',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'overdue_reminder_enabled', p_overdue_reminder_enabled, 'reminder_day_of_enabled', p_reminder_day_of_enabled, 'via', 'recipient_session'));
+end;
+$$;
+
+revoke all on function public.set_response_done_as_recipient(uuid, date, time, boolean, boolean, boolean) from public;
+grant execute on function public.set_response_done_as_recipient(uuid, date, time, boolean, boolean, boolean) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name, column_default from information_schema.columns
+--   where table_name = 'requests'
+--     and column_name in ('reminder_day_of_enabled', 'reminder_day_of_sent_at', 'overdue_reminder_enabled');
+--        -> reminder_day_of_enabled: boolean, default false
+--        -> reminder_day_of_sent_at: timestamptz, default null
+--        -> overdue_reminder_enabled: boolean, default false (existing rows' own stored value unchanged)
+--
+-- Verify as a client, not here:
+--   Create Request/Create ToDo should now show three checkboxes (Day
+--   before, Day of, Daily thereafter) with only Day before checked by
+--   default. Open an existing /r/[token] or Response Detail screen and
+--   toggle Day of, Send/Save, reload — the checked state should persist.
+-- ============================================================================
+
+-- ============================================================================
+-- WYP migration 043 — profiles.reminder_default_day_before /
+-- reminder_default_day_of / reminder_default_day_after (Reminders-until-Done
+-- default settings), and "Daily thereafter" simplified to a single "Day
+-- after" send. DRAFTED 2026-08-22 — NOT YET CONFIRMED RUN.
+--
+-- Same-day follow-up to migration 042. Jim spent several long paragraphs
+-- working through how "Day of" and the automatic lapsed-Due-Time Overdue
+-- system (cron Phase B/C, and the ToDo-side Phase A3 migration 041 had just
+-- added) should relate, concluded the combination was "sufficiently
+-- complicated that end-users would easily get confused," and asked for two
+-- simplifications instead:
+--
+--   1. "Daily thereafter" (an open-ended recurring nudge — hourly-then-
+--      daily for a Due-Time Request, daily for everything else) is dropped
+--      in favor of "Day after" — a single, one-time notice sent the
+--      calendar day following Due Date. His own reasoning: "I don't have
+--      any way to know, but the Daily thereafter is most likely to cause
+--      spam complaints." This is the direct, simpler successor to the
+--      original moment-of-lapse Overdue transition email this same
+--      checkbox already gated (Phase B's very first send) — no schema
+--      change needed for this half of the request. requests.
+--      overdue_reminder_enabled (the checkbox) and requests.
+--      overdue_notified_at (the "already sent" marker) are REUSED IN PLACE,
+--      not renamed or replaced — same precedent as "Morning before" ->
+--      "Day before" (migration 042's own header comment): a UI/behavior
+--      relabel doesn't require a matching column rename. requests.
+--      last_overdue_nudge_at becomes unused (it existed only to track a
+--      recurring cadence's own state) — left in the schema rather than
+--      dropped, consistent with this file's own established practice of
+--      never destroying a column just because the app stops reading it.
+--
+--   2. Three new Account-level "default" toggles — Jim: "One Account option
+--      (or 3 options) could be the default settings of the three checkboxes
+--      for Reminders (for both Requests and ToDos)." Chose 3 separate
+--      booleans over 1 combined preset — direct 1:1 symmetry with the three
+--      per-item checkboxes is simpler to reason about than a named preset
+--      selector, and matches this app's own established one-toggle-per-
+--      setting convention (AccountForm.tsx). These are DEFAULTS ONLY, read
+--      once when Create Request/Create ToDo mounts to set each checkbox's
+--      initial state — NOT a live gate at send time. This is a deliberate,
+--      simpler alternative to an earlier same-day proposal (a "Send Day-of
+--      Reminders" account-level kill switch, AND-gated with the per-item
+--      checkbox at cron-send time, mirroring todo_reminders_enabled's own
+--      relationship to a ToDo's per-item Reminder checkboxes) — that
+--      earlier design was mocked up and shown to Jim, but superseded before
+--      being built once he converged on "default settings" instead, which
+--      needs no cron-side gating logic at all. todo_reminders_enabled
+--      itself (migration 041) is UNCHANGED by this migration — it remains
+--      the live per-account gate for whether ToDo Reminders exist at all
+--      (paired with todo_dates_enabled), a different, already-shipped
+--      mechanism from the new default-only toggles here.
+--
+-- One shared set of 3 defaults for both Requests and ToDos (not 6 separate
+-- toggles) — Jim's own phrasing groups them as one setting "for both
+-- Requests and ToDos," and the two Create screens' own Reminders-until-Done
+-- banners are already visually and behaviorally identical.
+--
+-- Defaults chosen to match the already-shipped, spam-conscious behavior-
+-- preserving values from migration 042/043's own in-app initialState
+-- objects: Day before true, Day of false, Day after false — "only Day
+-- before by default," Jim's own words from two batches ago, now made
+-- account-adjustable rather than hardcoded.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists reminder_default_day_before boolean not null default true,
+  add column if not exists reminder_default_day_of boolean not null default false,
+  add column if not exists reminder_default_day_after boolean not null default false;
+
+comment on column public.profiles.reminder_default_day_before is
+  'Default true. Pre-fills the "Day before" checkbox on Create Request/Create ToDo only -- read once on mount, never a live gate. The per-item requests.reminder_enabled column is what actually governs sending.';
+comment on column public.profiles.reminder_default_day_of is
+  'Default false. Pre-fills the "Day of" checkbox on Create Request/Create ToDo only -- read once on mount, never a live gate. The per-item requests.reminder_day_of_enabled column is what actually governs sending.';
+comment on column public.profiles.reminder_default_day_after is
+  'Default false. Pre-fills the "Day after" checkbox (UI label; underlying column is still requests.overdue_reminder_enabled, reused in place -- see this migration''s own header comment) on Create Request/Create ToDo only -- read once on mount, never a live gate.';
+
+grant update (reminder_default_day_before) on public.profiles to authenticated;
+grant update (reminder_default_day_of) on public.profiles to authenticated;
+grant update (reminder_default_day_after) on public.profiles to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name, column_default from information_schema.columns
+--   where table_name = 'profiles'
+--     and column_name in ('reminder_default_day_before', 'reminder_default_day_of', 'reminder_default_day_after');
+--        -> day_before: boolean, default true
+--        -> day_of: boolean, default false
+--        -> day_after: boolean, default false
+--   select grantee, privilege_type, column_name
+--   from information_schema.column_privileges
+--   where table_name = 'profiles'
+--     and column_name in ('reminder_default_day_before', 'reminder_default_day_of', 'reminder_default_day_after');
+--
+-- Verify as a client, not here:
+--   Account screen shows three new "Default" Reminder toggles. Changing
+--   them and then opening Create Request/Create ToDo fresh should show the
+--   Reminders-until-Done banner's three checkboxes pre-filled to match --
+--   Request Detail/Response Detail/Request Response/ToDo Detail (existing
+--   items) are unaffected, since they read the item's own stored values,
+--   not these defaults. The Reminders-until-Done banner itself now reads
+--   "Day before / Day of / Day after" everywhere it appears, and a Request/
+--   ToDo's "Day after" fires once, the day after Due Date, instead of
+--   recurring.
+-- ============================================================================

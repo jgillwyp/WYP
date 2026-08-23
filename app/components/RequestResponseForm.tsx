@@ -42,14 +42,17 @@ import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
  * demo snapshot, not a universal rule, and an anonymous recipient should
  * always be able to respond with Dialog alone.
  *
- * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20) —
+ * Reminders until Done banner (§6.41 PROPOSED, migration 037, 2026-08-20;
+ * extended to three checkboxes with "Day of," migration 042, 2026-08-22) —
  * see RequestDetailForm.tsx's/ResponseDetailForm.tsx's identical file-header
- * paragraphs for the full reasoning. Same two-checkbox banner here: "Morning
- * before" (reminder_enabled) and "Daily thereafter" (overdue_reminder_
- * enabled, the Overdue-notification opt-out — unchecking it stops this
- * anonymous recipient's Overdue emails entirely, confirmed with the owner).
- * "Morning before" is greyed out once reminder_sent_at is set, on top of the
- * existing eligibility check.
+ * paragraphs for the full reasoning. Same three-checkbox banner here: "Day
+ * before" (renamed from "Morning before," reminder_enabled), "Day of"
+ * (reminder_day_of_enabled), and "Day after" (renamed from "Daily
+ * thereafter," migration 043, 2026-08-22 — see that migration's own header
+ * comment; overdue_reminder_enabled, column unchanged, meaning simplified
+ * from a recurring cron nudge to a single send the calendar day after Due
+ * Date — Jim's own spam-complaint concern). "Day before" is greyed out
+ * once reminder_sent_at is set, on top of the existing eligibility check.
  */
 
 type Kind = 'question' | 'answer' | 'comment'
@@ -133,6 +136,11 @@ type ResponsePayload = {
   // ResponseDetailForm.tsx's identical addition for the full reasoning.
   overdue_reminder_enabled: boolean
   reminder_sent_at: string | null
+  // "Day of" (migration 042, 2026-08-22) — a third, independent
+  // Reminders-until-Done checkbox; see ResponseDetailForm.tsx's identical
+  // reasoning.
+  reminder_day_of_enabled: boolean
+  reminder_day_of_sent_at: string | null
   // Repeat, read-only recipient footnote (Jim's own design, 2026-08-21,
   // migration 039). Never editable here — only Request Detail's/ToDo
   // Detail's own RepeatControl on the owner's side can set or change it.
@@ -238,10 +246,16 @@ export default function RequestResponseForm() {
   // Detail's own; loaded from data.reminder_enabled, written on Send via
   // set_response_done_by_token's new p_reminder_enabled argument.
   const [reminderEnabled, setReminderEnabled] = useState(true)
-  // "Daily thereafter" opt-out (migration 037, 2026-08-20) — see
-  // ResponseDetailForm.tsx's identical addition.
+  // "Day of" (migration 042, 2026-08-22) — a third, independent Reminders-
+  // until-Done checkbox; see ResponseDetailForm.tsx's identical reasoning.
+  const [reminderDayOfEnabled, setReminderDayOfEnabled] = useState(false)
+  // "Day after" opt-out (renamed from "Daily thereafter," migration 043,
+  // 2026-08-22 — column unchanged, meaning simplified to a single send;
+  // migration 037, 2026-08-20) — see ResponseDetailForm.tsx's identical
+  // addition.
   const [overdueReminderEnabled, setOverdueReminderEnabled] = useState(true)
   const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
+  const [reminderDayOfSentAt, setReminderDayOfSentAt] = useState<string | null>(null)
 
   const [dialogList, setDialogList] = useState<DialogEntry[]>([])
 
@@ -340,8 +354,10 @@ export default function RequestResponseForm() {
       setDoneTime(payload.done_time ?? '')
       setAlreadyDoneOnLoad(!!payload.done_date)
       setReminderEnabled(payload.reminder_enabled)
+      setReminderDayOfEnabled(payload.reminder_day_of_enabled)
       setOverdueReminderEnabled(payload.overdue_reminder_enabled)
       setReminderSentAt(payload.reminder_sent_at)
+      setReminderDayOfSentAt(payload.reminder_day_of_sent_at)
       setDialogList(payload.dialog ?? [])
       setLoading(false)
     }
@@ -461,6 +477,7 @@ export default function RequestResponseForm() {
       p_done_time: doneTime.trim() === '' ? null : doneTime,
       p_reminder_enabled: reminderEnabled,
       p_overdue_reminder_enabled: overdueReminderEnabled,
+      p_reminder_day_of_enabled: reminderDayOfEnabled,
     })
 
     setSending(false)
@@ -516,7 +533,7 @@ export default function RequestResponseForm() {
   const reminderIneligible = !isReminderEligible(data?.due_date ?? null)
   // "has been sent already" (owner, 2026-08-20) — see
   // ResponseDetailForm.tsx's identical addition; a second, independent
-  // grey-out for "Morning before" only.
+  // grey-out for "Day before" only.
   const reminderAlreadySent = reminderSentAt !== null
   const reminderDisabled = reminderIneligible || reminderAlreadySent
   const reminderTooltip = reminderIneligible
@@ -524,8 +541,30 @@ export default function RequestResponseForm() {
       ? 'A Reminder is not available due to the short lead time.'
       : 'A Reminder is not available without a Due Date.'
     : reminderAlreadySent
-      ? 'The morning-before Reminder has already been sent for this Request.'
+      ? 'The day-before Reminder has already been sent for this Request.'
       : undefined
+
+  // "Day of" (migration 042, 2026-08-22) — no lead-time eligibility floor;
+  // the only prereq is a Due Date, same as elsewhere on this screen.
+  // dayOfAlreadySent mirrors reminderAlreadySent's own shape, keyed off the
+  // independent reminder_day_of_sent_at column.
+  const dayOfAlreadySent = reminderDayOfSentAt !== null
+  const dayOfDisabled = !data?.due_date || dayOfAlreadySent
+  const dayOfTooltip = !data?.due_date
+    ? 'A Reminder is not available without a Due Date.'
+    : dayOfAlreadySent
+      ? 'The day-of Reminder has already been sent for this Request.'
+      : undefined
+
+  // "Day after" grey-out, 2026-08-22 — same addition as Request
+  // Detail/Response Detail's identical fix: once Done Date holds a value,
+  // there's nothing left to nudge about. No archived state on this
+  // anonymous screen (Archive is an owner/signed-in-recipient concept), so
+  // Done Date is the only gate here.
+  const overdueReminderDisabled = doneDate.trim() !== ''
+  const overdueReminderTooltip = overdueReminderDisabled
+    ? 'This Request is already marked Done.'
+    : undefined
 
   function reminderBanner() {
     return (
@@ -542,15 +581,31 @@ export default function RequestResponseForm() {
               disabled={reminderDisabled}
               onChange={(e) => setReminderEnabled(e.target.checked)}
             />
-            <span>Morning before</span>
+            <span>Day before</span>
           </label>
-          <label className="reminderitem">
+          <label
+            className={`reminderitem${dayOfDisabled ? ' reminderitem-disabled' : ''}`}
+            title={dayOfTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={reminderDayOfEnabled}
+              disabled={dayOfDisabled}
+              onChange={(e) => setReminderDayOfEnabled(e.target.checked)}
+            />
+            <span>Day of</span>
+          </label>
+          <label
+            className={`reminderitem${overdueReminderDisabled ? ' reminderitem-disabled' : ''}`}
+            title={overdueReminderTooltip}
+          >
             <input
               type="checkbox"
               checked={overdueReminderEnabled}
+              disabled={overdueReminderDisabled}
               onChange={(e) => setOverdueReminderEnabled(e.target.checked)}
             />
-            <span>Daily thereafter</span>
+            <span>Day after</span>
           </label>
         </div>
       </div>
