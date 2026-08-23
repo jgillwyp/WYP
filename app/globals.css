@@ -472,6 +472,22 @@ body {
   border-color: var(--brand-blue);
 }
 
+/* Overdue Due Date text (§6.44 PROPOSED, 2026-08-22) — Request Detail's
+   manual "Send Reminder" feature (owner: "The overdue Due Date in red would
+   be a nice touch."). Colors the native date input's own text --alert-red,
+   same token every other overdue treatment in the app already uses (row
+   text, print rows) — just scoped to a single field's value rather than a
+   whole row, since Request Detail shows one Request, not a list. Combines
+   with .req (border stays --ink) rather than replacing it — this is a
+   value-state cue layered on top of the existing required-field cue, not a
+   substitute for it. Best-effort: WebKit/Blink (Chrome, Edge, Safari) apply
+   `color` to a date input's own digits; a browser that doesn't honor it
+   just shows the value in its default color, no breakage either way. */
+.finput.overdue-date {
+  color: var(--alert-red);
+  font-weight: 700;
+}
+
 /* Read-only variant — PROPOSED (§6.10 locked) */
 .finput[readonly] {
   background: var(--locked);

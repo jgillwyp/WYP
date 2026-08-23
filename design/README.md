@@ -326,3 +326,17 @@ palette1_floating.html` either. As with every earlier Reminders-until-Done
 batch, none of the six source mockups have interactive JS for this banner,
 so none needed updating. See the decisions log's fourth 2026-08-22 entry
 for the full write-up.
+
+## 2026-08-22 — Manual "Send Reminder" button + overdue-red Due Date on Request Detail: §6.44 PROPOSED, no mockup
+
+New, not a rename — closes the item the previous entry's own batch had left
+open. §6.44 PROPOSED: a `.donerow`/`.donenote` panel (no new CSS shape)
+holding a "Send Reminder" button, shown only while Request Detail's Due
+Date is actually overdue, placed directly after the Reminders-until-Done
+banner. Paired with a new `.finput.overdue-date` class coloring the Due
+Date field's own text `--alert-red` while overdue. `WYP_request_detail_
+palette1.html`'s static HTML has no overdue-state Due Date and no Send
+Reminder control to add either of these to — same "documented gap, not
+silently skipped" posture as every other live-only feature in this batch's
+family. See the decisions log's fifth 2026-08-22 entry for the full
+write-up.

@@ -2442,7 +2442,7 @@ link is built only after the stack is proven on Add Contact.
   2026-08-22 entry for the full write-up.
 - **"Daily thereafter" replaced by a single one-time "Day after" notice
   (Requests and ToDos); Account-level Reminder defaults — migration 043
-  DRAFTED, NOT YET CONFIRMED RUN (2026-08-22, same day, fourth
+  confirmed run by Jim, 2026-08-22 (same day, fourth
   follow-up).** Jim, citing spam-complaint risk with no way to measure
   it: "The 'Daily thereafter' should be replaced by the 'Day after'...
   The same three Reminder options should be available for ToDos — and
@@ -2490,12 +2490,34 @@ link is built only after the stack is proven on Add Contact.
   banner at all; flagged in `design/README.md`, not silently skipped.
   `npx tsc --noEmit`/`npm run lint` clean. See the decisions log's
   2026-08-22 entry for the full write-up.
-- **Still open from this same conversation, not yet built**: a manual
-  "Send Reminder" button on Request Detail (Jim's original first
-  request in this batch — send an Overdue notice immediately or on the
-  next cron cycle, for a Requestor who has all three Reminder checkboxes
-  off but still wants to nudge a Recipient by hand). Not withdrawn, just
-  not yet implemented; raise for confirmation before building, since the
-  underlying Overdue email templates it would reuse
-  (`buildOverdueRecipientEmailHtml/Text`) are unchanged by this batch and
-  already exist.
+- **Manual "Send Reminder" button on Request Detail, built (2026-08-22, same
+  conversation as the "Day after" batch above) — §6.44 PROPOSED, no mockup.**
+  Closes the item flagged as "still open" immediately above. Jim: "It will
+  not fit on my phone as I suggested it to the right of the Date and
+  Recipient. It could go after or before the Reminders in its own
+  section/panel. The overdue Due Date in red would be a nice touch." New
+  `app/api/email/send-reminder/route.ts` — same posture as
+  `send-request/route.ts` (anon key + forwarded JWT, not service_role, since
+  this is triggered by the signed-in owner from the browser, unlike the cron
+  route) — reuses the exact Overdue notice template
+  (`buildOverdueRecipientEmailSubject/Html/Text`) the automatic "Day after"
+  send already uses, but deliberately does **not** touch
+  `overdue_notified_at`: a manual send is independent of the automated
+  system's own one-shot idempotency marker by design, so it can be clicked
+  regardless of that state and never suppresses or fast-forwards it.
+  `RequestDetailForm.tsx` gained `isOverdue` (same calendar-date-only
+  comparison as every other overdue treatment in the app — `due_date <
+  todayIso()`, Done/archived excluded) driving two things: a new
+  `.finput.overdue-date` class (`color: var(--alert-red)`, `globals.css`)
+  applied to both Due Date `<input type="date">` occurrences (with and
+  without Due/Done Time enabled), and a new `sendReminderPanel()` — reusing
+  `.donerow`/`.donenote` (no new CSS shape needed) — rendered directly after
+  `{reminderBanner()}` and only while overdue. `handleSendReminder()` mints
+  a fresh response-link token via the existing owner-only `issue_request_link`
+  RPC (migration 008, same call `CreateRequestForm.tsx`'s own automatic
+  Initial-email flow already makes), then POSTs it to the new route; result
+  surfaces inline in the panel (success text, or red failure text — no
+  separate `.ferror` markup, just an inline style override on `.donenote`).
+  The route re-validates server-side (not Done, not archived) rather than
+  trusting the button's own client-side gating. `npx tsc --noEmit`/`npm run
+  lint` clean.

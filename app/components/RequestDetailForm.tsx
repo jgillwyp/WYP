@@ -352,6 +352,19 @@ export default function RequestDetailForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Manual "Send Reminder" (owner, 2026-08-22): "The reminder would go out
+  // either immediately or in the next cron cycle. This would accommodate a
+  // Requestor who does not want automated notifications sent out." —
+  // independent of the three automated Reminder checkboxes above; mints its
+  // own response-link token and posts to /api/email/send-reminder, which
+  // deliberately does not touch overdue_notified_at (see that route's own
+  // header comment). sendingReminder guards the button against a double
+  // click; reminderResult surfaces the outcome inline (.donenote on
+  // success, .ferror on failure) rather than a toast, matching this
+  // screen's existing inline-message conventions.
+  const [sendingReminder, setSendingReminder] = useState(false)
+  const [reminderResult, setReminderResult] = useState<{ ok: boolean; text: string } | null>(null)
+
   // Auto-growing Description (2026-08-19, owner request) — this screen
   // loads an existing, possibly long Description the moment the record
   // fetches, unlike Create Request's own fresh-typed-and-scrolls case
@@ -927,6 +940,100 @@ export default function RequestDetailForm() {
     )
   }
 
+  // Overdue Due Date (owner, 2026-08-22: "The overdue Due Date in red would
+  // be a nice touch.") — same calendar-date-only comparison as every other
+  // overdue treatment in this app (Main Screen rows, print reports' `status`
+  // at line ~1668), not the cron route's own timezone-aware precision. A
+  // Done Request or an archived one is never "overdue" regardless of Due
+  // Date, matching the Reminder checkboxes' own grey-out reasoning above.
+  const isOverdue =
+    archivedAt === null && form.doneDate.trim() === '' && form.dueDate.trim() !== '' && form.dueDate < todayIso()
+
+  // Manual "Send Reminder" (owner, 2026-08-22) — mints a fresh response-link
+  // token (issue_request_link, migration 008, same owner-only RPC
+  // CreateRequestForm.tsx's own automatic Initial-email flow already calls)
+  // and posts it to /api/email/send-reminder, which reuses the automatic
+  // "Day after" notice's own template. Deliberately does not touch any of
+  // the three Reminder checkboxes or their _sent_at columns above — this is
+  // an independent, in-the-moment override, not a substitute for or a
+  // trigger of the automated system.
+  async function handleSendReminder() {
+    setReminderResult(null)
+    setSendingReminder(true)
+
+    const { data: linkToken, error: linkError } = await supabase.rpc('issue_request_link', {
+      p_request_id: requestId,
+    })
+
+    if (linkError || !linkToken) {
+      setSendingReminder(false)
+      setReminderResult({ ok: false, text: 'Could not create a response link. Please try again.' })
+      return
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+
+    if (!accessToken) {
+      setSendingReminder(false)
+      setReminderResult({ ok: false, text: 'Your session has expired. Please sign in again.' })
+      return
+    }
+
+    try {
+      const res = await fetch('/api/email/send-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          requestId,
+          link: `${window.location.origin}/r/${linkToken}`,
+        }),
+      })
+      const json: { sent?: boolean; reason?: string } = await res.json()
+
+      setSendingReminder(false)
+      if (json.sent) {
+        setReminderResult({ ok: true, text: 'Reminder sent.' })
+      } else if (json.reason === 'not_configured') {
+        setReminderResult({ ok: false, text: 'Email sending is not configured yet.' })
+      } else if (json.reason === 'not_overdue') {
+        setReminderResult({ ok: false, text: 'This Request is no longer overdue.' })
+      } else {
+        setReminderResult({ ok: false, text: 'The Reminder could not be sent. Please try again.' })
+      }
+    } catch {
+      setSendingReminder(false)
+      setReminderResult({ ok: false, text: 'The Reminder could not be sent. Please try again.' })
+    }
+  }
+
+  // §6.44 PROPOSED — reuses .donerow/.donenote (the same "Strip-tint box,
+  // text left, button right" component already used for quick-Done bands
+  // and the Repeat band) rather than a new shape. Rendered only while the
+  // Request is actually overdue (see isOverdue above) — there's nothing to
+  // send a reminder about otherwise, and the button would just duplicate
+  // the (already-available) automated checkboxes' own state.
+  function sendReminderPanel() {
+    if (!isOverdue) return null
+    return (
+      <div className="donerow">
+        <span className="donenote" style={reminderResult && !reminderResult.ok ? { color: 'var(--alert-red)' } : undefined}>
+          {reminderResult
+            ? reminderResult.text
+            : 'This Request is overdue. Send an Overdue notice to the Recipient now, independent of the automated Reminder schedule above.'}
+        </span>
+        <button
+          className="btn-secondary"
+          type="button"
+          onClick={handleSendReminder}
+          disabled={sendingReminder}
+        >
+          {sendingReminder ? 'Sending…' : 'Send Reminder'}
+        </button>
+      </div>
+    )
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -1057,12 +1164,21 @@ export default function RequestDetailForm() {
                 avoids repeating that. */}
             {reminderBanner()}
 
+            {/* Manual "Send Reminder" (§6.44 PROPOSED, 2026-08-22) — placed
+                directly after the automated Reminders-until-Done banner:
+                automated options first, then the manual override, both in
+                the same "Reminders" area of the screen rather than scattered
+                (owner: "It could go after or before the Reminders in its own
+                section/panel."). Renders nothing unless the Request is
+                actually overdue. */}
+            {sendReminderPanel()}
+
             {requestTimeEnabled ? (
               <>
                 <div className="fgroup frow">
                   <span className="ffloat picker native">
                     <input
-                      className="finput req"
+                      className={`finput req${isOverdue ? ' overdue-date' : ''}`}
                       id="dd"
                       type="date"
                       value={form.dueDate}
@@ -1194,7 +1310,7 @@ export default function RequestDetailForm() {
               <div className="fgroup frow">
                 <span className="ffloat picker native">
                   <input
-                    className="finput req"
+                    className={`finput req${isOverdue ? ' overdue-date' : ''}`}
                     id="dd"
                     type="date"
                     value={form.dueDate}

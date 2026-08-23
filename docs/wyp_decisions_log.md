@@ -6,6 +6,78 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-22 — Manual "Send Reminder" button built on Request Detail; overdue Due Date shown in red
+
+Closes the item raised alongside the "Day after" simplification batch
+(previous entry) and left explicitly open at the time: a manual override
+letting a Requestor send an Overdue notice by hand, for someone who has all
+three Reminders-until-Done checkboxes off but still wants to nudge a
+Recipient once, without waiting on or altering the automated cron system's
+own state.
+
+Jim confirmed migrations 42 and 43 had both been run ("it all looks good"),
+then gave the final placement/visual instructions: "For the manual 'Send
+Reminder' button on Request Detail (it will not fit on my phone as I
+suggested it to the right of of the Date and Recipient). It could go after
+or before the Reminders in its own section/panel. The overdue Due Date in
+red would be a nice touch."
+
+**Placement**: after the Reminders-until-Done banner, not before — reasoning
+was that the automated options should be seen first, with the manual
+override presented as a fallback beneath them, both still grouped in the
+same visual area of the screen. Not explicitly confirmed with Jim (he left
+either order open), flagged here rather than assumed uncontroversial.
+
+**Overdue red Due Date**: new `.finput.overdue-date` CSS class
+(`color: var(--alert-red)`, `font-weight: 700`), applied to both places
+Request Detail renders its Due Date `<input type="date">` (the
+Due-Time-enabled branch and the combined-row branch when Due/Done Time is
+off). Uses the same calendar-date-only overdue definition every other part
+of the app already uses (`due_date < todayIso()`, with Done/archived
+excluded) — not the cron route's own timezone-aware precision, since this
+is a single-item visual cue, not a notification trigger. Best-effort:
+WebKit/Blink browsers (Chrome, Edge, Safari — the app's real audience) apply
+`color` to a native date input's own digit text; a browser that doesn't
+honor it just falls back to the default color, no breakage.
+
+**Send Reminder panel and route**: new `app/api/email/send-reminder/route.ts`,
+reusing the exact Overdue notice template
+(`buildOverdueRecipientEmailSubject/Html/Text`) the automatic "Day after"
+send already uses in `app/api/cron/tick/route.ts` — same content, different
+trigger. Deliberately does **not** write to `requests.overdue_notified_at`:
+that column is the automated system's own one-shot idempotency marker, and
+a manual send here needed to stay fully independent of it — clickable
+regardless of whether the automated window already fired, hasn't yet, or
+the "Day after" checkbox is off entirely, and never suppresses or
+fast-forwards the automated system's own separate state. Follows
+`send-request/route.ts`'s posture, not `cron/tick/route.ts`'s: since this is
+triggered by the signed-in owner from the browser (a real session exists to
+scope to), it runs under RLS via the forwarded JWT + anon key, not
+`service_role`. The route re-validates server-side that the Request is
+still not Done and not archived before sending, rather than trusting the
+button's own client-side gating — "don't trust the client," the same
+posture every other route in this app already takes.
+
+`RequestDetailForm.tsx` gained a `sendReminderPanel()` function, rendered
+only while `isOverdue` is true, reusing `.donerow`/`.donenote` (the same
+"Strip-tint box, note text left, button right" component already used for
+quick-Done bands and the Repeat band) rather than inventing new CSS.
+`handleSendReminder()` mints a fresh response-link token via the existing
+owner-only `issue_request_link` RPC (migration 008) — the identical call
+`CreateRequestForm.tsx`'s own automatic Initial Request email flow already
+makes — then POSTs `{ requestId, link }` with a Bearer session token to the
+new route. The result (success, or a failure reason) surfaces inline in the
+panel itself rather than a toast — success text in the normal `.donenote`
+color, failure text with an inline `color: var(--alert-red)` override on
+the same element (no separate `.ferror` markup needed for a single line).
+
+No mockup reflects this — none of Request Detail's static HTML has an
+overdue-state Due Date or a Send Reminder control to update; flagged in
+`design/README.md`, not silently skipped. `npx tsc --noEmit`/`npm run lint`
+clean.
+
+\---
+
 ## 2026-08-22 — "Daily thereafter" replaced by a single one-time "Day after" notice, for both Requests and ToDos; Account-level default toggles for the three Reminder checkboxes
 
 Jim, working from a pasted screenshot of Request Detail plus two numbered
