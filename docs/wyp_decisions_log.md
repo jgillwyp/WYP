@@ -168,6 +168,17 @@ in this family), and `AccountForm.tsx` has never had a mockup counterpart
 at all; flagged in `design/README.md`, not silently skipped. `npx tsc
 --noEmit`/`npm run lint` both clean across the full batch.
 
+**Same-day follow-up, migration 044 confirmed run**: Jim — "It all looks
+good, migration 44 was run. One tweak: please change both the Housekeeping
+task 'Account' title and the page title to 'Account Options' and then drop
+the word ' Options' on each of the sections." Main Screen's Housekeeping
+row and Account's own `.band` title (`.glabel`) both now read "Account
+Options"; the four section headers (`sectionHead()`'s `title` argument)
+dropped their own trailing " Options" — "General," "Request," "ToDo,"
+"Subscriber" — so the word appears exactly once, at the screen level, not
+repeated on every section beneath it. Purely a label change, no new state
+or gating. `npx tsc --noEmit`/`npm run lint` clean.
+
 \---
 
 ## 2026-08-22 — Manual "Send Reminder" button built on Request Detail; overdue Due Date shown in red

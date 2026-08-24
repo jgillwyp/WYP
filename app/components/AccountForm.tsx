@@ -413,16 +413,16 @@ export default function AccountForm() {
         <WypHeader />
 
         <div className="band">
-          <span className="glabel">Account</span>
+          <span className="glabel">Account Options</span>
           <button className="btn" type="button" onClick={handleClose}>
             Close
           </button>
         </div>
 
         <div className="scroll">
-          {/* ---------------------------------------------------- General Options */}
+          {/* ---------------------------------------------------- General */}
           <div className="subcard">
-            {sectionHead('General Options', generalOpen, setGeneralOpenAndStore)}
+            {sectionHead('General', generalOpen, setGeneralOpenAndStore)}
             {generalOpen && (
               <div className="subbody">
                 <label className="checkrow">
@@ -466,9 +466,9 @@ export default function AccountForm() {
             )}
           </div>
 
-          {/* ---------------------------------------------------- Request Options */}
+          {/* ---------------------------------------------------- Request */}
           <div className="subcard">
-            {sectionHead('Request Options', requestOpen, setRequestOpenAndStore)}
+            {sectionHead('Request', requestOpen, setRequestOpenAndStore)}
             {requestOpen && (
               <div className="subbody">
                 <label className="checkrow">
@@ -600,9 +600,9 @@ export default function AccountForm() {
             )}
           </div>
 
-          {/* ---------------------------------------------------- ToDo Options */}
+          {/* ---------------------------------------------------- ToDo */}
           <div className="subcard">
-            {sectionHead('ToDo Options', todoOpen, setTodoOpenAndStore)}
+            {sectionHead('ToDo', todoOpen, setTodoOpenAndStore)}
             {todoOpen && (
               <div className="subbody">
                 <label className="checkrow">
@@ -719,10 +719,10 @@ export default function AccountForm() {
             )}
           </div>
 
-          {/* ---------------------------------------------------- Subscriber Options */}
+          {/* ---------------------------------------------------- Subscriber */}
           {canToggleTier && (
             <div className="subcard">
-              {sectionHead('Subscriber Options', subscriberOpen, setSubscriberOpenAndStore)}
+              {sectionHead('Subscriber', subscriberOpen, setSubscriberOpenAndStore)}
               {subscriberOpen && (
                 <div className="subbody">
                   <label className="checkrow">

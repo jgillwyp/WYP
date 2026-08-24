@@ -1613,7 +1613,7 @@ export default function MainScreen() {
                     onKeyDown={(e) => { if (e.key === 'Enter') router.push('/account') }}
                   >
                     <span className="hktext">
-                      <span className="hktitle">Account</span>
+                      <span className="hktitle">Account Options</span>
                       <span className="hknote"> — view and edit</span>
                     </span>
                   </div>
