@@ -108,6 +108,11 @@ type SentCandidate = {
   // count-embed technique as MainScreen.tsx's SentRow.
   dialog: { count: number }[] | null
   attachments: { count: number }[] | null
+  // categories(name) — 2026-08-24, Category column/sort/row-display batch.
+  // This screen's Sent query never selected it before; MainScreen.tsx's own
+  // SentRow has had it since 2026-08-15 (Print's own categoryPrefix), but
+  // Archive's on-screen rows never showed Category at all until now.
+  categories: { name: string } | null
   // repeat_rule — migration 040, alongside this batch's other Repeat print
   // additions.
   repeat_rule: RepeatRule | null
@@ -140,6 +145,8 @@ type TodoCandidate = {
   // Dialog only — ToDos' own Locations have no icon of their own yet,
   // matching MainScreen.tsx's TodoRow (no attachments field there either).
   dialog: { count: number }[] | null
+  // categories(name) — 2026-08-24, same batch as SentCandidate above.
+  categories: { name: string } | null
   repeat_rule: RepeatRule | null
 }
 
@@ -171,6 +178,13 @@ type PrintAttachmentEntry = {
 }
 type PrintDetail = { dialog: PrintDialogEntry[]; attachments: PrintAttachmentEntry[] }
 type PrintDetailMap = Record<string, PrintDetail>
+
+// Category print prefix — 2026-08-24, same shape as MainScreen.tsx's
+// identical helper. Sent/ToDos only (per-caller check below); Received
+// never has a category to prefix with (Row.category is always null there).
+function categoryPrefix(name: string | null | undefined): string {
+  return name ? `[${name}] ` : ''
+}
 
 // "Repeats: ..." print line — same shared describeRepeat() builder every
 // consumer uses; see MainScreen.tsx's identical copy.
@@ -275,21 +289,30 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
 // etc. rather than shared — this app's established convention for small
 // stateless helpers (see openPicker above, formatMDY). Sent/Received share
 // one Req sort (name/date/due/done, mirroring Main Screen's own To-From/
-// Date/Due/Done columns); ToDos here has only Priority to sort by — unlike
-// Main Screen's ToDos, this screen never shows Category at all, so there's
-// no second sortable column.
+// Date/Due/Done columns); ToDos here has Priority plus, as of 2026-08-24,
+// Category (see 'category' below) — this screen never showed Category at
+// all before that date, matching MainScreen.tsx's own history.
 type SortDir = 'asc' | 'desc'
-type ReqSortKey = 'name' | 'date' | 'due' | 'done'
+// 'category' added 2026-08-24 — Sent-only in practice (Received never shows
+// Category, PRD §2.3), but kept on the one shared ReqSortKey type rather
+// than split into a Sent-specific type the way MainScreen.tsx's own
+// SentSortKey is: this screen's colbar/sort is already driven by a single
+// `currentReqSort`/`sortReqColumn` shared between Sent and Received (see
+// below), and Received's own colbar simply never renders a Category
+// ColSort button, so the key is never reachable from that side's UI.
+type ReqSortKey = 'name' | 'date' | 'due' | 'done' | 'category'
 // Extended 2026-08-17 from 'priority' alone — Archive's ToDos header now
 // mirrors Main Screen's own Priority/Date/[Due]/Done column set (see
-// TodoCandidate/Row above), so it needs the same four sort keys.
-type TodoSortKey = 'priority' | 'date' | 'due' | 'done'
+// TodoCandidate/Row above), so it needs the same four sort keys. 'category'
+// added 2026-08-24, same batch as ReqSortKey above.
+type TodoSortKey = 'priority' | 'date' | 'due' | 'done' | 'category'
 
 const REQ_SORT_DEFAULT_DIR: Record<ReqSortKey, SortDir> = {
   name: 'asc',
   date: 'desc',
   due: 'desc',
   done: 'desc',
+  category: 'asc',
 }
 
 const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
@@ -297,6 +320,17 @@ const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
   date: 'desc',
   due: 'desc',
   done: 'desc',
+  category: 'asc',
+}
+
+// Secondary tie-break, 2026-08-24 — same rule as MainScreen.tsx's own
+// compareDueDesc: "if To, From, or Category is selected - secondarily sort
+// the output by descending Due Date (except for ToDos if Due Dates are not
+// shown - then for ToDos secondarily sort by descending Date)." Always
+// descending, regardless of the primary column's own asc/desc direction —
+// consulted only when the primary comparison returns 0 (a tie).
+function compareDueDesc(a: string | null, b: string | null): number {
+  return compareNullable(a, b, 'desc', compareStrings)
 }
 
 function toggleSort<K extends string>(
@@ -530,15 +564,27 @@ export default function ArchiveForm() {
   // signed-in user's id).
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
 
+  // Show Private Category — profiles.private_category_enabled, added to
+  // this screen's own preference read 2026-08-24 (this screen previously
+  // never read it at all, since it never showed Category anywhere — see the
+  // ReqSortKey/TodoSortKey comments above). Same one-time-on-mount pattern
+  // as todoDatesEnabled just above.
+  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
+
   useEffect(() => {
     let cancelled = false
     async function loadPrefs() {
       const { data: userData } = await supabase.auth.getUser()
       const uid = userData.user?.id ?? null
       if (cancelled || !uid) return
-      const { data } = await supabase.from('profiles').select('todo_dates_enabled').eq('id', uid).single()
+      const { data } = await supabase
+        .from('profiles')
+        .select('todo_dates_enabled, private_category_enabled')
+        .eq('id', uid)
+        .single()
       if (cancelled) return
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+      setCategoriesEnabled(data?.private_category_enabled ?? false)
     }
     loadPrefs()
     return () => {
@@ -639,7 +685,7 @@ export default function ArchiveForm() {
       const [sentRes, receivedRes, todoRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count), repeat_rule')
+          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count), categories(name), repeat_rule')
           .not('contact_id', 'is', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +received_archived_at via
@@ -650,7 +696,7 @@ export default function ArchiveForm() {
         supabase.rpc('get_received_requests'),
         supabase
           .from('requests')
-          .select('id, description, priority, due_date, done_date, created_at, archived_at, dialog(count), repeat_rule')
+          .select('id, description, priority, due_date, done_date, created_at, archived_at, dialog(count), categories(name), repeat_rule')
           .is('contact_id', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
       ])
@@ -695,6 +741,10 @@ export default function ArchiveForm() {
     // above. attachmentCount is always 0 for a ToDo row.
     dialogCount: number
     attachmentCount: number
+    // category — 2026-08-24, see the Candidate types' own comment. Always
+    // null for Received (PRD §2.3 — no categories(name) embed to read it
+    // from in the first place; ReceivedCandidate has no such field).
+    category: string | null
     repeatRule: RepeatRule | null
   }
 
@@ -716,6 +766,7 @@ export default function ArchiveForm() {
           priority: null,
           dialogCount: r.dialog?.[0]?.count ?? 0,
           attachmentCount: r.attachments?.[0]?.count ?? 0,
+          category: r.categories?.name ?? null,
           repeatRule: r.repeat_rule,
         }))
     }
@@ -736,6 +787,7 @@ export default function ArchiveForm() {
           priority: null,
           dialogCount: r.dialog_count,
           attachmentCount: r.attachment_count,
+          category: null,
           repeatRule: r.repeat_rule,
         }))
     }
@@ -757,6 +809,7 @@ export default function ArchiveForm() {
         doneISO: (t.done_date ?? '').slice(0, 10),
         priLabel: t.priority ? PRIORITY_LABEL[t.priority] : '',
         priority: t.priority ?? null,
+        category: t.categories?.name ?? null,
         dialogCount: t.dialog?.[0]?.count ?? 0,
         attachmentCount: 0,
         repeatRule: t.repeat_rule,
@@ -806,6 +859,15 @@ export default function ArchiveForm() {
             return compareNullable(a.dueISO, b.dueISO, todoSort.dir, compareStrings)
           case 'done':
             return compareNullable(a.doneISO, b.doneISO, todoSort.dir, compareStrings)
+          // Reinstated 2026-08-24 — see TodoSortKey's own comment above.
+          // Tie-break: descending Due Date when Due Dates are shown, else
+          // descending Date (created) — same owner rule as MainScreen.tsx's
+          // own compareDueDesc call sites.
+          case 'category': {
+            const primary = compareNullable(a.category, b.category, todoSort.dir, compareStrings)
+            if (primary !== 0) return primary
+            return todoDatesEnabled ? compareDueDesc(a.dueISO, b.dueISO) : compareDueDesc(a.dateISO, b.dateISO)
+          }
         }
       })
       return list
@@ -813,18 +875,28 @@ export default function ArchiveForm() {
     const sort = currentType === 'received' ? receivedSort : sentSort
     list.sort((a, b) => {
       switch (sort.key) {
-        case 'name':
-          return compareNullable(a.name, b.name, sort.dir, compareStrings)
+        // Tie-break on descending Due Date — see compareDueDesc's own
+        // comment above (2026-08-24). Reachable for Sent's own 'name'
+        // (To) and 'category'; Received's colbar never renders a Category
+        // ColSort button, so only 'name' (From) is reachable there.
+        case 'name': {
+          const primary = compareNullable(a.name, b.name, sort.dir, compareStrings)
+          return primary !== 0 ? primary : compareDueDesc(a.dueISO, b.dueISO)
+        }
         case 'date':
           return compareNullable(a.dateISO, b.dateISO, sort.dir, compareStrings)
         case 'due':
           return compareNullable(a.dueISO, b.dueISO, sort.dir, compareStrings)
         case 'done':
           return compareNullable(a.doneISO, b.doneISO, sort.dir, compareStrings)
+        case 'category': {
+          const primary = compareNullable(a.category, b.category, sort.dir, compareStrings)
+          return primary !== 0 ? primary : compareDueDesc(a.dueISO, b.dueISO)
+        }
       }
     })
     return list
-  }, [matches, currentType, sentSort, receivedSort, todoSort])
+  }, [matches, currentType, sentSort, receivedSort, todoSort, todoDatesEnabled])
 
   function sortReqColumn(key: ReqSortKey) {
     if (currentType === 'received') {
@@ -1206,7 +1278,20 @@ export default function ArchiveForm() {
                         dir={todoSort.dir}
                         onClick={() => sortTodoColumn('priority')}
                       />
-                      <span className="c-desc">Description</span>
+                      {/* Description -> Category, sortable, when Private
+                          Category is on; removed entirely when off —
+                          2026-08-24, matching MainScreen.tsx's own batch.
+                          Archive's ToDos view never showed Category at all
+                          before this. */}
+                      {categoriesEnabled && (
+                        <ColSort
+                          className="c-desc"
+                          label="Category"
+                          active={todoSort.key === 'category'}
+                          dir={todoSort.dir}
+                          onClick={() => sortTodoColumn('category')}
+                        />
+                      )}
                     </span>
                     <ColSort
                       className="c-dt"
@@ -1234,13 +1319,29 @@ export default function ArchiveForm() {
                   </div>
                 ) : (
                   <div className="colbar sr">
-                    <ColSort
-                      className="c-nm"
-                      label={COL[currentType] ?? ''}
-                      active={currentReqSort.key === 'name'}
-                      dir={currentReqSort.dir}
-                      onClick={() => sortReqColumn('name')}
-                    />
+                    <span className="namecell">
+                      <ColSort
+                        className="c-nm"
+                        label={COL[currentType] ?? ''}
+                        active={currentReqSort.key === 'name'}
+                        dir={currentReqSort.dir}
+                        onClick={() => sortReqColumn('name')}
+                      />
+                      {/* Category column, Sent only — 2026-08-24, new (this
+                          screen never showed Category at all before; see
+                          ReqSortKey's own comment above for why Received
+                          never renders this even though the type technically
+                          allows the key). */}
+                      {currentType === 'sent' && categoriesEnabled && (
+                        <ColSort
+                          className="c-desc"
+                          label="Category"
+                          active={currentReqSort.key === 'category'}
+                          dir={currentReqSort.dir}
+                          onClick={() => sortReqColumn('category')}
+                        />
+                      )}
+                    </span>
                     <ColSort
                       className="c-dt"
                       label="Date"
@@ -1312,7 +1413,20 @@ export default function ArchiveForm() {
                             {r.dialogCount > 0 && (
                               <span className="ii"><DialogIcon /></span>
                             )}
-                            <span className="desc">{r.desc}</span>
+                            <span className="desc">
+                              {/* Category on screen — 2026-08-24, matching
+                                  MainScreen.tsx's own TodoRow treatment
+                                  (r.category ?? '—' em-dash fallback, not
+                                  omitted, when the toggle is on but this
+                                  particular ToDo has no Category set). */}
+                              {categoriesEnabled && (
+                                <>
+                                  <span className="cat">{r.category ?? '—'}</span>
+                                  {' — '}
+                                </>
+                              )}
+                              {r.desc}
+                            </span>
                           </div>
                         </>
                       ) : (
@@ -1330,7 +1444,22 @@ export default function ArchiveForm() {
                             {r.attachmentCount > 0 && (
                               <span className="ii"><AttachmentIcon /></span>
                             )}
-                            <span className="desc">{r.desc}</span>
+                            <span className="desc">
+                              {/* Category on screen, Sent only — 2026-08-24,
+                                  new (this screen never showed Category at
+                                  all before). r.category is always null for
+                                  Received (see Row's own comment), so this
+                                  condition is belt-and-suspenders — the
+                                  currentType check alone would already be
+                                  enough. */}
+                              {currentType === 'sent' && categoriesEnabled && (
+                                <>
+                                  <span className="cat">{r.category ?? '—'}</span>
+                                  {' — '}
+                                </>
+                              )}
+                              {r.desc}
+                            </span>
                           </div>
                         </>
                       )}
@@ -1371,7 +1500,11 @@ export default function ArchiveForm() {
             <div className={`pcolbar pdcols${todoDatesEnabled ? ' wide' : ''}`}>
               <span className="namecell">
                 <span>Priority{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
-                <span className="c-desc">Description</span>
+                {/* Category when shown, nothing at all when not —
+                    2026-08-24, matching MainScreen.tsx's own print colbar. */}
+                {categoriesEnabled && (
+                  <span className="c-desc">Category{todoSort.key === 'category' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                )}
               </span>
               <span className="c-dt">Date{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               {todoDatesEnabled && (
@@ -1383,7 +1516,11 @@ export default function ArchiveForm() {
             <div className="pcolbar psr">
               <span className="namecell">
                 <span className="c-nm">{COL[currentType]}{currentReqSort.key === 'name' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
-                <span className="c-desc">Description</span>
+                {/* Category heading (Sent only, per PRD §2.3 withholding Category
+                    from Received) when shown, nothing at all when not — 2026-08-24. */}
+                {currentType === 'sent' && categoriesEnabled && (
+                  <span className="c-desc">Category{currentReqSort.key === 'category' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                )}
               </span>
               <span className="c-dt">Date{currentReqSort.key === 'date' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               <span className="c-due">Due{currentReqSort.key === 'due' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
@@ -1410,7 +1547,7 @@ export default function ArchiveForm() {
                           <span className="pdn">{r.doneDisp}</span>
                         </div>
                         <div className="pr2">
-                          <span className="pdesc">{r.desc}</span>
+                          <span className="pdesc">{categoriesEnabled && categoryPrefix(r.category)}{r.desc}</span>
                         </div>
                       </>
                     ) : (
@@ -1422,7 +1559,7 @@ export default function ArchiveForm() {
                           <span className="pdn">{r.doneDisp}</span>
                         </div>
                         <div className="pr2">
-                          <span className="pdesc">{r.desc}</span>
+                          <span className="pdesc">{currentType === 'sent' && categoriesEnabled && categoryPrefix(r.category)}{r.desc}</span>
                         </div>
                       </>
                     )}

@@ -2613,3 +2613,77 @@ link is built only after the stack is proven on Add Contact.
   itself has never had a mockup of its own; flagged in `design/README.md`.
   `npx tsc --noEmit`/`npm run lint` clean. See the decisions log's
   2026-08-23 entry for the full write-up.
+- **"Account" renamed to "Account Options" (Housekeeping row + band title);
+  four Account section headers dropped their own " Options" suffix
+  (2026-08-24).** Jim: "please change both the Housekeeping task 'Account'
+  title and the page title to 'Account Options' and then drop the word
+  ' Options' on each of the sections." `MainScreen.tsx`'s Housekeeping row
+  and `AccountForm.tsx`'s band title now read "Account Options"; the four
+  `sectionHead()` calls (General/Request/ToDo/Subscriber) dropped "Options"
+  from their own labels, unchanged otherwise — `sectionHead()` itself needed
+  no change, it was already a pass-through. Logged as a same-day follow-up
+  in the decisions log's existing 2026-08-23 Account-restructure entry
+  rather than a new one, since it's a pure wording correction to that same
+  batch. `npx tsc --noEmit`/`npm run lint` clean.
+- **Description column heading becomes Category (sortable) or disappears,
+  depending on Private Category; Category now shown on Sent rows too;
+  print reports match; Done-row print-heading bold+grey CSS bug fixed
+  (2026-08-24).** Jim: "On the main screen and on the Archive screen, for
+  Requests Sent and for ToDos, replace the column heading of 'Description'
+  (when Private Categories are shown per Account Options) with Category
+  (including it being a sort option). For Requests Sent and for ToDos,
+  remove the column heading of 'Description' (when Private Categories are
+  not shown per Account Options). For Requests Received, for consistency
+  remove the column heading of 'Description'. Apply these same changes to
+  the printed reports... Another printed reports tweak, for items marked as
+  Done, the Dialog and Locations (and I presume Attachments) headings are
+  not bolded in the grey font... When Private Categories are shown... the
+  only place the Category is currently displayed... is on the main screen
+  for ToDos, it should also be displayed on the main screen Requests Sent
+  (and Category should similarly be displayed for Archive and for printed
+  reports for Requests Sent and for ToDos)." Applied identically to
+  `MainScreen.tsx` and `ArchiveForm.tsx`: the `.namecell`/`.c-desc` pair
+  that used to hold a static "Description" span now holds either a
+  sortable Category `ColSort` button (Sent/ToDos, gated
+  `private_category_enabled`) or nothing at all — Received's own colbar
+  drops the heading unconditionally, since Received never shows Category
+  (PRD §2.3) and a heading with nothing under it read as inconsistent
+  either way. Sent rows gained the same `.cat`/em-dash prefix ToDos'
+  description line already had. `MainScreen.tsx` split its Sent/ToDo sort-key
+  types (`SentSortKey`/`TodoSortKey` each gained `'category'`; Received's
+  own `ReqSortKey` deliberately did not, so Received can never sort by a
+  column it doesn't show) — `ArchiveForm.tsx` instead added `'category'` to
+  its one shared `ReqSortKey` (Sent and Received already share one sort
+  state/switch there), relying on the colbar simply never rendering a
+  Category button for Received to keep the key practically unreachable from
+  that side; flagged in both files' own code comments so the asymmetry
+  reads as deliberate, not inconsistent. Print colbars/rows in both files
+  got the identical heading and `categoryPrefix()`-prefix treatment (a
+  `[Category] ` prefix on the description line, matching the existing
+  Repeat-line/other print conventions) — `MainScreen.tsx` already had
+  `categoryPrefix()` calls on its Sent/ToDos print rows from the 2026-08-15
+  batch; `ArchiveForm.tsx` needed the helper built from scratch. **New
+  secondary-sort rule, same day**: "For columnar sorting, if To, From, or
+  Category is selected - secondarily sort the output by descending Due Date
+  (except for ToDos if Due Dates are not shown - then for ToDos secondarily
+  sort by descending Date)." New `compareDueDesc()` (always descending,
+  independent of the primary column's own direction) in both files,
+  consulted only as a tie-break when the primary comparator returns 0, for
+  the `name` (To/From) and `category` keys — never `date`/`due`/`done` or
+  ToDos' `priority`, which already carry their own meaningful order.
+  **Print CSS bug, same day**: `.prow.done .pdlghead`/`.patthead` (the
+  Dialog/Locations/Attachments section headings on a printed Done row) were
+  losing their base `font-weight: 700` to a later, more-specific
+  `.prow.done { ...; font-weight: 500 }` rule that also covers several
+  other classes at once — `.pdlgkind` (each Dialog entry's own
+  Question/Answer/Comment label) was never swept into that shared rule and
+  so kept its own bold weight while inheriting the row's grey color,
+  producing exactly the bold+grey Jim described wanting for the section
+  headings too. Fixed with a more-specific override rule immediately after
+  the existing one in `app/globals.css`. **A tool-call was rejected
+  mid-batch** ("STOP what you are doing and wait for the user to tell you
+  how to proceed") after the first `ArchiveForm.tsx` edit — work paused
+  immediately and only resumed once Jim explicitly said "Yes" to a direct
+  question about continuing. **No mockups updated** — none of the affected
+  screens' static HTML has interactive Category-column JS to convert;
+  flagged in `design/README.md`. `npx tsc --noEmit`/`npm run lint` clean.

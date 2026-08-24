@@ -401,11 +401,23 @@ async function loadReceivedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
 // the filter chips and search: these lists are personal-scale, so a
 // re-query per click isn't worth the complexity.
 type SortDir = 'asc' | 'desc'
+// Received never shows or sorts by Category (PRD §2.3 withholds it from the
+// recipient entirely — see ReceivedRow's own comment) — ReqSortKey stays
+// exactly what Received's colbar needs. Sent's own Category column
+// (reinstated 2026-08-24, see SentSortKey below) needs one more key than
+// Received does, so the two are no longer the same type.
 type ReqSortKey = 'name' | 'date' | 'due' | 'done'
-// 'category' retired 2026-08-17 — Category is no longer a colbar heading on
-// ToDos (see the .colbar.dcols redesign in globals.css); 'date'/'due'/'done'
-// added, matching Sent/Received's own three date-column sort keys.
-type TodoSortKey = 'priority' | 'date' | 'due' | 'done'
+// 'category' retired 2026-08-17 as a ToDos colbar heading (the .colbar.dcols
+// redesign replaced it with the plain "Description" label), then reinstated
+// 2026-08-24 — Category becomes the column heading in place of Description
+// whenever Private Category is on (owner: "replace the column heading of
+// 'Description'... with Category (including it being a sort option)").
+// Sent gains the identical column/sort for the first time in this same
+// batch — SentSortKey below, not a change to ReqSortKey, since Received
+// must never gain it.
+type TodoSortKey = 'priority' | 'date' | 'due' | 'done' | 'category'
+// Sent-only — see the comment on ReqSortKey above.
+type SentSortKey = ReqSortKey | 'category'
 
 // Each column's own sensible starting direction the first time it's
 // clicked — matching the defaults this screen already had (Due descending,
@@ -419,11 +431,19 @@ const REQ_SORT_DEFAULT_DIR: Record<ReqSortKey, SortDir> = {
   done: 'desc',
 }
 
+// Extends REQ_SORT_DEFAULT_DIR with Category's own starting direction
+// (alphabetical, same convention as name/To) — Sent-only, see SentSortKey.
+const SENT_SORT_DEFAULT_DIR: Record<SentSortKey, SortDir> = {
+  ...REQ_SORT_DEFAULT_DIR,
+  category: 'asc',
+}
+
 const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
   priority: 'asc',
   date: 'desc',
   due: 'desc',
   done: 'desc',
+  category: 'asc',
 }
 
 function toggleSort<K extends string>(
@@ -456,6 +476,17 @@ function compareStrings(a: string, b: string): number {
 
 function compareNumbers(a: number, b: number): number {
   return a - b
+}
+
+// Secondary tie-break, 2026-08-24 — owner: "if To, From, or Category is
+// selected - secondarily sort the output by descending Due Date (except for
+// ToDos if Due Dates are not shown - then for ToDos secondarily sort by
+// descending Date)." Always descending, regardless of the primary column's
+// own asc/desc direction — a fixed tie-break, not a second user-controlled
+// sort. Only ever consulted when the primary comparison above returns 0
+// (equal), so an already-decisive primary sort is never disturbed.
+function compareDueDesc(a: string | null, b: string | null): number {
+  return compareNullable(a, b, 'desc', compareStrings)
 }
 
 // Sort state persistence mirrors the existing chip-state pattern below
@@ -874,14 +905,14 @@ export default function MainScreen() {
   // switched back to All/Open/Done still sorts/filters correctly either way.
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
 
-  const [sentSort, setSentSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
-    readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
+  const [sentSort, setSentSort] = useState<{ key: SentSortKey; dir: SortDir }>(() =>
+    readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done', 'category'] as const, { key: 'due', dir: 'desc' })
   )
   const [receivedSort, setReceivedSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
     readStoredSort(RECEIVED_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
   )
   const [todoSort, setTodoSort] = useState<{ key: TodoSortKey; dir: SortDir }>(() =>
-    readStoredSort(TODO_SORT_KEY, ['priority', 'date', 'due', 'done'] as const, { key: 'priority', dir: 'asc' })
+    readStoredSort(TODO_SORT_KEY, ['priority', 'date', 'due', 'done', 'category'] as const, { key: 'priority', dir: 'asc' })
   )
 
   useEffect(() => {
@@ -1153,14 +1184,23 @@ export default function MainScreen() {
     const list = [...filteredSent]
     list.sort((a, b) => {
       switch (sentSort.key) {
-        case 'name':
-          return compareNullable(a.contacts?.display_name ?? null, b.contacts?.display_name ?? null, sentSort.dir, compareStrings)
+        // Both branches below tie-break on descending Due Date — see
+        // compareDueDesc's own comment above.
+        case 'name': {
+          const primary = compareNullable(a.contacts?.display_name ?? null, b.contacts?.display_name ?? null, sentSort.dir, compareStrings)
+          return primary !== 0 ? primary : compareDueDesc(a.due_date, b.due_date)
+        }
         case 'date':
           return compareNullable(a.created_at, b.created_at, sentSort.dir, compareStrings)
         case 'due':
           return compareNullable(a.due_date, b.due_date, sentSort.dir, compareStrings)
         case 'done':
           return compareNullable(a.done_date, b.done_date, sentSort.dir, compareStrings)
+        // Reinstated 2026-08-24 — see SentSortKey's own comment above.
+        case 'category': {
+          const primary = compareNullable(a.categories?.name ?? null, b.categories?.name ?? null, sentSort.dir, compareStrings)
+          return primary !== 0 ? primary : compareDueDesc(a.due_date, b.due_date)
+        }
       }
     })
     return list
@@ -1170,8 +1210,12 @@ export default function MainScreen() {
     const list = [...filteredReceived]
     list.sort((a, b) => {
       switch (receivedSort.key) {
-        case 'name':
-          return compareNullable(a.owner_name, b.owner_name, receivedSort.dir, compareStrings)
+        // Tie-break on descending Due Date — see compareDueDesc's own
+        // comment above (2026-08-24).
+        case 'name': {
+          const primary = compareNullable(a.owner_name, b.owner_name, receivedSort.dir, compareStrings)
+          return primary !== 0 ? primary : compareDueDesc(a.due_date, b.due_date)
+        }
         case 'date':
           return compareNullable(a.created_at, b.created_at, receivedSort.dir, compareStrings)
         case 'due':
@@ -1195,10 +1239,21 @@ export default function MainScreen() {
           return compareNullable(a.due_date, b.due_date, todoSort.dir, compareStrings)
         case 'done':
           return compareNullable(a.done_date, b.done_date, todoSort.dir, compareStrings)
+        // Reinstated 2026-08-24 — see TodoSortKey's own comment above.
+        // Tie-break: descending Due Date when Due Dates are shown, else
+        // descending Date (created) — owner's own carve-out for ToDos,
+        // since a ToDo's due_date is meaningless UI-wise while
+        // todoDatesEnabled is off (same reasoning the Overdue chip already
+        // uses elsewhere in this file).
+        case 'category': {
+          const primary = compareNullable(a.categories?.name ?? null, b.categories?.name ?? null, todoSort.dir, compareStrings)
+          if (primary !== 0) return primary
+          return todoDatesEnabled ? compareDueDesc(a.due_date, b.due_date) : compareDueDesc(a.created_at, b.created_at)
+        }
       }
     })
     return list
-  }, [filteredTodos, todoSort])
+  }, [filteredTodos, todoSort, todoDatesEnabled])
 
   // Placed after sortedSent/sortedReceived/sortedTodos above (not beside
   // printSection/printDetail's own state, further up) — the React Compiler
@@ -1225,8 +1280,8 @@ export default function MainScreen() {
     setPrintTick((t) => t + 1)
   }
 
-  function sortSent(key: ReqSortKey) {
-    setSentSort((s) => toggleSort(s, key, REQ_SORT_DEFAULT_DIR))
+  function sortSent(key: SentSortKey) {
+    setSentSort((s) => toggleSort(s, key, SENT_SORT_DEFAULT_DIR))
   }
 
   function sortReceived(key: ReqSortKey) {
@@ -1282,7 +1337,14 @@ export default function MainScreen() {
               <div className="colbar sr">
                 <span className="namecell">
                   <ColSort className="c-nm" label="To" active={sentSort.key === 'name'} dir={sentSort.dir} onClick={() => sortSent('name')} />
-                  <span className="c-desc">Description</span>
+                  {/* Description -> Category, sortable, when Private Category
+                      is on; removed entirely (no heading at all) when off —
+                      2026-08-24, owner. Mirrors the ToDos colbar below, and
+                      is new for Sent: unlike ToDos, Sent has never had a
+                      Category column heading before. */}
+                  {categoriesEnabled && (
+                    <ColSort className="c-desc" label="Category" active={sentSort.key === 'category'} dir={sentSort.dir} onClick={() => sortSent('category')} />
+                  )}
                 </span>
                 <ColSort className="c-dt" label="Date" active={sentSort.key === 'date'} dir={sentSort.dir} onClick={() => sortSent('date')} />
                 <ColSort className="c-due" label="Due" active={sentSort.key === 'due'} dir={sentSort.dir} onClick={() => sortSent('due')} />
@@ -1338,7 +1400,22 @@ export default function MainScreen() {
                         {attachmentCount(r.attachments) > 0 && (
                           <span className="ii"><AttachmentIcon /></span>
                         )}
-                        <span className="desc">{r.description}</span>
+                        <span className="desc">
+                          {/* Category, on screen, for Sent — new 2026-08-24
+                              (owner: "the only place the Category is
+                              currently displayed on a detail item in a list
+                              is on the main screen for ToDos, it should also
+                              be displayed on the main screen Requests Sent").
+                              Identical .cat + em-dash treatment as the ToDos
+                              row below. */}
+                          {categoriesEnabled && (
+                            <>
+                              <span className="cat">{r.categories?.name ?? '—'}</span>
+                              {' — '}
+                            </>
+                          )}
+                          {r.description}
+                        </span>
                       </div>
                     </div>
                   )
@@ -1381,7 +1458,11 @@ export default function MainScreen() {
               <div className="colbar sr">
                 <span className="namecell">
                   <ColSort className="c-nm" label="From" active={receivedSort.key === 'name'} dir={receivedSort.dir} onClick={() => sortReceived('name')} />
-                  <span className="c-desc">Description</span>
+                  {/* Description heading removed entirely, 2026-08-24 —
+                      owner: "for consistency" with Sent/ToDos, where it now
+                      either becomes Category or disappears. Received never
+                      shows Category (PRD §2.3), so there is nothing left for
+                      this heading to become — it's just dropped. */}
                 </span>
                 <ColSort className="c-dt" label="Date" active={receivedSort.key === 'date'} dir={receivedSort.dir} onClick={() => sortReceived('date')} />
                 <ColSort className="c-due" label="Due" active={receivedSort.key === 'due'} dir={receivedSort.dir} onClick={() => sortReceived('due')} />
@@ -1479,7 +1560,15 @@ export default function MainScreen() {
               <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}`}>
                 <span className="namecell">
                   <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
-                  <span className="c-desc">Description</span>
+                  {/* Description -> Category, sortable, when Private
+                      Category is on; removed entirely when off — 2026-08-24,
+                      owner. Category was a plain static colbar heading here
+                      through 2026-08-17's redesign; this reinstates it as a
+                      live sort column (retired 2026-08-17, see TodoSortKey's
+                      own comment above). */}
+                  {categoriesEnabled && (
+                    <ColSort className="c-desc" label="Category" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
+                  )}
                 </span>
                 <ColSort className="c-dt" label="Date" active={todoSort.key === 'date'} dir={todoSort.dir} onClick={() => sortTodos('date')} />
                 {todoDatesEnabled && (
@@ -1811,7 +1900,11 @@ export default function MainScreen() {
               <div className="pcolbar psr">
                 <span className="namecell">
                   <span className="c-nm">To</span>
-                  <span className="c-desc">Description</span>
+                  {/* Same rule as the on-screen colbar above: Category when
+                      shown, nothing at all when not — 2026-08-24. */}
+                  {categoriesEnabled && (
+                    <span className="c-desc">Category{sentSort.key === 'category' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                  )}
                 </span>
                 <span className="c-dt">Date{sentSort.key === 'date' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-due">Due{sentSort.key === 'due' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
@@ -1862,7 +1955,10 @@ export default function MainScreen() {
               <div className="pcolbar psr">
                 <span className="namecell">
                   <span className="c-nm">From</span>
-                  <span className="c-desc">Description</span>
+                  {/* Description heading removed, 2026-08-24 — same
+                      consistency rule as the on-screen colbar above.
+                      Received never shows Category (PRD §2.3, see the
+                      pr2/pdesc comment below). */}
                 </span>
                 <span className="c-dt">Date{receivedSort.key === 'date' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-due">Due{receivedSort.key === 'due' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
@@ -1924,7 +2020,11 @@ export default function MainScreen() {
               <div className={`pcolbar pdcols${todoDatesEnabled ? ' wide' : ''}`}>
                 <span className="namecell">
                   <span>Priority{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
-                  <span className="c-desc">Description</span>
+                  {/* Same rule as Sent's print colbar above — Category when
+                      shown, nothing at all when not — 2026-08-24. */}
+                  {categoriesEnabled && (
+                    <span className="c-desc">Category{todoSort.key === 'category' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                  )}
                 </span>
                 <span className="c-dt">Date{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 {todoDatesEnabled && (

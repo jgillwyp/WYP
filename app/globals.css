@@ -3401,6 +3401,21 @@ body {
   font-weight: 500;
 }
 
+/* Owner-reported, 2026-08-24: on a Done print row, the Dialog/Locations/
+   Attachments section headings (.pdlghead/.patthead — "Dialog"/"Locations"/
+   "Attachments") read grey but NOT bold, unlike each Dialog entry's own
+   "Question"/"Answer"/"Comment" kind label (.pdlgkind), which stays bold
+   throughout (it has no font-weight override of its own above, so it only
+   ever inherits the grey color, never the 500 weight). The .prow.done rule
+   above resets every child's weight to 500 uniformly, stomping .pdlghead/
+   .patthead's own base 700 (line ~3340). Restore just the weight, keeping
+   the inherited grey color from the rule above — same "bold in the grey
+   font" look .pdlgkind already has. */
+.prow.done .pdlghead,
+.prow.done .patthead {
+  font-weight: 700;
+}
+
 /* Contacts print report (2026-08-15) — new, from the owner's own xlsx
    mockup ("Contacts list.xlsx"). Deliberately smaller than every other
    print report's 11pt/14pt scale: fitting Name/Email/Phone/Time Zone/Sent/

@@ -6,6 +6,105 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-24 — Description column heading becomes Category (sortable) or disappears; Category shown on Sent rows; secondary Due-Date sort tie-break; Done-row print heading bold+grey fixed
+
+Jim:
+
+> "On the main screen and on the Archive screen, for Requests Sent and for
+> ToDos, replace the column heading of "Description" (when Private
+> Categories are shown per Account Options) with Category (including it
+> being a sort option). For Requests Sent and for ToDos, remove the column
+> heading of "Description" (when Private Categories are not shown per
+> Account Options). For Requests Received, for consistency remove the
+> column heading of "Description". Apply these same changes to the printed
+> reports for Requests Sent and Received and for ToDos. Another printed
+> reports tweak, for items marked as Done, the Dialog and Locations (and I
+> presume Attachments) headings are not bolded in the grey font - as is
+> done for the type of Dialog. When Private Categories are shown per
+> Account Options, the only place the Category is currently displayed on a
+> detail item in a list is on the main screen for ToDos, it should also be
+> displayed on the main screen Requests Sent (and Category should similarly
+> be displayed for Archive and for printed reports for Requests Sent and
+> for ToDos)."
+
+Then, separately the same day:
+
+> "For columnar sorting, if To, From, or Category is selected - secondarily
+> sort the output by descending Due Date (except for ToDos if Due Dates are
+> not shown - then for ToDos secondarily sort by descending Date)."
+
+**Column heading / Category display.** Both `MainScreen.tsx` and
+`ArchiveForm.tsx` had the same `.namecell`/`.c-desc` shape: a sortable
+`ColSort` for To/From/Priority paired with a second cell that used to be a
+static "Description" span. That static span is now conditional: on Sent and
+ToDos it becomes a sortable Category `ColSort` button when
+`private_category_enabled` is on, and disappears entirely when off; on
+Received it's removed unconditionally, since Received never shows Category
+(PRD §2.3, enforced server-side by `get_received_requests()` never returning
+one) and a heading with nothing under it read as more inconsistent than no
+heading at all. Sent rows gained the identical `.cat`/em-dash prefix ToDos'
+description line already had — the one place Category was previously shown
+on a list row.
+
+**Sort-key typing differs between the two files, deliberately.**
+`MainScreen.tsx` already had fully independent state/switch statements per
+section, so `SentSortKey`/`TodoSortKey` each gained a real `'category'`
+member while Received's own `ReqSortKey` did not — Received structurally
+cannot reach a sort key its own colbar never renders. `ArchiveForm.tsx`
+shares one sort state/switch between Sent and Received, so `'category'` was
+added to that one shared `ReqSortKey` instead; Received still can't reach it
+in practice, since its own colbar branch never renders a Category button,
+but the type system doesn't enforce that the way `MainScreen.tsx`'s split
+types do. Documented in both files' own code comments so the asymmetry
+reads as a considered trade-off (match each file's own existing
+architecture) rather than an oversight.
+
+**Print reports.** Both files' print colbars and print-row description
+lines got the identical heading/prefix treatment. `MainScreen.tsx` already
+had `categoryPrefix()` wired into its Sent/ToDos print rows from the
+2026-08-15 print-report batch — only the colbar heading text needed
+updating this time. `ArchiveForm.tsx` had never shown Category on its print
+report at all; `categoryPrefix()` was built there from scratch (same
+one-line helper, duplicated per this codebase's convention) and wired into
+both its ToDos and shared Sent/Received print-row `.pdesc` spans.
+
+**Secondary sort tie-break.** New `compareDueDesc()` in both files — always
+descending, independent of the primary column's own direction — consulted
+only when the primary comparator returns 0, and only for the `name`
+(To/From) and `category` sort keys. `date`/`due`/`done` (and ToDos'
+`priority`) were left alone, since each of those already carries its own
+meaningful order and a Due-Date tie-break under `due` itself would be
+circular. ToDos' own tie-break switches between `compareDueDesc(dueISO)` and
+`compareDueDesc(dateISO)` based on `todo_dates_enabled`, matching Jim's own
+carve-out for ToDos with dates hidden.
+
+**Print CSS bug.** `.prow.done .pdlghead`/`.patthead` (the Dialog/Locations/
+Attachments section headings on a printed Done row) read grey but not bold,
+while `.pdlgkind` (each Dialog entry's own Question/Answer/Comment label)
+read bold and grey — exactly the asymmetry Jim described. Root cause: a
+later, more-specific `.prow.done { ...; font-weight: 500 }` rule swept up
+`.pdlghead`/`.patthead` along with several other classes, but `.pdlgkind`
+was never included in that shared selector list, so it kept its own base
+`font-weight: 700` while still inheriting the row's grey color. Fixed with a
+small, more-specific override rule immediately after the existing one in
+`app/globals.css`, restoring `.pdlghead`/`.patthead` to bold without
+touching the rest of that shared rule's other targets.
+
+**Mid-batch pause.** An early `Edit` call on `ArchiveForm.tsx` (adding a
+`categories` field to `SentCandidate`) was rejected with an explicit "STOP
+what you are doing and wait for the user to tell you how to proceed." Work
+paused immediately — no further `ArchiveForm.tsx` edits were made until Jim
+replied "Yes" to a direct follow-up question asking whether to proceed with
+Archive. `MainScreen.tsx`'s own changes (already in progress at that point)
+were unaffected and completed first.
+
+**No mockups updated** — none of the affected screens' static HTML has
+interactive Category-column JS to convert; flagged in `design/README.md`,
+not silently skipped. `npx tsc --noEmit`/`npm run lint` both clean across
+the full batch (both files).
+
+\---
+
 ## 2026-08-23 — Account restructured into four collapsible sections; Request/ToDo Reminder defaults split; new "Show Reminders" and "Always show Send Reminder button" toggles; Response Detail Close/Cancel bug fixed
 
 Jim, with an attached mockup screenshot of a redesigned Account screen
