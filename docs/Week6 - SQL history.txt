@@ -2273,3 +2273,342 @@ commit;
 --   ToDo's "Day after" fires once, the day after Due Date, instead of
 --   recurring.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 044 — profiles.request_reminders_enabled, profiles.
+-- always_show_send_reminder, and splitting the shared reminder_default_day_*
+-- trio into independent Request-side and ToDo-side triplets.
+-- DRAFTED 2026-08-23 — NOT YET CONFIRMED RUN.
+--
+-- Jim, working from his own hand-built Account mockup (screenshot pasted in
+-- chat): "After continuing to work with ToDos, I think it would be useful to
+-- allow separately specified reminder options for Requests and ToDos... This
+-- brings up the possibility of an unwieldy list of options in the Account
+-- screen. So, I have created a mockup of how these options can be presented
+-- within respective sections with show/hide chips... I have also added an
+-- 'Always show Send Reminder button' and made recommended wording changes on
+-- some of the existing options."
+--
+-- Three genuinely new pieces of schema, resolved through direct follow-up
+-- questions before this was drafted:
+--
+--   1. request_reminders_enabled — a new master toggle for whether the
+--      Reminders-until-Done banner appears at all on the Request side
+--      (Create Request/Request Detail), mirroring todo_reminders_enabled's
+--      own role but for Requests. Jim's mockup drew it unchecked with "Off
+--      by default" in the note text — but on follow-up he clarified the
+--      mockup's checkbox states are "copies of what some settings were,"
+--      i.e. a screenshot of his own live account, not a specification of
+--      what a brand-new column's default should be. Since the Reminders-
+--      until-Done banner is already live, unconditional, and in active use
+--      on every Request today, this defaults to TRUE — preserves current
+--      behavior for every existing account with no action required, same
+--      reasoning migration 019's request_time_enabled originally used
+--      before later being flipped (migration 023, once this app had no
+--      real users besides Jim left to worry about). Confirmed standalone,
+--      not gated on anything — Jim: "Gating: standalone." (His mockup's own
+--      note text had referenced a nonexistent "Show Due/Done Dates
+--      (Requests)" toggle — Requests always have a required Due Date, so
+--      there both isn't such a toggle and wouldn't be a reason to gate on
+--      one; flagged to Jim as a likely copy-paste from the ToDo section's
+--      analogous note before this was drafted, and he chose standalone.)
+--      Also confirmed to gate the two recipient-facing screens (Response
+--      Detail, Request Response), consistent with this app's own
+--      "rights come from the issuer, never the viewer" rule (CLAUDE.md
+--      Entitlements section) — see the get_request_by_token/
+--      get_received_request changes below.
+--
+--   2. always_show_send_reminder — Jim's own new mockup item: "The Send
+--      Reminder button is shown on the Request Detail when a Request is
+--      overdue. If this is checked, it is always shown on the Request
+--      Detail." Defaults FALSE, preserving the button's existing
+--      only-when-overdue behavior (§6.44, 2026-08-22) for every account
+--      unless deliberately turned on. Read only by RequestDetailForm.tsx —
+--      no equivalent exists for ToDos (no manual Send Reminder feature
+--      there), and this doesn't change what the button's click actually
+--      does (app/api/email/send-reminder/route.ts is unchanged), only
+--      whether the panel is visible outside of an actually-overdue Request.
+--
+--   3. Splitting reminder_default_day_before/day_of/day_after (migration
+--      043) into request_reminder_default_day_before/day_of/day_after and
+--      todo_reminder_default_day_before/day_of/day_after — six columns
+--      replacing three. Jim: "I prefer to send out Requests with a day
+--      before reminder and ToDos are best for me with a day of reminder" —
+--      migration 043's single shared trio can't express that. Each new
+--      triplet keeps the same default values the shared trio already had
+--      (day_before true, day_of/day_after false) — a pure split, not a
+--      behavior change, since both Create Request and Create ToDo were
+--      reading the exact same three shared values until now. Existing
+--      values are copied forward from the old shared columns before they
+--      are dropped, so Jim's own already-configured defaults (visible in
+--      his mockup screenshot) survive the split rather than silently
+--      resetting to the column defaults above.
+--
+--      The old shared reminder_default_day_before/day_of/day_after columns
+--      (migration 043) are dropped outright once copied, rather than kept
+--      unused — unlike other cases in this file where a superseded column
+--      is deliberately left in the schema (e.g. last_overdue_nudge_at,
+--      migration 043's own header), those were kept because the owner asked
+--      not to remove cron infrastructure that might be reused later. Here
+--      the three old columns are being replaced by a strictly more capable
+--      pair of triplets with no remaining reader anywhere in the app once
+--      this migration and its matching code changes ship — keeping them
+--      would just be three more columns nobody writes or reads.
+--
+-- No change to how sending is actually gated — request_reminders_enabled
+-- only controls whether the banner/checkboxes are shown; the per-item
+-- requests.reminder_enabled/reminder_day_of_enabled/overdue_reminder_enabled
+-- columns are still what cron/tick/route.ts's Phase A1/A1b/B actually check
+-- at send time. Those three phases gain a profile.request_reminders_enabled
+-- AND-gate in the same app code change that reads these new columns,
+-- mirroring the todo_reminders_enabled precedent Phase A2/A2b/A3 already
+-- established (migration 041) — not part of this SQL file's own scope,
+-- since it's app logic, not schema.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists request_reminders_enabled boolean not null default true,
+  add column if not exists always_show_send_reminder boolean not null default false,
+  add column if not exists request_reminder_default_day_before boolean not null default true,
+  add column if not exists request_reminder_default_day_of boolean not null default false,
+  add column if not exists request_reminder_default_day_after boolean not null default false,
+  add column if not exists todo_reminder_default_day_before boolean not null default true,
+  add column if not exists todo_reminder_default_day_of boolean not null default false,
+  add column if not exists todo_reminder_default_day_after boolean not null default false;
+
+comment on column public.profiles.request_reminders_enabled is
+  'Default true (preserves existing live behavior). Master toggle for whether the Reminders-until-Done banner/checkboxes appear at all on Create Request, Request Detail, and (via owner_request_reminders_enabled) the recipient-facing Response Detail/Request Response screens. Standalone -- not gated on any other Account option. Does not itself gate sending; cron/tick/route.ts AND-gates this with each row''s own reminder_enabled/reminder_day_of_enabled/overdue_reminder_enabled, same shape as todo_reminders_enabled.';
+comment on column public.profiles.always_show_send_reminder is
+  'Default false (preserves existing only-when-overdue behavior). When true, Request Detail''s manual Send Reminder panel (§6.44) is always shown, not only while the Request is overdue.';
+comment on column public.profiles.request_reminder_default_day_before is
+  'Default true. Pre-fills Create Request''s own "Day before" checkbox only -- read once on mount, never a live gate. Replaces the shared reminder_default_day_before (migration 043), split so Request and ToDo defaults can differ.';
+comment on column public.profiles.request_reminder_default_day_of is
+  'Default false. Pre-fills Create Request''s own "Day of" checkbox only -- read once on mount, never a live gate. Replaces the shared reminder_default_day_of (migration 043).';
+comment on column public.profiles.request_reminder_default_day_after is
+  'Default false. Pre-fills Create Request''s own "Day after" checkbox only -- read once on mount, never a live gate. Replaces the shared reminder_default_day_after (migration 043).';
+comment on column public.profiles.todo_reminder_default_day_before is
+  'Default true. Pre-fills Create ToDo''s own "Day before" checkbox only -- read once on mount, never a live gate. Replaces the shared reminder_default_day_before (migration 043), split so Request and ToDo defaults can differ.';
+comment on column public.profiles.todo_reminder_default_day_of is
+  'Default false. Pre-fills Create ToDo''s own "Day of" checkbox only -- read once on mount, never a live gate. Replaces the shared reminder_default_day_of (migration 043).';
+comment on column public.profiles.todo_reminder_default_day_after is
+  'Default false. Pre-fills Create ToDo''s own "Day after" checkbox only -- read once on mount, never a live gate. Replaces the shared reminder_default_day_after (migration 043).';
+
+-- Carry Jim's own already-configured values forward across the split, before
+-- the old shared columns are dropped -- otherwise his existing settings
+-- (visible in his own mockup screenshot) would silently reset to the column
+-- defaults above instead of surviving the split unchanged.
+update public.profiles set
+  request_reminder_default_day_before = reminder_default_day_before,
+  request_reminder_default_day_of = reminder_default_day_of,
+  request_reminder_default_day_after = reminder_default_day_after,
+  todo_reminder_default_day_before = reminder_default_day_before,
+  todo_reminder_default_day_of = reminder_default_day_of,
+  todo_reminder_default_day_after = reminder_default_day_after;
+
+alter table public.profiles
+  drop column reminder_default_day_before,
+  drop column reminder_default_day_of,
+  drop column reminder_default_day_after;
+
+grant update (request_reminders_enabled) on public.profiles to authenticated;
+grant update (always_show_send_reminder) on public.profiles to authenticated;
+grant update (request_reminder_default_day_before) on public.profiles to authenticated;
+grant update (request_reminder_default_day_of) on public.profiles to authenticated;
+grant update (request_reminder_default_day_after) on public.profiles to authenticated;
+grant update (todo_reminder_default_day_before) on public.profiles to authenticated;
+grant update (todo_reminder_default_day_of) on public.profiles to authenticated;
+grant update (todo_reminder_default_day_after) on public.profiles to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_request_by_token — add owner_request_reminders_enabled to the jsonb
+-- payload, same coalesce-true-if-null pattern already used for
+-- owner_request_time_enabled (a null only happens if the owner's own
+-- profiles row is somehow missing, which should never occur in practice).
+-- jsonb-returning, so a plain create-or-replace is safe -- no OUT-parameter
+-- shape to worry about (see migration 017's own header for why that
+-- constraint doesn't apply to jsonb functions).
+-- ----------------------------------------------------------------------------
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled, r.reminder_day_of_enabled,
+         r.reminder_day_of_sent_at, r.repeat_rule,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, true),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- get_received_request — same addition, signed-in recipient path.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at, r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled,
+         r.reminder_day_of_enabled, r.reminder_day_of_sent_at, r.repeat_rule,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, true),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+commit;
+
+-- ============================================================================
+-- Verify (superuser, proves creation only):
+--   select column_name, column_default from information_schema.columns
+--   where table_name = 'profiles'
+--     and column_name in ('request_reminders_enabled', 'always_show_send_reminder',
+--       'request_reminder_default_day_before', 'request_reminder_default_day_of',
+--       'request_reminder_default_day_after', 'todo_reminder_default_day_before',
+--       'todo_reminder_default_day_of', 'todo_reminder_default_day_after');
+--        -> request_reminders_enabled: boolean, default true
+--        -> always_show_send_reminder: boolean, default false
+--        -> request_reminder_default_day_before / todo_reminder_default_day_before: default true
+--        -> the other four *_day_of / *_day_after columns: default false
+--   select column_name from information_schema.columns where table_name = 'profiles'
+--     and column_name in ('reminder_default_day_before', 'reminder_default_day_of', 'reminder_default_day_after');
+--        -> should return zero rows (old shared columns dropped)
+--   select prosrc from pg_proc where proname in ('get_request_by_token', 'get_received_request');
+--        -> both should show owner_request_reminders_enabled in the select list
+--           and the jsonb_build_object call
+--
+-- Verify as a client, not here:
+--   Account screen's new Request Options section shows "Show Reminders,"
+--   unchecked by it turns off, hides the Reminders-until-Done banner on both
+--   Create Request and Request Detail; on Response Detail and Request
+--   Response (open a link this account issued) the banner should also
+--   disappear. Account's new "Always show Send Reminder button" toggle, once
+--   checked, keeps Request Detail's Send Reminder panel visible even on a
+--   Request that isn't overdue. Setting different Request-side and ToDo-side
+--   "Default: Day X Reminder" values in Account and then opening Create
+--   Request vs. Create ToDo fresh should pre-fill each screen's own
+--   checkboxes independently.
+-- ============================================================================

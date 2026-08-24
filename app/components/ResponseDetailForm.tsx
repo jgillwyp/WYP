@@ -142,6 +142,12 @@ type ReceivedDetailPayload = {
   owner_name: string | null
   owner_tier: 'free' | 'subscriber' | null
   owner_request_time_enabled: boolean
+  // Show Reminders (migration 044, 2026-08-23) — gates whether the
+  // Reminders-until-Done banner below appears at all, read from the
+  // issuer's own request_reminders_enabled, never this viewer's own
+  // account — same "rights come from the issuer" precedent as
+  // owner_request_time_enabled/owner_tier above.
+  owner_request_reminders_enabled: boolean
   // Reminder opt-out (migration 036, 2026-08-19) — the single shared
   // requests.reminder_enabled column (migration 031), now readable and
   // writable from here too, not just the owner's own Create Request/
@@ -824,7 +830,14 @@ export default function ResponseDetailForm() {
               {sending ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={sending}>
-              {hasChanges ? 'Cancel' : 'Close'}
+              {/* Close once Send has succeeded (2026-08-23, owner-reported)
+                  — hasChanges alone doesn't reset after a successful Send
+                  (the dirty-check snapshot is taken once on load, not
+                  re-taken post-Send), so a Response that had, say, its Done
+                  Date changed before Send kept reading "Cancel" even once
+                  that change was already saved. There's nothing left to
+                  cancel at that point. */}
+              {sendConfirmed || !hasChanges ? 'Close' : 'Cancel'}
             </button>
           </span>
         </div>
@@ -873,7 +886,7 @@ export default function ResponseDetailForm() {
                 full-width row below .meta, not beside it — see
                 RequestDetailForm.tsx's identical comment on the
                 2026-08-10 .metatop/.metacol wrap precedent this avoids. */}
-            {reminderBanner()}
+            {data.owner_request_reminders_enabled && reminderBanner()}
 
             <div className="seclabel">Request Description</div>
             <div className="respdesc">{data.description}</div>

@@ -1858,6 +1858,24 @@ body {
   margin-left: auto;
 }
 
+/* Account screen's four collapsible sections (General/Request/ToDo/
+   Subscriber Options, 2026-08-23, Jim's own mockup) — title left, Show/Hide
+   chip pair right, one row, same shape as .todos-head above but with the
+   chips themselves pushed to the far right rather than sitting after a
+   left-aligned chip row. */
+.subhead.acct-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.subhead.acct-head .chips {
+  margin-top: 0;
+  margin-left: auto;
+}
+
 /* info icons: sit to the left of a row's description, not interactive */
 .ii {
   flex: 0 0 auto;

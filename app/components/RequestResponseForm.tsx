@@ -126,6 +126,11 @@ type ResponsePayload = {
   owner_name: string | null
   owner_tier: 'free' | 'subscriber' | null
   owner_request_time_enabled: boolean
+  // Show Reminders (migration 044, 2026-08-23) — gates whether the
+  // Reminders-until-Done banner below appears at all, read from the
+  // issuer's own request_reminders_enabled. See ResponseDetailForm.tsx's
+  // identical addition for the full reasoning.
+  owner_request_reminders_enabled: boolean
   // Reminder opt-out (migration 036, 2026-08-19) — the single shared
   // requests.reminder_enabled column (migration 031), now readable and
   // writable from this anonymous token path too, not just the owner's own
@@ -748,7 +753,7 @@ export default function RequestResponseForm() {
                 screen's flat, per-block-padded .scroll layout (see the
                 comment further down on the editable Done Date row). */}
             <div style={{ padding: '0 var(--pad)', marginBottom: 12 }}>
-              {reminderBanner()}
+              {data.owner_request_reminders_enabled && reminderBanner()}
             </div>
 
             <div className="seclabel">Request Description</div>

@@ -92,10 +92,12 @@ const initialState: TodoFormState = {
   // new defaults, migration 042, 2026-08-22 same day; "Daily thereafter"
   // renamed "Day after" and simplified to a single send, migration 043,
   // 2026-08-22 same day) — hardcoded fallback only, overwritten on mount
-  // by the account's own reminder_default_day_before/day_of/day_after
-  // columns (profiles, migration 043). Only shown/editable when the
-  // account's todo_reminders_enabled is on; the columns themselves are
-  // shared with Requests on the `requests` table.
+  // by the account's own todo_reminder_default_day_before/day_of/day_after
+  // columns (profiles, migration 044 — split from a shared Request/ToDo
+  // trio, migration 043). Only shown/editable when the account's
+  // todo_reminders_enabled is on; the per-item reminder_enabled/day_of/
+  // overdue columns themselves are shared with Requests on the `requests`
+  // table (only the account-level defaults are split, not the row schema).
   reminderEnabled: true,
   reminderDayOfEnabled: false,
   overdueReminderEnabled: false,
@@ -288,15 +290,16 @@ export default function CreateTodoForm() {
       .order('name')
       .then(({ data }) => setCategories(data ?? []))
 
-    // reminder_default_day_before/day_of/day_after (migration 043,
-    // 2026-08-22) pre-fill the three Reminders-until-Done checkboxes below
-    // — read once here, same as CreateRequestForm.tsx's identical
-    // addition, never a live gate (see that file's own comment for the
-    // full reasoning).
+    // todo_reminder_default_day_before/day_of/day_after (migration 044,
+    // 2026-08-23, split from the shared reminder_default_day_before/day_of/
+    // day_after trio, migration 043) pre-fill the three Reminders-until-Done
+    // checkboxes below — read once here, same as CreateRequestForm.tsx's
+    // identical addition (which now reads its own request_reminder_
+    // default_* trio instead), never a live gate.
     supabase
       .from('profiles')
       .select(
-        'display_name, private_category_enabled, todo_dates_enabled, todo_reminders_enabled, tier, reminder_default_day_before, reminder_default_day_of, reminder_default_day_after'
+        'display_name, private_category_enabled, todo_dates_enabled, todo_reminders_enabled, tier, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after'
       )
       .single()
       .then(({ data }) => {
@@ -307,9 +310,9 @@ export default function CreateTodoForm() {
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
         setForm((f) => ({
           ...f,
-          reminderEnabled: data?.reminder_default_day_before ?? f.reminderEnabled,
-          reminderDayOfEnabled: data?.reminder_default_day_of ?? f.reminderDayOfEnabled,
-          overdueReminderEnabled: data?.reminder_default_day_after ?? f.overdueReminderEnabled,
+          reminderEnabled: data?.todo_reminder_default_day_before ?? f.reminderEnabled,
+          reminderDayOfEnabled: data?.todo_reminder_default_day_of ?? f.reminderDayOfEnabled,
+          overdueReminderEnabled: data?.todo_reminder_default_day_after ?? f.overdueReminderEnabled,
         }))
       })
   }, [])

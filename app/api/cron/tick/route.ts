@@ -51,7 +51,11 @@ export const maxDuration = 60
  * with three independent, one-time checkboxes — "Day before" (Requests:
  * Phase A1; ToDos: Phase A2), "Day of" (Phase A1b/A2b), and "Day after"
  * (Phase B for Requests, Phase A3 for ToDos) — plus two opt-in/un-gated
- * digests to the Requestor (Phase D) and Repeat generation (Phase E).
+ * digests to the Requestor (Phase D) and Repeat generation (Phase E). As of
+ * migration 044 (2026-08-23), Phase A1/A1b/B are also AND-gated on the
+ * owner's own profiles.request_reminders_enabled ("Show Reminders" in
+ * Account's new Request Options section) — the Request-side counterpart to
+ * todo_reminders_enabled's own already-established Phase A2/A2b/A3 gate.
  *
  * Single hourly invocation, not one cron schedule per job — Vercel Cron
  * entries are fixed to one UTC time each, but "morning" and "the day after"
@@ -154,6 +158,11 @@ type ProfileRow = {
   todo_dates_enabled: boolean
   todo_reminders_enabled: boolean
   reminder_digest_enabled: boolean
+  // Show Reminders (migration 044, 2026-08-23) — Request-side master
+  // toggle, AND-gated with each row's own reminder_enabled/
+  // reminder_day_of_enabled/overdue_reminder_enabled at Phase A1/A1b/B
+  // below, same shape as todo_reminders_enabled's own Phase A2/A2b/A3 gate.
+  request_reminders_enabled: boolean
 }
 
 type ContactInfo = { email: string; display_name: string | null; time_zone: string | null } | null
@@ -310,7 +319,9 @@ async function handle(request: Request) {
   if (ownerIds.length > 0) {
     const { data: profileData } = await sb
       .from('profiles')
-      .select('id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled')
+      .select(
+        'id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled'
+      )
       .in('id', ownerIds)
     for (const p of (profileData ?? []) as ProfileRow[]) profileMap.set(p.id, p)
   }
@@ -392,6 +403,12 @@ async function handle(request: Request) {
   for (const row of requestRows) {
     if (!row.reminder_enabled || row.reminder_sent_at || !row.due_date || !row.contacts) continue
     const profile = profileMap.get(row.owner_id) ?? null
+    // Show Reminders (migration 044) — request_reminders_enabled defaults
+    // true, so only an explicit false actually suppresses sending; a
+    // missing profile lookup (should not happen in practice) is treated as
+    // enabled, same as the coalesce(..., true) convention the two jsonb
+    // RPCs already use for this same column.
+    if (profile?.request_reminders_enabled === false) continue
     const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
     const tomorrow = addDaysISO(localDateISO(zone, now), 1)
     if (row.due_date !== tomorrow || localHour(zone, now) !== MORNING_HOUR) continue
@@ -476,6 +493,8 @@ async function handle(request: Request) {
   for (const row of requestRows) {
     if (!row.reminder_day_of_enabled || row.reminder_day_of_sent_at || !row.due_date || !row.contacts) continue
     const profile = profileMap.get(row.owner_id) ?? null
+    // Show Reminders (migration 044) — see Phase A1's identical gate above.
+    if (profile?.request_reminders_enabled === false) continue
     const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
     if (row.due_date !== localDateISO(zone, now) || localHour(zone, now) !== MORNING_HOUR) continue
 
@@ -669,6 +688,8 @@ async function handle(request: Request) {
   for (const row of requestRows) {
     if (row.overdue_notified_at || !row.overdue_reminder_enabled || !row.due_date || !row.contacts) continue
     const profile = profileMap.get(row.owner_id) ?? null
+    // Show Reminders (migration 044) — see Phase A1's identical gate above.
+    if (profile?.request_reminders_enabled === false) continue
     const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
     if (localHour(zone, now) !== OVERDUE_HOUR) continue
     if (!hasLocalDateTimePassed(zone, row.due_date, row.due_time, now)) continue
@@ -774,7 +795,9 @@ async function handle(request: Request) {
   if (repeatOwnerIds.length > 0) {
     const { data: moreProfiles } = await sb
       .from('profiles')
-      .select('id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled')
+      .select(
+        'id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled'
+      )
       .in('id', Array.from(new Set(repeatOwnerIds)))
     for (const p of (moreProfiles ?? []) as ProfileRow[]) profileMap.set(p.id, p)
   }

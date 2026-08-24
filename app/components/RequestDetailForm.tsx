@@ -327,6 +327,14 @@ export default function RequestDetailForm() {
   // (Due Date, Done Date), matching ToDo Detail's own combined-row pattern
   // exactly — owner's own stated goal for this feature.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
+  // Show Reminders (migration 044, 2026-08-23) — standalone master toggle
+  // for the Reminders-until-Done banner; see AccountForm.tsx and
+  // CreateRequestForm.tsx's identical gate. On by default.
+  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(true)
+  // Always show Send Reminder button (migration 044) — when true,
+  // sendReminderPanel() below renders even when the Request isn't overdue.
+  // Off by default (preserves §6.44's original only-when-overdue behavior).
+  const [alwaysShowSendReminder, setAlwaysShowSendReminder] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -569,7 +577,12 @@ export default function RequestDetailForm() {
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
-        supabase.from('profiles').select('display_name, private_category_enabled, request_time_enabled, tier').single(),
+        supabase
+          .from('profiles')
+          .select(
+            'display_name, private_category_enabled, request_time_enabled, request_reminders_enabled, always_show_send_reminder, tier'
+          )
+          .single(),
         // Print (2026-08-15) — same owner-scoped RLS access MainScreen.tsx's
         // own loadOwnedPrintDetail() uses; fetched unconditionally on load
         // rather than only-on-print-click, since a single Detail screen's
@@ -656,6 +669,8 @@ export default function RequestDetailForm() {
       setOwnerName(ownerRes.data?.display_name ?? null)
       setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
       setRequestTimeEnabled(ownerRes.data?.request_time_enabled ?? true)
+      setRequestRemindersEnabled(ownerRes.data?.request_reminders_enabled ?? true)
+      setAlwaysShowSendReminder(ownerRes.data?.always_show_send_reminder ?? false)
       setTier(ownerRes.data?.tier === 'subscriber' ? 'subscriber' : 'free')
 
       await loadDialog()
@@ -1009,18 +1024,21 @@ export default function RequestDetailForm() {
 
   // §6.44 PROPOSED — reuses .donerow/.donenote (the same "Strip-tint box,
   // text left, button right" component already used for quick-Done bands
-  // and the Repeat band) rather than a new shape. Rendered only while the
-  // Request is actually overdue (see isOverdue above) — there's nothing to
-  // send a reminder about otherwise, and the button would just duplicate
-  // the (already-available) automated checkboxes' own state.
+  // and the Repeat band) rather than a new shape. Rendered while the
+  // Request is actually overdue (see isOverdue above), or unconditionally
+  // when the owner's own "Always show Send Reminder button" account
+  // preference (migration 044, alwaysShowSendReminder) is on. Note text
+  // shortened to Jim's own exact wording, 2026-08-23 ("This action is
+  // unrelated to the Reminder schedule above.") — applies regardless of
+  // overdue state now that the panel can show either way; the earlier
+  // overdue-specific sentence is gone, not conditionally kept, since the
+  // shorter wording is correct either way.
   function sendReminderPanel() {
-    if (!isOverdue) return null
+    if (!isOverdue && !alwaysShowSendReminder) return null
     return (
       <div className="donerow">
         <span className="donenote" style={reminderResult && !reminderResult.ok ? { color: 'var(--alert-red)' } : undefined}>
-          {reminderResult
-            ? reminderResult.text
-            : 'This Request is overdue. Send an Overdue notice to the Recipient now, independent of the automated Reminder schedule above.'}
+          {reminderResult ? reminderResult.text : 'This action is unrelated to the Reminder schedule above.'}
         </span>
         <button
           className="btn-secondary"
@@ -1162,15 +1180,16 @@ export default function RequestDetailForm() {
                 (.metatop/.metacol, 2026-08-10, word-wrapped "Wednesday,
                 August 10," on a narrow Android phone); staying full-width
                 avoids repeating that. */}
-            {reminderBanner()}
+            {requestRemindersEnabled && reminderBanner()}
 
             {/* Manual "Send Reminder" (§6.44 PROPOSED, 2026-08-22) — placed
                 directly after the automated Reminders-until-Done banner:
                 automated options first, then the manual override, both in
                 the same "Reminders" area of the screen rather than scattered
                 (owner: "It could go after or before the Reminders in its own
-                section/panel."). Renders nothing unless the Request is
-                actually overdue. */}
+                section/panel."). Renders while overdue, or unconditionally
+                once the owner's own "Always show Send Reminder button"
+                Account preference is on (migration 044, 2026-08-23). */}
             {sendReminderPanel()}
 
             {requestTimeEnabled ? (

@@ -24,6 +24,22 @@ import { supabase } from '@/lib/supabaseClient'
  * app's existing `.checkrow` component (§6.2, first used by "Keep me
  * signed in" on Sign In).
  *
+ * Restructured into four collapsible sections, 2026-08-23 (Jim's own
+ * mockup, drawn as this list of toggles kept growing) — "General Options,"
+ * "Request Options," "ToDo Options," "Subscriber Options," each a
+ * `.subcard`/`.subhead`/`.subbody` (the same component Main Screen's own
+ * Sent/Received/ToDos sections use) with a Show/Hide `.chip` pair in the
+ * header instead of filter chips. Jim: "the default Account presentation
+ * per session should be Open for General Options and Hide for all other
+ * options - during a session, the Open/Hide status should remain as
+ * last-used." Persisted to sessionStorage via the same readStoredChip
+ * pattern MainScreen.tsx already uses for its own chip state — within-
+ * session only, resets to the General-open/rest-hidden default the next
+ * time the tab is closed and reopened, deliberately not promoted to a
+ * cross-session profiles column the way Main Screen's own chip prefs were
+ * (migration 016) — Jim's own wording here was "per session," not
+ * "last-used account-wide."
+ *
  * profiles.private_category_enabled (migration 018) — off by default, any
  * account (free or subscriber) may turn it on; not a tier gate. Read once
  * on mount, written immediately on toggle (no separate Save step — a
@@ -79,25 +95,43 @@ import { supabase } from '@/lib/supabaseClient'
  * unlike `beta_allowlist` — a deliberately separate table, since "may
  * create an account" and "may self-grant Subscriber for testing" are
  * different questions). `can_toggle_tier()` is called on mount so the row
- * is hidden entirely for anyone not allowed, rather than shown and then
- * failing on click.
+ * (and now, the whole Subscriber Options section) is hidden entirely for
+ * anyone not allowed, rather than shown and then failing on click.
  *
  * profiles.reminder_default_day_before/day_of/day_after (migration 043,
- * 2026-08-22) — the "Daily thereafter" recurring Overdue-nudge system
- * (Phase C, cron/tick/route.ts) was dropped outright per the owner's own
- * spam-complaint concern and replaced by a single one-time "Day after"
- * send, sharing the same three-checkbox Reminders-until-Done shape
- * (Day before / Day of / Day after) across both Requests and ToDos.
- * Owner: "One Account option (or 3 options) could be the default settings
- * of the three checkboxes for Reminders (for both Requests and ToDos)."
- * Three separate toggles chosen for direct 1:1 symmetry — each is read
- * once by Create Request/Create ToDo on mount to pre-fill their own
- * per-item checkboxes; changing a default here never touches an
- * already-created Request or ToDo, and never gates sending at cron time
- * the way todo_reminders_enabled or overdue_reminder_enabled do. Day
- * before defaults true (matches reminder_enabled's own existing true
- * default); Day of and Day after both default false, same
- * spam-consciousness reasoning as migration 042's own default flip.
+ * 2026-08-22) — superseded 2026-08-23, migration 044, by
+ * request_reminder_default_* / todo_reminder_default_* below. See that
+ * migration's own header for the split.
+ *
+ * profiles.request_reminders_enabled / always_show_send_reminder /
+ * request_reminder_default_day_before/day_of/day_after /
+ * todo_reminder_default_day_before/day_of/day_after (migration 044,
+ * 2026-08-23) — Jim's own mockup, three changes:
+ *   1. "Show Reminders" (Request Options) — a new master toggle for
+ *      whether the Reminders-until-Done banner appears at all on the
+ *      Request side. Defaults true (preserves existing live behavior —
+ *      Jim's mockup checkbox states were "copies of what some settings
+ *      were," not a specification of new-column defaults, confirmed on
+ *      follow-up). Standalone, not gated on Show Due/Done Time — Jim's own
+ *      mockup note text had referenced a "Show Due/Done Dates (Requests)"
+ *      toggle that doesn't exist (Requests always have a required Due
+ *      Date), flagged before this was built, and Jim confirmed standalone.
+ *      Also gates the two recipient-facing screens via
+ *      owner_request_reminders_enabled (migration 044) — confirmed via
+ *      direct follow-up, consistent with the "rights come from the
+ *      issuer" Entitlements rule this file's own comments above already
+ *      describe for owner_request_time_enabled/owner_tier.
+ *   2. "Always show Send Reminder button" (Request Options) — Jim's own
+ *      new mockup item, defaults false (preserves the existing
+ *      only-when-overdue behavior, §6.44). Read only by
+ *      RequestDetailForm.tsx.
+ *   3. The shared reminder_default_day_before/day_of/day_after trio
+ *      (migration 043) is split into independent Request-side and
+ *      ToDo-side triplets — Jim: "I prefer to send out Requests with a day
+ *      before reminder and ToDos are best for me with a day of reminder,"
+ *      which the old shared trio couldn't express. Same defaults as
+ *      before the split (day before true, day of/day after false), just
+ *      doubled and independently adjustable.
  */
 export default function AccountForm() {
   const router = useRouter()
@@ -114,36 +148,59 @@ export default function AccountForm() {
   // todoDatesEnabled is also on (a ToDo has no Due Date to remind about
   // otherwise). Reuses the same reminder_enabled/overdue_reminder_enabled
   // columns a Request already uses, on the shared `requests` table.
+  // Retitled "Show Reminders" (from "Add Reminders (ToDos)") 2026-08-23,
+  // for symmetry with the new Request-side toggle below — same field,
+  // same gating, just a wording change inside the new ToDo Options section.
   const [todoRemindersEnabled, setTodoRemindersEnabled] = useState(false)
   // profiles.reminder_digest_enabled (migration 032, 2026-08-17) — off by
   // default, same "opt-in, plain boolean, immediate write" pattern as every
   // toggle above. See app/api/cron/tick/route.ts's own header comment for
   // the full Chron notification design.
   const [reminderDigestEnabled, setReminderDigestEnabled] = useState(false)
-  // profiles.reminder_default_day_before/day_of/day_after (migration 043,
-  // 2026-08-22) — pre-fill only, never a live gate. Owner: "One Account
-  // option (or 3 options) could be the default settings of the three
-  // checkboxes for Reminders (for both Requests and ToDos)." Three
-  // separate toggles chosen over one combined preset, for direct 1:1
-  // symmetry with the three per-item checkboxes — same
-  // handleToggle/immediate-write pattern as every boolean toggle above.
-  // Read once by Create Request/Create ToDo on their own mount, to set
-  // the initial state of their own Reminders-until-Done checkboxes;
-  // changing a value here never touches any already-created Request or
-  // ToDo.
-  const [reminderDefaultDayBefore, setReminderDefaultDayBefore] = useState(true)
-  const [reminderDefaultDayOf, setReminderDefaultDayOf] = useState(false)
-  const [reminderDefaultDayAfter, setReminderDefaultDayAfter] = useState(false)
+  // profiles.request_reminders_enabled (migration 044, 2026-08-23) —
+  // standalone master toggle for the Request-side Reminders-until-Done
+  // banner; see the file-level comment. Default true — read once on
+  // mount, matching every other toggle in this file.
+  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(true)
+  // profiles.always_show_send_reminder (migration 044) — see the
+  // file-level comment. Default false.
+  const [alwaysShowSendReminder, setAlwaysShowSendReminder] = useState(false)
+  // profiles.request_reminder_default_day_before/day_of/day_after and
+  // todo_reminder_default_day_before/day_of/day_after (migration 044,
+  // 2026-08-23) — replace the single shared reminder_default_day_before/
+  // day_of/day_after trio (migration 043); see the file-level comment for
+  // the split. Pre-fill only, never a live gate. Read once by Create
+  // Request/Create ToDo on their own mount, to set the initial state of
+  // their own Reminders-until-Done checkboxes; changing a value here never
+  // touches any already-created Request or ToDo.
+  const [requestReminderDefaultDayBefore, setRequestReminderDefaultDayBefore] = useState(true)
+  const [requestReminderDefaultDayOf, setRequestReminderDefaultDayOf] = useState(false)
+  const [requestReminderDefaultDayAfter, setRequestReminderDefaultDayAfter] = useState(false)
+  const [todoReminderDefaultDayBefore, setTodoReminderDefaultDayBefore] = useState(true)
+  const [todoReminderDefaultDayOf, setTodoReminderDefaultDayOf] = useState(false)
+  const [todoReminderDefaultDayAfter, setTodoReminderDefaultDayAfter] = useState(false)
   // Testing-only tier toggle (migration 024) — the DB column is text
   // ('free'/'subscriber'), not boolean, so it gets its own state and
   // handler rather than joining the shared boolean handleToggle below.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
-  // Locked down, migration 035 — the whole row is hidden unless this is
-  // true, rather than shown and failing on click. Defaults false so there
-  // is no flash of the control before can_toggle_tier() resolves.
+  // Locked down, migration 035 — the whole Subscriber Options section is
+  // hidden unless this is true, rather than shown and failing on click.
+  // Defaults false so there is no flash of the section before
+  // can_toggle_tier() resolves.
   const [canToggleTier, setCanToggleTier] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Collapsible section state (2026-08-23) — General Options open, the
+  // other three hidden, by default; persists per Jim's own "remain as
+  // last-used" wording within a session (sessionStorage), resets on the
+  // next fresh tab. Lazy useState initializers so the very first render
+  // already reflects any earlier choice this session, matching
+  // MainScreen.tsx's own readStoredChip convention.
+  const [generalOpen, setGeneralOpen] = useState(() => readStoredOpen('wyp.acctGeneralOpen', true))
+  const [requestOpen, setRequestOpen] = useState(() => readStoredOpen('wyp.acctRequestOpen', false))
+  const [todoOpen, setTodoOpen] = useState(() => readStoredOpen('wyp.acctTodoOpen', false))
+  const [subscriberOpen, setSubscriberOpen] = useState(() => readStoredOpen('wyp.acctSubscriberOpen', false))
 
   useEffect(() => {
     let cancelled = false
@@ -166,7 +223,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, reminder_default_day_before, reminder_default_day_of, reminder_default_day_after, tier'
+          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier'
         )
         .eq('id', userData.user.id)
         .single()
@@ -184,15 +241,20 @@ export default function AccountForm() {
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
       setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
       setReminderDigestEnabled(data?.reminder_digest_enabled ?? false)
-      setReminderDefaultDayBefore(data?.reminder_default_day_before ?? true)
-      setReminderDefaultDayOf(data?.reminder_default_day_of ?? false)
-      setReminderDefaultDayAfter(data?.reminder_default_day_after ?? false)
+      setRequestRemindersEnabled(data?.request_reminders_enabled ?? true)
+      setAlwaysShowSendReminder(data?.always_show_send_reminder ?? false)
+      setRequestReminderDefaultDayBefore(data?.request_reminder_default_day_before ?? true)
+      setRequestReminderDefaultDayOf(data?.request_reminder_default_day_of ?? false)
+      setRequestReminderDefaultDayAfter(data?.request_reminder_default_day_after ?? false)
+      setTodoReminderDefaultDayBefore(data?.todo_reminder_default_day_before ?? true)
+      setTodoReminderDefaultDayOf(data?.todo_reminder_default_day_of ?? false)
+      setTodoReminderDefaultDayAfter(data?.todo_reminder_default_day_after ?? false)
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
 
       // can_toggle_tier() (migration 035) — a failure here (RPC missing,
       // network hiccup) is treated as "not allowed" rather than surfaced
       // as a load error; the rest of the screen is still fully usable
-      // either way, and this control staying hidden is the safe default.
+      // either way, and this section staying hidden is the safe default.
       const { data: canToggle } = await supabase.rpc('can_toggle_tier')
       if (!cancelled) setCanToggleTier(canToggle === true)
 
@@ -212,9 +274,14 @@ export default function AccountForm() {
       | 'todo_dates_enabled'
       | 'todo_reminders_enabled'
       | 'reminder_digest_enabled'
-      | 'reminder_default_day_before'
-      | 'reminder_default_day_of'
-      | 'reminder_default_day_after',
+      | 'request_reminders_enabled'
+      | 'always_show_send_reminder'
+      | 'request_reminder_default_day_before'
+      | 'request_reminder_default_day_of'
+      | 'request_reminder_default_day_after'
+      | 'todo_reminder_default_day_before'
+      | 'todo_reminder_default_day_of'
+      | 'todo_reminder_default_day_after',
     next: boolean,
     setLocal: (value: boolean) => void,
   ) {
@@ -266,6 +333,58 @@ export default function AccountForm() {
     router.back()
   }
 
+  // Show/Hide chip pair for one section's header — reused four times below
+  // rather than extracted to a separate component file, matching this
+  // app's own established per-file-duplication convention for small
+  // repeated bits of markup. onSetOpen already closes over both the
+  // section's own setState and its sessionStorage key (see the four
+  // wrapper functions below), so this only ever needs a plain
+  // boolean-in setter.
+  function sectionHead(title: string, open: boolean, onSetOpen: (v: boolean) => void) {
+    return (
+      <div className="subhead acct-head">
+        <span className="subname">{title}</span>
+        <div className="chips" role="tablist" aria-label={`${title} visibility`}>
+          <button
+            className={`chip${open ? ' sel' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={open}
+            onClick={() => onSetOpen(true)}
+          >
+            Show
+          </button>
+          <button
+            className={`chip${!open ? ' sel' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={!open}
+            onClick={() => onSetOpen(false)}
+          >
+            Hide
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  function setGeneralOpenAndStore(v: boolean) {
+    setGeneralOpen(v)
+    window.sessionStorage.setItem('wyp.acctGeneralOpen', v ? '1' : '0')
+  }
+  function setRequestOpenAndStore(v: boolean) {
+    setRequestOpen(v)
+    window.sessionStorage.setItem('wyp.acctRequestOpen', v ? '1' : '0')
+  }
+  function setTodoOpenAndStore(v: boolean) {
+    setTodoOpen(v)
+    window.sessionStorage.setItem('wyp.acctTodoOpen', v ? '1' : '0')
+  }
+  function setSubscriberOpenAndStore(v: boolean) {
+    setSubscriberOpen(v)
+    window.sessionStorage.setItem('wyp.acctSubscriberOpen', v ? '1' : '0')
+  }
+
   if (loading) {
     return (
       <div className="frame-none">
@@ -301,185 +420,336 @@ export default function AccountForm() {
         </div>
 
         <div className="scroll">
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={categoriesEnabled}
-              disabled={saving}
-              onChange={(e) =>
-                handleToggle('private_category_enabled', e.target.checked, setCategoriesEnabled)
-              }
-            />
-            <span className="checktext">
-              Show Private Category
-              <span className="checknote">
-                Adds an optional Category field to Requests and ToDos, for your own
-                private labeling (e.g. &ldquo;Personal Fin,&rdquo; &ldquo;Future Dev&rdquo;). Off by
-                default to keep things simple — turn it on any time.
-              </span>
-            </span>
-          </label>
+          {/* ---------------------------------------------------- General Options */}
+          <div className="subcard">
+            {sectionHead('General Options', generalOpen, setGeneralOpenAndStore)}
+            {generalOpen && (
+              <div className="subbody">
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={categoriesEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('private_category_enabled', e.target.checked, setCategoriesEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Show Private Category
+                    <span className="checknote">
+                      Adds an optional Category field to Requests and ToDos, for your own
+                      private labeling (e.g. &ldquo;Personal Fin,&rdquo; &ldquo;Future Dev&rdquo;). Off by
+                      default — turn it on any time.
+                    </span>
+                  </span>
+                </label>
 
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={requestTimeEnabled}
-              disabled={saving}
-              onChange={(e) =>
-                handleToggle('request_time_enabled', e.target.checked, setRequestTimeEnabled)
-              }
-            />
-            <span className="checktext">
-              Show Due/Done Time (Requests)
-              <span className="checknote">
-                Adds a Due Time and Done Time next to a Request&rsquo;s Due Date and Done
-                Date, for you and whoever you send it to. Off by default. Turn it on
-                if you want to optionally set both the Date and the Time for a Request.
-              </span>
-            </span>
-          </label>
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={reminderDigestEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('reminder_digest_enabled', e.target.checked, setReminderDigestEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Notify Me When Reminders Are Sent
+                    <span className="checknote">
+                      A daily summary email listing which of your Sent Requests just had a
+                      day-before Reminder go out to their Recipient, with a link to each
+                      Request. Off by default.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
 
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={todoDatesEnabled}
-              disabled={saving}
-              onChange={(e) =>
-                handleToggle('todo_dates_enabled', e.target.checked, setTodoDatesEnabled)
-              }
-            />
-            <span className="checktext">
-              Show Due/Done Dates (ToDos)
-              <span className="checknote">
-                Adds Due Date and Done Date for creating and editing ToDos instead of
-                just a Status of Open and Done. Off by default. Turn it on for more
-                precise ToDo tracking. Date created and Date Done are always captured
-                and shown in the ToDos list view.
-              </span>
-            </span>
-          </label>
+          {/* ---------------------------------------------------- Request Options */}
+          <div className="subcard">
+            {sectionHead('Request Options', requestOpen, setRequestOpenAndStore)}
+            {requestOpen && (
+              <div className="subbody">
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestTimeEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('request_time_enabled', e.target.checked, setRequestTimeEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Show Due/Done Time
+                    <span className="checknote">
+                      Adds a Due Time and Done Time next to a Request&rsquo;s Due Date and Done
+                      Date, for you and whoever you send it to. Off by default. Turn it on
+                      if you want to optionally set both the Date and the Time for a Request.
+                    </span>
+                  </span>
+                </label>
 
-          <label
-            className={`checkrow${!todoDatesEnabled ? ' checkrow-disabled' : ''}`}
-            title={!todoDatesEnabled ? 'Please turn on Show Due/Done Dates (ToDos) first.' : undefined}
-          >
-            <input
-              type="checkbox"
-              checked={todoRemindersEnabled}
-              disabled={saving || !todoDatesEnabled}
-              onChange={(e) =>
-                handleToggle('todo_reminders_enabled', e.target.checked, setTodoRemindersEnabled)
-              }
-            />
-            <span className="checktext">
-              Add Reminders (ToDos)
-              <span className="checknote">
-                Adds a Reminders until Done panel (Day before / Day of / Day after)
-                to Create ToDo and ToDo Detail, same as a Request&rsquo;s own Reminders.
-                Sent to your own account email — a ToDo has no recipient. Off by
-                default, and only available once Show Due/Done Dates (ToDos) above is
-                turned on.
-              </span>
-            </span>
-          </label>
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={alwaysShowSendReminder}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('always_show_send_reminder', e.target.checked, setAlwaysShowSendReminder)
+                    }
+                  />
+                  <span className="checktext">
+                    Always show Send Reminder button
+                    <span className="checknote">
+                      The Send Reminder button is shown on the Request Detail when a Request
+                      is overdue. If this is checked, it is always shown on the Request
+                      Detail. Off by default.
+                    </span>
+                  </span>
+                </label>
 
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={reminderDigestEnabled}
-              disabled={saving}
-              onChange={(e) =>
-                handleToggle('reminder_digest_enabled', e.target.checked, setReminderDigestEnabled)
-              }
-            />
-            <span className="checktext">
-              Notify Me When Reminders Are Sent
-              <span className="checknote">
-                A daily summary email listing which of your Sent Requests just had a
-                day-before Reminder go out to their Recipient, with a link to each
-                Request. Off by default.
-              </span>
-            </span>
-          </label>
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestRemindersEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('request_reminders_enabled', e.target.checked, setRequestRemindersEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Show Reminders
+                    <span className="checknote">
+                      Adds a Reminders until Done panel (Day before / Day of / Day after) to
+                      Create Requests and Request Detail, and to your Recipients&rsquo; own
+                      response screens. On by default, since Reminders are already part of
+                      every Request — turn it off if you&rsquo;d rather send Reminders manually
+                      with the Send Reminder button above.
+                    </span>
+                  </span>
+                </label>
 
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={reminderDefaultDayBefore}
-              disabled={saving}
-              onChange={(e) =>
-                handleToggle('reminder_default_day_before', e.target.checked, setReminderDefaultDayBefore)
-              }
-            />
-            <span className="checktext">
-              Default: Day Before Reminder
-              <span className="checknote">
-                Pre-fills the &ldquo;Day before&rdquo; Reminder checkbox when you create a
-                new Request or ToDo. You can still change it per item. Changing this
-                setting never affects anything already created. On by default.
-              </span>
-            </span>
-          </label>
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestReminderDefaultDayBefore}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'request_reminder_default_day_before',
+                        e.target.checked,
+                        setRequestReminderDefaultDayBefore
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Day Before Reminder
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Day before&rdquo; Reminder checkbox when you create a
+                      new Request. You can still change it per item. Changing this setting
+                      never affects anything already created. On by default.
+                    </span>
+                  </span>
+                </label>
 
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={reminderDefaultDayOf}
-              disabled={saving}
-              onChange={(e) =>
-                handleToggle('reminder_default_day_of', e.target.checked, setReminderDefaultDayOf)
-              }
-            />
-            <span className="checktext">
-              Default: Day Of Reminder
-              <span className="checknote">
-                Pre-fills the &ldquo;Day of&rdquo; Reminder checkbox when you create a new
-                Request or ToDo. You can still change it per item. Off by default.
-              </span>
-            </span>
-          </label>
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestReminderDefaultDayOf}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'request_reminder_default_day_of',
+                        e.target.checked,
+                        setRequestReminderDefaultDayOf
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Day Of Reminder
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Day of&rdquo; Reminder checkbox when you create a new
+                      Request. You can still change it per item. Off by default.
+                    </span>
+                  </span>
+                </label>
 
-          <label className="checkrow">
-            <input
-              type="checkbox"
-              checked={reminderDefaultDayAfter}
-              disabled={saving}
-              onChange={(e) =>
-                handleToggle('reminder_default_day_after', e.target.checked, setReminderDefaultDayAfter)
-              }
-            />
-            <span className="checktext">
-              Default: Day After Reminder
-              <span className="checknote">
-                Pre-fills the &ldquo;Day after&rdquo; Reminder checkbox when you create a
-                new Request or ToDo. You can still change it per item. Off by default.
-              </span>
-            </span>
-          </label>
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestReminderDefaultDayAfter}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'request_reminder_default_day_after',
+                        e.target.checked,
+                        setRequestReminderDefaultDayAfter
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Day After Reminder
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Day after&rdquo; Reminder checkbox when you create a
+                      new Request. You can still change it per item. Off by default.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
 
+          {/* ---------------------------------------------------- ToDo Options */}
+          <div className="subcard">
+            {sectionHead('ToDo Options', todoOpen, setTodoOpenAndStore)}
+            {todoOpen && (
+              <div className="subbody">
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={todoDatesEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('todo_dates_enabled', e.target.checked, setTodoDatesEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Show Due/Done Dates
+                    <span className="checknote">
+                      Adds Due Date and Done Date for creating and editing ToDos instead of
+                      just a Status of Open and Done. Off by default. Turn it on for more
+                      precise ToDo tracking. Date created and Date Done are always captured
+                      and shown in the ToDos list view.
+                    </span>
+                  </span>
+                </label>
+
+                <label
+                  className={`checkrow${!todoDatesEnabled ? ' checkrow-disabled' : ''}`}
+                  title={!todoDatesEnabled ? 'Please turn on Show Due/Done Dates first.' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={todoRemindersEnabled}
+                    disabled={saving || !todoDatesEnabled}
+                    onChange={(e) =>
+                      handleToggle('todo_reminders_enabled', e.target.checked, setTodoRemindersEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Show Reminders
+                    <span className="checknote">
+                      Adds a Reminders until Done panel (Day before / Day of / Day after)
+                      to Create ToDo and ToDo Detail, same as a Request&rsquo;s own Reminders.
+                      Sent to your own account email — a ToDo has no recipient. Off by
+                      default, and only available once Show Due/Done Dates above is
+                      turned on.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={todoReminderDefaultDayBefore}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'todo_reminder_default_day_before',
+                        e.target.checked,
+                        setTodoReminderDefaultDayBefore
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Day Before Reminder
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Day before&rdquo; Reminder checkbox when you create a
+                      new ToDo. You can still change it per item. Changing this setting
+                      never affects anything already created. On by default.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={todoReminderDefaultDayOf}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'todo_reminder_default_day_of',
+                        e.target.checked,
+                        setTodoReminderDefaultDayOf
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Day Of Reminder
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Day of&rdquo; Reminder checkbox when you create a new
+                      ToDo. You can still change it per item. Off by default.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={todoReminderDefaultDayAfter}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'todo_reminder_default_day_after',
+                        e.target.checked,
+                        setTodoReminderDefaultDayAfter
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Day After Reminder
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Day after&rdquo; Reminder checkbox when you create a
+                      new ToDo. You can still change it per item. Off by default.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* ---------------------------------------------------- Subscriber Options */}
           {canToggleTier && (
-            <label className="checkrow">
-              <input
-                type="checkbox"
-                checked={tier === 'subscriber'}
-                disabled={saving}
-                onChange={(e) => handleTierToggle(e.target.checked)}
-              />
-              <span className="checktext">
-                Subscribed? (testing only)
-                <span className="checknote">
-                  Sets your account to the Subscriber tier so subscriber-only features
-                  like Attachments can be tested. Off by default. This status only
-                  lasts for the testing period — once testing ends, this checkbox goes
-                  away and you would subscribe for real, through an actual Subscription
-                  Details page with eCommerce links, to keep any subscriber features.
-                </span>
-              </span>
-            </label>
+            <div className="subcard">
+              {sectionHead('Subscriber Options', subscriberOpen, setSubscriberOpenAndStore)}
+              {subscriberOpen && (
+                <div className="subbody">
+                  <label className="checkrow">
+                    <input
+                      type="checkbox"
+                      checked={tier === 'subscriber'}
+                      disabled={saving}
+                      onChange={(e) => handleTierToggle(e.target.checked)}
+                    />
+                    <span className="checktext">
+                      Subscribed? (testing only)
+                      <span className="checknote">
+                        Sets your account to the Subscriber tier so subscriber-only features
+                        like Attachments can be tested. Off by default. This status only
+                        lasts for the testing period — once testing ends, this checkbox goes
+                        away and you would subscribe for real, through an actual Subscription
+                        Details page with eCommerce links, to keep any subscriber features.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
           )}
 
           {saveError && (
-            <p className="ferror" role="alert">
+            <p className="ferror" role="alert" style={{ margin: '10px var(--pad) 0' }}>
               {saveError}
             </p>
           )}
@@ -487,4 +757,13 @@ export default function AccountForm() {
       </div>
     </div>
   )
+}
+
+// Same shape as MainScreen.tsx's own readStoredChip — a boolean stored as
+// '1'/'0' rather than a string union, since a section is only ever
+// open/hidden, nothing else to validate against.
+function readStoredOpen(key: string, fallback: boolean): boolean {
+  if (typeof window === 'undefined') return fallback
+  const v = window.sessionStorage.getItem(key)
+  return v === '1' ? true : v === '0' ? false : fallback
 }

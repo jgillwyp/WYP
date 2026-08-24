@@ -327,6 +327,27 @@ batch, none of the six source mockups have interactive JS for this banner,
 so none needed updating. See the decisions log's fourth 2026-08-22 entry
 for the full write-up.
 
+## 2026-08-23 — Account restructured into four collapsible Show/Hide sections; Request/ToDo Reminder defaults split; no mockup updated
+
+`AccountForm.tsx` never had a mockup counterpart of its own (see every
+earlier Account-toggle entry in this file), so this batch — four `.subcard`
+sections (General/Request/ToDo/Subscriber Options) with Show/Hide chip
+pairs, a new "Show Reminders" master toggle on both the Request and ToDo
+sides, "Always show Send Reminder button," and the Request/ToDo Reminder
+default triplets split apart (migration 044) — landed entirely in the live
+component with nothing to port back. Jim's own attached screenshot was a
+rough content mockup, not a `design/screens/` HTML file, and stays that way.
+
+The six Reminders-until-Done screens' static mockup HTML (Create Request,
+Request Detail, Response Detail, Request Response, Create ToDo, ToDo
+Detail) still don't model the `.reminderbanner` in any form — unchanged
+from every prior entry in this family — so none of this batch's new
+gating (the "Show Reminders" toggle hiding the banner outright, "Always
+show Send Reminder button" changing when Request Detail's Send Reminder
+panel appears, or the Request-vs-ToDo default-checkbox split) has any
+mockup surface to reflect it either. See the decisions log's 2026-08-23
+entry for the full write-up.
+
 ## 2026-08-22 — Manual "Send Reminder" button + overdue-red Due Date on Request Detail: §6.44 PROPOSED, no mockup
 
 New, not a rename — closes the item the previous entry's own batch had left

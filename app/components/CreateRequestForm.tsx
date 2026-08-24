@@ -337,6 +337,16 @@ export default function CreateRequestForm() {
   // pre-existing behavior being made optional, not a new feature starting
   // closed. When off, the Due row below collapses to just Due Date.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
+  // Show Reminders is now an opt-in-off (default true) account preference
+  // too (migration 044, 2026-08-23) — see AccountForm.tsx. On by default,
+  // same reasoning as requestTimeEnabled above: pre-existing behavior being
+  // made optional, not a new feature starting closed. Standalone, not
+  // gated on requestTimeEnabled. When off, the Reminders-until-Done banner
+  // is hidden entirely (the per-item checkboxes still exist in form state
+  // at whatever their pre-filled default was, same as todo_reminders_
+  // enabled's own established precedent — cron/tick/route.ts's Phase A1/
+  // A1b/B are what actually gate sending, not this screen).
+  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(true)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -539,23 +549,26 @@ export default function CreateRequestForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, private_category_enabled, request_time_enabled, tier, reminder_default_day_before, reminder_default_day_of, reminder_default_day_after'
+        'display_name, private_category_enabled, request_time_enabled, request_reminders_enabled, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after'
       )
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.private_category_enabled ?? false)
         setRequestTimeEnabled(data?.request_time_enabled ?? true)
+        setRequestRemindersEnabled(data?.request_reminders_enabled ?? true)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
-        // Reminders-until-Done defaults (migration 043) — applied on top of
-        // initialState's own hardcoded fallback, functional update so any
-        // Description/Recipient/etc. the owner already typed in the brief
-        // window before this resolves is preserved.
+        // Reminders-until-Done defaults (migration 044, split from the
+        // shared reminder_default_day_before/day_of/day_after trio,
+        // migration 043) — applied on top of initialState's own hardcoded
+        // fallback, functional update so any Description/Recipient/etc.
+        // the owner already typed in the brief window before this resolves
+        // is preserved.
         setForm((f) => ({
           ...f,
-          reminderEnabled: data?.reminder_default_day_before ?? f.reminderEnabled,
-          reminderDayOfEnabled: data?.reminder_default_day_of ?? f.reminderDayOfEnabled,
-          overdueReminderEnabled: data?.reminder_default_day_after ?? f.overdueReminderEnabled,
+          reminderEnabled: data?.request_reminder_default_day_before ?? f.reminderEnabled,
+          reminderDayOfEnabled: data?.request_reminder_default_day_of ?? f.reminderDayOfEnabled,
+          overdueReminderEnabled: data?.request_reminder_default_day_after ?? f.overdueReminderEnabled,
         }))
       })
     // router is stable across renders (Next's useRouter()) and this effect
@@ -1255,7 +1268,7 @@ export default function CreateRequestForm() {
                   )}
                 </span>
               ) : (
-                reminderBanner(true)
+                requestRemindersEnabled ? reminderBanner(true) : null
               )}
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
@@ -1510,7 +1523,7 @@ export default function CreateRequestForm() {
             {/* Reminders until Done banner, standalone-row placement — only
                 when Due Time is on (the inline placement above already
                 covers the off case; see the file-level comment). */}
-            {requestTimeEnabled && reminderBanner(false)}
+            {requestTimeEnabled && requestRemindersEnabled && reminderBanner(false)}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

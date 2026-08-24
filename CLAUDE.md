@@ -2521,3 +2521,95 @@ link is built only after the stack is proven on Add Contact.
   The route re-validates server-side (not Done, not archived) rather than
   trusting the button's own client-side gating. `npx tsc --noEmit`/`npm run
   lint` clean.
+- **Account restructured into four collapsible sections; Request/ToDo
+  Reminder defaults split; new "Show Reminders" and "Always show Send
+  Reminder button" toggles; Close/Cancel bug fixed on Response Detail —
+  migration 044 DRAFTED, NOT YET CONFIRMED RUN (2026-08-23).** Jim, with his
+  own mockup screenshot: "I think it would be useful to allow separately
+  specified reminder options for Requests and ToDos, e.g., I prefer to send
+  out Requests with a day before reminder and ToDos are best for me with a
+  day of reminder. This brings up the possibility of an unwieldy list of
+  options in the Account screen. So, I have created a mockup of how these
+  options can be presented within respective sections with show/hide chips
+  (the default Account presentation per session should be Open for General
+  Options and Hide for all other options... during a session, the Open/Hide
+  status should remain as last-used." Plus a new "Always show Send Reminder
+  button" toggle, several wording changes, a shortened Send Reminder panel
+  description, and a separate bug report: after a signed-in recipient sets
+  Done Date and Send on Response Detail, the confirmation banner already
+  says "Response saved," but the buttons still read Send/Cancel — should be
+  Send/Close. Three genuine ambiguities were asked and resolved directly in
+  chat (not via the AskUserQuestion widget — Jim: "If I see and then move
+  off of this UI before answering a question, the question disappears," so
+  this one was asked and answered in plain text instead): the new "Show
+  Reminders" toggle gates standalone, not conditioned on any other setting;
+  the mockup's own checkbox states were a snapshot of Jim's live account,
+  not a specification of new defaults, so both new columns' actual defaults
+  were left to engineering judgment (flagged below); and the new toggle also
+  hides the Reminders-until-Done banner on both recipient-facing screens
+  (Response Detail, Request Response), per this file's own Entitlements
+  rule that rights on a Request come from its issuer, never its viewer.
+  `AccountForm.tsx` rebuilt around four `.subcard` sections (General/
+  Request/ToDo/Subscriber Options, reusing Main Screen's existing
+  `.subcard`/`.subhead`/`.chips`/`.chip` components verbatim, new
+  `.subhead.acct-head` CSS modifier for the title-left/chips-right single
+  row) with Show/Hide chips persisted to `sessionStorage`
+  (`wyp.acctGeneralOpen`/`RequestOpen`/`TodoOpen`/`SubscriberOpen` — General
+  defaults open, the other three default hidden), a session-only scope
+  deliberately not promoted to a `profiles` column, since Jim's own wording
+  was "per session," unlike Main Screen's own cross-session
+  `main_chip_prefs` (migration 016). **Migration 044** adds 8 new
+  `profiles` columns: `request_reminders_enabled boolean not null default
+  true` (new standalone master toggle, Request Options section — hides the
+  Reminders-until-Done banner on Create Request/Request Detail and, via a
+  new `owner_request_reminders_enabled` field added to both
+  `get_request_by_token`/`get_received_request`, on Request Response/
+  Response Detail too), `always_show_send_reminder boolean not null default
+  false` (Request Detail's §6.44 Send Reminder panel shows unconditionally
+  instead of only-when-overdue), and two new split triplets —
+  `request_reminder_default_day_before/day_of/day_after` and
+  `todo_reminder_default_day_before/day_of/day_after` (same true/false/false
+  defaults as before) — replacing migration 043's single shared
+  `reminder_default_day_before/day_of/day_after` trio outright: backfilled
+  into both new triplets, then dropped from the table entirely, since
+  nothing reads it anymore (unlike `last_overdue_nudge_at`'s own deliberate
+  "kept per Jim's don't-drop-structure instruction" precedent — this case
+  has zero remaining readers, not preserved-for-later infrastructure).
+  **Two default values are my own engineering judgment, not confirmed by
+  Jim** — both chosen to preserve today's already-live behavior rather than
+  change anything: `request_reminders_enabled` defaults `true` (reminders
+  keep showing for every existing account) and `always_show_send_reminder`
+  defaults `false` (the button stays only-when-overdue). Flagged for Jim's
+  review once migration 044 is run. `CreateRequestForm.tsx`/
+  `RequestDetailForm.tsx` read the new master toggle and gate their own
+  `reminderBanner()` call sites on it; `RequestDetailForm.tsx` also reads
+  `always_show_send_reminder` to change `sendReminderPanel()`'s render
+  condition from `isOverdue` alone to `isOverdue || alwaysShowSendReminder`,
+  and its panel text is now Jim's own shortened wording verbatim: "This
+  action is unrelated to the Reminder schedule above." `CreateRequestForm.tsx`/
+  `CreateTodoForm.tsx` now read the new split default columns
+  (`request_reminder_default_*` / `todo_reminder_default_*` respectively)
+  instead of the old shared trio to pre-fill their own Reminders-until-Done
+  checkboxes — an existing Request or ToDo's own already-stored checkbox
+  values are never touched by this change, matching Jim's own understanding
+  ("changing the default settings only applies to newly-created items").
+  `app/api/cron/tick/route.ts`'s Phase A1 (Request day-before), Phase A1b
+  (Request day-of), and Phase B (Request day-after) are now each
+  additionally AND-gated on `request_reminders_enabled === false` (profile
+  read, defaulting to enabled if the column is somehow missing — mirrors the
+  `coalesce(..., true)` convention the SQL functions already use) — this is
+  the same double-gate pattern `todo_reminders_enabled` already established
+  for ToDos (the account flag only ever hides the *UI banner*; the per-item
+  checkbox is still submitted/stored regardless; the real safety net is this
+  cron-time AND-gate). `ResponseDetailForm.tsx`'s Close/Cancel bug fixed:
+  the button's label logic gained `sendConfirmed ||` ahead of the existing
+  `!hasChanges` check, since `hasChanges` alone never resets after a
+  successful Send (its dirty-check snapshot is taken once at load, not
+  re-taken post-Send) — a Response with, say, a changed Done Date kept
+  reading "Cancel" even after that change was already saved, with nothing
+  left to actually cancel. **No mockups updated** — none of the six
+  Reminders-until-Done screens' static HTML models the banner at all
+  (unchanged from every earlier entry in this family), and `AccountForm.tsx`
+  itself has never had a mockup of its own; flagged in `design/README.md`.
+  `npx tsc --noEmit`/`npm run lint` clean. See the decisions log's
+  2026-08-23 entry for the full write-up.
