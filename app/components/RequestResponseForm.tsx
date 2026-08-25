@@ -992,9 +992,21 @@ export default function RequestResponseForm() {
         <div className="subbanner" role="button" tabIndex={0}>
           See Subscription Features and Other Options
         </div>
-        <div className="adslot" aria-hidden="true">
-          <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-        </div>
+        {/* Gated on data.owner_tier (2026-08-25), not a viewer tier — this
+            anonymous screen has no signed-in identity of its own for an
+            ad-free benefit to attach to (unlike ResponseDetailForm.tsx's
+            identical-looking gate, which uses the signed-in recipient's own
+            profiles.tier). Consistent with this screen's existing
+            Attachments/voice-dictation gates just above, both already keyed
+            off the Request's issuer per this file's own Entitlements
+            precedent — extended here on the same reasoning: if the issuer is
+            a subscriber, the response experience they've sent out is
+            ad-free too. */}
+        {data.owner_tier !== 'subscriber' && (
+          <div className="adslot" aria-hidden="true">
+            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
+          </div>
+        )}
 
         {dialogModalOpen && (
           <>

@@ -2879,3 +2879,37 @@ link is built only after the stack is proven on Add Contact.
   Archive-only flow; flagged in `design/README.md`. `npx tsc --noEmit`/`npm
   run lint` clean. See the decisions log's 2026-08-25 entry for the full
   write-up.
+- **Search scope control replaced with chip buttons; scope chips relocated
+  to the "Search" band header; ad banner gating extended to every screen
+  that shows it (2026-08-25, same session as the batch above).** Jim
+  reported the Search scope's native `<select>` (All/Dates) opened Android
+  Chrome's own full-screen radio-button dialog rather than a compact
+  dropdown — no CSS on a `<select>` can suppress that, it's OS picker
+  chrome. Replaced with two `.chip` buttons (`.scopechips`, reusing the
+  app's own `.chip.sel` selected-state convention) in `MainScreen.tsx`;
+  `selectSearchScope()` needed no change. **Follow-up, same day**: those
+  chips originally sat inside `.searchbar` itself, competing with the
+  search field/Date Range fields/magnifying-glass icon for width — on a
+  phone, selecting Dates wrapped the icon below the visible band. Moved
+  into the "Search" `.band`'s own `.bandcluster` (right-aligned header
+  slot, the pattern every other band with controls already uses), leaving
+  `.searchbar` as just the field row. **Separately, same day**: the ad
+  banner (`.adslot`) was gated on subscriber tier for Main Screen only in
+  the batch above — Jim found it still showed everywhere else. Extended to
+  all 8 remaining screens that render it: `CreateRequestForm.tsx`,
+  `RequestDetailForm.tsx`, `CreateTodoForm.tsx`, `TodoDetailForm.tsx` (all
+  four already had their own `tier` state from other gating, just wrapped
+  `.adslot`); `ContactDetailForm.tsx`/`AddContactForm.tsx` (added a `tier`
+  state each — `AddContactForm.tsx` piggybacks on its existing
+  unconditional `profiles` fetch, `ContactDetailForm.tsx` needed a new
+  always-run effect since its own `profiles` select only fires in a rare
+  fallback branch); `ResponseDetailForm.tsx` (signed-in recipient — gated
+  on a new `viewerTier`, the *viewer's own* `profiles.tier`, deliberately
+  not `data.owner_tier` like this screen's other gates, since an ad-free
+  benefit is personal to the viewer, not a property of the Request being
+  viewed); `RequestResponseForm.tsx` (the anonymous `/r/[token]` path — no
+  viewer identity exists, gated on `data.owner_tier` instead, matching this
+  screen's own existing Attachments/voice-dictation precedent — a
+  considered design call, flagged rather than assumed uncontroversial).
+  `npx tsc --noEmit`/`npm run lint` clean across both fixes. See the
+  decisions log's 2026-08-25 entry for the full write-up.

@@ -428,6 +428,16 @@ export default function ResponseDetailForm() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [authToken, setAuthToken] = useState<string | null>(null)
 
+  // viewerTier — 2026-08-25, gates .adslot below. Deliberately the signed-in
+  // recipient's *own* tier, not data.owner_tier (the Request's issuer,
+  // already used above for Attachments/Reminders/voice-dictation gating on
+  // this screen) — an ad-free benefit is personal to the account viewing
+  // the screen, unlike a Request's own features, which follow the issuer
+  // per this file's own Entitlements precedent (CLAUDE.md). Fetched
+  // alongside the existing session lookup below, once currentUserId is
+  // known.
+  const [viewerTier, setViewerTier] = useState<'free' | 'subscriber'>('free')
+
   // Owner's ask, 2026-08-13 — see cameFromCalendarLink's own comment in
   // @/lib/ics and RequestResponseForm.tsx's identical use of it.
   const [cameFromCalendar] = useState(() =>
@@ -527,6 +537,18 @@ export default function ResponseDetailForm() {
       if (!cancelled) {
         setCurrentUserId(sessionData.session?.user.id ?? null)
         setAuthToken(sessionData.session?.access_token ?? null)
+      }
+
+      const viewerId = sessionData.session?.user.id
+      if (viewerId) {
+        const { data: viewerProfile } = await supabase
+          .from('profiles')
+          .select('tier')
+          .eq('id', viewerId)
+          .single()
+        if (!cancelled) {
+          setViewerTier(viewerProfile?.tier === 'subscriber' ? 'subscriber' : 'free')
+        }
       }
 
       setLoading(false)
@@ -1085,9 +1107,11 @@ export default function ResponseDetailForm() {
         <div className="subbanner" role="button" tabIndex={0}>
           See Subscription Features and Other Options
         </div>
-        <div className="adslot" aria-hidden="true">
-          <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-        </div>
+        {viewerTier !== 'subscriber' && (
+          <div className="adslot" aria-hidden="true">
+            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
+          </div>
+        )}
 
         {dialogModalOpen && (
           <>

@@ -98,14 +98,23 @@ export default function AddContactForm() {
   // comment. Focus always browses the full list; typing switches to filtering.
   const [timeZoneBrowsing, setTimeZoneBrowsing] = useState(false)
 
+  // tier — 2026-08-25, gates .adslot below (see that render site's own
+  // comment). Piggybacks on the Time Zone effect's own unconditional
+  // `profiles` fetch rather than a second query, unlike Contact Detail's
+  // equivalent fix — that file's own `profiles` select only runs in a rare
+  // fallback branch, this one always runs.
+  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+
   // Default Time Zone on mount — see the file-header comment for the
   // profiles.time_zone / browser-detection / write-back reasoning.
   useEffect(() => {
     let cancelled = false
 
     async function loadDefaultTimeZone() {
-      const { data } = await supabase.from('profiles').select('time_zone').single()
+      const { data } = await supabase.from('profiles').select('time_zone, tier').single()
       if (cancelled) return
+
+      setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
 
       if (data?.time_zone) {
         setForm((f) => ({ ...f, timeZone: data.time_zone as string }))
@@ -533,9 +542,11 @@ export default function AddContactForm() {
         <div className="subbanner" role="button" tabIndex={0}>
           See Subscription Features and Other Options
         </div>
-        <div className="adslot" aria-hidden="true">
-          <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-        </div>
+        {tier !== 'subscriber' && (
+          <div className="adslot" aria-hidden="true">
+            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
+          </div>
+        )}
       </div>
     </div>
   )

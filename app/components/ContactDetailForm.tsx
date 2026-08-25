@@ -62,6 +62,30 @@ export default function ContactDetailForm() {
   const [timeZoneInvalid, setTimeZoneInvalid] = useState(false)
   const [timeZoneBrowsing, setTimeZoneBrowsing] = useState(false)
 
+  // tier — 2026-08-25, closing a gap flagged the same day the ad banner was
+  // first gated on Main Screen: it, and every owner-side screen, still
+  // showed .adslot unconditionally. This is the signed-in owner's own
+  // account, so their own tier is the right thing to gate on (unlike a
+  // Request's Attachments, which follow the issuer's tier per this file's
+  // own Entitlements precedent — an ad-free benefit is personal, not a
+  // property of any one Contact/Request). A separate, always-run fetch
+  // rather than piggybacking on the `profiles.time_zone` query above, which
+  // only runs in the rare pre-migration-007 fallback branch and would leave
+  // `tier` unset for the common case.
+  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadTier() {
+      const { data } = await supabase.from('profiles').select('tier').single()
+      if (!cancelled) setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
+    }
+    loadTier()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     if (!contactId) return
     let cancelled = false
@@ -442,9 +466,11 @@ export default function ContactDetailForm() {
         <div className="subbanner" role="button" tabIndex={0}>
           See Subscription Features and Other Options
         </div>
-        <div className="adslot" aria-hidden="true">
-          <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-        </div>
+        {tier !== 'subscriber' && (
+          <div className="adslot" aria-hidden="true">
+            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
+          </div>
+        )}
       </div>
     </div>
   )

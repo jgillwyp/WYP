@@ -2473,7 +2473,17 @@ body {
    All/Dates choice, same `selectSearchScope()` handler — reuses the app's
    own filter-chip visual language (Main Screen's Sent/Received/ToDos status
    chips, Archive's Action/Record Type rows) rather than any native form
-   control, so there's no OS-level widget left to diverge across platforms. */
+   control, so there's no OS-level widget left to diverge across platforms.
+   **Relocated the same day** — the chip pair originally sat inside
+   `.searchbar` itself, competing with the search field/Clear Search/
+   magnifying-glass icon for width on a phone; when Dates was selected the
+   two date fields plus the chips left no room for the icon, which wrapped
+   to a second line mostly below the visible band (Jim's own screenshot,
+   matching his own mockup's layout). Moved into the "Search" `.band`'s own
+   `.bandcluster` (the same right-aligned-cluster pattern every other band
+   with header controls already uses), so `.searchbar` below it is now
+   solely the field row and never has to share space with the scope
+   picker. */
 .searchbar {
   flex: 0 0 auto;
   display: flex;
@@ -2486,7 +2496,6 @@ body {
 }
 
 .scopechips {
-  flex: 0 0 auto;
   display: flex;
   gap: 6px;
   white-space: nowrap;

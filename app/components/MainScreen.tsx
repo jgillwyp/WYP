@@ -1818,26 +1818,27 @@ export default function MainScreen() {
               fixed-height footer strip either. */}
           <div className="band">
             <span className="glabel">Search</span>
+            <span className="bandcluster">
+              <div className="scopechips" role="group" aria-label="Search scope">
+                <button
+                  className={`chip${searchScope === 'all' ? ' sel' : ''}`}
+                  type="button"
+                  onClick={() => selectSearchScope('all')}
+                >
+                  All
+                </button>
+                <button
+                  className={`chip${searchScope === 'daterange' ? ' sel' : ''}`}
+                  type="button"
+                  onClick={() => selectSearchScope('daterange')}
+                >
+                  Dates
+                </button>
+              </div>
+            </span>
           </div>
 
           <div className="searchbar sb">
-            <div className="scopechips" role="group" aria-label="Search scope">
-              <button
-                className={`chip${searchScope === 'all' ? ' sel' : ''}`}
-                type="button"
-                onClick={() => selectSearchScope('all')}
-              >
-                All
-              </button>
-              <button
-                className={`chip${searchScope === 'daterange' ? ' sel' : ''}`}
-                type="button"
-                onClick={() => selectSearchScope('daterange')}
-              >
-                Dates
-              </button>
-            </div>
-
             {searchScope === 'all' ? (
               <div className="fieldwrap">
                 <input

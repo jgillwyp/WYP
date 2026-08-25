@@ -6,6 +6,68 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-25 — Search band reorganized for phone width; ad banner gated everywhere it appears, not just Main Screen
+
+Two follow-ups from Jim's own testing of the two batches directly above.
+
+**(1) Search band layout.** The new `.scopechips` (All/Dates) sat inside
+`.searchbar` itself, sharing one flex-wrap row with the search field (or the
+two Date Range fields) and the magnifying-glass icon. On a phone, selecting
+Dates left no room for the icon, which wrapped to a second line mostly below
+the visible band — Jim's own screenshot and a pasted mockup both showed the
+fix: move the chip pair up into the "Search" `.band`'s own header row
+(right-aligned via `.bandcluster`, the same pattern every other band with
+header controls already uses — Archive's Print icon, Request Detail's
+Reminder controls, etc.), leaving `.searchbar` below as solely the field
+row. No logic changed, just where `.scopechips` renders; `.searchbar`
+itself is otherwise unchanged. `npx tsc --noEmit`/`npm run lint` clean.
+
+**(2) Ad banner gating extended to every screen that shows `.adslot`.**
+Jim: gated on Main Screen, "still appears for all the other screens except
+Archive" (which never had one). A grep confirmed 8 more components render
+`.adslot` unconditionally: `CreateRequestForm.tsx`, `RequestDetailForm.tsx`,
+`CreateTodoForm.tsx`, `TodoDetailForm.tsx`, `ContactDetailForm.tsx`,
+`AddContactForm.tsx`, `ResponseDetailForm.tsx`, `RequestResponseForm.tsx`.
+Three different gating sources were needed, not one:
+
+- **Four owner-side screens** (Create Request, Request Detail, Create ToDo,
+  ToDo Detail) already fetch the signed-in owner's own `profiles.tier` for
+  other gates (Attachments, voice dictation, Repeat) — just wrapped
+  `.adslot` in the existing `tier !== 'subscriber'` check, no new query.
+- **Two Contact screens** (`ContactDetailForm.tsx`, `AddContactForm.tsx`)
+  had no `tier` state at all. `AddContactForm.tsx`'s existing unconditional
+  Time Zone-default effect already runs a `profiles` select on every
+  mount — extended it to also select `tier` in the same round trip.
+  `ContactDetailForm.tsx`'s own `profiles` select only runs in a rare
+  fallback branch (a pre-migration-007 Contact with no `time_zone` of its
+  own), so a second, always-run effect was added instead rather than
+  piggybacking on a query that skips most of the time.
+- **`ResponseDetailForm.tsx`** (signed-in recipient viewing someone else's
+  Sent Request) is more subtle: this screen already gates Attachments/
+  Reminders/voice-dictation on `data.owner_tier` — the Request's issuer,
+  per CLAUDE.md's own Entitlements rule ("rights on a request come from its
+  issuer, never from whoever is reading it"). The ad banner is different in
+  kind: it's not a Request feature, it's a personal account benefit tied to
+  whoever is looking at the screen. Reusing `data.owner_tier` here would
+  mean a subscriber viewing a free-tier sender's own Request would
+  incorrectly see ads, and vice versa. Fetched a new `viewerTier` — the
+  signed-in recipient's *own* `profiles.tier`, via a query added right
+  alongside the screen's existing `getSession()` call (which already
+  resolves `currentUserId`) — and gated on that instead.
+- **`RequestResponseForm.tsx`** (the anonymous `/r/[token]` path) has no
+  signed-in identity at all — there's no "viewer's own tier" to fetch.
+  Gated on `data.owner_tier` here, matching this screen's own existing
+  Attachments/voice-dictation precedent, on the reasoning that if the
+  issuer pays for ad-free, the response experience they send out to their
+  own recipients is ad-free too. This is a considered design call, not an
+  explicit instruction from Jim — flagged rather than assumed
+  uncontroversial, since it's a real behavioral difference from
+  `ResponseDetailForm.tsx`'s viewer-tier gate right above it.
+
+`npx tsc --noEmit`/`npm run lint` clean across both fixes.
+
+\---
+
 ## 2026-08-25 — Search scope picker: native `<select>` replaced with chip buttons (Android fix)
 
 Jim: on his laptop, the Search scope choices (All / Dates) show as an

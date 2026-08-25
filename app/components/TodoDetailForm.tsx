@@ -1342,9 +1342,11 @@ export default function TodoDetailForm() {
         <div className="subbanner" role="button" tabIndex={0}>
           See Subscription Features and Other Options
         </div>
-        <div className="adslot" aria-hidden="true">
-          <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-        </div>
+        {tier !== 'subscriber' && (
+          <div className="adslot" aria-hidden="true">
+            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
+          </div>
+        )}
 
         {addCategoryOpen && (
           <>
