@@ -51,11 +51,21 @@ export const maxDuration = 60
  * with three independent, one-time checkboxes — "Day before" (Requests:
  * Phase A1; ToDos: Phase A2), "Day of" (Phase A1b/A2b), and "Day after"
  * (Phase B for Requests, Phase A3 for ToDos) — plus two opt-in/un-gated
- * digests to the Requestor (Phase D) and Repeat generation (Phase E). As of
- * migration 044 (2026-08-23), Phase A1/A1b/B are also AND-gated on the
+ * digests to the Requestor (Phase D) and Repeat generation (Phase E).
+ * Migration 044 (2026-08-23) originally AND-gated Phase A1/A1b/B on the
  * owner's own profiles.request_reminders_enabled ("Show Reminders" in
- * Account's new Request Options section) — the Request-side counterpart to
- * todo_reminders_enabled's own already-established Phase A2/A2b/A3 gate.
+ * Account's Request Options section), mirroring todo_reminders_enabled's
+ * own Phase A2/A2b/A3 gate. Both gates were REMOVED 2026-08-25, per Jim's
+ * own rewritten Show Reminders wording ("Without regard to whether
+ * Reminders are shown, Reminders are sent as indicated with Default...
+ * settings"): Show Reminders is now a pure UI-visibility toggle for the
+ * Reminders-until-Done banner only — actual sending here depends solely on
+ * each row's own reminder_enabled/reminder_day_of_enabled/
+ * overdue_reminder_enabled columns, which are populated from the owner's
+ * Default settings at creation regardless of whether the banner was ever
+ * shown. todo_dates_enabled is still checked on the ToDo phases below —
+ * that one gates on data availability (a ToDo's Due Date column), not on
+ * banner visibility, so it stays.
  *
  * Single hourly invocation, not one cron schedule per job — Vercel Cron
  * entries are fixed to one UTC time each, but "morning" and "the day after"
@@ -156,13 +166,11 @@ type ProfileRow = {
   display_name: string | null
   time_zone: string | null
   todo_dates_enabled: boolean
-  todo_reminders_enabled: boolean
   reminder_digest_enabled: boolean
-  // Show Reminders (migration 044, 2026-08-23) — Request-side master
-  // toggle, AND-gated with each row's own reminder_enabled/
-  // reminder_day_of_enabled/overdue_reminder_enabled at Phase A1/A1b/B
-  // below, same shape as todo_reminders_enabled's own Phase A2/A2b/A3 gate.
-  request_reminders_enabled: boolean
+  // request_reminders_enabled / todo_reminders_enabled (migrations 041/044)
+  // are no longer read here — as of 2026-08-25 they're pure UI-visibility
+  // toggles (Account Options' "Show Reminders"), not sending gates. See
+  // this file's header comment.
 }
 
 type ContactInfo = { email: string; display_name: string | null; time_zone: string | null } | null
@@ -320,7 +328,7 @@ async function handle(request: Request) {
     const { data: profileData } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled'
       )
       .in('id', ownerIds)
     for (const p of (profileData ?? []) as ProfileRow[]) profileMap.set(p.id, p)
@@ -403,12 +411,6 @@ async function handle(request: Request) {
   for (const row of requestRows) {
     if (!row.reminder_enabled || row.reminder_sent_at || !row.due_date || !row.contacts) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    // Show Reminders (migration 044) — request_reminders_enabled defaults
-    // true, so only an explicit false actually suppresses sending; a
-    // missing profile lookup (should not happen in practice) is treated as
-    // enabled, same as the coalesce(..., true) convention the two jsonb
-    // RPCs already use for this same column.
-    if (profile?.request_reminders_enabled === false) continue
     const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
     const tomorrow = addDaysISO(localDateISO(zone, now), 1)
     if (row.due_date !== tomorrow || localHour(zone, now) !== MORNING_HOUR) continue
@@ -493,8 +495,6 @@ async function handle(request: Request) {
   for (const row of requestRows) {
     if (!row.reminder_day_of_enabled || row.reminder_day_of_sent_at || !row.due_date || !row.contacts) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    // Show Reminders (migration 044) — see Phase A1's identical gate above.
-    if (profile?.request_reminders_enabled === false) continue
     const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
     if (row.due_date !== localDateISO(zone, now) || localHour(zone, now) !== MORNING_HOUR) continue
 
@@ -543,20 +543,19 @@ async function handle(request: Request) {
 
   // ======================================================================
   // Phase A2 — ToDo day-before Reminder, to the owner's own account email.
-  // No Recipient, so no per-row "who to notify" question — but the ToDo
-  // Reminders feature (Account toggle + per-ToDo Reminders-until-Done
-  // panel, 2026-08-22) now gates this on BOTH the owner's own
-  // todo_reminders_enabled account flag AND the individual row's own
-  // reminder_enabled ("Day before") checkbox, same shape as a
-  // Request's own Phase A1 gate — todo_dates_enabled is checked too since
-  // todo_reminders_enabled can never be true without it (AccountForm.tsx
-  // greys the toggle out otherwise, but this is the enforcement that
-  // actually matters). Timed to the OWNER's own zone.
+  // No Recipient, so no per-row "who to notify" question. Gated only on
+  // todo_dates_enabled — a ToDo's Due Date column has no meaning without
+  // it, so a row can't have due_date set at all if it's off — not on
+  // todo_reminders_enabled (2026-08-25: Show Reminders is now a pure
+  // UI-visibility toggle for the banner, per Jim's own rewritten wording,
+  // "Without regard to whether Reminders are shown..."). Actual sending
+  // depends solely on the row's own reminder_enabled ("Day before")
+  // checkbox. Timed to the OWNER's own zone.
   // ======================================================================
   for (const row of todoRows) {
     if (row.reminder_sent_at || !row.due_date || !row.reminder_enabled) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    if (!profile?.todo_dates_enabled || !profile?.todo_reminders_enabled) continue
+    if (!profile?.todo_dates_enabled) continue
     const zone = profile.time_zone
     const tomorrow = addDaysISO(localDateISO(zone, now), 1)
     if (row.due_date !== tomorrow || localHour(zone, now) !== MORNING_HOUR) continue
@@ -587,15 +586,15 @@ async function handle(request: Request) {
   // from the Overdue machinery — a fully separate third checkbox from
   // Phase A2's day-before Reminder above, own idempotency marker
   // (reminder_day_of_sent_at), no lead-time floor (fires the very morning
-  // the ToDo is due). Same gating shape as Phase A2: both
-  // profile.todo_dates_enabled and profile.todo_reminders_enabled must be
-  // on, plus the row's own reminder_day_of_enabled. Timed to the OWNER's
-  // own zone, same as Phase A2 and A3.
+  // the ToDo is due). Same gating shape as Phase A2 (2026-08-25): only
+  // profile.todo_dates_enabled, plus the row's own reminder_day_of_enabled
+  // — not todo_reminders_enabled, see Phase A2's own comment above. Timed
+  // to the OWNER's own zone, same as Phase A2 and A3.
   // ======================================================================
   for (const row of todoRows) {
     if (row.reminder_day_of_sent_at || !row.due_date || !row.reminder_day_of_enabled) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    if (!profile?.todo_dates_enabled || !profile?.todo_reminders_enabled) continue
+    if (!profile?.todo_dates_enabled) continue
     const zone = profile.time_zone
     if (row.due_date !== localDateISO(zone, now) || localHour(zone, now) !== MORNING_HOUR) continue
 
@@ -627,15 +626,17 @@ async function handle(request: Request) {
   // concern (see this file's header comment). overdue_notified_at is the
   // idempotency marker; a checkbox turned on after its own day-after date
   // has already passed produces no catch-up send, same as "Day of."
-  // Gated on both profile.todo_reminders_enabled and the row's own
-  // overdue_reminder_enabled ("Day after" checkbox) — no separate
-  // Recipient whose own visibility is independent of the owner's
-  // checkbox here, it's the same person either way.
+  // Gated on profile.todo_dates_enabled (data-availability, not
+  // visibility — see Phase A2's comment above) and the row's own
+  // overdue_reminder_enabled ("Day after" checkbox) — not
+  // todo_reminders_enabled (2026-08-25). No separate Recipient whose own
+  // visibility is independent of the owner's checkbox here, it's the same
+  // person either way.
   // ======================================================================
   for (const row of todoRows) {
     if (row.overdue_notified_at || !row.due_date || !row.overdue_reminder_enabled) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    if (!profile?.todo_dates_enabled || !profile?.todo_reminders_enabled) continue
+    if (!profile?.todo_dates_enabled) continue
     const zone = profile.time_zone
     if (localHour(zone, now) !== OVERDUE_HOUR) continue
     if (localDateISO(zone, now) <= row.due_date) continue
@@ -688,8 +689,6 @@ async function handle(request: Request) {
   for (const row of requestRows) {
     if (row.overdue_notified_at || !row.overdue_reminder_enabled || !row.due_date || !row.contacts) continue
     const profile = profileMap.get(row.owner_id) ?? null
-    // Show Reminders (migration 044) — see Phase A1's identical gate above.
-    if (profile?.request_reminders_enabled === false) continue
     const zone = row.contacts.time_zone ?? profile?.time_zone ?? null
     if (localHour(zone, now) !== OVERDUE_HOUR) continue
     if (!hasLocalDateTimePassed(zone, row.due_date, row.due_time, now)) continue
@@ -796,7 +795,7 @@ async function handle(request: Request) {
     const { data: moreProfiles } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled'
       )
       .in('id', Array.from(new Set(repeatOwnerIds)))
     for (const p of (moreProfiles ?? []) as ProfileRow[]) profileMap.set(p.id, p)

@@ -2741,6 +2741,69 @@ link is built only after the stack is proven on Add Contact.
   updated cost/revenue model (below) and PRD follow-up. **No mockup** —
   `AccountForm.tsx` has never had one; flagged in `design/README.md`, not
   silently skipped. `npx tsc --noEmit`/`npm run lint` clean.
+- **Subscribe page mockup drafted; Stripe chosen over Paddle; Show Reminders
+  rewritten to a pure UI-visibility toggle, sending fully decoupled from it
+  — migration 045 confirmed run by the owner, 2026-08-25.** Jim asked which
+  hosted checkout to use for a $17.95 purchase (worked with WooCommerce
+  before); researched Stripe (2.9% + $0.30/charge, +0.7% for Billing/
+  auto-renewal) vs. Paddle (flat 5% + $0.50, bundles merchant-of-record tax
+  handling) and recommended Stripe given Jim's own stated preference to
+  avoid tax/renewal complexity — he agreed the same day. New
+  `design/screens/WYP_subscribe_palette1.html` (§6.45 PROPOSED, mockup
+  only, no live route) — first draft drew a raw card-entry form, flagged
+  as putting WYP in PCI DSS scope; same-day revision replaced it with a
+  single `.checkrow` ("Subscribe now") under the same "Payment Method"
+  heading per Jim's own instruction, swap for a real Stripe Checkout/
+  Payment Element redirect once his corporation/bank account are ready —
+  never a custom card form. Reuses `AccountForm.tsx`'s own `BecomeSubscriberPromo`
+  copy verbatim (`.promo`/`.planrow`) so the two screens never diverge.
+  **Same-day wording fix**: the What's-included bullet for storage dropped
+  "included" and switched to the same em-dash separator every other bullet
+  uses ("5&nbsp;GB of storage &#8212; for attachments..."), applied to both
+  `AccountForm.tsx`'s `BecomeSubscriberPromo` and this mockup.
+  **Separately the same day — Show Reminders rewritten wording +
+  decoupled from sending, migration 045.** Jim rewrote both "Show
+  Reminders" checknotes (Request Options and ToDo Options) to near-verbatim
+  new text ending "Without regard to whether Reminders are shown, Reminders
+  are sent as indicated with Default (Day before / Day of / Day after)
+  settings. Off by default," and asked to "align the Reminder sending
+  actions and default settings accordingly." Two real behavior changes
+  followed from that one sentence, not just a wording edit: (1)
+  `app/api/cron/tick/route.ts`'s Request Phases A1/A1b/B and ToDo Phases
+  A2/A2b/A3 had each been AND-gated on `request_reminders_enabled`/
+  `todo_reminders_enabled` (the account-level Show Reminders flags) since
+  migration 044 (Request side) and 2026-08-22 (ToDo side) — **all six gates
+  removed**. Sending now depends solely on each row's own
+  `reminder_enabled`/`reminder_day_of_enabled`/`overdue_reminder_enabled`
+  columns, pre-filled from the owner's Default settings
+  (`request_reminder_default_*`/`todo_reminder_default_*`, migration 044)
+  at creation time regardless of whether the banner was ever shown —
+  verified `CreateRequestForm.tsx`'s own pre-fill effect already writes
+  these unconditionally, independent of the `requestRemindersEnabled` state
+  that only gates `reminderBanner()`'s render, so no change was needed
+  there beyond the default-value fix below. `todo_dates_enabled` stays as
+  the ToDo phases' one remaining gate — a data-availability check (a ToDo's
+  Due Date column has no meaning without it), not a visibility gate, so it
+  was kept. (2) `profiles.request_reminders_enabled`'s own column default
+  flips true -> false (migration 045) to match "Off by default" — ToDo's
+  own `todo_reminders_enabled` was already false by default (migration
+  041), unchanged. Existing rows are unaffected, only new signups; every
+  `?? true` fallback reading this column client-side
+  (`AccountForm.tsx`/`CreateRequestForm.tsx`/`RequestDetailForm.tsx`) was
+  updated to `?? false` to match, and the two
+  `owner_request_reminders_enabled` coalesce-if-null fallbacks inside
+  `get_request_by_token`/`get_received_request` (migration 044) were
+  updated `true` -> `false` for the same edge-case-only reasoning
+  migration 044's own header gave for `owner_request_time_enabled`'s
+  identical pattern. **Separate wording addition, same message**: each of
+  the four Day Of/Day After Default checknotes (Request and ToDo) gained
+  "Changing this setting never affects anything already created." — Jim's
+  own instruction; previously only the two Day Before notes had it. `npx
+  tsc --noEmit`/`npm run lint` clean. No mockup updated — none of the six
+  Reminders-until-Done screens' static HTML models the banner or the
+  Account Options screen at all (unchanged from every earlier entry in
+  this family). See the decisions log's 2026-08-25 entry for the full
+  write-up.
 - **Cost/revenue model updated in place with the new subscriber pricing
   (2026-08-24, `docs/WYP_Hosting_Cost_Crossover_Model.xlsx`).** Jim asked
   to re-run the PRD §8.2/§11.3 cost/revenue estimates against his new

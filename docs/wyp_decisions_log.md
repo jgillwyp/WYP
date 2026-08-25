@@ -6,6 +6,132 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-25 — Show Reminders rewritten to a pure UI-visibility toggle, sending fully decoupled (migration 045); Subscribe What's-included wording fix
+
+Jim pasted exact replacement wording for both "Show Reminders" checknotes
+(Request Options and ToDo Options sections of Account Options) and asked to
+"align the Reminder sending actions and default settings accordingly":
+
+> Request — Show Reminders — Adds a Reminders until Done panel to Create
+> Requests and Request Detail and to your Recipients' response screen with
+> choices to set or change (Day before / Day of / Day after) Reminders.
+> Without regard to whether Reminders are shown, Reminders are sent as
+> indicated with Default (Day before / Day of / Day after) settings. Off by
+> default.
+>
+> ToDo — Show Reminders — Adds a Reminders until Done panel to Create ToDos
+> and ToDo Detail to offer choices for setting or changing (Day before / Day
+> of / Day after) Reminders. Without regard to whether Reminders are shown,
+> Reminders are sent as indicated with Default (Day before / Day of / Day
+> after) settings. Off by default.
+
+This decomposed into a wording change and a real behavior change.
+
+**Wording**: both checknotes in `AccountForm.tsx` now read Jim's text
+near-verbatim (curly apostrophe converted to `&rsquo;`). The ToDo note lost
+its old explanatory clause about depending on Show Due/Done Dates — the
+functional dependency (the checkbox stays disabled with a tooltip until
+`todo_dates_enabled` is on, since a ToDo Reminder has nothing to count days
+from otherwise) was kept as-is, since Jim's instruction was about wording,
+not about removing that gate; flagged here rather than silently dropped,
+since the checknote no longer explains why the control is greyed out.
+
+**Behavior — "without regard to whether Reminders are shown."** Migration
+044 (2026-08-23) had AND-gated `app/api/cron/tick/route.ts`'s Request Phases
+A1 (day-before)/A1b (day-of)/B (day-after) on
+`profiles.request_reminders_enabled`; the ToDo side (Phases A2/A2b/A3) had
+carried the equivalent `todo_reminders_enabled` gate since that toggle's own
+2026-08-22 introduction. All six gates are now removed. Verified by reading
+the actual route before editing, not assumed from memory — each gate was a
+one-line `if (profile?.x === false) continue` (Request) or folded into a
+combined `if (!profile?.todo_dates_enabled || !profile?.x) continue` (ToDo,
+where `todo_dates_enabled` had to stay — a data-availability check, since a
+ToDo's Due Date column is meaningless without it, not a visibility
+preference). Sending now depends solely on each row's own
+`reminder_enabled`/`reminder_day_of_enabled`/`overdue_reminder_enabled`
+columns. Also checked `CreateRequestForm.tsx`'s own mount effect: the
+per-item pre-fill from `request_reminder_default_day_before/day_of/day_after`
+already writes unconditionally to `form` state via a functional
+`setForm((f) => ...)` update, entirely separate from the
+`requestRemindersEnabled` state that only gates whether `reminderBanner()`
+renders — so no code change was needed there, this was already correct by
+construction. Same true of `CreateTodoForm.tsx`'s equivalent effect
+(not re-read in full this batch, but built on the identical pattern in the
+same earlier session — flagged as assumed-correct-by-precedent rather than
+independently re-verified).
+
+**Behavior — "Off by default."** `profiles.request_reminders_enabled`'s own
+column default flips `true` -> `false` (migration 045); `todo_reminders_enabled`
+was already `false` by default (migration 041), unchanged. Existing rows
+are unaffected — Jim's own account keeps whatever value it currently holds
+unless he flips it in Account Options; only brand-new profiles rows get the
+new default. Every client-side `?? true` fallback reading this column was
+updated to `?? false` to match: `AccountForm.tsx` (load effect and the
+`useState` initial value), `CreateRequestForm.tsx` (same two spots),
+`RequestDetailForm.tsx` (same two spots). The two
+`owner_request_reminders_enabled` coalesce-if-null fallbacks inside
+`get_request_by_token`/`get_received_request` (added by migration 044) were
+also flipped `true` -> `false`, for the same edge-case-only reasoning
+migration 044's own header gave for the identical `owner_request_time_enabled`
+pattern — a null only happens if the owner's own profiles row is somehow
+missing, which should never occur in practice. Both functions are
+jsonb-returning, so a plain `create or replace function` was safe (no
+OUT-parameter shape to worry about, per migration 017's own precedent) —
+bodies copied byte-for-byte from migration 044's own text with only the one
+coalesce value changed in each, cross-checked against the actual file
+rather than reconstructed from memory (an initial draft of
+`get_received_request`'s ending guessed at a different `from`/`where` clause
+than the original; caught and corrected before this was written up).
+
+**Separate wording addition, mid-batch, same message from Jim**: "As
+strictly a wording change, the sentence 'Changing this setting never
+affects anything already created.' should be in each Day of and Day after
+setting for both Requests and ToDos. Now it is only in the Day Before."
+Added to all four remaining Default checknotes (Request Day Of, Request Day
+After, ToDo Day Of, ToDo Day After) — now all six Default checknotes across
+both sections carry the identical sentence.
+
+Migration 045 confirmed run by Jim, 2026-08-25. `npx tsc --noEmit`/`npm run
+lint` both clean.
+
+**Same-day follow-up: "Only available once..." restored, and every Account
+Options description now ends with its On/Off-by-default sentence.** Jim:
+"The 'Only available once Show Due/Done Dates above is turned on.' should be
+added back to the ToDo Show Reminders. As narrative, it flows with the
+default setting described within the Option text, but for consistency and
+quick visual access to this information, all of the option descriptions
+should end with the On or Off by default sentence." Two changes: (1) the
+dropped dependency clause is back in the ToDo Show Reminders checknote,
+placed immediately before the final "Off by default." sentence, not after —
+so it doesn't itself become the last sentence. (2) Audited all 14 checkboxes
+in `AccountForm.tsx` for whether "On by default"/"Off by default" was
+already their last sentence; four were not and got reordered (no wording
+dropped, just moved to the end): Show Private Category ("...Off by default —
+turn it on any time." -> "...Turn it on any time. Off by default."), Show
+Due/Done Time ("...Off by default. Turn it on if you want to optionally set
+both the Date and the Time for a Request." -> "...Turn it on if you want to
+optionally set both the Date and the Time for a Request. Off by default."),
+Show Due/Done Dates, ToDo ("...Off by default. Turn it on for more precise
+ToDo tracking. Date created and Date Done are always captured and shown in
+the ToDos list view." -> "...Turn it on for more precise ToDo tracking. Date
+created and Date Done are always captured and shown in the ToDos list view.
+Off by default."), and Subscribed? (testing only) ("...Off by default. This
+status only lasts for the testing period..." -> "...This status only lasts
+for the testing period... Off by default."). The other ten checknotes
+(including both rewritten Show Reminders notes from the earlier entry above)
+already ended this way and needed no change. `npx tsc --noEmit`/`npm run
+lint` clean.
+
+**Same-day, separate small wording fix** — Subscribe mockup's What's-included
+list: "5 GB of storage included for attachments (additional storage
+available at $10 per 5 GB per year)." dropped "included" and switched to the
+same em-dash separator every other bullet already uses ("5 GB of storage —
+for attachments..."), matching `AccountForm.tsx`'s own `BecomeSubscriberPromo`
+copy, which was the same-day source of this bullet's original text. Applied
+to both `AccountForm.tsx` and `design/screens/WYP_subscribe_palette1.html`.
+
+\---
+
 ## 2026-08-24 — AWS Activate Founders-vs-Portfolio question answered; Subscribe page drafted as a mockup
 
 Jim asked two things in one message, both follow-ups to the cost/revenue

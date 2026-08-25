@@ -329,8 +329,9 @@ export default function RequestDetailForm() {
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
   // Show Reminders (migration 044, 2026-08-23) — standalone master toggle
   // for the Reminders-until-Done banner; see AccountForm.tsx and
-  // CreateRequestForm.tsx's identical gate. On by default.
-  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(true)
+  // CreateRequestForm.tsx's identical gate. Default flipped true -> false,
+  // migration 045, 2026-08-25 — see AccountForm.tsx's header comment.
+  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(false)
   // Always show Send Reminder button (migration 044) — when true,
   // sendReminderPanel() below renders even when the Request isn't overdue.
   // Off by default (preserves §6.44's original only-when-overdue behavior).
@@ -669,7 +670,7 @@ export default function RequestDetailForm() {
       setOwnerName(ownerRes.data?.display_name ?? null)
       setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
       setRequestTimeEnabled(ownerRes.data?.request_time_enabled ?? true)
-      setRequestRemindersEnabled(ownerRes.data?.request_reminders_enabled ?? true)
+      setRequestRemindersEnabled(ownerRes.data?.request_reminders_enabled ?? false)
       setAlwaysShowSendReminder(ownerRes.data?.always_show_send_reminder ?? false)
       setTier(ownerRes.data?.tier === 'subscriber' ? 'subscriber' : 'free')
 

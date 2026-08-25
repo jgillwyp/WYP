@@ -337,16 +337,18 @@ export default function CreateRequestForm() {
   // pre-existing behavior being made optional, not a new feature starting
   // closed. When off, the Due row below collapses to just Due Date.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
-  // Show Reminders is now an opt-in-off (default true) account preference
-  // too (migration 044, 2026-08-23) — see AccountForm.tsx. On by default,
-  // same reasoning as requestTimeEnabled above: pre-existing behavior being
-  // made optional, not a new feature starting closed. Standalone, not
-  // gated on requestTimeEnabled. When off, the Reminders-until-Done banner
-  // is hidden entirely (the per-item checkboxes still exist in form state
-  // at whatever their pre-filled default was, same as todo_reminders_
-  // enabled's own established precedent — cron/tick/route.ts's Phase A1/
-  // A1b/B are what actually gate sending, not this screen).
-  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(true)
+  // Show Reminders — profiles.request_reminders_enabled (migration 044,
+  // 2026-08-23), pure UI-visibility toggle for the Reminders-until-Done
+  // banner. Default flipped true -> false, migration 045, 2026-08-25, per
+  // Jim's own rewritten AccountForm.tsx wording ("Off by default."; see
+  // that file's own header comment for the full write-up). Standalone,
+  // not gated on requestTimeEnabled. When off, the banner is hidden
+  // entirely but the per-item checkboxes still exist in form state at
+  // whatever their pre-filled default was (set unconditionally by the
+  // effect below, regardless of this flag) — cron/tick/route.ts's Phase
+  // A1/A1b/B read only those per-item columns, never this one, so sending
+  // is unaffected either way.
+  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -556,7 +558,7 @@ export default function CreateRequestForm() {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.private_category_enabled ?? false)
         setRequestTimeEnabled(data?.request_time_enabled ?? true)
-        setRequestRemindersEnabled(data?.request_reminders_enabled ?? true)
+        setRequestRemindersEnabled(data?.request_reminders_enabled ?? false)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
         // Reminders-until-Done defaults (migration 044, split from the
         // shared reminder_default_day_before/day_of/day_after trio,

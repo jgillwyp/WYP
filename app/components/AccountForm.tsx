@@ -107,20 +107,33 @@ import { supabase } from '@/lib/supabaseClient'
  * request_reminder_default_day_before/day_of/day_after /
  * todo_reminder_default_day_before/day_of/day_after (migration 044,
  * 2026-08-23) — Jim's own mockup, three changes:
- *   1. "Show Reminders" (Request Options) — a new master toggle for
- *      whether the Reminders-until-Done banner appears at all on the
- *      Request side. Defaults true (preserves existing live behavior —
- *      Jim's mockup checkbox states were "copies of what some settings
- *      were," not a specification of new-column defaults, confirmed on
- *      follow-up). Standalone, not gated on Show Due/Done Time — Jim's own
- *      mockup note text had referenced a "Show Due/Done Dates (Requests)"
- *      toggle that doesn't exist (Requests always have a required Due
- *      Date), flagged before this was built, and Jim confirmed standalone.
- *      Also gates the two recipient-facing screens via
- *      owner_request_reminders_enabled (migration 044) — confirmed via
- *      direct follow-up, consistent with the "rights come from the
- *      issuer" Entitlements rule this file's own comments above already
- *      describe for owner_request_time_enabled/owner_tier.
+ *   1. "Show Reminders" (Request Options) — a master toggle for whether
+ *      the Reminders-until-Done banner appears at all on the Request
+ *      side. Originally defaulted true and, per migration 044's own
+ *      comment at the time, also AND-gated actual sending in
+ *      app/api/cron/tick/route.ts. **Both changed 2026-08-25 (migration
+ *      045), per Jim's own rewritten wording**: "Without regard to
+ *      whether Reminders are shown, Reminders are sent as indicated with
+ *      Default (Day before / Day of / Day after) settings. Off by
+ *      default." Show Reminders (and its ToDo-side counterpart,
+ *      todo_reminders_enabled) is now a pure UI-visibility toggle for the
+ *      banner only — sending in cron/tick/route.ts depends solely on each
+ *      row's own reminder_enabled/reminder_day_of_enabled/
+ *      overdue_reminder_enabled columns, which are pre-filled from the
+ *      Default settings below at creation time regardless of whether the
+ *      banner was ever shown. ToDo's own todo_reminders_enabled was
+ *      already false by default (migration 041); Request's own default
+ *      flipped true -> false (migration 045) to match "Off by default."
+ *      Standalone, not gated on Show Due/Done Time — Jim's own mockup note
+ *      text had referenced a "Show Due/Done Dates (Requests)" toggle that
+ *      doesn't exist (Requests always have a required Due Date), flagged
+ *      before this was built, and Jim confirmed standalone. Still gates
+ *      the two recipient-facing screens' *banner visibility* via
+ *      owner_request_reminders_enabled (migration 044) — consistent with
+ *      the "rights come from the issuer" Entitlements rule this file's own
+ *      comments above already describe for owner_request_time_enabled/
+ *      owner_tier — but, as of 2026-08-25, no longer affects whether the
+ *      issuer's own Reminders actually go out.
  *   2. "Always show Send Reminder button" (Request Options) — Jim's own
  *      new mockup item, defaults false (preserves the existing
  *      only-when-overdue behavior, §6.44). Read only by
@@ -131,7 +144,10 @@ import { supabase } from '@/lib/supabaseClient'
  *      before reminder and ToDos are best for me with a day of reminder,"
  *      which the old shared trio couldn't express. Same defaults as
  *      before the split (day before true, day of/day after false), just
- *      doubled and independently adjustable.
+ *      doubled and independently adjustable. Each of the six checknotes
+ *      now reads "Changing this setting never affects anything already
+ *      created." (2026-08-25, Jim's own instruction — originally present
+ *      only on the two Day Before notes; now on Day Of/Day After too).
  */
 export default function AccountForm() {
   const router = useRouter()
@@ -159,9 +175,12 @@ export default function AccountForm() {
   const [reminderDigestEnabled, setReminderDigestEnabled] = useState(false)
   // profiles.request_reminders_enabled (migration 044, 2026-08-23) —
   // standalone master toggle for the Request-side Reminders-until-Done
-  // banner; see the file-level comment. Default true — read once on
-  // mount, matching every other toggle in this file.
-  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(true)
+  // banner; see the file-level comment. Originally defaulted true
+  // (preserved existing live behavior at the time). Default flipped to
+  // false, migration 045, 2026-08-25, per Jim's own rewritten checknote
+  // wording ("Off by default.") — existing rows are unaffected, only new
+  // signups.
+  const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(false)
   // profiles.always_show_send_reminder (migration 044) — see the
   // file-level comment. Default false.
   const [alwaysShowSendReminder, setAlwaysShowSendReminder] = useState(false)
@@ -241,7 +260,7 @@ export default function AccountForm() {
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
       setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
       setReminderDigestEnabled(data?.reminder_digest_enabled ?? false)
-      setRequestRemindersEnabled(data?.request_reminders_enabled ?? true)
+      setRequestRemindersEnabled(data?.request_reminders_enabled ?? false)
       setAlwaysShowSendReminder(data?.always_show_send_reminder ?? false)
       setRequestReminderDefaultDayBefore(data?.request_reminder_default_day_before ?? true)
       setRequestReminderDefaultDayOf(data?.request_reminder_default_day_of ?? false)
@@ -438,8 +457,8 @@ export default function AccountForm() {
                     Show Private Category
                     <span className="checknote">
                       Adds an optional Category field to Requests and ToDos, for your own
-                      private labeling (e.g. &ldquo;Personal Fin,&rdquo; &ldquo;Future Dev&rdquo;). Off by
-                      default — turn it on any time.
+                      private labeling (e.g. &ldquo;Personal Fin,&rdquo; &ldquo;Future Dev&rdquo;). Turn it
+                      on any time. Off by default.
                     </span>
                   </span>
                 </label>
@@ -484,8 +503,8 @@ export default function AccountForm() {
                     Show Due/Done Time
                     <span className="checknote">
                       Adds a Due Time and Done Time next to a Request&rsquo;s Due Date and Done
-                      Date, for you and whoever you send it to. Off by default. Turn it on
-                      if you want to optionally set both the Date and the Time for a Request.
+                      Date, for you and whoever you send it to. Turn it on if you want to
+                      optionally set both the Date and the Time for a Request. Off by default.
                     </span>
                   </span>
                 </label>
@@ -521,11 +540,11 @@ export default function AccountForm() {
                   <span className="checktext">
                     Show Reminders
                     <span className="checknote">
-                      Adds a Reminders until Done panel (Day before / Day of / Day after) to
-                      Create Requests and Request Detail, and to your Recipients&rsquo; own
-                      response screens. On by default, since Reminders are already part of
-                      every Request — turn it off if you&rsquo;d rather send Reminders manually
-                      with the Send Reminder button above.
+                      Adds a Reminders until Done panel to Create Requests and Request Detail
+                      and to your Recipients&rsquo; response screen with choices to set or
+                      change (Day before / Day of / Day after) Reminders. Without regard to
+                      whether Reminders are shown, Reminders are sent as indicated with
+                      Default (Day before / Day of / Day after) settings. Off by default.
                     </span>
                   </span>
                 </label>
@@ -570,7 +589,8 @@ export default function AccountForm() {
                     Default: Day Of Reminder
                     <span className="checknote">
                       Pre-fills the &ldquo;Day of&rdquo; Reminder checkbox when you create a new
-                      Request. You can still change it per item. Off by default.
+                      Request. You can still change it per item. Changing this setting
+                      never affects anything already created. Off by default.
                     </span>
                   </span>
                 </label>
@@ -592,7 +612,8 @@ export default function AccountForm() {
                     Default: Day After Reminder
                     <span className="checknote">
                       Pre-fills the &ldquo;Day after&rdquo; Reminder checkbox when you create a
-                      new Request. You can still change it per item. Off by default.
+                      new Request. You can still change it per item. Changing this setting
+                      never affects anything already created. Off by default.
                     </span>
                   </span>
                 </label>
@@ -618,9 +639,9 @@ export default function AccountForm() {
                     Show Due/Done Dates
                     <span className="checknote">
                       Adds Due Date and Done Date for creating and editing ToDos instead of
-                      just a Status of Open and Done. Off by default. Turn it on for more
-                      precise ToDo tracking. Date created and Date Done are always captured
-                      and shown in the ToDos list view.
+                      just a Status of Open and Done. Turn it on for more precise ToDo
+                      tracking. Date created and Date Done are always captured and shown in
+                      the ToDos list view. Off by default.
                     </span>
                   </span>
                 </label>
@@ -640,11 +661,12 @@ export default function AccountForm() {
                   <span className="checktext">
                     Show Reminders
                     <span className="checknote">
-                      Adds a Reminders until Done panel (Day before / Day of / Day after)
-                      to Create ToDo and ToDo Detail, same as a Request&rsquo;s own Reminders.
-                      Sent to your own account email — a ToDo has no recipient. Off by
-                      default, and only available once Show Due/Done Dates above is
-                      turned on.
+                      Adds a Reminders until Done panel to Create ToDos and ToDo Detail to
+                      offer choices for setting or changing (Day before / Day of / Day
+                      after) Reminders. Without regard to whether Reminders are shown,
+                      Reminders are sent as indicated with Default (Day before / Day of /
+                      Day after) settings. Only available once Show Due/Done Dates above
+                      is turned on. Off by default.
                     </span>
                   </span>
                 </label>
@@ -689,7 +711,8 @@ export default function AccountForm() {
                     Default: Day Of Reminder
                     <span className="checknote">
                       Pre-fills the &ldquo;Day of&rdquo; Reminder checkbox when you create a new
-                      ToDo. You can still change it per item. Off by default.
+                      ToDo. You can still change it per item. Changing this setting never
+                      affects anything already created. Off by default.
                     </span>
                   </span>
                 </label>
@@ -711,7 +734,8 @@ export default function AccountForm() {
                     Default: Day After Reminder
                     <span className="checknote">
                       Pre-fills the &ldquo;Day after&rdquo; Reminder checkbox when you create a
-                      new ToDo. You can still change it per item. Off by default.
+                      new ToDo. You can still change it per item. Changing this setting
+                      never affects anything already created. Off by default.
                     </span>
                   </span>
                 </label>
@@ -750,9 +774,9 @@ export default function AccountForm() {
                       Subscribed? (testing only)
                       <span className="checknote">
                         Sets your account to the Subscriber tier so subscriber-only features
-                        like Attachments can be tested. Off by default. This status only
-                        lasts for the testing period — once testing ends, this checkbox goes
-                        away and you would subscribe for real, through the button above.
+                        like Attachments can be tested. This status only lasts for the
+                        testing period — once testing ends, this checkbox goes away and you
+                        would subscribe for real, through the button above. Off by default.
                       </span>
                     </span>
                   </label>
@@ -806,7 +830,7 @@ function BecomeSubscriberPromo() {
           with your Requests and Responses.
         </li>
         <li>
-          <strong>5 GB of storage included</strong> for attachments (additional storage
+          <strong>5 GB of storage</strong> — for attachments (additional storage
           available at $10 per 5 GB per year).
         </li>
         <li>
