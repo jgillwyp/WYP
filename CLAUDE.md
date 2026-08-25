@@ -2847,3 +2847,35 @@ link is built only after the stack is proven on Add Contact.
   rather than silently decided. See the decisions log's 2026-08-24 entry
   for the full pricing inputs, assumptions, and computed results across
   all five tiers.
+- **Main Screen ad banner now gated by subscription tier; Archive gains a
+  full UnArchive action — migration 046 confirmed run by Jim, 2026-08-25.**
+  Jim: the `.adslot` ("AD — 320×50 RESERVED") on Main
+  Screen "is not being gated by the Subscription status," plus a pasted
+  mockup asking for an UnArchive action on `/archive` with the band's "xx
+  Selected" button reflecting Archive vs. UnArchive. `MainScreen.tsx` had no
+  tier-awareness anywhere — added a `tier` state (read off the same
+  `profiles` round trip as `categoriesEnabled`/etc., no extra query) and
+  wrapped `.adslot` in `tier !== 'subscriber'`; `.subbanner` stays
+  unconditional, unaffected by the report. `ArchiveForm.tsx` gained a new
+  `action` state (`'archive' | 'unarchive'`, `ARCHIVE_ACTION_KEY`
+  sessionStorage-persisted like `currentType` — survives a fresh visit,
+  unlike the filter/selection state) and a new Action chip row above Record
+  Type, reusing the existing `.archtyperow` classes verbatim. The `rows`
+  useMemo's candidate filter, `LIST_TITLE` (split into
+  `LIST_TITLE_ARCHIVE`/`LIST_TITLE_UNARCHIVE`, consumed through one
+  `listTitle` variable), the instruction paragraph, both empty-state
+  messages, and the band button label are all now action-aware.
+  `handleArchiveSelected` renamed `handleActionSelected`: Sent/ToDos'
+  `archived_at` is already plain-RLS-writable either direction (no new SQL
+  needed for UnArchive there); Received goes through new
+  `unarchive_received_request()` (**migration 046**), a direct mirror of
+  `archive_received_request()` (migration 028) with `received_archived_at`
+  set to `null` instead of `now()` — its body was copied verbatim from
+  migration 028's actual text (grepped fresh, not recalled from memory)
+  after an earlier same-session incident where a guessed function body
+  drifted from the original. UnArchive now works end to end for all three
+  Record Types, Received included. No mockup updated —
+  `design/screens/WYP_archive_palette1.html` still shows the original
+  Archive-only flow; flagged in `design/README.md`. `npx tsc --noEmit`/`npm
+  run lint` clean. See the decisions log's 2026-08-25 entry for the full
+  write-up.

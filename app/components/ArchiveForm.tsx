@@ -65,10 +65,26 @@ import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
  * affordance (openPicker, 2026-08-11) — flagged as a deliberate, scoped
  * exception, not a retroactive app-wide change to the other 14 fields.
  *
- * Un-Archive is out of scope this batch (owner, 2026-08-14: "I did not
- * tackle an 'Un-Archive' feature - that can be done later") — no reverse
- * action exists yet; an archived record simply drops out of this screen's
- * own eligible list once archived_at/received_archived_at is set.
+ * UnArchive is now Live (2026-08-25, migration 046) — supersedes the
+ * "out of scope" note that used to be here (owner, 2026-08-14: "I did not
+ * tackle an 'Un-Archive' feature - that can be done later"; that "later" is
+ * this batch). Jim pasted a mockup: a new Action chip row (Archive /
+ * UnArchive) above the existing Record Type row, band button text
+ * following suit ("Archive Selected (N)" / "UnArchive Selected (N)").
+ * `action` state, persisted like currentType (ARCHIVE_ACTION_KEY,
+ * sessionStorage, survives a fresh visit — not reset the way filters/
+ * selection are, same reasoning as Record Type: it's "which mode am I in,"
+ * not a per-search filter). Archive mode's candidate filter is unchanged
+ * (Done and NOT yet archived); UnArchive mode is its mirror (archived,
+ * regardless of the done_date check — an archived row can only exist if it
+ * was Done at the time, so this is belt-and-suspenders, not a new
+ * requirement). Sent/ToDos' own archived_at is already plain-RLS-writable
+ * either direction, so UnArchive there is just `.update({archived_at:
+ * null})`, no new function. Received goes through the new
+ * unarchive_received_request() (migration 046), a direct mirror of
+ * archive_received_request() (migration 028) with received_archived_at set
+ * to null instead of now(). LIST_TITLE/instruction text/empty-state text/
+ * print title are all action-aware now — see listTitle below.
  *
  * Print (2026-08-15) reuses Main Screen's own detailed print-report layout
  * verbatim — full Dialog thread, full Attachments/Locations list per
@@ -452,10 +468,18 @@ const ARCHIVE_TODO_SORT_KEY = 'wyp.archiveTodoSort'
 
 const NOUN: Record<RecordType, string | null> = { sent: 'Recipient', received: 'Requestor', todos: null }
 const COL: Record<RecordType, string | null> = { sent: 'To', received: 'From', todos: null }
-const LIST_TITLE: Record<RecordType, string> = {
+// Two maps, not one — Archive mode lists eligible-but-not-yet-archived
+// (Done) records; UnArchive mode lists already-archived ones. See
+// listTitle below, computed from `action`.
+const LIST_TITLE_ARCHIVE: Record<RecordType, string> = {
   sent: 'Sent Requests (Done)',
   received: 'Received Requests (Done)',
   todos: 'ToDos (Done)',
+}
+const LIST_TITLE_UNARCHIVE: Record<RecordType, string> = {
+  sent: 'Sent Requests (Archived)',
+  received: 'Received Requests (Archived)',
+  todos: 'ToDos (Archived)',
 }
 const DETAIL_LABEL: Record<RecordType, string> = {
   sent: 'Request Detail',
@@ -497,15 +521,27 @@ const DETAIL_LABEL: Record<RecordType, string> = {
 // about the filter fields and selection only, and an empty filter already
 // shows nothing regardless of which Record Type chip is active.
 const ARCHIVE_TYPE_KEY = 'wyp.archiveType'
+const ARCHIVE_ACTION_KEY = 'wyp.archiveAction'
 const ARCHIVE_QUERY_KEY = 'wyp.archiveRecipientQuery'
 const ARCHIVE_BEFORE_KEY = 'wyp.archiveBeforeDone'
 const ARCHIVE_DESELECTED_KEY = 'wyp.archiveDeselected'
 const ARCHIVE_ROUNDTRIP_KEY = 'wyp.archiveDetailRoundTrip'
 
+// UnArchive (2026-08-25, migration 046) — same "which mode am I in, not a
+// filter" reasoning and persistence shape as RecordType/readStoredType just
+// above.
+type ArchiveAction = 'archive' | 'unarchive'
+
 function readStoredType(): RecordType {
   if (typeof window === 'undefined') return 'sent'
   const v = window.sessionStorage.getItem(ARCHIVE_TYPE_KEY)
   return v === 'sent' || v === 'received' || v === 'todos' ? v : 'sent'
+}
+
+function readStoredAction(): ArchiveAction {
+  if (typeof window === 'undefined') return 'archive'
+  const v = window.sessionStorage.getItem(ARCHIVE_ACTION_KEY)
+  return v === 'archive' || v === 'unarchive' ? v : 'archive'
 }
 
 function readStoredString(key: string): string {
@@ -593,6 +629,7 @@ export default function ArchiveForm() {
   }, [])
 
   const [currentType, setCurrentType] = useState<RecordType>(readStoredType)
+  const [action, setAction] = useState<ArchiveAction>(readStoredAction)
   const [recipientQuery, setRecipientQuery] = useState(() =>
     isArchiveRoundTrip() ? readStoredString(ARCHIVE_QUERY_KEY) : ''
   )
@@ -609,6 +646,10 @@ export default function ArchiveForm() {
   useEffect(() => {
     window.sessionStorage.setItem(ARCHIVE_TYPE_KEY, currentType)
   }, [currentType])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(ARCHIVE_ACTION_KEY, action)
+  }, [action])
 
   useEffect(() => {
     window.sessionStorage.setItem(ARCHIVE_QUERY_KEY, recipientQuery)
@@ -751,7 +792,7 @@ export default function ArchiveForm() {
   const rows: Row[] = useMemo(() => {
     if (currentType === 'sent') {
       return sentData
-        .filter((r) => r.done_date && !r.archived_at)
+        .filter((r) => (action === 'archive' ? r.done_date && !r.archived_at : !!r.archived_at))
         .map((r) => ({
           id: r.id,
           name: r.contacts?.display_name ?? null,
@@ -772,7 +813,7 @@ export default function ArchiveForm() {
     }
     if (currentType === 'received') {
       return receivedData
-        .filter((r) => r.done_date && !r.received_archived_at)
+        .filter((r) => (action === 'archive' ? r.done_date && !r.received_archived_at : !!r.received_archived_at))
         .map((r) => ({
           id: r.id,
           name: r.owner_name ?? null,
@@ -796,7 +837,7 @@ export default function ArchiveForm() {
     // Done layout, so the same Row fields Sent/Received already use for
     // sorting/display carry ToDo's created_at/due_date too.
     return todoData
-      .filter((t) => t.done_date && !t.archived_at)
+      .filter((t) => (action === 'archive' ? t.done_date && !t.archived_at : !!t.archived_at))
       .map((t) => ({
         id: t.id,
         name: null,
@@ -814,9 +855,13 @@ export default function ArchiveForm() {
         attachmentCount: 0,
         repeatRule: t.repeat_rule,
       }))
-  }, [currentType, sentData, receivedData, todoData])
+  }, [currentType, action, sentData, receivedData, todoData])
 
   const noun = NOUN[currentType]
+  // listTitle (2026-08-25) — action-aware replacement for the old single
+  // LIST_TITLE[currentType] lookup, now split into LIST_TITLE_ARCHIVE/
+  // LIST_TITLE_UNARCHIVE (see those constants' own comment above).
+  const listTitle = action === 'archive' ? LIST_TITLE_ARCHIVE[currentType] : LIST_TITLE_UNARCHIVE[currentType]
   const query = recipientQuery.trim()
   const noFilters = currentType === 'todos' ? beforeDone === '' : query === '' && beforeDone === ''
 
@@ -945,6 +990,17 @@ export default function ArchiveForm() {
     setArchiveError(null)
   }
 
+  // selectAction (2026-08-25) — mirrors selectType's own reset shape
+  // exactly (confirmMessage/archiveError are stale action feedback the
+  // moment the candidate list underneath changes; filters/selection are
+  // deliberately left alone, same "not a filter" reasoning selectType's own
+  // comment above already gives for Record Type).
+  function selectAction(next: ArchiveAction) {
+    setAction(next)
+    setConfirmMessage(null)
+    setArchiveError(null)
+  }
+
   function toggleChecked(id: string, checked: boolean) {
     setDeselected((prev) => {
       const next = new Set(prev[currentType])
@@ -979,20 +1035,28 @@ export default function ArchiveForm() {
     return () => window.removeEventListener('afterprint', handleAfterPrint)
   }, [printTick])
 
-  async function handleArchiveSelected() {
-    const toArchive = matches.filter((r) => !currentDeselected.has(r.id))
-    if (toArchive.length === 0) return // nothing checked — quiet no-op
+  // handleActionSelected (renamed from handleArchiveSelected, 2026-08-25) —
+  // branches on `action`. Archive keeps every rule/message this function
+  // already had; UnArchive is its direct mirror — Sent/ToDos write
+  // archived_at back to null directly (plain-RLS-writable either
+  // direction, same as the Archive-side write), Received calls the new
+  // unarchive_received_request() (migration 046) instead of
+  // archive_received_request(). Both branches share the same
+  // deselected-cleanup and setArchiving/setArchiveError shape.
+  async function handleActionSelected() {
+    const toAct = matches.filter((r) => !currentDeselected.has(r.id))
+    if (toAct.length === 0) return // nothing checked — quiet no-op
 
     setArchiving(true)
     setArchiveError(null)
 
-    const ids = toArchive.map((r) => r.id)
+    const ids = toAct.map((r) => r.id)
+    const isArchive = action === 'archive'
     const nowIso = new Date().toISOString()
 
     if (currentType === 'received') {
-      const results = await Promise.all(
-        ids.map((id) => supabase.rpc('archive_received_request', { p_request_id: id }))
-      )
+      const rpcName = isArchive ? 'archive_received_request' : 'unarchive_received_request'
+      const results = await Promise.all(ids.map((id) => supabase.rpc(rpcName, { p_request_id: id })))
       const failed = results.find((r) => r.error)
       if (failed?.error) {
         setArchiving(false)
@@ -1000,12 +1064,14 @@ export default function ArchiveForm() {
         return
       }
       setReceivedData((prev) =>
-        prev.map((r) => (ids.includes(r.id) ? { ...r, received_archived_at: nowIso } : r))
+        prev.map((r) =>
+          ids.includes(r.id) ? { ...r, received_archived_at: isArchive ? nowIso : null } : r
+        )
       )
     } else {
       const { error: updateError } = await supabase
         .from('requests')
-        .update({ archived_at: nowIso })
+        .update({ archived_at: isArchive ? nowIso : null })
         .in('id', ids)
 
       if (updateError) {
@@ -1013,23 +1079,27 @@ export default function ArchiveForm() {
         setArchiveError(updateError.message)
         return
       }
+      const patch = { archived_at: isArchive ? nowIso : null }
       if (currentType === 'sent') {
-        setSentData((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, archived_at: nowIso } : r)))
+        setSentData((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, ...patch } : r)))
       } else {
-        setTodoData((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, archived_at: nowIso } : r)))
+        setTodoData((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, ...patch } : r)))
       }
     }
 
     setDeselected((prev) => {
       const next = new Set(prev[currentType])
-      ids.forEach((id) => next.delete(id)) // no longer meaningful once archived
+      ids.forEach((id) => next.delete(id)) // no longer meaningful once acted on
       return { ...prev, [currentType]: next }
     })
 
     setArchiving(false)
     setConfirmMessage(
-      `${toArchive.length} ${toArchive.length === 1 ? 'record' : 'records'} archived. ` +
-      'No longer shown here or on the Main Screen — still included when a Search is done.'
+      isArchive
+        ? `${toAct.length} ${toAct.length === 1 ? 'record' : 'records'} archived. ` +
+          'No longer shown here or on the Main Screen — still included when a Search is done.'
+        : `${toAct.length} ${toAct.length === 1 ? 'record' : 'records'} un-archived. ` +
+          'Shown again here and on the Main Screen.'
     )
   }
 
@@ -1090,8 +1160,10 @@ export default function ArchiveForm() {
         <div className="band">
           <span className="glabel">Archive</span>
           <span className="bandcluster">
-            <button className="btn" type="button" onClick={handleArchiveSelected} disabled={archiving}>
-              {selectedCount > 0 ? `Archive Selected (${selectedCount})` : 'Archive Selected'}
+            <button className="btn" type="button" onClick={handleActionSelected} disabled={archiving}>
+              {selectedCount > 0
+                ? `${action === 'archive' ? 'Archive' : 'UnArchive'} Selected (${selectedCount})`
+                : `${action === 'archive' ? 'Archive' : 'UnArchive'} Selected`}
             </button>
             <button className="btn-secondary" type="button" onClick={() => router.push('/')}>
               Close
@@ -1100,6 +1172,26 @@ export default function ArchiveForm() {
         </div>
 
         <div className="scroll">
+          <div className="archtyperow">
+            <span className="archtypelabel">Action</span>
+            <div className="archtypechips">
+              <button
+                className={`chip${action === 'archive' ? ' sel' : ''}`}
+                type="button"
+                onClick={() => selectAction('archive')}
+              >
+                Archive
+              </button>
+              <button
+                className={`chip${action === 'unarchive' ? ' sel' : ''}`}
+                type="button"
+                onClick={() => selectAction('unarchive')}
+              >
+                UnArchive
+              </button>
+            </div>
+          </div>
+
           <div className="archtyperow">
             <span className="archtypelabel">Record Type</span>
             <div className="archtypechips">
@@ -1129,12 +1221,17 @@ export default function ArchiveForm() {
 
           <p className="archnote">
             <b>
-              {currentType === 'todos'
-                ? 'Select records to Archive by the Before Done Date.'
-                : `Select records to Archive by ${noun} and/or Before Done Date.`}
+              {action === 'archive'
+                ? currentType === 'todos'
+                  ? 'Select records to Archive by the Before Done Date.'
+                  : `Select records to Archive by ${noun} and/or Before Done Date.`
+                : currentType === 'todos'
+                  ? 'Select records to UnArchive by the Before Done Date.'
+                  : `Select records to UnArchive by ${noun} and/or Before Done Date.`}
             </b>{' '}
-            You can uncheck any you do not want to Archive. Although Archived records are no longer displayed,
-            they are included when a Search is done.
+            {action === 'archive'
+              ? 'You can uncheck any you do not want to Archive. Although Archived records are no longer displayed, they are included when a Search is done.'
+              : 'You can uncheck any you do not want to UnArchive. UnArchived records are shown again here and on the Main Screen.'}
           </p>
 
           {archiveError && (
@@ -1261,7 +1358,7 @@ export default function ArchiveForm() {
               control this screen needs; this one was a confusing, broken
               duplicate, not a second intentional entry point. */}
           <div className="band" style={{ marginTop: 0 }}>
-            <span className="glabel" style={{ fontSize: 17 }}>{LIST_TITLE[currentType]}</span>
+            <span className="glabel" style={{ fontSize: 17 }}>{listTitle}</span>
           </div>
 
           <div style={{ padding: '8px var(--pad) 0' }}>
@@ -1373,10 +1470,12 @@ export default function ArchiveForm() {
             {noFilters && (
               <p className="subempty">
                 Enter {currentType === 'todos' ? 'a Before Done Date' : `${noun} and/or a Before Done Date`} above to
-                see eligible records.
+                see {action === 'archive' ? 'eligible' : 'archived'} records.
               </p>
             )}
-            {!noFilters && matches.length === 0 && <p className="subempty">No Done records match.</p>}
+            {!noFilters && matches.length === 0 && (
+              <p className="subempty">{action === 'archive' ? 'No Done records match.' : 'No Archived records match.'}</p>
+            )}
             {!noFilters &&
               sortedMatches.map((r) => {
                 const checked = !currentDeselected.has(r.id)
@@ -1485,7 +1584,7 @@ export default function ArchiveForm() {
           printGeneratedAt state further up this file. */}
       {showPrint && (
         <div className="print-report">
-          <div className="ptitle">{LIST_TITLE[currentType]}</div>
+          <div className="ptitle">{listTitle}</div>
           <div className="pcriteria">
             <b>Selection Criteria:</b> {criteriaText}
           </div>

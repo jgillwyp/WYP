@@ -2830,3 +2830,99 @@ commit;
 --   still see its Default settings pre-fill new Requests'/ToDos' per-item
 --   checkboxes even while the banner itself stays hidden.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 046 — unarchive_received_request()
+--
+-- Jim, 2026-08-25, pasting a mockup: the Archive screen (/archive) should
+-- support an UnArchive action alongside its existing Archive one, with a new
+-- Action chip row (Archive / UnArchive) above the existing Record Type row,
+-- and the "xx Selected" band button reading "Archive Selected (N)" or
+-- "UnArchive Selected (N)" to match. Un-Archive had been explicitly deferred
+-- when Archive first shipped (migration 028's own header: "I did not tackle
+-- an 'Un-Archive' feature - that can be done later" — that "later" is now).
+--
+-- Sent and ToDos need no new function — requests.archived_at is already
+-- plain-RLS-writable by the row's own owner ("requests: owners update own,"
+-- migration 002), so ArchiveForm.tsx's existing `.update({archived_at:
+-- ...})` call already works with either a timestamp (Archive) or null
+-- (UnArchive); no SQL change needed for that half.
+--
+-- Received has no such path — RLS on requests is owner-only, and the
+-- recipient isn't the owner, which is exactly why archive_received_request()
+-- (migration 028) had to be a SECURITY DEFINER function in the first place.
+-- unarchive_received_request() is its direct mirror: identical email-match-
+-- through-contacts guard, identical single-row-per-call shape (called once
+-- per id from ArchiveForm.tsx, same as its Archive-side counterpart), only
+-- difference is `set received_archived_at = null` instead of `= now()`, and
+-- an `'unarchived_by_recipient'` events action instead of `'archived_by_
+-- recipient'`. Body copied from migration 028's own archive_received_
+-- request() almost verbatim, cross-checked against that file's actual text
+-- rather than reconstructed from memory (this project's own established
+-- practice after an earlier session caught a guessed function body drifting
+-- from the original — see migration 045's own header for that incident).
+-- ============================================================================
+
+begin;
+
+-- ----------------------------------------------------------------------------
+-- unarchive_received_request — the signed-in recipient's UnArchive action on
+-- their own Received copy of a Request. Mirrors archive_received_request()
+-- (migration 028) exactly; only sets received_archived_at, touches nothing
+-- else on the row.
+-- ----------------------------------------------------------------------------
+create or replace function public.unarchive_received_request(p_request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set received_archived_at = null
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'request', v_request_id, v_request_id, 'unarchived_by_recipient',
+      jsonb_build_object('via', 'recipient_session')
+    );
+end;
+$$;
+
+revoke all on function public.unarchive_received_request(uuid) from public;
+grant execute on function public.unarchive_received_request(uuid) to authenticated;
+
+commit;
+
+-- Verify:
+--   select prosrc from pg_proc where proname = 'unarchive_received_request';
+--        -> should exist, security definer, sets received_archived_at = null
+--   select grantee, privilege_type
+--   from information_schema.routine_privileges
+--   where routine_name = 'unarchive_received_request';
+--        -> should show authenticated / EXECUTE
+--
+-- Verify as a client, not here:
+--   On /archive, switch the new Action chip to UnArchive with Received
+--   Requests selected, filter to a Requestor and/or Before Done Date that
+--   matches an already-archived row, uncheck/leave-checked as desired, click
+--   UnArchive Selected — the row should disappear from this UnArchive list
+--   and reappear on the Main Screen's own Received section. Sent/ToDos'
+--   own UnArchive path needs no migration to test, since it was already
+--   plain-RLS-writable.
+-- ============================================================================

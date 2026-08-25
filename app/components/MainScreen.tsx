@@ -885,6 +885,19 @@ export default function MainScreen() {
   // there's nothing to gate on those two sections.
   const [categoriesEnabled, setCategoriesEnabled] = useState(false)
 
+  // profiles.tier — 2026-08-25, closing a real gap the owner spotted: the
+  // bottom-of-screen .adslot ("AD — 320×50 RESERVED") was rendering
+  // unconditionally, for every account regardless of tier, contradicting
+  // this app's own "Ad-free — removes the ad banner shown to Free accounts"
+  // Subscriber Features pitch (AccountForm.tsx's BecomeSubscriberPromo /
+  // the Subscribe mockup). Read on the same profiles round trip as
+  // categoriesEnabled/requestTimeEnabled/todoDatesEnabled above, no extra
+  // query. .subbanner ("See Subscription Features and Other Options")
+  // stays unconditional — it was never part of the owner's report, and it
+  // already links onward to Account Options, which still has content worth
+  // seeing (the other, non-Subscriber sections) regardless of tier.
+  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+
   // Due/Done Time is now an opt-in account preference too (migration 019,
   // 2026-08-13) — see AccountForm.tsx. On by default. Governs the Print
   // Sent report's Due Time sub-line, gated by the signed-in owner's own
@@ -944,13 +957,14 @@ export default function MainScreen() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('main_chip_prefs, private_category_enabled, request_time_enabled, todo_dates_enabled')
+        .select('main_chip_prefs, private_category_enabled, request_time_enabled, todo_dates_enabled, tier')
         .eq('id', uid)
         .single()
       if (cancelled) return
 
       setCategoriesEnabled(data?.private_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? true)
+      setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
       const datesEnabled = data?.todo_dates_enabled ?? false
       setTodoDatesEnabled(datesEnabled)
       // A stale sessionStorage/main_chip_prefs value of 'overdue' from
@@ -1873,7 +1887,9 @@ export default function MainScreen() {
         </div>
 
         <div className="subbanner" role="button" tabIndex={0}>See Subscription Features and Other Options</div>
-        <div className="adslot" aria-hidden="true"><span className="adbox">AD — 320×50 RESERVED</span></div>
+        {tier !== 'subscriber' && (
+          <div className="adslot" aria-hidden="true"><span className="adbox">AD — 320×50 RESERVED</span></div>
+        )}
       </div>
 
       {/* Print Reports (2026-08-13) — a dedicated, print-only layout per

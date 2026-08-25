@@ -6,6 +6,81 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-25 — Main Screen ad banner gated by subscription tier; Archive gains a full UnArchive action (migration 046)
+
+Jim, with a pasted screenshot of the Archive screen showing a new "Action"
+chip row mockup: "The bottom panel for 'AD — 320×50 RESERVED' is not being
+gated by the Subscription status. The archive screen should be enhanced to
+support an UnArchive action - I have pasted-in a mockup. The 'xx Selected'
+top button would reflect the Archive or UnArchive as the 'xx' word." Two
+separate fixes.
+
+**Ad banner gating.** `MainScreen.tsx` had zero tier-awareness anywhere —
+confirmed via Grep before writing any code, alongside confirming `.adslot`/
+`.subbanner` exist only in this one file, not in `ArchiveForm.tsx` (the
+screenshot's own screen), so Jim's report reads as about the app's ad
+behavior generally, not an Archive-specific bug. Added a `tier` state, read
+on the same `profiles` round trip already fetching
+`categoriesEnabled`/`requestTimeEnabled`/`todoDatesEnabled` (no extra
+query), and wrapped `.adslot`'s render in `tier !== 'subscriber'`.
+`.subbanner` ("See Subscription Features and Other Options") stays
+unconditional — it was never part of the report, and it still links onward
+to Account Options, which has content worth seeing regardless of tier.
+
+**UnArchive.** Supersedes the 2026-08-14 "I did not tackle an 'Un-Archive'
+feature - that can be done later" scoping note. New `action` state
+(`'archive' | 'unarchive'`), persisted to `sessionStorage`
+(`ARCHIVE_ACTION_KEY`) the same way `currentType` already is — "which mode
+am I in," not a per-search filter, so it survives a fresh visit rather than
+resetting the way the Recipient/Requestor/Before-Done-Date filters and
+selection state do. A new Action chip row (Archive / UnArchive) renders
+above the existing Record Type row, reusing the identical
+`.archtyperow`/`.archtypelabel`/`.archtypechips`/`.chip` classes — no new
+CSS needed.
+
+Candidate filtering in the `rows` useMemo is now action-aware for all three
+Record Types: Archive mode keeps the original rule (Done and not yet
+archived); UnArchive mode is its mirror (archived, full stop — an archived
+row can only exist if it was Done when archived, so this is
+belt-and-suspenders, not a new requirement). `action` was added to the
+memo's own dependency array.
+
+`LIST_TITLE` (previously one `Record<RecordType, string>`) split into
+`LIST_TITLE_ARCHIVE`/`LIST_TITLE_UNARCHIVE` ("... (Done)" vs
+"... (Archived)" suffixes), consumed through one computed `listTitle`
+variable at both call sites (the on-screen band title and the print report's
+`.ptitle`). The instruction paragraph (`archnote`), both empty-state
+messages ("Enter ... to see eligible/archived records." and "No
+Done/Archived records match."), and the band button's label ("Archive
+Selected (N)" / "UnArchive Selected (N)") are all now action-aware.
+
+`handleArchiveSelected` renamed `handleActionSelected` and rewritten to
+branch on `action` rather than assume Archive. Sent/ToDos: `archived_at` is
+already plain-RLS-writable in either direction (the same owner-update
+policy that lets it be set also lets it be cleared), so UnArchive there is
+just `.update({ archived_at: null })` — no new SQL. Received: RLS on
+`requests` is owner-only, so this goes through a new **migration 046**
+SECURITY DEFINER function, `unarchive_received_request()` — a direct mirror
+of `archive_received_request()` (migration 028), same email-match-through-
+`contacts` guard, differing only in `set received_archived_at = null`
+(instead of `now()`) and the `events.action` value
+(`'unarchived_by_recipient'`). Drafted by grepping migration 028's actual
+text from `docs/Week5 - SQL history.txt` first and copying its body
+verbatim rather than reconstructing from memory, after an earlier incident
+this same session (migration 045) where a guessed function body drifted
+from the original. Both branches share one `setDeselected`/`setArchiving`/
+`setArchiveError` cleanup shape; the confirmation message also branches
+("N records archived... still included when a Search is done." vs "N
+records un-archived. Shown again here and on the Main Screen.").
+
+**Migration 046 confirmed run by Jim, 2026-08-25** — UnArchive now works end
+to end for all three Record Types, Received included. No mockup updated —
+`design/screens/WYP_archive_palette1.html` still shows only the original
+Archive-only flow; flagged in `design/README.md`, not silently skipped.
+`npx tsc --noEmit`/`npm run lint` both clean.
+
+\---
+
 ## 2026-08-25 — Show Reminders rewritten to a pure UI-visibility toggle, sending fully decoupled (migration 045); Subscribe What's-included wording fix
 
 Jim pasted exact replacement wording for both "Show Reminders" checknotes
