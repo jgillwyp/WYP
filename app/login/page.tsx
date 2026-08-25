@@ -350,6 +350,20 @@ function LoginScreen() {
                 </button>
                 .
               </p>
+              {/* Owner-reported, 2026-08-24: a tester's sign-in email landed
+                  in spam. SPF/DKIM/DMARC checked out fine on investigation —
+                  this is ordinary new-domain reputation, which First mail
+                  from any sender can trip regardless of clean auth records.
+                  Marking it "Not spam" is the one action that actually helps
+                  (it's a real signal to Gmail/Outlook), so it's called out
+                  explicitly rather than folded into the terser note above,
+                  which just says where to look. */}
+              <p className="sent-meta">
+                First time signing in? This is a new sending address, so some
+                inboxes may file it under spam or junk the first time. If you
+                find it there, marking it &ldquo;Not spam&rdquo; helps future
+                emails land in your inbox.
+              </p>
             </div>
           </div>
         )}

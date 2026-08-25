@@ -720,12 +720,26 @@ export default function AccountForm() {
           </div>
 
           {/* ---------------------------------------------------- Subscriber */}
-          {canToggleTier && (
-            <div className="subcard">
-              {sectionHead('Subscriber', subscriberOpen, setSubscriberOpenAndStore)}
-              {subscriberOpen && (
-                <div className="subbody">
-                  <label className="checkrow">
+          {/* Un-gated from canToggleTier, 2026-08-24 — that flag now governs
+              only the testing checkbox below it, not the section itself.
+              Every non-subscriber sees the real "Become a Subscriber" pitch
+              (Jim's own written content) instead; the section only used to
+              be worth showing for the handful of people allowed to flip the
+              testing toggle. */}
+          <div className="subcard">
+            {sectionHead('Subscriber', subscriberOpen, setSubscriberOpenAndStore)}
+            {subscriberOpen && (
+              <div className="subbody">
+                {tier === 'subscriber' ? (
+                  <p className="promo-p" style={{ margin: '0 0 4px' }}>
+                    You have Subscriber features. Thank you for subscribing.
+                  </p>
+                ) : (
+                  <BecomeSubscriberPromo />
+                )}
+
+                {canToggleTier && (
+                  <label className="checkrow" style={{ marginTop: tier === 'subscriber' ? 0 : 14 }}>
                     <input
                       type="checkbox"
                       checked={tier === 'subscriber'}
@@ -738,15 +752,14 @@ export default function AccountForm() {
                         Sets your account to the Subscriber tier so subscriber-only features
                         like Attachments can be tested. Off by default. This status only
                         lasts for the testing period — once testing ends, this checkbox goes
-                        away and you would subscribe for real, through an actual Subscription
-                        Details page with eCommerce links, to keep any subscriber features.
+                        away and you would subscribe for real, through the button above.
                       </span>
                     </span>
                   </label>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </div>
 
           {saveError && (
             <p className="ferror" role="alert" style={{ margin: '10px var(--pad) 0' }}>
@@ -755,6 +768,82 @@ export default function AccountForm() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// "Become a Subscriber" pitch (2026-08-24) — Jim's own written content
+// ("Subscriber Features" / "Cost" / "Sign up for a 1st year discount"),
+// lightly edited for wording only, shown to every non-subscriber who opens
+// the Subscriber section of Account Options. Reuses the existing .promo/
+// .promo-h/.promo-p/.promo .btn component (Request Response's "Free Account
+// Features" pitch, §6.2x) rather than inventing a new container — new
+// .promo-features/.promo-sub classes cover the parts that component didn't
+// already have (a labeled feature list, a price block).
+//
+// The CTA has nowhere real to go yet — there is no eCommerce/checkout page
+// in this app (PRD's own Scope Discipline defers payments on purpose). It's
+// built as a real, clickable primary button rather than left silently inert,
+// since a button that does nothing on click is worse than one that says so:
+// clicking it reveals a small explanatory note instead of navigating
+// anywhere. Swap this out for a real `next/link` to the checkout page once
+// one exists.
+function BecomeSubscriberPromo() {
+  const [clicked, setClicked] = useState(false)
+
+  return (
+    <div className="promo" style={{ margin: '0 0 4px' }}>
+      <div className="promo-h">Become a Subscriber</div>
+
+      <div className="promo-sub">Subscriber Features</div>
+      <ul className="promo-features">
+        <li>
+          <strong>Voice dictation</strong> — speak your Request and ToDo Description and
+          Dialog entries instead of typing.
+        </li>
+        <li>
+          <strong>File attachments</strong> — send and receive documents, photos, and PDFs
+          with your Requests and Responses.
+        </li>
+        <li>
+          <strong>5 GB of storage included</strong> for attachments (additional storage
+          available at $10 per 5 GB per year).
+        </li>
+        <li>
+          <strong>Request Texting</strong> — deliver Requests by SMS text in addition to
+          email.
+        </li>
+        <li>
+          <strong>Ad-free</strong> — removes the ad banner shown to Free accounts.
+        </li>
+        <li>
+          <strong>Priority support</strong> — via email.
+        </li>
+      </ul>
+
+      <div className="promo-sub" style={{ marginTop: 12 }}>
+        Cost
+      </div>
+      <p className="promo-p" style={{ margin: '4px 0 0' }}>
+        1st year subscription — 25% discount, only <strong>$17.95</strong>
+        <br />
+        Per year subscription — <strong>$23.95</strong> thereafter
+      </p>
+
+      <button
+        type="button"
+        className="btn"
+        style={{ width: '100%', marginTop: 12 }}
+        onClick={() => setClicked(true)}
+      >
+        Sign up for a 1st year discount
+      </button>
+
+      {clicked && (
+        <p className="promo-p" style={{ margin: '8px 0 0' }}>
+          Subscription checkout isn&rsquo;t available yet — check back soon.
+        </p>
+      )}
     </div>
   )
 }

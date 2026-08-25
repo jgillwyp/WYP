@@ -2687,3 +2687,100 @@ link is built only after the stack is proven on Add Contact.
   question about continuing. **No mockups updated** — none of the affected
   screens' static HTML has interactive Category-column JS to convert;
   flagged in `design/README.md`. `npx tsc --noEmit`/`npm run lint` clean.
+- **Spam-folder investigation for the sign-in email; small in-app note
+  added (2026-08-24).** Jim reported a tester's sign-in email landed in
+  spam and ran MXToolbox against wouldyouplease.com, which came back clean
+  aside from a Tor-exit-node entry MXToolbox itself scores "Ignore." A
+  Google AI conversation he consulted recommended migrating off Hostinger
+  SMTP, on the mistaken assumption WYP sends mail directly from client-side
+  React with a hardcoded password and that Vercel's own IP reputation is
+  what the recipient sees — neither is true here (every email route is
+  server-side, `EMAIL_SMTP_PASSWORD` never leaves Vercel's environment
+  variables, and Hostinger's own mail servers, not Vercel's IP, do the
+  actual handoff to the recipient). Live DNS lookups (via `dns.google`'s
+  DoH API, since this sandbox's own resolver has no network route) showed
+  SPF and DKIM both correctly configured for the domain; DMARC exists but
+  sits at `p=none` (monitoring only) — flagged as a minor, non-urgent gap,
+  worth tightening once a few weeks of clean sending confirm nothing
+  legitimate fails alignment. Concluded the actual cause is ordinary
+  new-domain reputation, not fixable by a provider swap. Added a second
+  `.sent-meta` paragraph to `/login`'s "Check your email" screen
+  (`app/login/page.tsx`), after the existing "Nothing yet? Check spam..."
+  line, naming the new-domain cause and asking the recipient to mark the
+  message "Not spam" if found there — a real signal to Gmail/Outlook,
+  unlike just telling them where to look. Scoped to the sign-in email only,
+  per the report; the app's other outbound email shares the same domain/
+  auth and carries the same risk but wasn't touched this batch. `npx tsc
+  --noEmit`/`npm run lint` clean.
+- **"Become a Subscriber" pitch built into Account Options' Subscriber
+  section (2026-08-24).** Jim wrote the actual sales content himself
+  (Subscriber Features list, Cost, a "Sign up for a 1st year discount"
+  button) and asked for it to be built where he'd originally sketched it —
+  "or, more likely, have it present when the Subscriber section of Account
+  Options is opened," which is what got built, rather than a separate
+  screen/route. The whole Subscriber section was previously gated behind
+  `canToggleTier` (migration 035's private-testing allowlist) — un-gated,
+  2026-08-24, so every signed-in user can now open it; only the testing-only
+  "Subscribed?" checkbox inside stays gated. New `BecomeSubscriberPromo()`
+  component in `AccountForm.tsx`, shown whenever `tier !== 'subscriber'`
+  (a subscriber sees a one-line thank-you instead) — reuses the existing
+  `.promo`/`.promo-h`/`.promo-p`/`.promo .btn` component Request Response's
+  "Free Account Features" pitch already established, plus two new classes
+  (`.promo-sub` for the "Subscriber Features"/"Cost" sub-headings,
+  `.promo-features` for the feature list — a small brand-blue bullet dot,
+  since nothing in the app used list bullets before this). **The CTA button
+  has nowhere real to go** — there is no eCommerce/checkout page anywhere in
+  this app, on purpose (CLAUDE.md's own Scope Discipline defers payments).
+  Built as a real, clickable primary button rather than left silently
+  inert: clicking it reveals a small "Subscription checkout isn't available
+  yet" note in place, rather than doing nothing or navigating somewhere
+  fake. Swap for a real link once a checkout page exists. Pricing quoted
+  verbatim from Jim's own copy ($17.95 first year / $23.95 renewal, 5 GB
+  storage included / $10 per 5 GB/year additional) — not verified against
+  the PRD's own $17.95/yr flat figure, which this supersedes; see the
+  updated cost/revenue model (below) and PRD follow-up. **No mockup** —
+  `AccountForm.tsx` has never had one; flagged in `design/README.md`, not
+  silently skipped. `npx tsc --noEmit`/`npm run lint` clean.
+- **Cost/revenue model updated in place with the new subscriber pricing
+  (2026-08-24, `docs/WYP_Hosting_Cost_Crossover_Model.xlsx`).** Jim asked
+  to re-run the PRD §8.2/§11.3 cost/revenue estimates against his new
+  pricing (above) including the new storage add-on. The prior
+  cost-crossover model (built under tasks #305–310, an earlier session)
+  was in fact already saved into `docs/` — patched in place rather than
+  rebuilt from scratch, preserving its existing Assumptions/User
+  Tiers/Vercel Cost Model/Supabase Cost Model/AWS (PRD sec 6.2)/Crossover
+  Summary/AWS Activate Credits structure. Added: a 4th Assumptions section
+  (Year 1/renewal price, storage included per subscriber, additional
+  storage block size/price, % buying extra storage, free-to-paid
+  conversion rate — each its own labeled input cell, referenced via
+  openpyxl workbook-scoped defined names rather than hardcoded row
+  references, to avoid the row-miscounting bug this file's own build
+  history had already hit twice); a new "Subscriber Revenue" sheet (per
+  tier: subscriber count, Year 1 vs. renewal-price revenue, storage
+  add-on revenue, two TOTAL rows, and a separate storage-overage-cost line
+  using the Supabase Cost Model sheet's own existing 100GB-pooled/
+  $0.0213-per-GB convention); and four new Crossover Summary columns
+  (Subscribers, Year 1 revenue, Renewal revenue, Renewal revenue minus
+  Vercel+Supabase MID cost). **`recalc.py`'s LibreOffice pass could not
+  complete in this sandbox session** — repeated attempts, including a
+  bare `soffice --headless --terminate_after_init` with no document
+  involved, hung or were killed by the tool harness's own ~178-second
+  per-call cap; this reads as sandbox/environment instability, not a
+  file problem. Verified instead with the `formulas` package (a pure-
+  Python Excel formula engine, `pip install formulas`), which evaluated
+  all 580 cells in the workbook with **zero formula errors** and produced
+  sane, hand-checkable results (e.g. at the 10,000-user Pilot tier: 300
+  subscribers, $5,535 Year 1 revenue, $7,335 renewal revenue, $357.84/yr
+  storage-overage cost — all match a manual recompute of the formulas).
+  Because openpyxl strips cached values on save, the file's cells will
+  read blank in any viewer that doesn't itself recalculate — real Excel
+  and Google Sheets both recalculate automatically on open (Automatic
+  mode is the default), so this has no effect for Jim's actual use, but
+  is why a LibreOffice-based preview/thumbnail of the file might show
+  blanks. **Known gap, not yet wired into the model**: the storage
+  overage cost (Subscriber Revenue row 17) is computed but not currently
+  subtracted in Crossover Summary's "Renewal revenue minus cost" column —
+  worth folding in if Jim wants a true net-of-storage figure, flagged
+  rather than silently decided. See the decisions log's 2026-08-24 entry
+  for the full pricing inputs, assumptions, and computed results across
+  all five tiers.

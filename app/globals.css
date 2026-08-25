@@ -2987,6 +2987,47 @@ body {
   padding: 11px 14px;
 }
 
+/* "Become a Subscriber" pitch, Account Options' Subscriber section
+   (2026-08-24) — Jim's own written content, rendered inside the existing
+   .promo container. .promo-sub is a small bold sub-heading ("Subscriber
+   Features" / "Cost") within that box; .promo-features is the feature list
+   — no bullet character app-wide before this, so a small brand-blue dot is
+   used rather than a default browser disc, kept quiet enough not to read as
+   a checklist/status indicator. */
+.promo-sub {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-blue);
+  margin: 10px 0 0;
+}
+
+.promo-features {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.promo-features li {
+  position: relative;
+  padding-left: 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.promo-features li:last-child {
+  margin-bottom: 0;
+}
+
+.promo-features li::before {
+  content: '\2022';
+  position: absolute;
+  left: 0;
+  color: var(--brand-blue);
+  font-weight: 700;
+}
+
 /* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — Request Response's
    one-click "mark as Done" shortcut, sitting between the grabber divider
    and the editable Done Date/Done Time row. Strip band + inline .btn,

@@ -6,6 +6,248 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-24 — AWS Activate Founders-vs-Portfolio question answered; Subscribe page drafted as a mockup
+
+Jim asked two things in one message, both follow-ups to the cost/revenue
+model batch above: (1) whether applying for AWS Activate's Founders-tier
+credit excludes the higher Portfolio tier later, and (2) — now that he had
+pricing figures in hand — a draft "Subscribe page."
+
+**AWS Activate.** Confirmed against AWS's own current documentation
+(`aws.amazon.com/aws-startups/learn/applying-for-aws-activate-credits-a-step-by-step-guide`,
+updated 2026-08-20): taking Founders credits first does not exclude
+Portfolio later. Reapplying for Portfolio is allowed as long as the new
+application requests more than what's already been approved and the
+lifetime credit cap isn't exceeded — approval pays only the difference
+(e.g. $10K already held, $100K newly qualified for, nets $90K more).
+The real gate isn't Founders-vs-Portfolio sequencing, it's Portfolio's own
+eligibility: it requires being backed by an AWS Activate Provider
+(an accelerator, VC, or similar) with that provider's Org ID, which is a
+separate condition from anything about prior Founders credits. Founders
+itself (self-funded, no provider) tops out around $1,000, occasionally up
+to $5,000 for select startups — Portfolio is the $200,000 tier, gated on
+provider backing rather than on what tier came before it.
+
+**Subscribe page.** Drafted as a new design mockup,
+`design/screens/WYP_subscribe_palette1.html` (§6.45 PROPOSED) — not built
+live, matching this project's own mockup-first convention ("A screen is
+designed as static HTML in `design/screens/`, approved, then converted to
+React"). Reached, once a live route exists, from Account Options' "Sign up
+for a 1st year discount" button. Content: a Plan Summary box reusing the
+`.promo` component verbatim from `AccountForm.tsx`'s existing
+`BecomeSubscriberPromo` (so this page and the inline Account Options pitch
+never say two different things) plus two new small components — `.planrow`
+(order-summary line: plan name left, price right) and `.cardrow`
+(Expiration/CVC side-by-side, same layout convention as Add Contact's
+`.phone-row`) — and a Payment Method section below it.
+
+Flagged prominently in the mockup's own header comment, not built past
+silently: the Payment Method fields (Name on Card / Card Number /
+Expiration / CVC) are drawn as plain text inputs to show the page's content
+and flow only. Collecting a raw card number directly into this app's own
+form, as drawn, would put WYP in PCI DSS scope — real compliance
+infrastructure this app has none of and shouldn't build casually. The
+recommended path, once this page is approved and ready to go live, is a
+hosted processor UI in its place — Stripe Checkout or Payment Element (or
+an equivalent) — so WYP's own servers never receive or store raw card data
+at all; the custom-looking card form here exists to get sign-off on
+content and layout, not to be built exactly as drawn. This is also
+consistent with the standing rule in this codebase and its safety
+guidelines that payment processing itself stays out of scope until Jim
+explicitly chooses and wires a real processor.
+
+**Same-day follow-up: Stripe chosen over Paddle; card form replaced with a
+placeholder checkbox.** Jim asked which hosted checkout to recommend and
+what it would cost on a $17.95 purchase. Compared Stripe (2.9% + $0.30 per
+card charge, +0.7% more if using Stripe's own Billing/subscriptions product
+for real auto-renewal — ≈$0.95 fee on $17.95, netting ≈$17.00) against
+Paddle (flat 5% + $0.50, but Paddle acts as merchant of record and handles
+US sales tax/international VAT automatically — ≈$1.40 fee on $17.95,
+netting ≈$16.55), both figures confirmed against each provider's own
+current pricing page. Recommended Stripe as the better fit at this stage —
+cheaper per transaction, and Jim's own WooCommerce experience (Stripe is
+WooCommerce's most common gateway) carries over directly. Jim confirmed:
+"I would prefer not to deal with tax or renewals and it seems that at this
+stage - Stripe is the better alternative" — a real tradeoff accepted
+knowingly (Paddle's extra ~2% buys out of sales-tax registration/filing,
+which Stripe's plain Checkout/Billing doesn't handle; Stripe does have an
+optional Tax add-on, +0.5%, if that becomes necessary later without
+switching providers).
+
+Same message, Jim then asked for the mockup's Payment Method section
+itself to change: replace the raw card-entry form with "the Subscribe
+check box and explanation," still under the "Payment Method" heading, to
+be swapped for the real Stripe connection once his corporation/bank
+account are set up and the app is otherwise ready. Implemented literally —
+`WYP_subscribe_palette1.html`'s four card fields and their `.cardrow`/
+`.lockrow` CSS are gone, replaced by one `.checkrow` (reused verbatim from
+`app/globals.css`'s existing §6.20 component — not a new one) reading
+"Subscribe now" with a `.checknote` explaining payment isn't connected yet,
+sitting above the pre-existing "Subscribe Now — $17.95" button. The
+mockup's own header comment now carries this history (first draft → PCI-
+DSS finding → Jim's Stripe decision → checkbox placeholder), so a future
+pass converting this to a live route doesn't have to reconstruct why the
+Payment Method section looks the way it does, or accidentally reintroduce
+a custom card form where a real Stripe redirect belongs instead.
+
+\---
+
+## 2026-08-24 — "Become a Subscriber" pitch in Account Options; cost/revenue model updated with new subscriber pricing
+
+Jim drafted his own subscriber sign-up copy (features list, pricing: $17.95
+first year / $23.95 renewal, 5GB storage included / $10 per additional 5GB
+per year) and asked for two things: (1) a UI presenting this pitch, and (2)
+the PRD's cost/revenue estimates re-run against the new pricing including
+the storage economics.
+
+**UI.** Jim's own message answered the placement question directly — "or,
+more likely have it present when the Subscriber section of Account Options
+is opened" — so no separate route was built. `AccountForm.tsx`'s Subscriber
+section, previously gated entirely behind `canToggleTier` (migration 035's
+private-testing allowlist for the testing-only Subscribed? toggle), is now
+open to every signed-in user; only that one checkbox stays gated inside it.
+New `BecomeSubscriberPromo()` shows for any non-subscriber; a subscriber
+sees a one-line thank-you instead. Reused the existing `.promo` component
+(built for Request Response's "Free Account Features" pitch) rather than
+inventing new UI, adding two small classes for the sub-headings and bulleted
+feature list. The CTA button ("Sign up for a 1st year discount") has nowhere
+real to go — no eCommerce/checkout page exists, and building one is out of
+this batch's scope (payments are explicitly deferred per CLAUDE.md's Scope
+Discipline). Followed this codebase's own established pattern for an inert
+forward-looking control: real, clickable, primary-styled button, with an
+in-place explanatory note on click rather than a dead link or silent no-op.
+
+**Cost model.** The prior cost-crossover model (tasks #305–310, an earlier
+session) turned out to already be saved at
+`docs/WYP_Hosting_Cost_Crossover_Model.xlsx` — initially assumed lost (no
+matching decisions-log entry, nothing surfaced by a `docs/` glob), a
+standalone replacement was built first before the original was found intact
+in this session's own outputs folder. Discarded the replacement and patched
+the original in place instead, to avoid handing Jim two competing cost
+models. Added, matching the existing file's conventions (Arial, blue-text
+inputs, italic-grey source notes, openpyxl workbook-scoped defined names —
+adopted this session after hand-counted row references caused two real bugs
+during the build, both caught before shipping):
+
+- A 4th Assumptions section: Year 1 price ($17.95), renewal price ($23.95),
+  storage included per subscriber (5GB), additional storage block (5GB /
+  $10/yr), % of subscribers buying additional storage (5%, not confirmed by
+  Jim — flagged in its own note cell), and a free-to-paid conversion rate
+  (3%, typical freemium SaaS range, not a WYP-specific measurement since
+  there's no real user base yet — also flagged).
+- A new "Subscriber Revenue" sheet, one column per existing User Tiers
+  column (1,000 / 10,000 / 50,000 / 100,000 / 1,000,000 registered users):
+  subscriber count, Year 1-price and renewal-price revenue, additional-
+  storage revenue (expected value), two TOTAL rows, and a separate
+  storage-overage-cost line reusing the Supabase Cost Model sheet's own
+  100GB-pooled/$0.0213-per-GB-month convention.
+- Four new Crossover Summary columns: Subscribers, Year 1 revenue, Renewal
+  revenue, and Renewal revenue minus the existing Vercel+Supabase MID cost
+  column.
+
+**Verification.** `recalc.py` (LibreOffice-based) could not complete in
+this sandbox session — repeated attempts hung or were killed by the tool
+harness's own ~178-second per-call cap, including a bare
+`soffice --headless --terminate_after_init` with no document open at all,
+which succeeded once in 3 seconds and then hung on every later attempt.
+This reads as sandbox-environment instability rather than a file or formula
+problem. Verified instead with the `formulas` package (a pure-Python Excel
+formula-evaluation engine), which computed all 580 cells in the workbook
+with zero formula errors. Spot-checked by hand against the 10,000-user
+Pilot tier: 10,000 × 3% = 300 subscribers; 300 × $17.95 = $5,385 Year 1
+subscription revenue, +$150 storage add-on (300 × 5% × $10) = $5,535 total,
+matching the computed cell exactly; 300 × $23.95 = $7,185 renewal, +$150 =
+$7,335 total, also exact. Storage overage cost at that tier: 300 × 5GB =
+1,500GB demand, (1,500 − 100) × $0.0213 × 12 = $357.84/yr, also exact.
+Because openpyxl strips cached formula values whenever a file is re-saved
+(true of every cell in the workbook now, not just the new ones), the file
+will show blank cells in a viewer that doesn't itself recalculate — real
+Excel and Google Sheets both recalculate automatically on open (Automatic
+mode is the default), so this doesn't affect Jim's actual use, but is
+worth knowing if a quick preview tool ever shows it blank.
+
+**Computed results across all five tiers** (Year 1 pricing / renewal
+pricing, storage overage cost, Vercel+Supabase MID infra cost for
+comparison):
+
+| Registered users | Subscribers (3%) | Yr1 revenue | Renewal revenue | Storage overage/yr | VS-MID infra cost/yr |
+|---|---|---|---|---|---|
+| 1,000 | 30 | $554 | $734 | $13 | $540 |
+| 10,000 (Pilot) | 300 | $5,535 | $7,335 | $358 | $653 |
+| 50,000 | 1,500 | $27,675 | $36,675 | $1,891 | $1,315 |
+| 100,000 (Year 1 target) | 3,000 | $55,350 | $73,350 | $3,808 | $3,203 |
+| 1,000,000 (long-term) | 30,000 | $553,500 | $733,500 | $38,314 | $69,219 |
+
+At every tier modeled, renewal-year subscription revenue alone comfortably
+exceeds the Vercel+Supabase infrastructure cost — even before subtracting
+storage overage, which is not yet netted into the Crossover Summary's
+"revenue minus cost" column (flagged as a known gap, not silently decided;
+easy to add if Jim wants a true net figure). Storage overage cost grows
+from immaterial at low tiers to about 5% of renewal revenue at 1,000,000
+users — worth watching if the assumed 5%-of-subscribers-buy-extra-storage
+rate turns out to be conservative, since that one cell drives the whole
+line. The conversion-rate (3%) and extra-storage-purchase-rate (5%)
+assumptions are both editable input cells in Assumptions §4, not confirmed
+by Jim — flagged rather than treated as validated.
+
+\---
+
+## 2026-08-24 — Spam-folder investigation for the sign-in email; small in-app note added to /login's "Check your email" screen
+
+Jim reported a tester's sign-in email landed in spam and ran
+wouldyouplease.com through MXToolbox's blacklist check, which came back
+clean except for a "DAN TOREXIT" (Tor exit node) entry — status "Ignore,"
+not "Listed." Not understanding the term, he asked Google AI about it and
+attached the resulting conversation (`avoiding email being flaged as spam
+considerations.docx`), which recommended migrating off Hostinger SMTP to a
+dedicated provider (Resend/SendGrid), on the assumption that WYP sends mail
+directly from a client-side React app with a hardcoded SMTP password and
+that Vercel's own outbound IP reputation is what recipient mail servers see.
+
+Investigated and reported back: the Tor-exit-node flag is a non-issue —
+MXToolbox itself scores it "Ignore," it's a list built for anonymized web
+traffic rather than mail servers, and it doesn't even apply architecturally
+here, since Hostinger's own mail servers (not Vercel's IP) are what actually
+hand messages to the recipient over the authenticated SMTP relay
+`app/api/email/send-request/route.ts` and the cron route open. Google AI's
+credential-exposure concern doesn't apply either — `EMAIL_SMTP_PASSWORD`
+lives only in Vercel's server-side environment variables, never in browser
+code; all of WYP's email already goes through server-side routes, which is
+exactly the "secure bridge" pattern Google AI was recommending building.
+
+Checked the domain's live DNS directly (via `dns.google`'s DoH API, since
+this sandbox's own resolver has no network route) rather than relying on
+MXToolbox's summary: SPF (`v=spf1 include:_spf.mail.hostinger.com ~all`) and
+DKIM (`hostingermail-a._domainkey.wouldyouplease.com`, valid key) are both
+present and correctly configured. DMARC exists but sits at `p=none`
+(monitoring only, no enforcement) — a real, if minor, gap; recommended
+progressing it to `p=quarantine` (and SPF's `~all` to `-all`) once a few
+weeks of clean sending confirm nothing legitimate fails alignment, and
+suggested Google Postmaster Tools for real Gmail-side reputation data
+instead of guessing from a generic blacklist checker. Concluded the tester's
+spam-foldering is most likely ordinary new-domain reputation — Gmail/
+Outlook weight sender history and recipient engagement heavily regardless of
+clean SPF/DKIM/DMARC, and a brand-new domain with very low volume hasn't
+built either yet. Recommended not migrating providers over this, since there
+was no actual problem for a provider swap to fix.
+
+Jim asked for a small in-app note despite acknowledging most people won't
+read it. Added a second `.sent-meta` paragraph to `/login`'s "Check your
+email" screen (`app/login/page.tsx`), right after the existing "Nothing yet?
+Check spam..." line, explicitly naming the new-domain cause and asking the
+recipient to mark the message "Not spam" if they find it there — a
+first-email-from-a-new-domain problem naturally resolves over time, but a
+recipient action is the one thing that actually helps in the moment (it's a
+real signal to Gmail's per-recipient reputation model), so it's worth
+calling out separately from the terser existing note, which only says where
+to look. Scoped to the sign-in email only, per the report — the app's other
+outbound email (Initial Request notifications, Reminders, digests) uses the
+same Hostinger domain/authentication and would carry the same new-domain
+risk, but wasn't the one reported and wasn't touched this batch. `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-24 — Description column heading becomes Category (sortable) or disappears; Category shown on Sent rows; secondary Due-Date sort tie-break; Done-row print heading bold+grey fixed
 
 Jim:

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 · Floating labels — Would You Please — Subscribe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!--
+  PROPOSED — mockup only, no live route yet (2026-08-24, §6.45 PROPOSED).
+
+  Reached from Account Options' "Sign up for a 1st year discount" button
+  (see app/components/AccountForm.tsx's BecomeSubscriberPromo, which
+  currently shows an inline "isn't available yet" note in that button's
+  place). This screen is the next step in that flow once a real checkout
+  exists — draft only, for review before any conversion work starts.
+
+  IMPORTANT — Payment Method history, so this doesn't get silently
+  reinvented: the first draft of this screen (2026-08-24) drew a raw
+  card-entry form (Name on Card/Card Number/Expiration/CVC). Flagged then,
+  and still true: collecting a raw card number directly into this app's
+  own form and servers would put WYP in PCI DSS scope, real compliance
+  work this app has none of. Jim reviewed that draft, confirmed he'd
+  rather use Stripe once his corporation/bank account are set up, and
+  asked — same day — for the card form to be replaced with a single
+  checkbox + explanation under the same "Payment Method" heading in the
+  meantime: "When I get the corporation / bank account / etc set-up - and
+  the app is otherwise ready, we can switch it to a live connection."
+  Swap this `.checkrow` out for a real Stripe Checkout/Payment Element
+  redirect (never a custom card form — see the PCI DSS note above) once
+  that's ready, not before.
+
+  Plan summary content (features list, pricing) is Jim's own copy,
+  ported verbatim from AccountForm.tsx's BecomeSubscriberPromo — the
+  same .promo/.promo-h/.promo-sub/.promo-features/.promo-p components,
+  so this screen and Account Options' inline pitch never say two
+  different things. New in this screen: .planrow (order-summary line
+  item — plan name left, price right) and the Payment Method `.checkrow`
+  described above (reused verbatim from app/globals.css's §6.20).
+-->
+
+<style>
+html,body{margin:0;height:100%;background:#fff;}
+.frame-none{max-width:480px;margin:0 auto;height:100vh;height:100dvh;box-shadow:0 0 0 1px var(--rule);}
+@media(min-width:520px){html,body{background:#eef1f5;}.frame-none{box-shadow:0 6px 30px rgba(20,30,50,.14);}}
+
+:root{
+  --brand-blue:#2A5FC8;--blue-pressed:#1E4AA0;--btn-top:#3A70DC;
+  --alert-red:#D32F2F;--sort:#FFE34D;--focus-tint:#EDF2FD;--icon-grey:#6B7280;
+  --ink:#1F2933;--ink-soft:#5A6675;--row-tint:#F6F7F9;--rule:#E2E6EC;--pad:14px;
+  --strip:#E5ECF7;--band:#E7E7E7;--input-border:#7E8A9A;
+  --focus-halo:0 0 0 3px rgba(42,95,200,.22);
+  --scrim:rgba(31,41,51,.45);
+  --locked:#EDEFF2;--locked-ink:#8A93A0;--locked-border:#DDE1E7;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.app{display:flex;flex-direction:column;height:100%;background:#fff;color:var(--ink);
+  font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;}
+.scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;}
+
+/* Header band (§6.8) */
+.hdr{display:flex;align-items:center;gap:11px;padding:13px var(--pad) 12px;}
+.logo{flex:0 0 auto;display:flex;}
+.logo svg{height:40px;width:auto;display:block;}
+.brand{display:flex;flex-direction:column;line-height:1.05;}
+.word{font-size:23px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;}
+.tag{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin-top:1px;}
+
+/* Heading band (§6.7) */
+.band{display:flex;align-items:center;gap:10px;background:var(--band);padding:8px var(--pad);
+  margin:11px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);}
+.glabel{font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.hdr + .band{margin-top:0;border-top:none;}
+.bandcluster{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* Buttons (§6.1, §6.11) */
+.btn{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;color:#fff;
+  text-align:center;cursor:pointer;background:var(--brand-blue);
+  border:none;border-radius:11px;padding:9px 14px;white-space:nowrap;}
+.btn:active{background:var(--blue-pressed);}
+.btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+.btn-secondary{flex:0 0 auto;font:inherit;font-size:12.5px;font-weight:700;line-height:1.1;
+  color:var(--brand-blue);text-align:center;cursor:pointer;background:var(--strip);
+  border:1.5px solid var(--brand-blue);border-radius:11px;padding:8px 14px;white-space:nowrap;}
+.btn-secondary:active{background:var(--row-tint);}
+.btn-secondary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
+
+/* Section heading between Plan Summary and Payment Method */
+.sectionh{font-size:15px;font-weight:800;color:var(--ink);margin:18px 0 4px;padding:0 var(--pad);}
+
+/* Checkbox row (§6.20) — reused verbatim from app/globals.css. Stands in
+   for the whole Payment Method section until a real Stripe connection
+   exists (2026-08-24, Jim's own instruction — see the header comment). */
+.checkrow{display:flex;align-items:flex-start;gap:10px;background:var(--strip);
+  border-radius:9px;padding:10px;width:calc(100% - (var(--pad) * 2));margin:0 var(--pad) 14px;cursor:pointer;}
+.checkrow input{width:18px;height:18px;margin:1px 0 0;flex:0 0 auto;accent-color:var(--brand-blue);cursor:pointer;}
+.checkrow:focus-within{box-shadow:var(--focus-halo);}
+.checktext{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.35;}
+.checknote{display:block;font-size:12px;font-weight:400;color:var(--ink-soft);margin-top:2px;}
+
+/* Order-summary line item — plan name left, price right */
+.planrow{display:flex;align-items:baseline;justify-content:space-between;
+  padding:8px 0;border-top:1px solid rgba(31,41,51,.08);}
+.planrow:first-child{border-top:none;padding-top:0;}
+.plan-name{font-size:13.5px;font-weight:600;color:var(--ink);}
+.plan-sub{display:block;font-size:11.5px;font-weight:500;color:var(--ink-soft);margin-top:1px;}
+.plan-price{font-size:15px;font-weight:800;color:var(--ink);white-space:nowrap;}
+
+/* Promo block — reused verbatim from app/globals.css so this screen's Plan
+   Summary matches Account Options' own pitch exactly. */
+.promo{margin:4px var(--pad) 12px;background:var(--strip);border-radius:12px;padding:13px 14px;}
+.promo-h{font-size:19px;font-weight:800;color:var(--brand-blue);letter-spacing:-.01em;margin:0 0 8px;}
+.promo-sub{font-size:13px;font-weight:700;color:var(--brand-blue);margin:10px 0 0;}
+.promo-features{list-style:none;margin:6px 0 0;padding:0;}
+.promo-features li{position:relative;padding-left:14px;font-size:12.5px;line-height:1.45;color:var(--ink);margin:0 0 6px;}
+.promo-features li:last-child{margin-bottom:0;}
+.promo-features li::before{content:'\2022';position:absolute;left:0;color:var(--brand-blue);font-weight:700;}
+.promo-p{font-size:12.5px;line-height:1.45;color:var(--ink);margin:8px 0 0;}
+
+.subnote{padding:2px var(--pad) 18px;background:#fff;font-size:12px;color:var(--ink-soft);line-height:1.45;}
+</style></head>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+  </div>
+
+  <div class="band">
+    <span class="glabel">Subscribe</span>
+    <span class="bandcluster">
+      <button class="btn-secondary" type="button">Close</button>
+    </span>
+  </div>
+
+  <div class="scroll">
+
+    <div class="promo">
+      <div class="promo-h">Plan Summary</div>
+
+      <div class="planrow">
+        <span class="plan-name">Subscriber — 1st year<span class="plan-sub">25% discount, billed today</span></span>
+        <span class="plan-price">$17.95</span>
+      </div>
+      <div class="planrow">
+        <span class="plan-name">Renews at<span class="plan-sub">automatically, each year thereafter</span></span>
+        <span class="plan-price">$23.95&#8202;/yr</span>
+      </div>
+
+      <div class="promo-sub" style="margin-top:14px;">What's included</div>
+      <ul class="promo-features">
+        <li><strong>Voice dictation</strong> — speak your Request and ToDo Description and Dialog entries instead of typing.</li>
+        <li><strong>File attachments</strong> — send and receive documents, photos, and PDFs with your Requests and Responses.</li>
+        <li><strong>5&nbsp;GB of storage included</strong> for attachments (additional storage available at $10 per 5&nbsp;GB per year).</li>
+        <li><strong>Request Texting</strong> — deliver Requests by SMS text in addition to email.</li>
+        <li><strong>Ad-free</strong> — removes the ad banner shown to Free accounts.</li>
+        <li><strong>Priority support</strong> — via email.</li>
+      </ul>
+
+      <p class="promo-p">Cancel anytime from Account Options — your Subscriber features stay active through the end of the period you've already paid for.</p>
+    </div>
+
+    <div class="sectionh">Payment Method</div>
+
+    <label class="checkrow" style="margin-top:8px;">
+      <input type="checkbox" id="subscribe-now" checked>
+      <span>
+        <span class="checktext">Subscribe now</span>
+        <span class="checknote">Real payment processing isn&rsquo;t connected yet. Checking this box marks
+          your subscription as active for now; once billing (via Stripe) is fully set up, this will be
+          replaced with a real payment step here under Payment Method.</span>
+      </span>
+    </label>
+
+    <div style="padding:2px var(--pad) 4px;">
+      <button class="btn" type="button" style="width:100%;padding:12px 14px;font-size:14px;">Subscribe Now &#8212; $17.95</button>
+    </div>
+
+    <div class="subnote">
+      By subscribing you agree to be billed $17.95 today and $23.95 each year thereafter until
+      you cancel. You can cancel anytime from Account Options; cancellation takes effect at the
+      end of the period already paid for.
+    </div>
+
+  </div>
+
+</div></div>
+</body></html>
