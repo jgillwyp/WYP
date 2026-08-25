@@ -834,6 +834,9 @@ function BecomeSubscriberPromo() {
           available at $10 per 5 GB per year).
         </li>
         <li>
+          <strong>Automatic Repeating</strong> — for Requests and ToDos.
+        </li>
+        <li>
           <strong>Request Texting</strong> — deliver Requests by SMS text in addition to
           email.
         </li>

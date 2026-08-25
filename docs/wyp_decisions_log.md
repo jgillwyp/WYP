@@ -122,6 +122,16 @@ for the testing period... Off by default."). The other ten checknotes
 already ended this way and needed no change. `npx tsc --noEmit`/`npm run
 lint` clean.
 
+**Same-day follow-up: Automatic Repeating added to Subscriber Features.**
+Jim noticed the What's-included list never mentioned Repeat, an existing
+subscriber-gated feature (built 2026-08-21) — pasted a draft list with a new
+bullet, "Automatic Repeating — for Requests and ToDos," positioned between
+storage and Request Texting. Added verbatim, matching the existing
+`<strong>Feature</strong> — description.` pattern, to both
+`AccountForm.tsx`'s `BecomeSubscriberPromo` and
+`design/screens/WYP_subscribe_palette1.html`. `npx tsc --noEmit`/`npm run
+lint` clean.
+
 **Same-day, separate small wording fix** — Subscribe mockup's What's-included
 list: "5 GB of storage included for attachments (additional storage
 available at $10 per 5 GB per year)." dropped "included" and switched to the
