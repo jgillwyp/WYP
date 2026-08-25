@@ -2462,10 +2462,18 @@ body {
 }
 
 /* Search bar — Search Mode redesign, 2026-08-19 (see MainScreen.tsx's own
-   file-header comment for the full reasoning). .scope is now a real
-   `<select>` (All / Date Range), not a visual-only button; flex-wrap lets
-   the Date Range fields and the Clear Search control drop to their own line
-   on a narrow phone rather than squeezing everything onto one row. */
+   file-header comment for the full reasoning). flex-wrap lets the Date
+   Range fields and the Clear Search control drop to their own line on a
+   narrow phone rather than squeezing everything onto one row.
+   .scopechips (2026-08-25) replaces an earlier native `<select>` — Jim
+   reported that on Android Chrome a 2-option `<select>` opens the OS's own
+   full-screen radio-button dialog rather than a compact dropdown, which no
+   amount of CSS on the `<select>` itself can suppress (it's native picker
+   chrome, not rendered by the page). Two `.chip` buttons instead, same
+   All/Dates choice, same `selectSearchScope()` handler — reuses the app's
+   own filter-chip visual language (Main Screen's Sent/Received/ToDos status
+   chips, Archive's Action/Record Type rows) rather than any native form
+   control, so there's no OS-level widget left to diverge across platforms. */
 .searchbar {
   flex: 0 0 auto;
   display: flex;
@@ -2477,18 +2485,19 @@ body {
   padding: 8px var(--pad);
 }
 
-.scope {
+.scopechips {
   flex: 0 0 auto;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink);
-  background: #fff;
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  padding: 9px 10px;
-  cursor: pointer;
+  display: flex;
+  gap: 6px;
   white-space: nowrap;
+}
+
+.scopechips .chip.sel {
+  background: #fff;
+  border: 1.5px solid var(--brand-blue);
+  color: var(--brand-blue);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(42, 95, 200, .18);
 }
 
 /* flex-basis of 60px (not auto) — 2026-08-19, owner: the magnifying glass

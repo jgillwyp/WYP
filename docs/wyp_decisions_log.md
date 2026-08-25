@@ -6,6 +6,36 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-25 — Search scope picker: native `<select>` replaced with chip buttons (Android fix)
+
+Jim: on his laptop, the Search scope choices (All / Dates) show as an
+expected compact pull-down; on his Android phone (S24+), the same control
+opens a large radio-button dialog in the vertical middle of the screen.
+
+Root cause: `.scope` was a native `<select>` with only two options.
+Chrome on Android renders a `<select>`'s options using the OS's own native
+picker chrome, not anything the page draws — with few options, that native
+picker is a full-height Material dialog with radio buttons, not a compact
+anchored dropdown (which is what desktop Chrome shows, and what a
+custom-built dropdown would show everywhere). No CSS applied to the
+`<select>` itself can change this, since the dropdown surface isn't part of
+the page's own DOM/render tree once opened.
+
+Fix: replaced the native `<select>` with two `.chip` buttons ("All" /
+"Dates"), reusing the app's own filter-chip visual language and the
+existing `.chip.sel` selected-state pattern (Main Screen's own Sent/
+Received/ToDos status chips, Archive's Action/Record Type rows,
+2026-08-25's own UnArchive batch). `selectSearchScope()` was already a
+plain function taking `'all' | 'daterange'`, so no logic changed — only the
+markup and a new `.scopechips`/`.scopechips .chip.sel` CSS pair (mirroring
+`.archtyperow .chip.sel`'s own scoped-duplicate convention, documented at
+that rule's own definition) replacing the old `.scope` rule. Chips render
+identically on every platform, since there's no OS-level form control left
+to diverge. `npx tsc --noEmit`/`npm run lint` clean. No mockup change —
+none of the existing mockups model Search.
+
+\---
+
 ## 2026-08-25 — Main Screen ad banner gated by subscription tier; Archive gains a full UnArchive action (migration 046)
 
 Jim, with a pasted screenshot of the Archive screen showing a new "Action"

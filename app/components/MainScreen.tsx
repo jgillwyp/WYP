@@ -43,9 +43,9 @@ import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
  *   (Received) / category name (ToDos), case-insensitive substring, in the
  *   default "All" scope. **Search Mode redesign, 2026-08-19** — supersedes
  *   the "scope button stays visual-only" note that used to be here. The
- *   scope button is now a real two-item picker (a plain `<select>`, styled
- *   to match): "All" (the text search above) or "Date Range," which swaps
- *   the text field for paired From/To Due Date fields — either side alone is
+ *   scope control is a real two-item picker: "All" (the text search above)
+ *   or "Date Range," which swaps the text field for paired From/To Due Date
+ *   fields — either side alone is
  *   a valid search (matchesDateRange below). Results still render inside
  *   Sent/Received/ToDos' own three sections, never a separate screen or a
  *   blended list ("showing results within the main screen would be more
@@ -1821,15 +1821,22 @@ export default function MainScreen() {
           </div>
 
           <div className="searchbar sb">
-            <select
-              className="scope"
-              value={searchScope}
-              onChange={(e) => selectSearchScope(e.target.value as 'all' | 'daterange')}
-              aria-label="Search scope"
-            >
-              <option value="all">All</option>
-              <option value="daterange">Dates</option>
-            </select>
+            <div className="scopechips" role="group" aria-label="Search scope">
+              <button
+                className={`chip${searchScope === 'all' ? ' sel' : ''}`}
+                type="button"
+                onClick={() => selectSearchScope('all')}
+              >
+                All
+              </button>
+              <button
+                className={`chip${searchScope === 'daterange' ? ' sel' : ''}`}
+                type="button"
+                onClick={() => selectSearchScope('daterange')}
+              >
+                Dates
+              </button>
+            </div>
 
             {searchScope === 'all' ? (
               <div className="fieldwrap">
