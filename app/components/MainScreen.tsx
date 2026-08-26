@@ -604,6 +604,50 @@ const TODO_SORT_KEY = 'wyp.mainTodoSort'
 // stray offset once real content changes the page's height.
 const MAIN_SCROLL_KEY = 'wyp.mainScrollTop'
 
+// Search round-trip persistence (2026-08-26) — owner-reported: clicking a
+// Search Results row (Sent/Received/ToDos) to open its Request/ToDo/
+// Response Detail, then Close/Cancel back, dropped straight into a normal,
+// non-searching Main Screen instead of the same Search results the row was
+// opened from. Root cause is the same one this file's own 2026-08-09
+// scroll-position/chip-filter fixes already solved for other state:
+// router.back() from a Detail screen still fully remounts this component
+// (this app deliberately doesn't use Next 16's opt-in Cache Components/
+// Activity — see next.config.ts — so the remount is real, not cached), and
+// plain useState resets to its initial value on every remount. The three
+// row-click handlers below already had nothing marking "this navigation
+// should come back to what I had" the way ArchiveForm.tsx's own
+// ARCHIVE_ROUNDTRIP_KEY already does for that screen's filters/selection —
+// same shape, applied here to searchText/searchScope/fromDate/toDate.
+// Deliberately scoped to the one round trip, not a permanent persistence
+// like the sentFilter/receivedFilter/todoFilter chips above: a fresh visit
+// to Main Screen (not returning from a just-opened Detail row) still starts
+// with Search cleared, matching this file's own 2026-08-09 decision that a
+// search-in-progress shouldn't survive indefinitely across visits.
+const MAIN_SEARCH_TEXT_KEY = 'wyp.mainSearchText'
+const MAIN_SEARCH_SCOPE_KEY = 'wyp.mainSearchScope'
+const MAIN_SEARCH_FROM_KEY = 'wyp.mainSearchFrom'
+const MAIN_SEARCH_TO_KEY = 'wyp.mainSearchTo'
+const MAIN_SEARCH_ROUNDTRIP_KEY = 'wyp.mainSearchRoundTrip'
+
+// Read-only check of the round-trip marker the three row-click handlers set
+// — used by the search useState lazy initializers below to decide whether
+// to restore stored search state or start blank. Checked synchronously
+// inside each initializer (React guarantees these run exactly once per
+// mount, before first paint) rather than via a setState call in a
+// useEffect, matching ArchiveForm.tsx's own isArchiveRoundTrip() and its
+// own comment on why (avoids an extra render and the
+// react-hooks/set-state-in-effect lint rule, for no benefit here since the
+// value is already known synchronously at mount time).
+function isMainSearchRoundTrip(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.sessionStorage.getItem(MAIN_SEARCH_ROUNDTRIP_KEY) === '1'
+}
+
+function readStoredString(key: string): string {
+  if (typeof window === 'undefined') return ''
+  return window.sessionStorage.getItem(key) ?? ''
+}
+
 type FilterValue = 'all' | 'open' | 'overdue' | 'done'
 const FILTER_VALUES = ['all', 'open', 'overdue', 'done'] as const
 
@@ -780,7 +824,15 @@ export default function MainScreen() {
   const [todoFilter, setTodoFilter] = useState<FilterValue>(() =>
     readStoredChip(TODO_FILTER_KEY, FILTER_VALUES, 'open')
   )
-  const [searchText, setSearchText] = useState('')
+  // Search round-trip persistence (2026-08-26) — see the MAIN_SEARCH_*_KEY
+  // constants' own comment above for the full reasoning. Each lazy
+  // initializer restores its stored value only when isMainSearchRoundTrip()
+  // is true (i.e. this mount is the return leg of a Search Results row
+  // click); any other mount — including a plain page reload or clicking
+  // Main Screen from elsewhere — starts blank, same as before this fix.
+  const [searchText, setSearchText] = useState(() =>
+    isMainSearchRoundTrip() ? readStoredString(MAIN_SEARCH_TEXT_KEY) : ''
+  )
 
   // Search Mode redesign (2026-08-19) — owner: showing search results within
   // Main Screen itself (not a separate screen) is "more logical," the Date
@@ -798,9 +850,49 @@ export default function MainScreen() {
   // searchText on entry and All clears fromDate/toDate on entry, so only one
   // field-set is ever "live" at a time — no stale hidden criteria silently
   // narrowing a result set the person can no longer see.
-  const [searchScope, setSearchScope] = useState<'all' | 'daterange'>('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [searchScope, setSearchScope] = useState<'all' | 'daterange'>(() =>
+    isMainSearchRoundTrip()
+      ? (readStoredString(MAIN_SEARCH_SCOPE_KEY) === 'daterange' ? 'daterange' : 'all')
+      : 'all'
+  )
+  const [fromDate, setFromDate] = useState(() =>
+    isMainSearchRoundTrip() ? readStoredString(MAIN_SEARCH_FROM_KEY) : ''
+  )
+  const [toDate, setToDate] = useState(() =>
+    isMainSearchRoundTrip() ? readStoredString(MAIN_SEARCH_TO_KEY) : ''
+  )
+
+  // Persist every change so the round-trip restore above always reads the
+  // latest values, not just whatever was live at the moment of navigation.
+  useEffect(() => {
+    window.sessionStorage.setItem(MAIN_SEARCH_TEXT_KEY, searchText)
+  }, [searchText])
+  useEffect(() => {
+    window.sessionStorage.setItem(MAIN_SEARCH_SCOPE_KEY, searchScope)
+  }, [searchScope])
+  useEffect(() => {
+    window.sessionStorage.setItem(MAIN_SEARCH_FROM_KEY, fromDate)
+  }, [fromDate])
+  useEffect(() => {
+    window.sessionStorage.setItem(MAIN_SEARCH_TO_KEY, toDate)
+  }, [toDate])
+
+  // Consumed-once marker: clears on every mount so the *next* mount defaults
+  // back to "fresh" (blank search) unless openDetailRow() below runs again
+  // first, matching ArchiveForm.tsx's own ARCHIVE_ROUNDTRIP_KEY convention.
+  // No setState involved, so this can't trip react-hooks/set-state-in-effect.
+  useEffect(() => {
+    window.sessionStorage.removeItem(MAIN_SEARCH_ROUNDTRIP_KEY)
+  }, [])
+
+  // Sets the round-trip marker, then navigates to a Sent/Received/ToDo row's
+  // own Detail screen — used by all three sections' row click/Enter-key
+  // handlers below, so a returning Close/Cancel lands back on the same
+  // Search results rather than a cleared, non-searching Main Screen.
+  function openDetailRow(path: string) {
+    window.sessionStorage.setItem(MAIN_SEARCH_ROUNDTRIP_KEY, '1')
+    router.push(path)
+  }
 
   function selectSearchScope(next: 'all' | 'daterange') {
     setSearchScope(next)
@@ -889,13 +981,14 @@ export default function MainScreen() {
   // bottom-of-screen .adslot ("AD — 320×50 RESERVED") was rendering
   // unconditionally, for every account regardless of tier, contradicting
   // this app's own "Ad-free — removes the ad banner shown to Free accounts"
-  // Subscriber Features pitch (AccountForm.tsx's BecomeSubscriberPromo /
-  // the Subscribe mockup). Read on the same profiles round trip as
-  // categoriesEnabled/requestTimeEnabled/todoDatesEnabled above, no extra
-  // query. .subbanner ("See Subscription Features and Other Options")
-  // stays unconditional — it was never part of the owner's report, and it
-  // already links onward to Account Options, which still has content worth
-  // seeing (the other, non-Subscriber sections) regardless of tier.
+  // Subscriber Features pitch (SubscriptionPanels.tsx's BecomeSubscriberPitch,
+  // shared with AccountForm.tsx and SubscriptionForm.tsx). Read on the same
+  // profiles round trip as categoriesEnabled/requestTimeEnabled/
+  // todoDatesEnabled above, no extra query. .subbanner ("See Subscription
+  // Features and Other Options") stays unconditional and, as of 2026-08-26,
+  // is wired to navigate to /account/subscription (SubscriptionForm.tsx) —
+  // it shows real Subscriber content for a subscriber too (Renewal Date,
+  // Attachment Storage, Plan Summary), not just a Free-account pitch.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
 
   // Due/Done Time is now an opt-in account preference too (migration 019,
@@ -1397,8 +1490,8 @@ export default function MainScreen() {
                       className={`row${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}
                       role="button"
                       tabIndex={0}
-                      onClick={() => router.push(`/requests/${r.id}`)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/requests/${r.id}`) }}
+                      onClick={() => openDetailRow(`/requests/${r.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') openDetailRow(`/requests/${r.id}`) }}
                     >
                       <div className="r1">
                         <span className="nm">{r.contacts?.display_name ?? '—'}</span>
@@ -1515,8 +1608,8 @@ export default function MainScreen() {
                       className={`row${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}
                       role="button"
                       tabIndex={0}
-                      onClick={() => router.push(`/requests/${r.id}/respond`)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/requests/${r.id}/respond`) }}
+                      onClick={() => openDetailRow(`/requests/${r.id}/respond`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') openDetailRow(`/requests/${r.id}/respond`) }}
                     >
                       <div className="r1">
                         <span className="nm">{r.owner_name ?? '—'}</span>
@@ -1622,8 +1715,8 @@ export default function MainScreen() {
                       className={`row td${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}
                       role="button"
                       tabIndex={0}
-                      onClick={() => router.push(`/todos/${t.id}`)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/todos/${t.id}`) }}
+                      onClick={() => openDetailRow(`/todos/${t.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') openDetailRow(`/todos/${t.id}`) }}
                     >
                       <div className={`trd${todoDatesEnabled ? ' wide' : ''}`}>
                         <span className="pri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>
@@ -1894,7 +1987,17 @@ export default function MainScreen() {
           <div className="scroll-pad" />
         </div>
 
-        <div className="subbanner" role="button" tabIndex={0}>See Subscription Features and Other Options</div>
+        <div
+          className="subbanner"
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push('/account/subscription')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') router.push('/account/subscription')
+          }}
+        >
+          See Subscription Features and Other Options
+        </div>
         {tier !== 'subscriber' && (
           <div className="adslot" aria-hidden="true"><span className="adbox">AD — 320×50 RESERVED</span></div>
         )}

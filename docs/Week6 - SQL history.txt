@@ -2926,3 +2926,98 @@ commit;
 --   own UnArchive path needs no migration to test, since it was already
 --   plain-RLS-writable.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 047 — profiles.subscription_renewal_date /
+-- subscription_storage_gb, for the new "My Subscription" screen
+-- CONFIRMED RUN by Jim, 2026-08-26.
+--
+-- Context: Jim's own five mockups for a "Become a Subscriber" (Free) /
+-- "My Subscription" (Subscriber) pair of screens — one reached by clicking
+-- "See Subscription Features and Other Options," one shown condensed inside
+-- Account Options' own Subscriber section. Both need a Renewal Date and an
+-- Attachment Storage Space to display, and neither has a real data source
+-- yet — there is no billing system in this app (CLAUDE.md's own Scope
+-- Discipline defers payments on purpose). Two small columns stand in for
+-- that during Private Testing, confirmed with Jim directly (not a design
+-- guess): "Renewal Date/Storage persist based on date of clicking the
+-- 'Subscribe? (Test...)' checkbox."
+--
+-- subscription_renewal_date — set to current_date + 365 days every time
+-- set_tier_for_testing('subscriber') actually runs (i.e. every time the
+-- testing checkbox is checked, including re-checking after having
+-- unchecked it — "based on date of clicking"). Left untouched when the
+-- call is set_tier_for_testing('free'), so unchecking the box to go back
+-- to a Free view doesn't wipe out a date Jim may still want to look at.
+-- Nullable — reads null for any account that has never once been a tester
+-- Subscriber (the app's own UI never needs to render it in that state,
+-- since the "My Subscription" content only ever shows for tier =
+-- 'subscriber').
+--
+-- subscription_storage_gb — the account's actual granted storage, not a
+-- purchase-preview value. Defaults 5 (matches the Subscriber Features
+-- list's own "5 GB of storage" line) and is not written by
+-- set_tier_for_testing or by the new screen's "Buy Add'l" button — that
+-- button is inert during Private Testing (same "not available yet" pattern
+-- as the existing Sign Up button), so there is no real purchase yet to
+-- reflect here. The 5 GB/10 GB chip pair on the new screen is a page-local
+-- "price this size" selector for the dynamic Buy Add'l dollar amount, not
+-- tied to this column.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists subscription_renewal_date date,
+  add column if not exists subscription_storage_gb smallint not null default 5;
+
+-- Same function, same signature — only the subscriber branch gains the
+-- renewal-date write. Re-grepped migration 035's own text above rather
+-- than recalled from memory, per this file's own established convention
+-- for editing a previously-shipped function body.
+create or replace function public.set_tier_for_testing(p_tier text)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.can_toggle_tier() then
+    raise exception 'Not permitted.';
+  end if;
+
+  if p_tier not in ('free', 'subscriber') then
+    raise exception 'Invalid tier.';
+  end if;
+
+  if p_tier = 'subscriber' then
+    update public.profiles
+      set tier = p_tier,
+          subscription_renewal_date = current_date + interval '365 days'
+      where id = auth.uid();
+  else
+    update public.profiles
+      set tier = p_tier
+      where id = auth.uid();
+  end if;
+end;
+$$;
+
+revoke all on function public.set_tier_for_testing(text) from public;
+grant execute on function public.set_tier_for_testing(text) to authenticated;
+
+commit;
+
+-- Verify (superuser, proves creation only — the real check is the browser):
+--   select column_name, data_type, column_default
+--   from information_schema.columns
+--   where table_name = 'profiles'
+--     and column_name in ('subscription_renewal_date', 'subscription_storage_gb');
+--
+-- Verify as a client:
+--   On /account, open the Subscriber section, check "Subscribed? (testing
+--   only)" — the new "My Subscription" content (embedded panel and the
+--   full /account/subscription page) should show a Renewal Date exactly
+--   365 days from today. Uncheck it, check it again a day later — the date
+--   should move to that day + 365, not stay pinned to the first date.
+-- ============================================================================

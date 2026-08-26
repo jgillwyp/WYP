@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPanels'
 
 /**
  * Account (2026-08-13) — new, deliberately minimal. Every other time this
@@ -202,6 +203,13 @@ export default function AccountForm() {
   // ('free'/'subscriber'), not boolean, so it gets its own state and
   // handler rather than joining the shared boolean handleToggle below.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  // profiles.subscription_renewal_date / subscription_storage_gb (migration
+  // 047, 2026-08-26) — feed the "My Subscription" summary
+  // (SubscriptionPanels.tsx) shown here and on the full /account/
+  // subscription page. See that migration's own header comment for why
+  // these stand in for real billing data during Private Testing.
+  const [renewalDate, setRenewalDate] = useState<string | null>(null)
+  const [storageGb, setStorageGb] = useState(5)
   // Locked down, migration 035 — the whole Subscriber Options section is
   // hidden unless this is true, rather than shown and failing on click.
   // Defaults false so there is no flash of the section before
@@ -242,7 +250,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier'
+          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb'
         )
         .eq('id', userData.user.id)
         .single()
@@ -269,6 +277,8 @@ export default function AccountForm() {
       setTodoReminderDefaultDayOf(data?.todo_reminder_default_day_of ?? false)
       setTodoReminderDefaultDayAfter(data?.todo_reminder_default_day_after ?? false)
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
+      setRenewalDate(data?.subscription_renewal_date ?? null)
+      setStorageGb(data?.subscription_storage_gb ?? 5)
 
       // can_toggle_tier() (migration 035) — a failure here (RPC missing,
       // network hiccup) is treated as "not allowed" rather than surfaced
@@ -340,12 +350,26 @@ export default function AccountForm() {
 
     const { error: updateError } = await supabase.rpc('set_tier_for_testing', { p_tier: nextTier })
 
-    setSaving(false)
-
     if (updateError) {
       setTier(next ? 'free' : 'subscriber')
       setSaveError(updateError.message)
+      setSaving(false)
+      return
     }
+
+    // Migration 047 sets subscription_renewal_date server-side on the
+    // subscriber transition — re-read the fresh row rather than guessing
+    // the new date client-side, same pattern as SubscriptionForm.tsx's own
+    // copy of this handler.
+    const { data } = await supabase
+      .from('profiles')
+      .select('subscription_renewal_date, subscription_storage_gb')
+      .eq('id', userId)
+      .single()
+
+    setRenewalDate(data?.subscription_renewal_date ?? null)
+    setStorageGb(data?.subscription_storage_gb ?? 5)
+    setSaving(false)
   }
 
   function handleClose() {
@@ -749,17 +773,17 @@ export default function AccountForm() {
               Every non-subscriber sees the real "Become a Subscriber" pitch
               (Jim's own written content) instead; the section only used to
               be worth showing for the handful of people allowed to flip the
-              testing toggle. */}
+              testing toggle. Content as of 2026-08-26 comes from the shared
+              SubscriptionPanels.tsx (variant="embedded") rather than a
+              local copy — see that file's own header comment. */}
           <div className="subcard">
             {sectionHead('Subscriber', subscriberOpen, setSubscriberOpenAndStore)}
             {subscriberOpen && (
               <div className="subbody">
                 {tier === 'subscriber' ? (
-                  <p className="promo-p" style={{ margin: '0 0 4px' }}>
-                    You have Subscriber features. Thank you for subscribing.
-                  </p>
+                  <MySubscriptionSummary variant="embedded" renewalDate={renewalDate} storageGb={storageGb} />
                 ) : (
-                  <BecomeSubscriberPromo />
+                  <BecomeSubscriberPitch variant="embedded" />
                 )}
 
                 {canToggleTier && (
@@ -776,7 +800,7 @@ export default function AccountForm() {
                         Sets your account to the Subscriber tier so subscriber-only features
                         like Attachments can be tested. This status only lasts for the
                         testing period — once testing ends, this checkbox goes away and you
-                        would subscribe for real, through the button above. Off by default.
+                        would subscribe for real, through the button below. Off by default.
                       </span>
                     </span>
                   </label>
@@ -792,85 +816,6 @@ export default function AccountForm() {
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-// "Become a Subscriber" pitch (2026-08-24) — Jim's own written content
-// ("Subscriber Features" / "Cost" / "Sign up for a 1st year discount"),
-// lightly edited for wording only, shown to every non-subscriber who opens
-// the Subscriber section of Account Options. Reuses the existing .promo/
-// .promo-h/.promo-p/.promo .btn component (Request Response's "Free Account
-// Features" pitch, §6.2x) rather than inventing a new container — new
-// .promo-features/.promo-sub classes cover the parts that component didn't
-// already have (a labeled feature list, a price block).
-//
-// The CTA has nowhere real to go yet — there is no eCommerce/checkout page
-// in this app (PRD's own Scope Discipline defers payments on purpose). It's
-// built as a real, clickable primary button rather than left silently inert,
-// since a button that does nothing on click is worse than one that says so:
-// clicking it reveals a small explanatory note instead of navigating
-// anywhere. Swap this out for a real `next/link` to the checkout page once
-// one exists.
-function BecomeSubscriberPromo() {
-  const [clicked, setClicked] = useState(false)
-
-  return (
-    <div className="promo" style={{ margin: '0 0 4px' }}>
-      <div className="promo-h">Become a Subscriber</div>
-
-      <div className="promo-sub">Subscriber Features</div>
-      <ul className="promo-features">
-        <li>
-          <strong>Voice dictation</strong> — speak your Request and ToDo Description and
-          Dialog entries instead of typing.
-        </li>
-        <li>
-          <strong>File attachments</strong> — send and receive documents, photos, and PDFs
-          with your Requests and Responses.
-        </li>
-        <li>
-          <strong>5 GB of storage</strong> — for attachments (additional storage
-          available at $10 per 5 GB per year).
-        </li>
-        <li>
-          <strong>Automatic Repeating</strong> — for Requests and ToDos.
-        </li>
-        <li>
-          <strong>Request Texting</strong> — deliver Requests by SMS text in addition to
-          email.
-        </li>
-        <li>
-          <strong>Ad-free</strong> — removes the ad banner shown to Free accounts.
-        </li>
-        <li>
-          <strong>Priority support</strong> — via email.
-        </li>
-      </ul>
-
-      <div className="promo-sub" style={{ marginTop: 12 }}>
-        Cost
-      </div>
-      <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        1st year subscription — 25% discount, only <strong>$17.95</strong>
-        <br />
-        Per year subscription — <strong>$23.95</strong> thereafter
-      </p>
-
-      <button
-        type="button"
-        className="btn"
-        style={{ width: '100%', marginTop: 12 }}
-        onClick={() => setClicked(true)}
-      >
-        Sign up for a 1st year discount
-      </button>
-
-      {clicked && (
-        <p className="promo-p" style={{ margin: '8px 0 0' }}>
-          Subscription checkout isn&rsquo;t available yet — check back soon.
-        </p>
-      )}
     </div>
   )
 }

@@ -3046,6 +3046,45 @@ body {
   font-weight: 700;
 }
 
+/* Plan Summary line items (2026-08-26) — ported verbatim from
+   design/screens/WYP_subscribe_palette1.html's own .planrow/.plan-name/
+   .plan-sub/.plan-price, so the live "My Subscription" screen's own Plan
+   Summary panel (SubscriptionPanels.tsx) matches that mockup exactly.
+   Plan name left (with a smaller sub-line underneath), price right. */
+.planrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-top: 1px solid rgba(31, 41, 51, 0.08);
+}
+
+.planrow:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.plan-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.plan-sub {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin-top: 1px;
+}
+
+.plan-price {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
 /* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — Request Response's
    one-click "mark as Done" shortcut, sitting between the grabber divider
    and the editable Done Date/Done Time row. Strip band + inline .btn,

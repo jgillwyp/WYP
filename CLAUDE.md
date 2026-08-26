@@ -2913,3 +2913,49 @@ link is built only after the stack is proven on Add Contact.
   considered design call, flagged rather than assumed uncontroversial).
   `npx tsc --noEmit`/`npm run lint` clean across both fixes. See the
   decisions log's 2026-08-25 entry for the full write-up.
+- **Search results now survive the round trip to a Detail screen and back
+  (2026-08-26).** Jim: opening a Sent/Received/ToDo row from Search Results
+  to view its Request/ToDo/Response Detail, then Close/Cancel back, dropped
+  into a normal non-searching Main Screen instead of the same search
+  results — "the app should instead return to the search results." Same
+  root cause as this file's own 2026-08-09 scroll-position/filter-chip
+  fixes (a Detail-screen round trip fully remounts `MainScreen.tsx`, and
+  `searchText`/`searchScope`/`fromDate`/`toDate` were plain `useState` with
+  no persistence at all). Fixed by mirroring `ArchiveForm.tsx`'s own
+  `ARCHIVE_ROUNDTRIP_KEY` pattern (2026-08-14/16) exactly: four new
+  `sessionStorage` keys for the four search fields plus a
+  `wyp.mainSearchRoundTrip` marker; the four `useState` calls became lazy
+  initializers that restore stored values only when the marker is present;
+  a mount effect clears the marker afterward (consumed-once); a new
+  `openDetailRow(path)` helper sets the marker immediately before
+  `router.push`, replacing the bare `router.push` calls in all three
+  sections' row `onClick`/`onKeyDown` handlers. Deliberately scoped to the
+  one round trip, not permanent like the filter chips — a genuinely fresh
+  visit still starts with Search cleared, preserving the 2026-08-09
+  decision that search shouldn't persist indefinitely across visits. `npx
+  tsc --noEmit`/`npm run lint` clean. See the decisions log's 2026-08-26
+  entry for the full write-up.
+- **"My Subscription" / "Become a Subscriber" screen pair, fully dynamic —
+  migration 047 confirmed run by Jim, 2026-08-26.** New shared
+  `app/components/SubscriptionPanels.tsx` (`SUBSCRIBER_FEATURES` data,
+  `BecomeSubscriberPitch`, `MySubscriptionSummary`, plus Renewal Date/
+  Attachment Storage/Plan Summary sub-panels), used at two call sites: the
+  new full-page `/account/subscription` (`SubscriptionForm.tsx`), reached
+  from `MainScreen.tsx`'s own `.subbanner` ("See Subscription Features and
+  Other Options" — existed since 2026-08-13, was never wired to anything
+  until now), and `AccountForm.tsx`'s own embedded Subscriber section,
+  which now renders through the same components instead of its old local
+  `BecomeSubscriberPromo`. Not caption-based — fully driven by the real
+  `tier` value, which the "Subscribed? (testing only)" checkbox (top of
+  both screens, `canToggleTier`-gated) controls live during testing.
+  Migration 047 adds `profiles.subscription_renewal_date`/
+  `subscription_storage_gb` — the former recomputed to `current_date + 365`
+  every time `set_tier_for_testing('subscriber')` actually runs (Jim: "based
+  on date of clicking the checkbox"), the latter always 5 (the account's
+  real granted storage; no purchase path exists yet). Buy Add'l/Cancel
+  Renewal/Sign Up all show the same inert "not available yet" note. New
+  `.planrow`/`.plan-name`/`.plan-sub`/`.plan-price` CSS ported verbatim from
+  `design/screens/WYP_subscribe_palette1.html`. No mockups updated — Jim's
+  five reference screenshots for this batch aren't part of `design/
+  screens/`. `npx tsc --noEmit`/`npm run lint` clean. See the decisions
+  log's 2026-08-26 entry for the full write-up.

@@ -6,6 +6,155 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-26 — "My Subscription" / "Become a Subscriber" built as a shared, fully-dynamic screen pair — migration 047 confirmed run by Jim
+
+Jim supplied five of his own mockups (`subscriber page - from free account
+page.png`, `- Free Account in Housekeeping.png`, `- active.png`,
+`- Subscribed Account in Housekeeping.png`, `- cancelled.png`) describing
+four layouts he wanted figured out during Private Testing: a Free account
+clicking "See Subscription Features and Other Options" (full page), a Free
+account seeing the same information condensed inside Account Options' own
+Subscriber section, a Subscribed account's version of each. A fifth
+mockup — the cancelled-renewal state of the full page — was explicitly
+scoped out ("this page is not needed for the Private Testing phase").
+
+Per this project's own working-preference rule ("for new design proposals,
+give me the recommendation first, then the alternatives you rejected, then
+the open questions"), a recommendation was presented and confirmed before
+any code was written. Three open questions were resolved directly by Jim:
+
+1. **Renewal Date/Storage persistence** — "based on date of clicking the
+   'Subscribe? (Test...)' checkbox." Confirms migration 047 below: every
+   time `set_tier_for_testing('subscriber')` actually runs, `profiles.
+   subscription_renewal_date` is recomputed to `current_date + 365 days`
+   — re-checking the box after having unchecked it moves the date forward,
+   it doesn't stay pinned to the first time it was ever checked.
+2. **Placement of "See Subscription Features and Other Options"** — Jim
+   clarified this link already exists: `MainScreen.tsx`'s own `.subbanner`
+   (pinned at the bottom of Main Screen, outside `.scroll`, alongside
+   `.adslot`) has carried this exact text since the 2026-08-13 Print
+   Reports/subscription-banner batch, but was never wired to anything
+   (`role="button"` with no `onClick`). No new link was needed inside
+   Account Options — the existing banner just needed an `onClick`/
+   `onKeyDown` pointed at the new route. An extra link initially added to
+   the bottom of `AccountForm.tsx` for this was removed once this was
+   clarified, to avoid two competing entry points that weren't asked for.
+3. **Free-account Housekeeping preview content** — "show the real default
+   values... as if they'd just subscribed." Confirms the whole design is
+   fully dynamic, not caption-based: there is no separate "this is a
+   preview" banner anywhere in the new screens. A Free account's pitch is
+   the same real pitch every future Free account will see; a
+   testing-Subscriber account's summary shows the same real panels a
+   genuine subscriber will eventually see, backed by the two new
+   `profiles` columns instead of a real billing record. This also answers
+   the original message's own either/or ("a prefix explanation... or,
+   dynamically alter the screen") in favor of the dynamic option.
+
+**Migration 047** (`docs/Week6 - SQL history.txt`) adds `profiles.
+subscription_renewal_date date` (nullable, null until an account has once
+been a testing Subscriber) and `profiles.subscription_storage_gb smallint
+not null default 5` (the account's actual granted storage — never written
+by the testing toggle or by the new screen's Buy Add'l button, since no
+real purchase path exists yet). `set_tier_for_testing()` is the only write
+path for either column, gated by the existing migration 035
+allowlist/gate, matching this file's own established access pattern.
+**Confirmed run by Jim, 2026-08-26.**
+
+New shared `app/components/SubscriptionPanels.tsx` — `SUBSCRIBER_FEATURES`
+(one data array feeding both the "Subscriber Features" heading, Free
+pitch, and the "What's included" heading, Plan Summary), `BecomeSubscriberPitch`
+and `MySubscriptionSummary` (the two top-level tier-branching blocks), and
+three inner panels (`RenewalDatePanel`, `AttachmentStoragePanel`,
+`PlanSummaryPanel`). A `variant: 'full' | 'embedded'` prop controls (a)
+whether a redundant heading renders, since the embedded call site already
+has its own "Subscriber" `.subhead`, and (b) which of Jim's two differently-
+worded Subscribed-account intro sentences shows ("Thank you for
+subscribing" on the full page vs. "...until the Renewal Date shown below"
+embedded) — the one place this design isn't purely tier-driven, since it's
+literally different copy Jim drew for the two contexts. One implementation,
+two call sites, matching this codebase's own `AttachmentsPanel.tsx`/
+`RepeatControl.tsx` precedent for shared multi-screen components rather
+than risking two copies drifting apart.
+
+New `app/components/SubscriptionForm.tsx` + `/account/subscription` route —
+the full-page click-through screen. Same testing-checkbox-at-top pattern as
+`AccountForm.tsx`'s own copy (only rendered for `canToggleTier` accounts),
+everything below reacting live to the real `tier` value. `AccountForm.tsx`'s
+own Subscriber section now renders through the same shared components
+(`variant="embedded"`) instead of its old local `BecomeSubscriberPromo`
+function, which is deleted.
+
+**Buy Add'l pricing**, confirmed with Jim: less than 6 months remaining
+until the Renewal Date → $5 per 5 GB block (discounted); otherwise $10 per
+5 GB block. Computed client-side from `subscription_renewal_date` and a
+page-local 5 GB/10 GB chip selection — the chip itself isn't persisted,
+since it's pricing a hypothetical purchase, not recording a real one.
+Clicking Buy Add'l, Cancel Renewal, or Sign Up all show the same inert
+"Subscription checkout isn't available yet — check back soon"-style note,
+consistent with the existing Sign Up button's own established pattern; no
+real purchase, cancellation, or account-tier change happens from any of
+the three.
+
+New `.planrow`/`.plan-name`/`.plan-sub`/`.plan-price` CSS ported verbatim
+into `app/globals.css` from `design/screens/WYP_subscribe_palette1.html`
+(drafted 2026-08-24), so the live Plan Summary panel matches that mockup's
+own styling exactly rather than inventing new rules.
+
+**No mockups updated for this batch** — none of Jim's five reference
+screenshots are the app's own `design/screens/*.html` mockup files;
+`WYP_subscribe_palette1.html` remains a separate, still-unconverted
+Stripe-checkout mockup, unrelated to this batch beyond the one CSS
+component it donated. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-08-26 — Search results now survive the round trip to a Detail screen and back
+
+Jim: "when I do a Search and then click on one of the SEARCH RESULTS details
+to see a ToDo Detail, Request Detail, or Response Detail - and then close the
+detail record instead of returning to the Search showing the results, the
+Search is cleared and I see a normal main screen content. In this
+circumstance, the app should instead return to the search results."
+
+Root cause is the same shape of problem this file's own 2026-08-09 scroll-
+position and filter-chip fixes already solved for other Main Screen state:
+`router.push`/`router.back()` to and from a Detail screen fully remounts
+`MainScreen.tsx` (this app deliberately doesn't use Next 16's opt-in Cache
+Components/Activity — see `next.config.ts`), and `searchText`/`searchScope`/
+`fromDate`/`toDate` were plain `useState()` with no persistence at all, unlike
+the sentFilter/receivedFilter/todoFilter chips (sessionStorage-backed since
+2026-08-09) — so every one of the four reset to blank/`'all'` on the way
+back, regardless of whether the visit was a fresh one or a same-second round
+trip.
+
+Fixed by mirroring `ArchiveForm.tsx`'s own `ARCHIVE_ROUNDTRIP_KEY` pattern
+(built 2026-08-14, extended 2026-08-16) exactly, applied to the four search
+fields instead of Archive's own filter/selection state: four new
+`sessionStorage` keys (`wyp.mainSearchText`/`Scope`/`From`/`To`) plus a
+`wyp.mainSearchRoundTrip` marker. The four search `useState` calls became
+lazy initializers that restore their stored value only when
+`isMainSearchRoundTrip()` reads the marker as `'1'`; a persistence `useEffect`
+per field keeps the stored value current; a mount effect unconditionally
+clears the marker afterward (consumed-once, so the *next* mount defaults back
+to a fresh, non-searching Main Screen unless the marker is set again); and a
+new `openDetailRow(path)` helper sets the marker immediately before
+`router.push(...)`, replacing the bare `router.push` calls in all three
+sections' row `onClick`/`onKeyDown` handlers (Sent → `/requests/[id]`,
+Received → `/requests/[id]/respond`, ToDos → `/todos/[id]`).
+
+Deliberately scoped to the one round trip, not made permanent like the filter
+chips — a genuinely fresh visit to Main Screen (not returning from a
+just-opened Detail row) still starts with Search cleared, preserving this
+file's own 2026-08-09 decision that a search-in-progress shouldn't persist
+indefinitely across visits; only Jim's specific complaint (losing search
+results after Close/Cancel on the very screen just opened from them) is
+addressed. No `readStoredString`-equivalent helper existed yet in
+`MainScreen.tsx` (ArchiveForm.tsx has its own local copy, per this codebase's
+established per-file-duplication convention for small stateless helpers) —
+added one. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-25 — Search band reorganized for phone width; ad banner gated everywhere it appears, not just Main Screen
 
 Two follow-ups from Jim's own testing of the two batches directly above.

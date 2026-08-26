@@ -379,3 +379,23 @@ anywhere in this app), so it's a real clickable button that reveals a
 "checkout isn't available yet" note in place rather than a dead link or a
 silent no-op. See the decisions log's 2026-08-24 entry for the full
 write-up, including the updated cost/revenue model this pricing feeds.
+
+## 2026-08-26 — "My Subscription" / "Become a Subscriber" screen pair: no mockup
+
+Jim's own five reference screenshots for this batch (`subscriber page -
+from free account page.png`, `- Free Account in Housekeeping.png`,
+`- active.png`, `- Subscribed Account in Housekeeping.png`,
+`- cancelled.png`) aren't part of `design/screens/` and weren't converted
+into one — same posture as every other Account Options entry above, which
+has never had a mockup of its own. The new full-page `/account/
+subscription` screen (`SubscriptionForm.tsx`) landed directly in the live
+components, built around a new shared `SubscriptionPanels.tsx` also used by
+`AccountForm.tsx`'s own Subscriber section, reusing `.promo`/`.promo-sub`/
+`.promo-features` plus new
+`.planrow`/`.plan-name`/`.plan-sub`/`.plan-price` (ported verbatim from
+`WYP_subscribe_palette1.html`, the one exception — that mockup is a
+separate, still-unconverted Stripe-checkout screen, unrelated to this batch
+beyond donating that one CSS component). The fifth mockup (cancelled
+renewal) was explicitly scoped out by Jim ("not needed for the Private
+Testing phase") and isn't built, live or as a mockup. See the decisions
+log's 2026-08-26 entry for the full write-up.
