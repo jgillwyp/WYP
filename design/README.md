@@ -416,3 +416,19 @@ JS to convert. Migration 048 (folding existing ToDo Locations into their
 own parent's Description, `docs/Week6 - SQL history.txt`) is **drafted,
 not yet confirmed run by Jim**. See the decisions log's 2026-08-26 entry
 for the full write-up.
+
+## 2026-08-27 — Conversion banner gains a copy-Dialog-and-Attachments option: no mockup
+
+Jim's own follow-up mockup for the "Create a Request from this ToDo" modal
+(pasted screenshot) moved the banner's "Carries..." wording into the modal
+itself and added a combined "Include Attachments and Dialog" checkbox —
+built directly into `ConversionBanner.tsx`, the same live-only component
+this feature has used since 2026-08-26; no mockup exists for it and none
+was created for this extension either. New server route
+`app/api/attachments/copy/route.ts` (duplicates Storage objects + rows,
+service_role, mirroring `/api/attachments/upload`'s own posture) and new
+`applyConversionContentCopy()` in `conversionCarry.ts` (Dialog copied via a
+plain client insert, preserving Question/Answer `replies_to_id` links via
+an id-remap pass) have no mockup counterpart either — this whole feature
+family is specified live, in chat, against the running app. See the
+decisions log's 2026-08-27 entry for the full write-up.

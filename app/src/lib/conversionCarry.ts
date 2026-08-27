@@ -40,6 +40,22 @@ export type ConversionSourceType = 'owned' | 'recipient'
  * as done, the only option should be 'Archive this [ToDo, Request]'"). */
 export type ConversionDoneAction = 'none' | 'done' | 'done_archive' | 'archive_only'
 
+/** A single source Dialog entry, snapshotted client-side at Continue time
+ * (2026-08-27) — see ConversionBanner.tsx's own "Include Attachments and
+ * Dialog" checkbox. Snapshotted rather than re-fetched on the target Create
+ * screen because the 'recipient' sourceType (Response Detail) has no direct
+ * RLS access to someone else's dialog rows — the parent screen's own
+ * already-loaded thread (owned directly, or via get_received_request's
+ * SECURITY DEFINER payload) is the only copy of this data this flow can
+ * reach either way, so it travels in the payload instead of being re-read. */
+export type ConversionDialogSnapshotEntry = {
+  id: number
+  kind: 'question' | 'answer' | 'comment'
+  body: string
+  who: string
+  repliesToId: number | null
+}
+
 export type ConversionCarryPayload = {
   sourceType: ConversionSourceType
   sourceId: string
@@ -47,6 +63,16 @@ export type ConversionCarryPayload = {
   categoryName: string | null
   dueDate: string | null
   doneAction: ConversionDoneAction
+  /** "Include Attachments and Dialog" (2026-08-27) — a single combined
+   * checkbox on the banner's modal splits into these two independent
+   * flags at Continue time, since the two are copied through entirely
+   * different mechanisms (see applyConversionContentCopy below). Either
+   * can be true on its own when only one of Dialog/Attachments actually
+   * exists on the source. */
+  copyDialog: boolean
+  copyAttachments: boolean
+  /** Populated only when copyDialog is true; empty otherwise. */
+  dialogSnapshot: ConversionDialogSnapshotEntry[]
 }
 
 const CARRY_KEY = 'wyp.conversionCarry'
@@ -113,5 +139,75 @@ export async function applyConversionSideEffect(payload: ConversionCarryPayload)
     }
   } catch (err) {
     console.error('Conversion side effect failed:', err)
+  }
+}
+
+/**
+ * "Include Attachments and Dialog" (2026-08-27) — carries the source's
+ * existing Dialog thread and/or real file Attachments onto the just-created
+ * new item. Called only after that new item has actually saved, same timing
+ * rule as applyConversionSideEffect above and for the same reason: nothing
+ * here should ever run against a new item that failed to save.
+ *
+ * Dialog is inserted directly, under RLS, as the signed-in user creating the
+ * new item — "dialog: owners insert own" already permits this since they own
+ * the new item regardless of whether they owned the source. Entries are
+ * inserted in their original id order specifically so an Answer's own
+ * repliesToId can always resolve against a Question that was already
+ * inserted (and therefore already has its own new id) earlier in the same
+ * loop — a plain array copy would silently drop that link, since the
+ * original bigint ids mean nothing on the new item's own thread.
+ *
+ * Attachments require actual Storage object duplication plus a `kind =
+ * 'file'` row, which RLS refuses from a direct client insert (migration
+ * 025) — routed through /api/attachments/copy (service_role, server-only),
+ * the same posture as every other attachments API route.
+ */
+export async function applyConversionContentCopy(
+  payload: ConversionCarryPayload,
+  newItemId: string
+): Promise<void> {
+  if (payload.copyDialog && payload.dialogSnapshot.length > 0) {
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const authorId = userData.user?.id
+      if (authorId) {
+        const idMap = new Map<number, number>()
+        const sorted = [...payload.dialogSnapshot].sort((a, b) => a.id - b.id)
+        for (const entry of sorted) {
+          const { data: inserted } = await supabase
+            .from('dialog')
+            .insert({
+              request_id: newItemId,
+              author_user_id: authorId,
+              who: entry.who,
+              kind: entry.kind,
+              body: entry.body,
+              replies_to_id: entry.repliesToId != null ? idMap.get(entry.repliesToId) ?? null : null,
+            })
+            .select('id')
+            .single()
+          if (inserted) idMap.set(entry.id, inserted.id as number)
+        }
+      }
+    } catch (err) {
+      console.error('Dialog copy failed:', err)
+    }
+  }
+
+  if (payload.copyAttachments) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (accessToken) {
+        await fetch('/api/attachments/copy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ sourceRequestId: payload.sourceId, newRequestId: newItemId }),
+        })
+      }
+    } catch (err) {
+      console.error('Attachment copy failed:', err)
+    }
   }
 }

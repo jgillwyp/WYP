@@ -3079,3 +3079,51 @@ link is built only after the stack is proven on Add Contact.
   owner's own proposed mechanism verbatim ("a timestamp of initial
   attachment acquisition compared to the current time"). `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Conversion banner can now copy an existing Dialog thread and/or
+  Attachments into the new item (2026-08-27).** Jim's own follow-up on the
+  2026-08-26 Request<->ToDo conversion feature: "The create ToDo and
+  Request from a Request and ToDo should have the ability to copy existing
+  Dialog and Attachments if desired," plus a pasted mockup moving the
+  banner's "Carries..." wording into the modal and adding a single combined
+  "Include Attachments and Dialog" checkbox. `ConversionBanner.tsx`'s
+  at-rest button is now a plain `.fieldact` row with no accompanying
+  text — the sentence lives in the modal's own first line instead, with
+  "Category" appearing only when a new `categoriesEnabled` prop is true
+  (which also nulls `categoryName` in the payload when false, so a hidden
+  Category is never copied either). `.donerow-stack` (added the day before
+  for this exact text/button pairing) is now dead code, removed from
+  `globals.css`. The two Mark-as-Done checkboxes were reworded to name the
+  source item explicitly on both lines ("Mark ToDo as Done" / "Mark ToDo as
+  Done and Archive it"). The Include checkbox only renders when there's
+  something to include (`dialogEntries.length > 0` or
+  `canCopyAttachments && attachmentCount > 0`) and only names whichever of
+  Attachments/Dialog is actually present — `canCopyAttachments` is the
+  *new* item's future owner's own tier (Response Detail's `viewerTier`;
+  Request/ToDo Detail's own `tier`), never the source's issuer tier, since
+  copying onto a brand-new item is "adding" there, gated on whoever will
+  own it (CLAUDE.md's own Entitlements section). Dialog copies via a plain
+  client insert in `conversionCarry.ts`'s new `applyConversionContentCopy()`
+  — the source thread is snapshotted into the payload at Continue time
+  (`ConversionDialogSnapshotEntry[]`, since a 'recipient' source has no RLS
+  path to re-read someone else's dialog later from the target Create
+  screen), inserted in original id order with an old-id -> new-id map so an
+  Answer's `replies_to_id` still resolves correctly on the new thread.
+  Attachments require a new server route, `app/api/attachments/copy/route.ts`
+  (service_role, mirroring `/api/attachments/upload`'s posture — a
+  `kind = 'file'` row can never be created by a direct client insert) —
+  permission on the source resolved via the existing `resolvePermission()`,
+  destination ownership verified via the caller's own forwarded client,
+  gated on the caller's own tier (silent no-op if not a subscriber, per
+  Jim's own scoping: "it for attachments will only be used for
+  Subscribers"), duplicates the actual Storage object (`.copy()`, same call
+  Repeat's own carry-forward already makes) rather than sharing a
+  reference — an accepted trade-off, Jim's own words: "I also considered
+  the duplication of attachments which results from this approach and
+  would expect this process to be infrequently used." `uploaded_by`/
+  `uploaded_by_label` are set to the *caller*, not the original uploader,
+  so an unrelated original uploader never gains delete rights on the new
+  item. `CreateRequestForm.tsx`/`CreateTodoForm.tsx` call the new
+  `applyConversionContentCopy()` right alongside the existing
+  `applyConversionSideEffect()` call, same post-Save timing. No mockup
+  updated — this feature family has none; see `design/README.md`'s
+  2026-08-27 entry. `npx tsc --noEmit`/`npm run lint` clean.

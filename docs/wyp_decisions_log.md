@@ -6,6 +6,108 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-27 — Conversion banner: copy existing Dialog and Attachments into the new item
+
+Jim, with a pasted phone screenshot of the "Create a Request from this
+ToDo" modal in progress: "The create ToDo and Request from a Request and
+ToDo should have the ability to copy existing Dialog and Attachments if
+desired. The Create a Request from this ToDo panel can drop the
+'Carries...' wording and that can be placed in the choices/continue dialog
+(as shown in the paste-in mockup). I have only mocked up the Create a
+Request from this ToDo - the reverse process should have a reversed
+similar presentation, functionality, and choices. I considered separating
+the Attachments and ToDos to be copied, but was not happy with seeing the
+dialog with a larger number of choices presented. I also considered the
+duplication of attachments which results from this approach and would
+expect this process to be infrequently used - and, it for attachments
+will only be used for Subscribers." His own annotations on the screenshot
+additionally asked to (1) drop "Category" from the Carries sentence when
+Private Category isn't shown (and not copy it either), (2) reword the two
+Mark-as-Done checkboxes to name the source item explicitly, and (3) only
+show the Include checkbox — and only name whichever of Attachments/Dialog
+actually exists — when there's something to include.
+
+**Banner restructured** (`ConversionBanner.tsx`): the at-rest button no
+longer carries the "Carries..." sentence at all — it's now a plain
+`.fieldact` row with just the button, and `.donerow-stack` (added just the
+day before, specifically for this text/button pairing) is dead code,
+removed from `globals.css` the same day it was added. The sentence moved
+into the modal's own first line, wrapped in a `.checknote` paragraph, with
+"Category" appearing only when a new `categoriesEnabled` prop is true — the
+same prop nulls out `categoryName` in the outgoing payload when false,
+satisfying "don't copy them either" without the caller having to remember
+to null it itself. The two Mark-as-Done checkboxes read "Mark {ToDo/Request}
+as Done" / "Mark {ToDo/Request} as Done and Archive it" now, naming the
+source noun explicitly on both lines rather than just the second.
+
+**"Include Attachments and Dialog"** — a single checkbox, shown only when
+`dialogEntries.length > 0` or (`canCopyAttachments && attachmentCount > 0`),
+labeled to name only whichever is actually present. `canCopyAttachments` is
+deliberately the *new* item's future owner's own tier, never the source's
+issuer tier — CLAUDE.md's Entitlements section already establishes that
+rights on a Request come from its issuer, but copying something onto a
+brand-new item is *adding* it there, which is gated on whoever will own
+that new item. On Response Detail this is `viewerTier` (the signed-in
+recipient's own tier, already tracked there since 2026-08-25's ad-gating
+batch); on Request Detail/ToDo Detail it's each screen's own existing
+`tier` state.
+
+**Dialog copy — client-side, no new route.** The source's Dialog thread is
+already loaded by every calling screen (`dialogList`, owned directly or via
+`get_received_request`'s payload for Response Detail's recipient case), so
+it's snapshotted straight into the `ConversionCarryPayload`
+(`ConversionDialogSnapshotEntry[]`, new type in `conversionCarry.ts`) rather
+than re-fetched later — the 'recipient' sourceType has no RLS path to
+re-read someone else's dialog rows from the target Create screen anyway,
+so the snapshot is the only copy of this data reachable at all by that
+point. `applyConversionContentCopy()` inserts the snapshot onto the new
+item via a plain client insert (`dialog: owners insert own` already permits
+it, since the new item is always owned by the caller regardless of who
+owned the source) — entries insert in original id order specifically so an
+Answer's `replies_to_id` can resolve against a Question already inserted
+earlier in the same loop, via an old-id -> new-id map built as it goes. A
+naive array copy would have silently orphaned every Answer's link, since
+the original bigint ids mean nothing on the new item's own thread.
+
+**Attachments copy — new `app/api/attachments/copy/route.ts`, service_role,
+mirroring `/api/attachments/upload`'s own posture.** A `kind = 'file'` row
+can only ever be created server-side (migration 025's insert policy refuses
+a client-inserted one outright), so this couldn't be a plain client insert
+the way Dialog's copy is. Permission on the source is resolved through the
+same `resolvePermission()` every other attachments route already uses
+(covers both an owned source and a recipient source in one call); the
+destination's ownership is verified independently through the caller's own
+forwarded client, since `requests: owners select own` already returns
+nothing for a row the caller doesn't own — exactly the check this route
+needs, since the new item this route ever writes onto is always owned by
+whoever is calling it. Gated on the caller's own tier (not the source's
+issuer), matching the checkbox's own gating logic above; an ungated call
+(e.g. a stale client somehow reaching this route without the tier actually
+being checked) is a silent no-op (`200, copied: 0`), not an error, since
+this route is only ever invoked automatically post-Save with nothing for
+the caller to retry. Duplicates the actual Storage object (`.copy()`, same
+call Repeat's own carry-forward already makes in
+`app/api/cron/tick/route.ts`) rather than sharing a reference — Jim's own
+accepted trade-off, quoted above. `uploaded_by`/`uploaded_by_label` are set
+to the *caller*, not the original uploader — preserving the original
+uploader's id on a row now living under a different owner would hand that
+unrelated person delete rights (via migration 025's "owner or own-uploads"
+policy) on an item they have no other connection to. Also handles a
+lingering legacy `kind = 'reference'` row (pre-migration-048 ToDo
+Locations) with a plain insert, no Storage object to duplicate — kept only
+so an as-yet-unmigrated row isn't silently dropped by a copy, not a revival
+of the retired feature.
+
+`CreateRequestForm.tsx`/`CreateTodoForm.tsx`'s `doSubmit()` call the new
+`applyConversionContentCopy(pendingConversion, newItem.id)` right alongside
+the existing `applyConversionSideEffect()` call — same timing rule, same
+reasoning: nothing here should ever run against a new item that failed to
+save. `npx tsc --noEmit`/`npm run lint` clean. No mockup updated — this
+whole feature family has none; see `design/README.md`'s own 2026-08-27
+entry.
+
+\---
+
 ## 2026-08-27 — AttachmentsPanel refreshes signed URLs in the background before they expire
 
 Immediately after the Office Online viewer fix (previous entry), Jim wrote:

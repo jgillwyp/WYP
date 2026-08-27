@@ -1602,7 +1602,17 @@ export default function RequestDetailForm() {
               isDone={form.doneDate.trim() !== ''}
               description={form.description}
               categoryName={selectedCategory?.name ?? null}
+              categoriesEnabled={categoriesEnabled}
               dueDate={form.dueDate.trim() === '' ? null : form.dueDate}
+              dialogEntries={dialogList.map((e) => ({
+                id: e.id,
+                kind: e.kind,
+                body: e.body,
+                who: e.who,
+                repliesToId: e.replies_to_id,
+              }))}
+              attachmentCount={printAttachments.length}
+              canCopyAttachments={tier === 'subscriber'}
             />
 
             {error && (

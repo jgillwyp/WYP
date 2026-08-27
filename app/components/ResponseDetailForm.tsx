@@ -1128,7 +1128,17 @@ export default function ResponseDetailForm() {
               isDone={doneDate.trim() !== ''}
               description={data.description}
               categoryName={null}
+              categoriesEnabled={false}
               dueDate={data.due_date}
+              dialogEntries={dialogList.map((e) => ({
+                id: e.id,
+                kind: e.kind,
+                body: e.body,
+                who: e.who,
+                repliesToId: e.replies_to_id,
+              }))}
+              attachmentCount={printAttachments.length}
+              canCopyAttachments={viewerTier === 'subscriber'}
             />
           </form>
         </div>

@@ -6,25 +6,40 @@ import { useRouter } from 'next/navigation'
 import {
   stashConversionCarry,
   type ConversionCarryPayload,
+  type ConversionDialogSnapshotEntry,
   type ConversionDoneAction,
   type ConversionSourceType,
 } from '@/lib/conversionCarry'
 
 /**
- * Request<->ToDo conversion banner (2026-08-26) — a bottom-of-form
- * .donerow/.donenote row (same component the Send Reminder panel already
- * uses on Request Detail) offering "Create a ToDo from this Request" or
- * "Create a Request from this ToDo." Shared across Request Detail, ToDo
- * Detail, and Response Detail — the only three screens that ever show one
- * of these two directions (Response Detail is request-to-todo only, since
- * a signed-in recipient never has a ToDo of their own to convert back the
- * other way from this screen).
+ * Request<->ToDo conversion banner (2026-08-26) — a bottom-of-form button
+ * offering "Create a ToDo from this Request" or "Create a Request from this
+ * ToDo." Shared across Request Detail, ToDo Detail, and Response Detail —
+ * the only three screens that ever show one of these two directions
+ * (Response Detail is request-to-todo only, since a signed-in recipient
+ * never has a ToDo of their own to convert back the other way from this
+ * screen).
  *
  * Continue never touches the source item itself — it only stashes a
  * ConversionCarryPayload (app/src/lib/conversionCarry.ts) and navigates to
- * the other record type's Create screen, which applies both the
- * pre-fill and any queued Done/Archive side effect only once its own
- * Save/Send actually succeeds.
+ * the other record type's Create screen, which applies the pre-fill and any
+ * queued Done/Archive/content-copy side effect only once its own Save/Send
+ * actually succeeds.
+ *
+ * "Carries..." wording moved from the at-rest button row into the modal
+ * itself (2026-08-27, Jim's own mockup) — the button alone sits in a plain
+ * .fieldact row now; the modal's own first line carries the descriptive
+ * text, conditioned on categoriesEnabled so Category is never mentioned (or
+ * copied — see handleContinue) when the account has it turned off.
+ *
+ * "Include Attachments and Dialog" (2026-08-27) — a single combined
+ * checkbox, shown only when there's actually something to include (Jim
+ * explicitly rejected splitting it into two: "I considered separating the
+ * Attachments and ToDos to be copied, but was not happy with seeing the
+ * dialog with a larger number of choices presented"). Its label names only
+ * whichever of Attachments/Dialog is actually available, and Attachments is
+ * only ever offered when the *new* item's own owner (the caller) is a
+ * subscriber — Jim: "it for attachments will only be used for Subscribers."
  */
 
 type Direction = 'request-to-todo' | 'todo-to-request'
@@ -36,7 +51,27 @@ type Props = {
   isDone: boolean
   description: string
   categoryName: string | null
+  /** Whether the account currently shows Private Category at all — governs
+   * both the modal's wording ("Description, Category, and Due Date" vs.
+   * "Description and Due Date") and whether categoryName is actually
+   * carried into the payload. Response Detail always passes false (a
+   * Request's Category is never shown to its recipient, PRD §2.3), matching
+   * its own categoryName={null}. */
+  categoriesEnabled: boolean
   dueDate: string | null
+  /** The source's own Dialog thread, already loaded by the parent screen
+   * (owned directly, or via get_received_request's payload for a
+   * recipient source) — snapshotted into the payload only if the "Include"
+   * checkbox is checked. */
+  dialogEntries: ConversionDialogSnapshotEntry[]
+  /** Count of the source's existing real file Attachments — drives whether
+   * "Attachments" appears in the Include checkbox's label at all. */
+  attachmentCount: number
+  /** The *new* item's future owner's own tier — never the source's issuer
+   * tier (CLAUDE.md's Entitlements section: rights on a Request come from
+   * its issuer, but copying onto a brand-new item is "adding" there, which
+   * is gated on whoever will own that new item). */
+  canCopyAttachments: boolean
 }
 
 const BANNER_LABEL: Record<Direction, string> = {
@@ -66,18 +101,34 @@ export default function ConversionBanner({
   isDone,
   description,
   categoryName,
+  categoriesEnabled,
   dueDate,
+  dialogEntries,
+  attachmentCount,
+  canCopyAttachments,
 }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [markDone, setMarkDone] = useState(false)
   const [markDoneAndArchive, setMarkDoneAndArchive] = useState(false)
   const [archiveOnly, setArchiveOnly] = useState(false)
+  const [includeContent, setIncludeContent] = useState(false)
+
+  const dialogAvailable = dialogEntries.length > 0
+  const attachmentsAvailable = canCopyAttachments && attachmentCount > 0
+  const includeAvailable = dialogAvailable || attachmentsAvailable
+
+  function includeLabel(): string {
+    if (dialogAvailable && attachmentsAvailable) return 'Include Attachments and Dialog'
+    if (attachmentsAvailable) return 'Include Attachments'
+    return 'Include Dialog'
+  }
 
   function openModal() {
     setMarkDone(false)
     setMarkDoneAndArchive(false)
     setArchiveOnly(false)
+    setIncludeContent(false)
     setOpen(true)
   }
 
@@ -92,13 +143,19 @@ export default function ConversionBanner({
           ? 'done'
           : 'none'
 
+    const copyDialog = includeContent && dialogAvailable
+    const copyAttachments = includeContent && attachmentsAvailable
+
     const payload: ConversionCarryPayload = {
       sourceType,
       sourceId,
       description,
-      categoryName,
+      categoryName: categoriesEnabled ? categoryName : null,
       dueDate,
       doneAction,
+      copyDialog,
+      copyAttachments,
+      dialogSnapshot: copyDialog ? dialogEntries : [],
     }
     stashConversionCarry(payload)
     setOpen(false)
@@ -107,18 +164,10 @@ export default function ConversionBanner({
 
   return (
     <>
-      {/* .donerow-stack (2026-08-27) — button on top, descriptive text
-          below, rather than .donerow's plain row layout every other
-          quick-Done band uses. See globals.css's own comment on
-          .donerow-stack for why this one caller needed it. */}
-      <div className="donerow donerow-stack">
+      <div className="fieldact">
         <button className="btn-secondary" type="button" onClick={openModal}>
           {BANNER_LABEL[direction]}
         </button>
-        <span className="donenote">
-          Carries this {SOURCE_NOUN[direction]}&rsquo;s Description, Category, and Due Date into a new{' '}
-          {TARGET_NOUN[direction]}.
-        </span>
       </div>
 
       {open && (
@@ -138,8 +187,14 @@ export default function ConversionBanner({
                 </button>
               </div>
             </div>
+
+            <p className="checknote" style={{ marginBottom: 10 }}>
+              Carries this {SOURCE_NOUN[direction]}&rsquo;s Description
+              {categoriesEnabled ? ', Category,' : ''} and Due Date into a new {TARGET_NOUN[direction]}.
+            </p>
+
             {isDone ? (
-              <label className="checkrow">
+              <label className="checkrow" style={{ marginBottom: includeAvailable ? 8 : 0 }}>
                 <input type="checkbox" checked={archiveOnly} onChange={(e) => setArchiveOnly(e.target.checked)} />
                 <span className="checktext">Archive this {SOURCE_NOUN[direction]}</span>
               </label>
@@ -147,17 +202,28 @@ export default function ConversionBanner({
               <>
                 <label className="checkrow" style={{ marginBottom: 8 }}>
                   <input type="checkbox" checked={markDone} onChange={(e) => setMarkDone(e.target.checked)} />
-                  <span className="checktext">Mark as Done</span>
+                  <span className="checktext">Mark {SOURCE_NOUN[direction]} as Done</span>
                 </label>
-                <label className="checkrow">
+                <label className="checkrow" style={{ marginBottom: includeAvailable ? 8 : 0 }}>
                   <input
                     type="checkbox"
                     checked={markDoneAndArchive}
                     onChange={(e) => setMarkDoneAndArchive(e.target.checked)}
                   />
-                  <span className="checktext">Mark as Done and Archive this {SOURCE_NOUN[direction]}</span>
+                  <span className="checktext">Mark {SOURCE_NOUN[direction]} as Done and Archive it</span>
                 </label>
               </>
+            )}
+
+            {includeAvailable && (
+              <label className="checkrow" style={{ marginBottom: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={includeContent}
+                  onChange={(e) => setIncludeContent(e.target.checked)}
+                />
+                <span className="checktext">{includeLabel()}</span>
+              </label>
             )}
           </div>
         </>

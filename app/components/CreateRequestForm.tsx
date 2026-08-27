@@ -12,6 +12,7 @@ import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
+  applyConversionContentCopy,
   type ConversionCarryPayload,
 } from '@/lib/conversionCarry'
 import {
@@ -1111,9 +1112,12 @@ export default function CreateRequestForm() {
     // now, with this new Request already fully saved, per Jim's own
     // instruction that the source item's Done/Archive change happens only
     // once the new item is actually saved, never at the moment Continue
-    // was clicked on the source screen.
+    // was clicked on the source screen. Content copy (2026-08-27,
+    // "Include Attachments and Dialog") runs the same way and for the same
+    // reason — see conversionCarry.ts's own header comment.
     if (pendingConversion) {
       await applyConversionSideEffect(pendingConversion)
+      await applyConversionContentCopy(pendingConversion, newRequest.id)
     }
 
     setSaving(false)

@@ -20,6 +20,7 @@ import { type RepeatRule } from '@/lib/repeatRule'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
+  applyConversionContentCopy,
   type ConversionCarryPayload,
 } from '@/lib/conversionCarry'
 
@@ -814,8 +815,11 @@ export default function CreateTodoForm() {
     // Request<->ToDo conversion side effect (2026-08-26) — applied only
     // now, with this new ToDo already fully saved. See
     // CreateRequestForm.tsx's identical addition for the full reasoning.
+    // Content copy (2026-08-27, "Include Attachments and Dialog") runs the
+    // same way and for the same reason.
     if (pendingConversion) {
       await applyConversionSideEffect(pendingConversion)
+      await applyConversionContentCopy(pendingConversion, newTodo.id)
     }
 
     setSaving(false)
