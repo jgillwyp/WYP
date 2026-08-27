@@ -5,9 +5,15 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import RepeatControl from './RepeatControl'
+import Linkified from './Linkified'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
+import {
+  takeConversionCarry,
+  applyConversionSideEffect,
+  type ConversionCarryPayload,
+} from '@/lib/conversionCarry'
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_ITEM,
@@ -349,6 +355,16 @@ export default function CreateRequestForm() {
   // A1/A1b/B read only those per-item columns, never this one, so sending
   // is unaffected either way.
   const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(false)
+
+  // Request<->ToDo conversion (2026-08-26) — a pending payload from ToDo
+  // Detail's own "Create a Request from this ToDo" banner, if that's how
+  // this screen was reached. Read once, lazily, via takeConversionCarry()
+  // (which clears sessionStorage immediately on read — see that function's
+  // own comment) so a leftover payload from an abandoned conversion never
+  // pre-fills or acts on some later, unrelated visit to this screen.
+  // Recipient/Category still have to be picked by hand below — a ToDo has
+  // neither.
+  const [pendingConversion] = useState<ConversionCarryPayload | null>(() => takeConversionCarry())
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -501,6 +517,24 @@ export default function CreateRequestForm() {
     setDlgDictating(true)
   }
 
+  // Request<->ToDo conversion pre-fill (2026-08-26) — Description and Due
+  // Date carry straight over; Category is matched by name once the
+  // categories list loads, below. Runs once on mount; pendingConversion
+  // itself never changes after its own lazy useState initializer.
+  useEffect(() => {
+    if (!pendingConversion) return
+    // Deferred a tick — same react-hooks/set-state-in-effect fix as the
+    // voiceSupported effect above; there's no external event to key this
+    // off, so a microtask stands in for one.
+    queueMicrotask(() => {
+      setForm((f) => ({
+        ...f,
+        description: pendingConversion.description,
+        dueDate: pendingConversion.dueDate ?? f.dueDate,
+      }))
+    })
+  }, [pendingConversion])
+
   // Load the owner's own contacts and categories once. RLS already scopes
   // both to owner_id = auth.uid() (migration 002 / 003) — no client-side
   // "is this mine" filter is added on top of that.
@@ -539,7 +573,16 @@ export default function CreateRequestForm() {
       .from('categories')
       .select('id, name')
       .order('name')
-      .then(({ data }) => setCategories(data ?? []))
+      .then(({ data }) => {
+        const list = data ?? []
+        setCategories(list)
+        if (pendingConversion?.categoryName) {
+          const match = list.find(
+            (c) => c.name.toLowerCase() === pendingConversion.categoryName!.toLowerCase()
+          )
+          if (match) setSelectedCategory(match)
+        }
+      })
 
     // For dialog.who — see migration 004's note on why this is a snapshot,
     // not a live join, taken once here rather than re-read at Send time.
@@ -1064,6 +1107,15 @@ export default function CreateRequestForm() {
       // Best-effort — see comment above.
     }
 
+    // Request<->ToDo conversion side effect (2026-08-26) — applied only
+    // now, with this new Request already fully saved, per Jim's own
+    // instruction that the source item's Done/Archive change happens only
+    // once the new item is actually saved, never at the moment Continue
+    // was clicked on the source screen.
+    if (pendingConversion) {
+      await applyConversionSideEffect(pendingConversion)
+    }
+
     setSaving(false)
     router.push('/')
   }
@@ -1439,7 +1491,7 @@ export default function CreateRequestForm() {
                     {dialogEntries.map((entry, i) => (
                       <div className="attitem" key={i}>
                         <span className="attname">
-                          <b>{entry.kind === 'question' ? 'Question' : 'Comment'}:</b> {entry.body}
+                          <b>{entry.kind === 'question' ? 'Question' : 'Comment'}:</b> <Linkified text={entry.body} />
                         </span>
                         <button
                           className="attremove"

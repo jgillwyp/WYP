@@ -6,6 +6,101 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-26 — Request<->ToDo conversion banner; ToDo Attachments replace Locations; URL auto-linkify — migration 048 drafted, NOT yet confirmed run
+
+Jim, across three messages, designed a symmetry feature between Requests
+and ToDos: a bottom-of-form banner on Request Detail ("Create a ToDo from
+this Request"), ToDo Detail ("Create a Request from this ToDo"), and
+Response Detail (request-to-todo direction only — a signed-in recipient has
+no ToDo of their own to convert back the other way from that screen) that
+opens a modal, then carries Description/Category/Due Date into the other
+record type's own Create screen. His refinements, incorporated directly:
+the modal's Done/Archive choices must be fully skippable (Continue always
+works with nothing checked); the modal must also appear on Response Detail;
+migration SQL should fold any existing ToDo Locations into their parent's
+own Description as `" -- Location(s): xxxxx, yyyyyy, zzzzz"` (his exact
+"note: value" join format, approved unchanged); and ToDos should gain real
+Attachments to replace Locations outright, since "we have very little usage
+of the app so far." His final refinement: "Mark as Done" must not appear for
+a record already marked Done — only "Archive this Request/ToDo" — otherwise
+both Mark-as-Done options remain available and skippable.
+
+**Modal behavior, as built** (`app/components/ConversionBanner.tsx`): if the
+source is not already Done, two independent checkboxes, "Mark as Done" and
+"Mark as Done and Archive this Request/ToDo," both optional; if the source
+is already Done, only "Archive this Request/ToDo" shows. Continue never
+touches the source item itself — it stashes a `ConversionCarryPayload`
+(`app/src/lib/conversionCarry.ts`, `sessionStorage`, single-consumption via
+`takeConversionCarry()`, the same round-trip pattern `ArchiveForm.tsx`'s own
+`ARCHIVE_ROUNDTRIP_KEY` and `MainScreen.tsx`'s search-round-trip keys
+already established) and navigates to the other record type's Create
+screen. The pre-fill (Description/Due Date immediately, Category once the
+target screen's own categories list resolves and is matched by name) and
+the queued Done/Archive side effect are both applied only once the new
+Request/ToDo is actually saved — never at the moment Continue is clicked —
+per Jim's own explicit sequencing instruction.
+
+The side effect (`applyConversionSideEffect`) branches on `sourceType`:
+`'owned'` (Request Detail, ToDo Detail — the signed-in owner's own row) does
+a plain `requests` table update (`done_date`/`archived_at`), already
+RLS-writable by the owner; `'recipient'` (Response Detail) goes through the
+same `SECURITY DEFINER` RPCs every other recipient-side write in this app
+already uses — `set_response_done_as_recipient()` and
+`archive_received_request()` — never a raw table update, which RLS would
+refuse from that side regardless. This follows directly from this file's own
+Entitlements rule: gates govern adding, never viewing, and a recipient's
+writes are always mediated by an RPC, never a client-supplied `WHERE`
+clause.
+
+**ToDo Attachments replace Locations.** Confirmed while reading
+`AttachmentsPanel.tsx` in full: because a ToDo is simply a `requests` row
+with `contact_id = null` (confirmed directly from `CreateTodoForm.tsx`'s own
+insert call), and the entire Attachments RLS/API layer (migration 025,
+`_shared.ts`, the `upload`/`list`/`delete` routes) is already fully
+ownership-based with zero Request-vs-ToDo discrimination, this required no
+schema or security changes at all — a one-line `mode="reference"` ->
+`mode="file"` prop swap on ToDo Detail's existing `AttachmentsPanel` call,
+and a mechanical port of Create Request's own staged-file-upload pattern
+onto Create ToDo (`handleFilesSelected`/`removeStagedFile`/
+`uploadStagedFiles`, byte-for-byte). The old staged-Locations modal, its
+state, and `insertAttachmentReference`/`urlLocationHref` call sites in
+`CreateTodoForm.tsx` are removed entirely — grep-verified zero remaining
+references. The Repeat carry-forward prompt (§6.42/§6.43) now offers to
+carry staged Attachments into a repeated ToDo the same way it already does
+for Requests.
+
+**Migration 048** (`docs/Week6 - SQL history.txt`) folds every existing
+`kind='reference'` attachments row (in practice, always a ToDo Location —
+`AttachmentsPanel.tsx`'s own header comment confirms `reference` mode was
+never used anywhere else) into its parent's own `description`, one `UPDATE`
+per affected `request_id` using `string_agg(...)` with the exact "note:
+value" join Jim approved unchanged, then deletes every `kind='reference'`
+row outright — a clean one-time cutover before the app stops writing or
+reading them. **Drafted 2026-08-26 — not yet confirmed run by Jim.**
+
+**URL auto-linkify.** `app/src/lib/attachments.ts`'s existing
+`urlLocationHref()` (built for a whole Location field, which is guaranteed
+whitespace-free) was refactored to extract its domain-detection core into a
+new private `hrefForUrlLikeToken()`; a new exported `linkifySegments(text)`
+splits free text on whitespace, peels trailing sentence punctuation off each
+token before testing it, and returns text/href segments. New shared
+`app/components/Linkified.tsx` renders those segments as real `<a
+target="_blank">` links where detected, plain text otherwise — scoped
+deliberately to read-only Description and Dialog-body display only, never
+an editable `<textarea>`, since linkifying an editable field would fight the
+cursor/selection. Applied to Request Detail, ToDo Detail, Request Response,
+and Response Detail's live Dialog lists, and to Request Response's and
+Response Detail's read-only Description display; Create Request/Create
+ToDo's *staged* Dialog entries (not yet saved) also got it for consistency.
+Print-report body text is left plain — no benefit to a live link on paper.
+
+**No mockups updated** — none of the affected screens' static HTML models
+Locations-as-Attachments, linkified text, or the conversion banner/modal at
+all; flagged in `design/README.md`, not silently skipped. `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-26 — "My Subscription" / "Become a Subscriber" built as a shared, fully-dynamic screen pair — migration 047 confirmed run by Jim
 
 Jim supplied five of his own mockups (`subscriber page - from free account

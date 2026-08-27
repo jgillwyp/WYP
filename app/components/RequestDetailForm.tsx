@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
 import RepeatControl from './RepeatControl'
+import Linkified from './Linkified'
+import ConversionBanner from './ConversionBanner'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
@@ -1558,10 +1560,15 @@ export default function RequestDetailForm() {
                           {e.kind === 'answer' ? (
                             <>
                               {q && <span className="dlgre">Re: {truncate(q.body)}</span>}
-                              <span className="dlgbody">{e.body}</span>
+                              <span className="dlgbody">
+                                <Linkified text={e.body} />
+                              </span>
                             </>
                           ) : (
-                            <> {e.body}</>
+                            <>
+                              {' '}
+                              <Linkified text={e.body} />
+                            </>
                           )}
                         </div>
                       )
@@ -1584,6 +1591,18 @@ export default function RequestDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
               showCarryToggle={repeatRule !== null}
+            />
+
+            {/* Request<->ToDo conversion (2026-08-26) — see
+                ConversionBanner.tsx's own header comment. */}
+            <ConversionBanner
+              direction="request-to-todo"
+              sourceType="owned"
+              sourceId={requestId}
+              isDone={form.doneDate.trim() !== ''}
+              description={form.description}
+              categoryName={selectedCategory?.name ?? null}
+              dueDate={form.dueDate.trim() === '' ? null : form.dueDate}
             />
 
             {error && (

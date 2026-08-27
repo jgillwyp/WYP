@@ -105,8 +105,16 @@ const FILE_EXTENSION_BLOCKLIST = new Set([
  * live check doesn't answer the actual question here any better than the
  * shape of the text already does.
  */
-export function urlLocationHref(value: string): string | null {
-  const trimmed = value.trim()
+/**
+ * Core domain-shape check shared by urlLocationHref (a whole Location field,
+ * guaranteed whitespace-free already) and linkifyText (2026-08-26, one
+ * whitespace-split token out of a longer Description/Dialog body — never
+ * passed anything containing whitespace itself, so the two callers differ
+ * only in how they get down to a single token, not in how that token is
+ * judged). Extracted rather than duplicated per this codebase's own
+ * shared-helper convention (cf. AttachmentsPanel.tsx, RepeatControl.tsx).
+ */
+function hrefForUrlLikeToken(trimmed: string): string | null {
   if (trimmed === '') return null
 
   // Already has a scheme — trust URL() outright rather than the heuristic
@@ -115,8 +123,8 @@ export function urlLocationHref(value: string): string | null {
     const u = new URL(trimmed)
     return u.protocol === 'http:' || u.protocol === 'https:' ? trimmed : null
   } catch {
-    // No scheme — a bare domain is the common case Locations actually see
-    // ("ft.com", "www.ft.com"), fall through to the heuristic below.
+    // No scheme — a bare domain is the common case ("ft.com", "www.ft.com"),
+    // fall through to the heuristic below.
   }
 
   // Reject anything shaped like a file path before checking the domain
@@ -137,6 +145,49 @@ export function urlLocationHref(value: string): string | null {
   if (tld.length < 2 || FILE_EXTENSION_BLOCKLIST.has(tld)) return null
 
   return `https://${trimmed}`
+}
+
+export function urlLocationHref(value: string): string | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  if (/\s/.test(trimmed)) return null // a whole Location field is one token
+  return hrefForUrlLikeToken(trimmed)
+}
+
+/**
+ * Splits free text into plain-text and URL-like segments, for rendering a
+ * read-only Description/Dialog body with clickable links (2026-08-26,
+ * replacing ToDo Locations' own "add a URL" affordance — see
+ * app/components/Linkified.tsx, which turns this into JSX). Trailing
+ * punctuation a sentence would naturally have after a URL (".", ",", ")",
+ * etc.) is peeled off the token before the domain check and reattached as
+ * plain text afterward, so "see ft.com." doesn't link the trailing period.
+ */
+export type TextSegment = { text: string; href: string | null }
+
+const TRAILING_PUNCTUATION = /[.,;:!?)\]}'"]+$/
+
+export function linkifySegments(text: string): TextSegment[] {
+  if (text === '') return []
+  const parts = text.split(/(\s+)/) // keep whitespace as its own segments
+  const segments: TextSegment[] = []
+  for (const part of parts) {
+    if (part === '' || /^\s+$/.test(part)) {
+      if (part !== '') segments.push({ text: part, href: null })
+      continue
+    }
+    const trailingMatch = part.match(TRAILING_PUNCTUATION)
+    const trailing = trailingMatch ? trailingMatch[0] : ''
+    const core = trailing ? part.slice(0, -trailing.length) : part
+    const href = core ? hrefForUrlLikeToken(core) : null
+    if (href) {
+      segments.push({ text: core, href })
+      if (trailing) segments.push({ text: trailing, href: null })
+    } else {
+      segments.push({ text: part, href: null })
+    }
+  }
+  return segments
 }
 
 export type AttachmentRow = {

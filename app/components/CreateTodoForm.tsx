@@ -5,11 +5,23 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import RepeatControl from './RepeatControl'
+import Linkified from './Linkified'
 import { supabase } from '@/lib/supabaseClient'
-import { insertAttachmentReference } from '@/lib/attachmentsClient'
-import { urlLocationHref } from '@/lib/attachments'
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_ITEM,
+  dedupeFileName,
+  fileExtension,
+  formatBytes,
+  isBlockedFileType,
+} from '@/lib/attachments'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule } from '@/lib/repeatRule'
+import {
+  takeConversionCarry,
+  applyConversionSideEffect,
+  type ConversionCarryPayload,
+} from '@/lib/conversionCarry'
 
 /**
  * Create ToDo (§9.4) — converted by hand from
@@ -220,6 +232,12 @@ export default function CreateTodoForm() {
   // a Reminder to anchor on either way.
   const [todoRemindersEnabled, setTodoRemindersEnabled] = useState(false)
   const [todoStatus, setTodoStatus] = useState<'open' | 'done'>('open')
+
+  // Request<->ToDo conversion (2026-08-26) — a pending payload from Request
+  // Detail's or Response Detail's own "Create a ToDo from this Request"
+  // banner, if that's how this screen was reached. See
+  // CreateRequestForm.tsx's identical addition for the full reasoning.
+  const [pendingConversion] = useState<ConversionCarryPayload | null>(() => takeConversionCarry())
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showCategoryResults, setShowCategoryResults] = useState(false)
@@ -243,30 +261,28 @@ export default function CreateTodoForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Locations (Week 5 Priority 3, 2026-08-14) — a ToDo's own "Attachment
-  // References" instead of real storage (owner's own proposal, decisions
-  // log 2026-08-14): staged client-side, same reasoning as dialogEntries
-  // above, then inserted directly (kind = 'reference' rows are allowed by
-  // migration 025's RLS insert policy — no API route needed, unlike a
-  // Request's real file uploads).
+  // Attachments (2026-08-26) — replaces the old Locations feature outright;
+  // same real-file mechanism a Request already uses (AttachmentsPanel.tsx's
+  // mode='file'), since a ToDo is just a requests row with contact_id =
+  // null and every attachments RLS policy/API route is already keyed on
+  // ownership alone. Staged as real File objects, same "hold as client-side
+  // draft state, write once Save succeeds and there's a real id" pattern
+  // dialogEntries already uses above; uploaded via /api/attachments/upload
+  // in doSubmit, not written directly (that route is the only place a
+  // kind = 'file' row can be created — migration 025).
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
-  type LocationEntry = { description: string; location: string }
-  const [stagedLocations, setStagedLocations] = useState<LocationEntry[]>([])
-  const [locationFormOpen, setLocationFormOpen] = useState(false)
-  const [locationDescription, setLocationDescription] = useState('')
-  const [locationValue, setLocationValue] = useState('')
-  const [locationError, setLocationError] = useState<string | null>(null)
-  const [copiedLocationIndex, setCopiedLocationIndex] = useState<number | null>(null)
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Repeat (Jim's own recurrence-method design, 2026-08-21) — same staged
   // pattern as CreateRequestForm.tsx's own copy. Gated on todoDatesEnabled
   // as well as tier — a ToDo with Due/Done Dates turned off has no Due Date
   // field for Repeat to anchor on. The carry-forward prompt asks about
-  // staged Locations instead of staged Attachments, same "Dialog never
-  // carries forward" wording.
+  // staged Attachments, same "Dialog never carries forward" wording.
   const [repeatRule, setRepeatRule] = useState<RepeatRule | null>(null)
   const [carryPromptOpen, setCarryPromptOpen] = useState(false)
-  const [carryLocationIndexes, setCarryLocationIndexes] = useState<Set<number>>(new Set())
+  const [carryFileIndexes, setCarryFileIndexes] = useState<Set<number>>(new Set())
 
   // Voice dictation for Description (2026-08-19) — same feature and
   // reasoning as CreateRequestForm.tsx's own copy; see the module-level
@@ -283,12 +299,37 @@ export default function CreateTodoForm() {
 
   const doneDateRef = useRef<HTMLInputElement>(null)
 
+  // Request<->ToDo conversion pre-fill (2026-08-26) — Description and Due
+  // Date carry straight over; Category is matched by name once the
+  // categories list loads, below.
+  useEffect(() => {
+    if (!pendingConversion) return
+    // Deferred a tick — same react-hooks/set-state-in-effect fix
+    // CreateRequestForm.tsx's identical effect uses.
+    queueMicrotask(() => {
+      setForm((f) => ({
+        ...f,
+        description: pendingConversion.description,
+        dueDate: pendingConversion.dueDate ?? f.dueDate,
+      }))
+    })
+  }, [pendingConversion])
+
   useEffect(() => {
     supabase
       .from('categories')
       .select('id, name')
       .order('name')
-      .then(({ data }) => setCategories(data ?? []))
+      .then(({ data }) => {
+        const list = data ?? []
+        setCategories(list)
+        if (pendingConversion?.categoryName) {
+          const match = list.find(
+            (c) => c.name.toLowerCase() === pendingConversion.categoryName!.toLowerCase()
+          )
+          if (match) setSelectedCategory(match)
+        }
+      })
 
     // todo_reminder_default_day_before/day_of/day_after (migration 044,
     // 2026-08-23, split from the shared reminder_default_day_before/day_of/
@@ -315,6 +356,11 @@ export default function CreateTodoForm() {
           overdueReminderEnabled: data?.todo_reminder_default_day_after ?? f.overdueReminderEnabled,
         }))
       })
+    // pendingConversion is a stable, set-once value from its own lazy
+    // useState initializer (see above) and this effect must run once on
+    // mount only — same pattern CreateRequestForm.tsx's identical effect
+    // uses for the same reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Voice dictation support check (2026-08-19) — see CreateRequestForm.tsx's
@@ -399,47 +445,69 @@ export default function CreateTodoForm() {
     setDialogEntries((entries) => entries.filter((_, i) => i !== index))
   }
 
-  function saveStagedLocation() {
-    const description = locationDescription.trim()
-    const location = locationValue.trim()
-    if (description === '' && location === '') {
-      setLocationError('Enter a Location or Cancel.')
-      return
-    }
-    setStagedLocations((entries) => [...entries, { description, location }])
-    setLocationDescription('')
-    setLocationValue('')
-    setLocationError(null)
-    setLocationFormOpen(false)
+  // Attachments — client-side checks are a courtesy; app/api/attachments/
+  // upload/route.ts re-verifies size, type, and the 10-item cap regardless
+  // (see that route's own header comment). Same as CreateRequestForm.tsx's
+  // identical copy.
+  function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? [])
+    e.target.value = '' // lets the same filename be picked again later
+    if (picked.length === 0) return
+
+    setAttachError(null)
+    setStagedFiles((current) => {
+      const next = [...current]
+      for (const f of picked) {
+        if (next.length >= MAX_ATTACHMENTS_PER_ITEM) {
+          setAttachError(`You can attach up to ${MAX_ATTACHMENTS_PER_ITEM} files.`)
+          break
+        }
+        if (isBlockedFileType(f.name)) {
+          setAttachError(`${fileExtension(f.name) || 'That file type'} isn't supported.`)
+          continue
+        }
+        if (f.size > MAX_ATTACHMENT_BYTES) {
+          setAttachError(`${f.name} is larger than ${formatBytes(MAX_ATTACHMENT_BYTES)}.`)
+          continue
+        }
+        const finalName = dedupeFileName(f.name, next.map((x) => x.name))
+        next.push(finalName === f.name ? f : new File([f], finalName, { type: f.type }))
+      }
+      return next
+    })
   }
 
-  // Add Location closed via Cancel or the scrim — same reset as a
-  // successful Save, minus the append. 2026-08-22: Add Location converted
-  // from an always-visible inline box to a real modal (scrim + .modal),
-  // matching Add Dialog/Add Category exactly — owner's own request, for UI
-  // consistency and because an inline box let a typed-but-unsaved Location
-  // get silently lost (scrolled past, or the outer Save clicked instead of
-  // this box's own Save); a modal's scrim makes "still open, not yet saved"
-  // impossible to miss.
-  function closeLocationModal() {
-    setLocationFormOpen(false)
-    setLocationDescription('')
-    setLocationValue('')
-    setLocationError(null)
+  function removeStagedFile(index: number) {
+    setStagedFiles((files) => files.filter((_, i) => i !== index))
   }
 
-  function removeStagedLocation(index: number) {
-    setStagedLocations((entries) => entries.filter((_, i) => i !== index))
-  }
+  async function uploadStagedFiles(todoId: string, carryIndexes: Set<number>) {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    if (!accessToken) throw new Error('Your session has expired.')
 
-  async function copyStagedLocation(index: number, value: string) {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopiedLocationIndex(index)
-      setTimeout(() => setCopiedLocationIndex((current) => (current === index ? null : current)), 1500)
-    } catch {
-      // Clipboard API can fail (permissions, non-secure context) — the path
-      // is still fully visible to select/copy by hand.
+    for (let i = 0; i < stagedFiles.length; i++) {
+      const file = stagedFiles[i]
+      const body = new FormData()
+      body.append('file', file)
+      body.append('requestId', todoId)
+      // Repeat carry-forward selection (Jim's own design, 2026-08-21) — only
+      // meaningful when repeatRule is set, but harmless to send either way;
+      // the upload route just writes it straight onto the new row.
+      body.append('carryIntoRepeats', carryIndexes.has(i) ? 'true' : 'false')
+      const res = await fetch('/api/attachments/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body,
+      })
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}))
+        throw new Error(
+          detail.error === 'limit_reached'
+            ? `Attachment limit reached (${MAX_ATTACHMENTS_PER_ITEM}).`
+            : `Could not upload ${file.name}.`
+        )
+      }
     }
   }
 
@@ -649,12 +717,11 @@ export default function CreateTodoForm() {
     if (!validate()) return
 
     // Repeat carry-forward gate — same pattern as CreateRequestForm.tsx's
-    // own copy, asking about staged Locations instead of staged Attachments.
-    // Only interrupts Save once, and only when there's something to ask
-    // about; carryPromptOpen guards against re-showing after the user has
-    // already confirmed a selection and re-clicked Save.
-    if (repeatRule && stagedLocations.length > 0 && !carryPromptOpen) {
-      setCarryLocationIndexes(new Set(stagedLocations.map((_, i) => i)))
+    // own copy. Only interrupts Save once, and only when there's something
+    // to ask about; carryPromptOpen guards against re-showing after the
+    // user has already confirmed a selection and re-clicked Save.
+    if (repeatRule && stagedFiles.length > 0 && !carryPromptOpen) {
+      setCarryFileIndexes(new Set(stagedFiles.map((_, i) => i)))
       setCarryPromptOpen(true)
       return
     }
@@ -727,26 +794,28 @@ export default function CreateTodoForm() {
       }
     }
 
-    // Locations write third, same "hold as draft state until there's a
-    // real id" reasoning as Dialog above — a direct client insert
-    // (kind = 'reference' is allowed by migration 025's RLS policy).
-    if (stagedLocations.length > 0) {
-      const who = ownerName ?? userData.user.email ?? 'You'
-      for (let i = 0; i < stagedLocations.length; i++) {
-        const entry = stagedLocations[i]
-        const result = await insertAttachmentReference({
-          requestId: newTodo.id,
-          uploadedByLabel: who,
-          referenceNote: entry.description === '' ? null : entry.description,
-          referenceUrl: entry.location === '' ? null : entry.location,
-          carryIntoRepeats: carryLocationIndexes.has(i),
-        })
-        if (!result) {
-          setSaving(false)
-          setError('ToDo saved, but Locations could not be saved.')
-          return
-        }
+    // Attachments write third, same "hold as draft state until there's a
+    // real id" reasoning as Dialog above — /api/attachments/upload is the
+    // only path that can create a kind = 'file' row (migration 025).
+    if (stagedFiles.length > 0) {
+      try {
+        await uploadStagedFiles(newTodo.id, carryFileIndexes)
+      } catch (err) {
+        setSaving(false)
+        setError(
+          `ToDo saved, but attachments could not be uploaded: ${
+            err instanceof Error ? err.message : 'unknown error'
+          }`
+        )
+        return
       }
+    }
+
+    // Request<->ToDo conversion side effect (2026-08-26) — applied only
+    // now, with this new ToDo already fully saved. See
+    // CreateRequestForm.tsx's identical addition for the full reasoning.
+    if (pendingConversion) {
+      await applyConversionSideEffect(pendingConversion)
     }
 
     setSaving(false)
@@ -1120,7 +1189,7 @@ export default function CreateTodoForm() {
                     {dialogEntries.map((entry, i) => (
                       <div className="attitem" key={i}>
                         <span className="attname">
-                          <b>{entry.kind === 'question' ? 'Question' : 'Comment'}:</b> {entry.body}
+                          <b>{entry.kind === 'question' ? 'Question' : 'Comment'}:</b> <Linkified text={entry.body} />
                         </span>
                         <button
                           className="attremove"
@@ -1137,98 +1206,68 @@ export default function CreateTodoForm() {
               )}
             </div>
 
-            {/* Locations (Week 5 Priority 3, 2026-08-14) — a ToDo's own
-                "Attachment References": a typed path or URL plus an
-                optional Description, staged here and inserted once Save
-                has a real id. Subscriber-gated, same as a Request's real
-                Attachments; free-tier keeps the original locked row.
-                Empty/populated split matches Add Dialog and AttachmentsPanel.tsx's
-                own mode='reference' behavior (2026-08-14, owner-reported:
-                "the Create ToDo and the ToDo Detail should have the Add
-                Location behave like the Add Dialog to include erasing the
-                'placeholder' box and explanation... when a Location is
-                added") — the box+button shows only while nothing is staged
-                yet and the inline form isn't open; once a Location exists,
-                only a bare Add Location button remains. Empty-state box is
-                the same bordered .actlabel treatment as Add Dialog's own
-                (2026-08-14, second report, owner screenshots comparing this
-                screen's own rendering, annotated "Preferred method", against
-                ToDo Detail's tinted "Note:" band) — not .donerow/.donenote,
-                which stays reserved for the locked (free-tier) case below. */}
+            {/* Attachments (2026-08-26) — replaces the old Locations feature
+                outright; same real-file mechanism a Request's Create screen
+                already uses (staged as File objects, uploaded once Save
+                produces a real id). Subscriber-gated, same as a Request's
+                Attachments; free-tier keeps the original locked row. */}
             {tier === 'subscriber' ? (
               <div className="fgroup">
-                {stagedLocations.length === 0 && (
+                {stagedFiles.length === 0 ? (
                   <div className="frow">
-                    <span className="actlabel">Locations are URLs or File paths.</span>
-                    <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
-                      Add Location
+                    <span className="actlabel">
+                      Attachments <span className="subnote">(optional)</span>
+                    </span>
+                    <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
+                      Add Attachment
                     </button>
                   </div>
-                )}
-                {stagedLocations.length > 0 && (
-                  <div className="fieldact">
-                    <button className="btn" type="button" onClick={() => setLocationFormOpen(true)}>
-                      Add Location
-                    </button>
-                  </div>
-                )}
-                {stagedLocations.length > 0 && (
+                ) : (
                   <>
+                    <div className="fieldact">
+                      <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
+                        Add Attachment
+                      </button>
+                    </div>
                     <div className="dlgstaged">
-                      {stagedLocations.map((entry, i) => {
-                        const href = urlLocationHref(entry.location)
-                        return (
-                          <div className="attitem" key={i}>
-                            <span className="attname">
-                              {entry.description && (
-                                <>
-                                  <b>{entry.description}</b>
-                                  <br />
-                                </>
-                              )}
-                              {href ? (
-                                <a href={href} target="_blank" rel="noopener noreferrer">
-                                  {entry.location}
-                                </a>
-                              ) : (
-                                entry.location
-                              )}
-                            </span>
-                            {!href && entry.location && (
-                              <button
-                                className="linkbtn"
-                                type="button"
-                                onClick={() => copyStagedLocation(i, entry.location)}
-                              >
-                                {copiedLocationIndex === i ? 'Copied' : 'Copy'}
-                              </button>
-                            )}
-                            <button
-                              className="attremove"
-                              type="button"
-                              aria-label="Remove this Location"
-                              onClick={() => removeStagedLocation(i)}
-                            >
-                              &times;
-                            </button>
-                          </div>
-                        )
-                      })}
+                      {stagedFiles.map((f, i) => (
+                        <div className="attitem" key={i}>
+                          <span className="attname">
+                            {f.name} <span className="subnote">({formatBytes(f.size)})</span>
+                          </span>
+                          <button
+                            className="attremove"
+                            type="button"
+                            aria-label={`Remove ${f.name}`}
+                            onClick={() => removeStagedFile(i)}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </>
                 )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={handleFilesSelected}
+                />
+                {attachError && <p className="ferror">{attachError}</p>}
               </div>
             ) : (
               <div className="donerow">
                 <span className="donenote">
-                  <b>Note:</b> Locations are a Subscription feature.
+                  <b>Note:</b> Attachments are a Subscription feature.
                 </span>
                 <button className="btn is-locked" type="button" aria-disabled="true">
                   <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
                     <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                   </svg>
-                  Add Location
+                  Add Attachment
                 </button>
               </div>
             )}
@@ -1385,62 +1424,16 @@ export default function CreateTodoForm() {
           </>
         )}
 
-        {/* Add Location modal — converted from an inline box to a real
-            modal, 2026-08-22 (owner's own request; see closeLocationModal's
-            comment above). Same shape as Add Dialog's modal just above:
-            title + Cancel/Save on one header row, fields below. */}
-        {locationFormOpen && (
-          <>
-            <div className="scrim" onClick={closeLocationModal} />
-            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="addloc-title">
-              <div className="modalhead">
-                <p className="modal-title" id="addloc-title">
-                  Add Location
-                </p>
-                <div className="modalacts">
-                  <button className="btn-secondary" type="button" onClick={closeLocationModal}>
-                    Cancel
-                  </button>
-                  <button className="btn" type="button" onClick={saveStagedLocation}>
-                    Save
-                  </button>
-                </div>
-              </div>
-              <div className="fgroup ffloat">
-                <input
-                  className="finput"
-                  placeholder=" "
-                  value={locationDescription}
-                  onChange={(e) => setLocationDescription(e.target.value)}
-                  autoFocus
-                />
-                <label className="flabel">Description</label>
-              </div>
-              <div className="fgroup ffloat">
-                <input
-                  className="finput"
-                  placeholder=" "
-                  value={locationValue}
-                  onChange={(e) => setLocationValue(e.target.value)}
-                />
-                <label className="flabel">Location (path or URL)</label>
-              </div>
-              {locationError && <p className="ferror" style={{ marginTop: -8 }}>{locationError}</p>}
-            </div>
-          </>
-        )}
-
         {/* Repeat carry-forward prompt — same pattern and wording as
-            CreateRequestForm.tsx's own copy, asking about staged Locations
-            instead of staged Attachments. Shown once, at Save, only when a
-            Repeat is set and there are staged Locations to ask about. */}
+            CreateRequestForm.tsx's own copy. Shown once, at Save, only when
+            a Repeat is set and there are staged Attachments to ask about. */}
         {carryPromptOpen && (
           <>
             <div className="scrim" onClick={() => setCarryPromptOpen(false)} />
             <div className="modal" role="dialog" aria-modal="true" aria-labelledby="carry-title">
               <div className="modalhead">
                 <p className="modal-title" id="carry-title">
-                  Carry Locations into Repeats
+                  Carry Attachments into Repeats
                 </p>
                 <div className="modalacts">
                   <button className="btn-secondary" type="button" onClick={() => setCarryPromptOpen(false)}>
@@ -1459,21 +1452,21 @@ export default function CreateTodoForm() {
                 </div>
               </div>
               <p className="checknote" style={{ marginBottom: 10 }}>
-                Dialog is not carried into repeated ToDos. Select any Locations that should be
+                Dialog is not carried into repeated ToDos. Select any Attachments that should be
                 included with each repeat.
               </p>
               <div className="dlgstaged">
-                {stagedLocations.map((entry, i) => (
+                {stagedFiles.map((f, i) => (
                   <label
                     className="checkrow"
                     key={i}
-                    style={{ marginBottom: i === stagedLocations.length - 1 ? 0 : 8 }}
+                    style={{ marginBottom: i === stagedFiles.length - 1 ? 0 : 8 }}
                   >
                     <input
                       type="checkbox"
-                      checked={carryLocationIndexes.has(i)}
+                      checked={carryFileIndexes.has(i)}
                       onChange={(e) =>
-                        setCarryLocationIndexes((current) => {
+                        setCarryFileIndexes((current) => {
                           const next = new Set(current)
                           if (e.target.checked) next.add(i)
                           else next.delete(i)
@@ -1481,7 +1474,7 @@ export default function CreateTodoForm() {
                         })
                       }
                     />
-                    <span className="checktext">{entry.description || entry.location}</span>
+                    <span className="checktext">{f.name}</span>
                   </label>
                 ))}
               </div>

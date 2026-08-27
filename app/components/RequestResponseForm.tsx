@@ -6,6 +6,7 @@ import Link from 'next/link'
 
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
+import Linkified from './Linkified'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 import { isReminderEligible } from '@/lib/email'
@@ -757,7 +758,9 @@ export default function RequestResponseForm() {
             </div>
 
             <div className="seclabel">Request Description</div>
-            <div className="respdesc">{data.description}</div>
+            <div className="respdesc">
+              <Linkified text={data.description} />
+            </div>
 
             <div className="grabber" aria-hidden="true"></div>
 
@@ -919,10 +922,15 @@ export default function RequestResponseForm() {
                           {e.kind === 'answer' ? (
                             <>
                               {q && <span className="dlgre">Re: {truncate(q.body)}</span>}
-                              <span className="dlgbody">{e.body}</span>
+                              <span className="dlgbody">
+                                <Linkified text={e.body} />
+                              </span>
                             </>
                           ) : (
-                            <> {e.body}</>
+                            <>
+                              {' '}
+                              <Linkified text={e.body} />
+                            </>
                           )}
                         </div>
                       )

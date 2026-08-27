@@ -2959,3 +2959,48 @@ link is built only after the stack is proven on Add Contact.
   five reference screenshots for this batch aren't part of `design/
   screens/`. `npx tsc --noEmit`/`npm run lint` clean. See the decisions
   log's 2026-08-26 entry for the full write-up.
+- **Request<->ToDo conversion banner; ToDo Attachments replace Locations;
+  URL auto-linkify — migration 048 DRAFTED, NOT YET CONFIRMED RUN
+  (2026-08-26).** Jim's own three-message design, refined to its final
+  shape across the exchange: a shared bottom-of-form banner/modal
+  (`app/components/ConversionBanner.tsx`) on Request Detail ("Create a
+  ToDo from this Request"), ToDo Detail ("Create a Request from this
+  ToDo"), and Response Detail (request-to-todo direction only — a
+  signed-in recipient has no ToDo of their own to convert back the other
+  way). If the source item isn't already Done, two independent, fully
+  skippable checkboxes ("Mark as Done" / "Mark as Done and Archive this
+  Request/ToDo"); if it's already Done, only "Archive this Request/ToDo"
+  shows — Jim's own final refinement. Continue stashes a
+  `ConversionCarryPayload` (`app/src/lib/conversionCarry.ts`, single-
+  consumption `sessionStorage`, same round-trip pattern as
+  `ArchiveForm.tsx`'s `ARCHIVE_ROUNDTRIP_KEY`) and navigates to the other
+  record type's Create screen, which applies both the Description/
+  Category/Due Date pre-fill and the queued Done/Archive side effect only
+  once its own Save/Send actually succeeds — never at the moment Continue
+  is clicked. The side effect branches on source: a plain `requests` table
+  update for the signed-in owner (Request Detail/ToDo Detail), or the
+  existing `set_response_done_as_recipient()`/`archive_received_request()`
+  RPCs for Response Detail — never a raw table update from the recipient
+  side, per the Entitlements section above.
+  **ToDo Attachments now replace ToDo Locations entirely** — confirmed
+  while reading `AttachmentsPanel.tsx` that a ToDo is simply a `requests`
+  row with `contact_id = null`, and the Attachments RLS/API layer
+  (migration 025) is already fully ownership-based with no Request-vs-ToDo
+  distinction, so this needed no schema/security change: ToDo Detail's
+  `AttachmentsPanel` call switched `mode="reference"` -> `mode="file"`,
+  and Create ToDo's staged-Locations modal/state was replaced by a
+  mechanical port of Create Request's own staged-file-upload pattern.
+  **Migration 048** folds every existing `kind='reference'` row (in
+  practice, always a ToDo Location) into its parent's own `description` as
+  `" -- Location(s): xxxxx, yyyyyy, zzzzz"` (Jim's own "note: value" join
+  format, approved unchanged), then deletes the reference rows outright —
+  a one-time cutover before the app stops writing/reading them.
+  **URL auto-linkify**: new `linkifySegments()` (`app/src/lib/
+  attachments.ts`, refactored out of the existing `urlLocationHref()`) and
+  a new shared `app/components/Linkified.tsx`, applied to read-only
+  Description and Dialog-body display on Request Detail, ToDo Detail,
+  Request Response, and Response Detail (never to an editable
+  `<textarea>`, which would fight the cursor). **No mockups updated** —
+  none of the affected screens' static HTML models any of this; flagged in
+  `design/README.md`. `npx tsc --noEmit`/`npm run lint` clean. See the
+  decisions log's 2026-08-26 entry for the full write-up.

@@ -399,3 +399,20 @@ beyond donating that one CSS component). The fifth mockup (cancelled
 renewal) was explicitly scoped out by Jim ("not needed for the Private
 Testing phase") and isn't built, live or as a mockup. See the decisions
 log's 2026-08-26 entry for the full write-up.
+
+## 2026-08-26 — Request<->ToDo conversion banner; ToDo Attachments replace Locations; URL auto-linkify: no mockup, migration 048 not yet confirmed run
+
+Jim's own three-message design for a conversion banner/modal shared across
+Request Detail, ToDo Detail, and Response Detail (`ConversionBanner.tsx`)
+landed directly in the live components — none of the three screens' static
+HTML in `design/screens/` models this at all, and the feature has no
+precedent in any existing mockup to extend. Same for ToDo Detail's/Create
+ToDo's switch from Locations (`kind='reference'` attachments) to real
+file Attachments (`mode="file"`) and the new `Linkified.tsx` component
+auto-linking URLs in read-only Description/Dialog-body text — neither of
+the two source mockups (`WYP_todo_detail_palette1.html`,
+`WYP_create_todo_palette1.html`) has interactive Attachments/Description
+JS to convert. Migration 048 (folding existing ToDo Locations into their
+own parent's Description, `docs/Week6 - SQL history.txt`) is **drafted,
+not yet confirmed run by Jim**. See the decisions log's 2026-08-26 entry
+for the full write-up.

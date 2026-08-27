@@ -3021,3 +3021,83 @@ commit;
 --   365 days from today. Uncheck it, check it again a day later — the date
 --   should move to that day + 365, not stay pinned to the first date.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 048 — fold existing ToDo Locations into their own
+-- Description; retire kind='reference' attachments rows
+-- DRAFTED 2026-08-26 — NOT YET CONFIRMED RUN.
+--
+-- Context: Jim's own Request/ToDo-symmetry proposal (2026-08-26 decisions
+-- log) replaces ToDo Locations outright with real file Attachments (the
+-- exact mechanism Requests already use — see AttachmentsPanel.tsx's own
+-- mode='file'/'reference' split, which needs no schema change to serve a
+-- ToDo, since a ToDo is just a public.requests row with contact_id = null,
+-- and every attachments RLS policy/API route is already keyed on
+-- ownership alone, never on Request-vs-ToDo). Before ToDo Detail's
+-- AttachmentsPanel switches from mode='reference' to mode='file', any
+-- Locations a ToDo already has need to survive the switch in some form —
+-- Jim's own instruction: "very little usage... collect any Locations and
+-- append them as text to the Description as ' -- Location(s): xxxxx,
+-- yyyyyy, zzzzz'." Requests never had Locations (mode='reference' has only
+-- ever applied to ToDos, per AttachmentsPanel.tsx's own header comment),
+-- so this only ever touches ToDo rows in practice, even though the query
+-- itself is written generically off attachments.kind rather than filtering
+-- requests.contact_id — kind='reference' already implies "was a Location."
+--
+-- Per-request_id entries are joined with ", ", each entry rendered as
+-- "note: value" when a Location has both a Description and a Location
+-- value, or just whichever of the two is present otherwise — Jim confirmed
+-- this format needs no change from the first draft. Requests with no
+-- Locations at all are untouched (the loop simply never visits them).
+--
+-- Runs before the application code deploys that stops writing/reading
+-- kind='reference' rows at all — once TodoDetailForm.tsx and
+-- CreateTodoForm.tsx switch to mode='file', nothing in the app inserts a
+-- 'reference' row again, so deleting every existing one here is a clean,
+-- one-time cutover, not an ongoing behavior change.
+-- ============================================================================
+
+begin;
+
+do $$
+declare
+  r record;
+  locs text;
+begin
+  for r in
+    select request_id,
+           string_agg(
+             coalesce(nullif(reference_note, '') || ': ', '') ||
+             coalesce(reference_url, reference_note, ''),
+             ', ' order by created_at
+           ) as locs
+    from public.attachments
+    where kind = 'reference'
+    group by request_id
+  loop
+    if r.locs is not null and length(trim(r.locs)) > 0 then
+      update public.requests
+        set description = coalesce(description, '') || ' -- Location(s): ' || r.locs
+        where id = r.request_id;
+    end if;
+  end loop;
+end $$;
+
+delete from public.attachments where kind = 'reference';
+
+commit;
+
+-- Verify (superuser, proves the transform ran — the real check is the
+-- browser): select id, description from public.requests where description
+-- like '%-- Location(s):%'; -- should show every ToDo that had a Location,
+-- with its old Location text now folded into the Description.
+--
+-- select count(*) from public.attachments where kind = 'reference';
+-- -- should be 0 after this migration runs.
+--
+-- Verify as a client: open a ToDo that used to show a Location under
+-- ToDo Detail — its Description should now end with " -- Location(s):
+-- ...", and the Locations panel below it should be gone (replaced by the
+-- real Attachments UI once that code change ships alongside this
+-- migration).
+-- ============================================================================

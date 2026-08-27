@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
+import Linkified from './Linkified'
+import ConversionBanner from './ConversionBanner'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 import { isReminderEligible } from '@/lib/email'
@@ -911,7 +913,9 @@ export default function ResponseDetailForm() {
             {data.owner_request_reminders_enabled && reminderBanner()}
 
             <div className="seclabel">Request Description</div>
-            <div className="respdesc">{data.description}</div>
+            <div className="respdesc">
+              <Linkified text={data.description} />
+            </div>
 
             <div className="grabber" aria-hidden="true"></div>
 
@@ -1056,10 +1060,15 @@ export default function ResponseDetailForm() {
                           {e.kind === 'answer' ? (
                             <>
                               {q && <span className="dlgre">Re: {truncate(q.body)}</span>}
-                              <span className="dlgbody">{e.body}</span>
+                              <span className="dlgbody">
+                                <Linkified text={e.body} />
+                              </span>
                             </>
                           ) : (
-                            <> {e.body}</>
+                            <>
+                              {' '}
+                              <Linkified text={e.body} />
+                            </>
                           )}
                         </div>
                       )
@@ -1101,6 +1110,26 @@ export default function ResponseDetailForm() {
                 * This Request — {describeRepeat(data.repeat_rule, data.due_date)}.
               </p>
             )}
+
+            {/* Request-to-ToDo conversion (2026-08-26) — this direction
+                only; a signed-in recipient has no ToDo of their own to
+                convert back the other way from this screen. See
+                ConversionBanner.tsx's own header comment. sourceType is
+                'recipient': Continue's Done/Archive side effect (if any)
+                goes through set_response_done_as_recipient/
+                archive_received_request, the same RPCs this screen's own
+                quick-Done band and Archive already use — never a plain
+                table update, which RLS would refuse from this side
+                anyway. */}
+            <ConversionBanner
+              direction="request-to-todo"
+              sourceType="recipient"
+              sourceId={requestId}
+              isDone={doneDate.trim() !== ''}
+              description={data.description}
+              categoryName={null}
+              dueDate={data.due_date}
+            />
           </form>
         </div>
 

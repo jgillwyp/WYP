@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
 import RepeatControl from './RepeatControl'
+import Linkified from './Linkified'
+import ConversionBanner from './ConversionBanner'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
@@ -133,10 +135,10 @@ function categoryPrefix(name: string | null | undefined): string {
   return name ? `[${name}] ` : ''
 }
 
-// Same shape as MainScreen.tsx's own PrintAttachmentEntry — ToDos only ever
-// use kind='reference' (Locations), but the type is shared with
-// RequestDetailForm.tsx's identical duplicate rather than narrowed, so
-// PrintAttachmentList below can be a byte-for-byte copy of the other two.
+// Same shape as MainScreen.tsx's own PrintAttachmentEntry — ToDos now use
+// kind='file' real Attachments (2026-08-26), same as Requests, so this type
+// is a byte-for-byte copy of RequestDetailForm.tsx's own rather than
+// narrowed to the old reference-only shape.
 type PrintAttachmentEntry = {
   id: string
   kind: 'file' | 'reference'
@@ -166,7 +168,7 @@ function PrintAttachmentList({ entries }: { entries: PrintAttachmentEntry[] }) {
   if (entries.length === 0) return null
   return (
     <div className="patt">
-      <div className="patthead">Locations</div>
+      <div className="patthead">Attachments</div>
       {entries.map((a) => (
         <div className="pattitem" key={a.id}>
           {a.kind === 'file'
@@ -383,8 +385,8 @@ export default function TodoDetailForm() {
     setDlgDictating(true)
   }
 
-  // Locations (Week 5 Priority 3, 2026-08-14) — AttachmentsPanel does its
-  // own fetching once these are known.
+  // Attachments (2026-08-26, formerly Locations) — AttachmentsPanel does
+  // its own fetching once these are known.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
   // Date created — read-only, print-only (2026-08-17). Not part of `form`
   // since it's never editable/saved; same pattern as ownerName/tier above.
@@ -401,7 +403,7 @@ export default function TodoDetailForm() {
 
   // Print (2026-08-15) — same reasoning/pattern as RequestDetailForm.tsx's
   // identical addition. dialogList already has everything Dialog needs;
-  // Locations need their own small fetch since AttachmentsPanel keeps its
+  // Attachments need their own small fetch since AttachmentsPanel keeps its
   // own list private.
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
@@ -1303,10 +1305,15 @@ export default function TodoDetailForm() {
                           {e.kind === 'answer' ? (
                             <>
                               {q && <span className="dlgre">Re: {truncate(q.body)}</span>}
-                              <span className="dlgbody">{e.body}</span>
+                              <span className="dlgbody">
+                                <Linkified text={e.body} />
+                              </span>
                             </>
                           ) : (
-                            <> {e.body}</>
+                            <>
+                              {' '}
+                              <Linkified text={e.body} />
+                            </>
                           )}
                         </div>
                       )
@@ -1316,12 +1323,16 @@ export default function TodoDetailForm() {
               )}
             </div>
 
-            {/* Locations (Week 5 Priority 3, 2026-08-14) — real Add/list/
-                delete via AttachmentsPanel (mode="reference"), gated on the
-                signed-in owner's own tier. */}
+            {/* Attachments (2026-08-26) — real file upload via
+                AttachmentsPanel (mode="file"), same mechanism Requests
+                already use; ToDos are just requests rows with
+                contact_id = null, so no schema/permission change was
+                needed. Supersedes the old mode="reference" Locations UI —
+                migration 048 folds any pre-existing Locations into this
+                ToDo's own Description before this switch takes effect. */}
             <AttachmentsPanel
               requestId={todoId}
-              mode="reference"
+              mode="file"
               canAdd={tier === 'subscriber'}
               authToken={authToken}
               recipientToken={null}
@@ -1329,6 +1340,18 @@ export default function TodoDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
               showCarryToggle={repeatRule !== null}
+            />
+
+            {/* Request<->ToDo conversion (2026-08-26) — see
+                ConversionBanner.tsx's own header comment. */}
+            <ConversionBanner
+              direction="todo-to-request"
+              sourceType="owned"
+              sourceId={todoId}
+              isDone={todoDatesEnabled ? form.doneDate.trim() !== '' : todoStatus === 'done'}
+              description={form.description}
+              categoryName={selectedCategory?.name ?? null}
+              dueDate={form.dueDate.trim() === '' ? null : form.dueDate}
             />
 
             {error && (
