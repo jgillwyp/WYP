@@ -3121,6 +3121,25 @@ body {
   color: var(--ink);
 }
 
+/* Conversion banner stacked variant (2026-08-27, ConversionBanner.tsx) —
+   owner-reported on a phone screenshot: the plain .donerow row layout
+   (text left, button right) squeezed this component's longer note text
+   ("Carries this ToDo's Description, Category and Due Date into a new
+   Request.") into a narrow left column, wrapping one word per line while
+   the button floated awkwardly mid-paragraph. Every other .donerow user
+   (quick-Done bands, Send Reminder) has a short, single-line note, so the
+   row layout never caused this — only this component's longer sentence
+   does. Text on top, button below, rather than widening .donerow itself
+   app-wide for one caller. */
+.donerow-stack {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.donerow-stack .donenote {
+  flex: none;
+}
+
 /* Print Reports (2026-08-13, MainScreen.tsx) — §6.34 PROPOSED, not yet
    drawn in any mockup (see design/README.md). Fixes the owner's report that
    printing Main Screen "only shows what can fit onto a page": the previous

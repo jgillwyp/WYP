@@ -6,6 +6,73 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-27 — Auth-failure hash silently dropped when it lands on /auth/callback instead of the landing page
+
+Jim signed out and back in; sending took longer than usual and produced two
+sign-in-link emails. The first worked. Clicking the second link's magic
+link bounced him to a bare landing page — no explanatory banner. Confirmed
+directly with him (rather than assumed) that no message appeared at all.
+
+This app already has a fix for exactly this shape of failure: a used or
+expired magic link causes Supabase to redirect back with a
+`#error=access_denied&error_code=otp_expired&...` hash, and
+`app/page.tsx`'s `parseAuthError()` (built 2026-08-18, after an earlier,
+similar owner report) turns that into a friendly banner on the landing
+page. That fix only fires if the hash actually reaches `/`. The 2026-08-18
+write-up's own example showed Supabase's project-level Site URL as the
+redirect target for that failure (a `*.vercel.app` address in the address
+bar at the time) — but Supabase does not necessarily send every failure
+type to the same target consistently; an already-consumed single-use token
+can instead land on `emailRedirectTo` (`/auth/callback`, the target
+`signInWithOtp` itself specifies), and until now that route had zero
+awareness of an error hash — it only ever called `getSession()`, found
+none, and silently sent the visitor to `/login` with the failure reason
+dropped on the floor.
+
+Fixed by checking `window.location.hash` for `error=` at the very top of
+`/auth/callback/page.tsx`'s effect, before ever calling `getSession()`; if
+present, forward to `/` with the hash intact so the existing
+`parseAuthError()`/banner logic — already correct — picks it up regardless
+of which of the two possible targets Supabase used this time. No change
+was needed to `app/page.tsx` itself.
+
+**Root cause of the two emails, corrected same day from Jim's follow-up.**
+The original write-up above assumed receipt order matched click order
+("the first worked, the second failed"). Jim clarified: he opened the
+more-recently-received of the two emails first — it failed — then opened
+the earlier-received one, which worked. Click order, not receipt order,
+determined which one worked, which is consistent with the two emails
+sharing (or racing for) a single valid session, but rules out a simple
+"first-sent-email's link is the one that works" story.
+
+This shifts the leading hypothesis away from an SMTP-relay retry and
+toward **Microsoft 365 Safe Links** (Defender for Office 365) prefetching
+the link automatically before Jim ever clicks it. The email headers Jim
+pasted for the failed link show the message routed through a
+`jgillon@versys.com` mailbox on Microsoft 365/Exchange Online Protection
+(ARC-Seal chain, `X-MS-Exchange-Organization-*`, `X-Forefront-Antispam-
+Report` headers) after being forwarded there from `jimgillon@gmail.com`.
+Safe Links is a well-known cause of exactly this symptom: a corporate M365
+tenant with URL scanning/time-of-click protection enabled can visit a
+link in an inbound email automatically, shortly after delivery, to check
+it for malicious content — which consumes a single-use magic-link token
+before the human ever clicks it, so the *next* click (regardless of which
+physical email it's in) fails. Not confirmed — flagged as the leading
+theory, not a settled cause. If Jim wants to verify, the versys.com M365
+admin console's Safe Links report would show whether either link was
+auto-visited near the delivery timestamp, or a sign-in tested on an
+address with no corporate email-security layer in front of it (e.g.
+`jimgillon@gmail.com` read directly, not forwarded) would rule it in or
+out by simply not reproducing the failure.
+
+Either way, the app-side fix above stands on its own: whatever consumes a
+token before the human clicks — a relay retry, a resend, or an automated
+security scanner — the visitor should see a clear explanation instead of
+a bare landing page, which is what the `/auth/callback` fix now provides.
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-26 — Request<->ToDo conversion banner; ToDo Attachments replace Locations; URL auto-linkify — migration 048 drafted, NOT yet confirmed run
 
 Jim, across three messages, designed a symmetry feature between Requests

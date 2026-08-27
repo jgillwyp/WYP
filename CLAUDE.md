@@ -3004,3 +3004,29 @@ link is built only after the stack is proven on Add Contact.
   none of the affected screens' static HTML models any of this; flagged in
   `design/README.md`. `npx tsc --noEmit`/`npm run lint` clean. See the
   decisions log's 2026-08-26 entry for the full write-up.
+- **`/auth/callback` now forwards a Supabase auth-failure hash to `/`
+  instead of silently swallowing it (2026-08-27).** Owner-reported: signed
+  out and back in, sign-in took longer than usual and produced two
+  sign-in-link emails; the first worked, clicking the second's link bounced
+  to a bare landing page with no explanation. `app/page.tsx`'s own
+  `parseAuthError()` (2026-08-18) already turns a `#error=...` hash from a
+  used/expired magic link into a friendly banner — but only if that hash
+  actually reaches `/`. The 2026-08-18 write-up's own example showed
+  Supabase's failure redirect landing on its project-level Site URL (a
+  `*.vercel.app` address in that case); this occurrence landed the failure
+  on `emailRedirectTo` (`/auth/callback`) instead, a route with zero error-
+  hash awareness before this fix — it only ever checked `getSession()` and,
+  finding none, sent the visitor to `/login` with the failure reason
+  dropped. `/auth/callback/page.tsx` now checks for `error=` in the hash
+  before calling `getSession()` at all, and if present, forwards to `/`
+  with the hash intact, verbatim, so the existing `parseAuthError()`/banner
+  logic picks it up regardless of which of the two targets Supabase
+  actually used. **Root cause of the two emails themselves is unconfirmed**
+  — the `/login` submit button is already `disabled` while sending (no
+  client-side double-submit gap found), so the most likely explanations are
+  either the SMTP relay being slow enough that Supabase's mailer/Hostinger
+  retried the send (same underlying token, single-use — whichever link is
+  opened first wins, the other then hits the now-fixed failure path), or a
+  second manual resend by the owner. Flagged for the owner to note the
+  exact address-bar contents if this recurs. `npx tsc --noEmit`/`npm run
+  lint` clean.

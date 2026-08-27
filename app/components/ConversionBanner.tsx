@@ -107,7 +107,11 @@ export default function ConversionBanner({
 
   return (
     <>
-      <div className="donerow">
+      {/* .donerow-stack (2026-08-27) — text on top, button below, rather
+          than .donerow's plain row layout every other quick-Done band uses.
+          See globals.css's own comment on .donerow-stack for why this one
+          caller needed it. */}
+      <div className="donerow donerow-stack">
         <span className="donenote">
           Carries this {SOURCE_NOUN[direction]}&rsquo;s Description, Category, and Due Date into a new{' '}
           {TARGET_NOUN[direction]}.
