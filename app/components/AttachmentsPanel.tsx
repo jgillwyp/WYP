@@ -88,6 +88,24 @@ type Props = {
 const emptyLabel = { file: 'Attachments', reference: 'Locations' } as const
 const addLabel = { file: 'Add Attachment', reference: 'Add Location' } as const
 
+/**
+ * Background signed-URL refresh (2026-08-27) — owner-reported: "I have seen
+ * that failure a few times when I leave an item open and later try to see
+ * the attachment." Each `kind = 'file'` row's `url` is a Supabase Storage
+ * signed URL good for ATTACHMENT_SIGNED_URL_TTL_SECONDS (900s/15 min — see
+ * app/api/attachments/_shared.ts's own constant, not imported here since
+ * that module is server-only; kept in sync by hand, same per-file-
+ * duplication convention this codebase already uses elsewhere). A panel
+ * fetches that batch once on mount and never again — leave the screen open
+ * longer than 15 minutes and a later click hits an expired-link error from
+ * Storage (or from the Office Online viewer trying to fetch it) instead of
+ * the file. REFRESH_THRESHOLD_MS re-fetches a fresh batch well before that
+ * expiry, silently, in the background, so whatever's already on screen
+ * stays clickable without the user ever noticing or having to retry.
+ */
+const REFRESH_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes — 5 min safety margin under the 15 min TTL
+const REFRESH_CHECK_INTERVAL_MS = 60 * 1000 // check once a minute
+
 export default function AttachmentsPanel({
   requestId,
   mode,
@@ -105,6 +123,10 @@ export default function AttachmentsPanel({
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // When the current `rows` batch's signed URLs were fetched — a ref, not
+  // state, since nothing renders off it directly and updating it must not
+  // itself retrigger the effect below (see that effect's own comment).
+  const fetchedAtRef = useRef<number | null>(null)
 
   const [refFormOpen, setRefFormOpen] = useState(false)
   const [refDescription, setRefDescription] = useState('')
@@ -117,9 +139,18 @@ export default function AttachmentsPanel({
     if (!requestId) return
     let cancelled = false
 
-    async function load() {
-      setLoading(true)
-      setError(null)
+    // `silent` (2026-08-27) — used by the background refresh interval below,
+    // which must not flip `loading` back to true (that would hide the whole
+    // panel behind `if (loading) return null` every ten minutes) or clear
+    // `error`/`rows` on a failed retry (better to leave whatever's already
+    // on screen, possibly stale, than blank the panel over a background
+    // fetch that didn't matter yet — the next minute's check tries again).
+    async function load(opts?: { silent?: boolean }) {
+      const silent = opts?.silent ?? false
+      if (!silent) {
+        setLoading(true)
+        setError(null)
+      }
       try {
         const res = await fetch('/api/attachments/list', {
           method: 'POST',
@@ -132,21 +163,38 @@ export default function AttachmentsPanel({
         const body = await res.json()
         if (cancelled) return
         if (!res.ok) {
-          setError('Could not load Attachments.')
-          setRows([])
+          if (!silent) {
+            setError('Could not load Attachments.')
+            setRows([])
+          }
         } else {
           setRows(body.attachments ?? [])
+          fetchedAtRef.current = Date.now()
         }
       } catch {
-        if (!cancelled) setError('Could not load Attachments.')
+        if (!cancelled && !silent) setError('Could not load Attachments.')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && !silent) setLoading(false)
       }
     }
 
     load()
+
+    // Owner-reported, 2026-08-27: leaving a Request/ToDo Detail screen open
+    // longer than the signed URL's own lifetime made a later attachment
+    // click fail instead of opening the file. Checking once a minute against
+    // fetchedAtRef (never the trigger for a re-render on its own) keeps this
+    // re-fetch entirely invisible unless it's actually due.
+    const interval = setInterval(() => {
+      const fetchedAt = fetchedAtRef.current
+      if (fetchedAt !== null && Date.now() - fetchedAt > REFRESH_THRESHOLD_MS) {
+        load({ silent: true })
+      }
+    }, REFRESH_CHECK_INTERVAL_MS)
+
     return () => {
       cancelled = true
+      clearInterval(interval)
     }
   }, [requestId, authToken, recipientToken])
 

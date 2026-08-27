@@ -3056,3 +3056,26 @@ link is built only after the stack is proven on Add Contact.
   `list/route.ts` and `upload/route.ts`) gives the viewer's own server-side
   fetch more headroom on a slow mobile connection before the link goes
   stale. `npx tsc --noEmit`/`npm run lint` clean.
+- **`AttachmentsPanel.tsx` now silently refreshes its signed URLs in the
+  background before they expire (2026-08-27)** — owner-reported, same day
+  as the Office-viewer fix above: "I have seen that failure a few times
+  when I leave an item open and later try to see the attachment." A
+  panel's `rows` (and each `kind = 'file'` row's signed `url`) were fetched
+  once on mount and never again; leaving a Request/ToDo Detail screen open
+  longer than `ATTACHMENT_SIGNED_URL_TTL_SECONDS` (900s/15 min) made a
+  later click hit an expired-link error from Storage (or from the Office
+  Online viewer trying to fetch it) instead of the file. New
+  `fetchedAtRef` (a ref, not state — nothing renders off it, and updating
+  it must not itself retrigger the fetch effect) records when the current
+  batch of signed URLs was fetched; a `setInterval` checked once a minute
+  re-fetches a fresh batch via `load({ silent: true })` once more than
+  `REFRESH_THRESHOLD_MS` (10 minutes — a 5-minute safety margin under the
+  15-minute TTL) has elapsed. `silent` mode deliberately never touches
+  `loading` (would otherwise hide the whole panel behind `if (loading)
+  return null` every ten minutes) or clear `rows`/`error` on a failed
+  retry — a failed background refresh just leaves whatever's already on
+  screen in place and tries again a minute later, rather than blanking a
+  working panel over a background call that didn't matter yet. Matches the
+  owner's own proposed mechanism verbatim ("a timestamp of initial
+  attachment acquisition compared to the current time"). `npx tsc
+  --noEmit`/`npm run lint` clean.

@@ -6,6 +6,63 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-27 — AttachmentsPanel refreshes signed URLs in the background before they expire
+
+Immediately after the Office Online viewer fix (previous entry), Jim wrote:
+"That is a big improvement for ease of use. Can a timestamp of initial
+attachment acquisition compared to the current time result in a refresh from
+the server instead of a fail to display. I have seen that failure a few
+times when I leave an item open and later try to see the attachment."
+
+**Root cause.** `AttachmentsPanel.tsx` (shared by Request Detail, ToDo
+Detail, Request Response, and Response Detail) fetched its `rows` — including
+each `kind = 'file'` row's signed Storage URL — exactly once, in a mount
+effect, and never again. A signed URL is only valid for
+`ATTACHMENT_SIGNED_URL_TTL_SECONDS` (900s/15 min, widened from 5 min the same
+day for the Office-viewer fix). Leave the screen open longer than that and
+click an attachment, and the link Storage (or the Office Online viewer trying
+to fetch it on your behalf) now sees is expired — a real, reproducible
+failure mode, not user error, exactly matching what Jim described.
+
+**Fix, matching Jim's own proposed mechanism almost exactly.** Added a
+`fetchedAtRef` (a `useRef`, not `useState` — nothing in the render ever needs
+this value, and updating it must not itself retrigger the fetch effect, which
+a `useState` dependency would). The existing mount effect now also starts a
+`setInterval`, checked once a minute, that compares `Date.now()` against
+`fetchedAtRef.current` and silently calls the same `load()` function again
+(with a new `{ silent: true }` option) once more than `REFRESH_THRESHOLD_MS`
+(10 minutes — a 5-minute safety margin under the 15-minute TTL) has passed.
+`silent` mode is the one real design decision here: it must never set
+`loading` true (the panel's own `if (loading) return null` would otherwise
+blank the whole component for the duration of every background refresh, once
+every ten minutes, on a screen that's just sitting open) and must never clear
+`rows`/set `error` on a failed attempt (a background refresh that fails
+should just leave whatever's already on screen — possibly still stale, but
+still visibly there — and let the next minute's check try again, rather than
+punishing a passive, working panel for a transient network hiccup).
+
+**Alternatives considered and rejected:**
+- *Intercept the click itself* — `onClick={e => { e.preventDefault(); await
+  refreshIfStale(); window.open(freshUrl) }}`. Rejected: calling
+  `window.open()` after an `await` breaks the "direct result of a user
+  gesture" requirement several browsers (notably Safari/iOS) enforce for
+  popup/new-tab opens, so a slow network could turn this into a silently
+  blocked popup — a worse failure mode than the one being fixed, and one
+  that's much harder to diagnose from a bug report ("nothing happened when I
+  tapped it").
+- *Refresh only on visibility change (tab refocus)* — would miss the case
+  Jim actually described (an already-visible, already-focused tab left open
+  for a while) and adds a second code path for no real benefit over a plain
+  interval.
+
+**Not done, flagged rather than silently skipped:** this refreshes the whole
+panel's row list, not just the one attachment about to be clicked — simpler,
+and the list is already small (`MAX_ATTACHMENTS_PER_ITEM` caps it at 10), so
+there's no meaningful cost to refreshing all of it at once. `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-27 — Office attachments open through Microsoft's Office Online viewer instead of downloading
 
 Jim asked whether the "Show in folder" / "Open" choice Windows offers after
