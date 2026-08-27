@@ -3127,3 +3127,42 @@ link is built only after the stack is proven on Add Contact.
   `applyConversionSideEffect()` call, same post-Save timing. No mockup
   updated — this feature family has none; see `design/README.md`'s
   2026-08-27 entry. `npx tsc --noEmit`/`npm run lint` clean.
+- **iOS PWA install — `apple-mobile-web-app` metadata added (2026-08-27).**
+  Jim asked whether app-icon installation works on an iPhone like it does on
+  Android/Windows. It doesn't, fully: `PWAProvider.tsx`'s
+  `canInstall`/Install-Housekeeping-row mechanism depends on
+  `beforeinstallprompt`, a Chromium-only event Safari never fires on iOS —
+  a platform limitation, not a bug here. The manual path (Safari Share ->
+  Add to Home Screen) does work and already picks up `app/manifest.ts`'s
+  icons/`display: standalone` and `layout.tsx`'s `icons.apple`
+  (`apple-touch-icon`). Closed the one remaining gap in that manual path:
+  `layout.tsx`'s `metadata` gained `appleWebApp: { capable: true, title:
+  "Would You Please", statusBarStyle: "default" }` — `capable: true` is
+  what makes the launched icon open standalone (no Safari chrome) rather
+  than as a bookmark tab; `statusBarStyle: "default"` (not
+  `"black-translucent"`) was a deliberate choice, since this app has no
+  safe-area-inset padding anywhere and the translucent variant draws
+  content under the status bar/notch. `npx tsc --noEmit`/`npm run lint`
+  clean.
+- **Landing page subscription content caught up to real pricing/features
+  (2026-08-27).** Jim: the landing page "needs to be caught up to the
+  latest subscription/etc changes" — it still quoted a flat "$17.95 / yr"
+  (predating the 2026-08-24/25 first-year-discount/renewal price split) and
+  was missing 5 GB storage, Automatic Repeating, and Voice dictation from
+  its feature list, while still pitching Voice dictation as "Coming soon"
+  after it had already shipped as a live Subscriber feature. `LandingPage.tsx`
+  now imports `SUBSCRIBER_FEATURES` directly from `SubscriptionPanels.tsx`
+  (the same canonical list Account Options/`/account/subscription` already
+  use) instead of hand-duplicating it a third time; badge/note/final-CTA
+  pricing text updated to "$17.95 1st yr" / "$23.95/yr" throughout; the
+  "Coming soon" Voice search bullet trimmed to just the still-unbuilt
+  search-dictation piece. `design/marketing/WYP_landing_page.html` (the
+  static mockup, kept hand-synced on every prior content change) got the
+  identical literal content, with a comment pointing back at
+  `SubscriptionPanels.tsx` as the source of truth. **Also answered**: Jim
+  can't see the anonymous landing page on his own device because "Keep me
+  signed in" persists via `localStorage` even after logging out on the same
+  browser profile — a private/incognito window has none of that storage, so
+  `getSession()` finds nothing there and `/` renders the landing page
+  regardless of his normal window's signed-in state. No code change for
+  that part. `npx tsc --noEmit`/`npm run lint` clean.

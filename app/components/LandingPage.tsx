@@ -3,6 +3,7 @@
 import Link from 'next/link'
 
 import './landing.css'
+import { SUBSCRIBER_FEATURES } from './SubscriptionPanels'
 
 // Live conversion of design/marketing/WYP_landing_page.html, 2026-08-13 —
 // owner asked for this to become the actual unauthenticated `/` route
@@ -281,23 +282,35 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
           </div>
         </section>
 
-        {/* Subscription / Coming soon */}
+        {/* Subscription / Coming soon — subscription bullets (2026-08-27)
+            now render from SubscriptionPanels.tsx's own SUBSCRIBER_FEATURES,
+            the same canonical list Account Options and /account/subscription
+            already use, so this panel can't drift out of sync with the real
+            feature set/pricing again the way it had (still listing a flat
+            $17.95/yr with no first-year-discount/renewal split, and still
+            pitching Voice search under "Coming soon" after Voice dictation
+            for Description/Dialog Text had already shipped as a live
+            Subscriber feature). "Keep everything forever" is kept as its
+            own bullet, appended after the shared list — it's this app's
+            original free-vs-paid retention distinction (1-year vs perpetual
+            history) and isn't part of SUBSCRIBER_FEATURES, which is scoped
+            to newer capability additions only. */}
         <section className="section alt">
           <div className="wrap">
             <div className="cols">
               <div>
                 <div className="slabel">
                   <span className="t">Coming with a subscription</span>
-                  <span className="badge sub">$17.95 / yr</span>
+                  <span className="badge sub">$17.95 1st yr</span>
                 </div>
                 <div className="lpanel sub">
                   <ul>
-                    <li><b>File attachments</b> — send and receive documents, photos, and PDFs with your requests and responses.</li>
-                    <li><b>Request Texting</b> — deliver requests by SMS text in addition to email.</li>
+                    {SUBSCRIBER_FEATURES.map((f) => (
+                      <li key={f.title}><b>{f.title}</b> — {f.desc}</li>
+                    ))}
                     <li><b>Keep everything forever</b> — perpetual history for your requests and files.</li>
-                    <li><b>Ad-free</b>, with priority support.</li>
                   </ul>
-                  <div className="note">Just $1.50 a month — a fraction of team tools. The free plan keeps a full year of history.</div>
+                  <div className="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history.</div>
                 </div>
               </div>
               <div>
@@ -307,7 +320,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 </div>
                 <div className="lpanel soon">
                   <ul>
-                    <li><b>Voice search</b> — dictate a search, or speak your request text instead of typing.</li>
+                    <li><b>Voice search</b> — dictate a search instead of typing it.</li>
                     <li><b>Native apps</b> for iPhone, Android, and Windows, with push notifications.</li>
                   </ul>
                   <div className="note">Start on the web today — your account, requests, and ToDos carry over automatically when new features and apps arrive.</div>
@@ -332,7 +345,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               </div>
               <div className="price">
                 <div className="amt">Free</div>
-                <div className="per">Advanced features with subscription $17.95/yr.</div>
+                <div className="per">Advanced features with a subscription — $17.95 first year, $23.95/yr after.</div>
               </div>
               <Link className="btn-white" href="/login?intent=signup">Start Free Account</Link>
             </div>

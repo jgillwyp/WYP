@@ -575,16 +575,24 @@ footer .wrap {
         <div>
           <div class="slabel">
             <span class="t">Coming with a subscription</span>
-            <span class="badge sub">$17.95 / yr</span>
+            <span class="badge sub">$17.95 1st yr</span>
           </div>
+          <!-- List content (2026-08-27) mirrors app/components/SubscriptionPanels.tsx's
+               own SUBSCRIBER_FEATURES array, the live app's single canonical source
+               for this list — kept in sync by hand here since this static mockup has
+               no way to import it directly. Update both places together. -->
           <div class="panel sub">
             <ul>
-              <li><b>File attachments</b> — send and receive documents, photos, and PDFs with your requests and responses.</li>
-              <li><b>Request Texting</b> — deliver requests by SMS text in addition to email.</li>
+              <li><b>Voice dictation</b> — speak your Request and ToDo Description and Dialog entries instead of typing.</li>
+              <li><b>File attachments</b> — send and receive documents, photos, and PDFs with your Requests and Responses.</li>
+              <li><b>5 GB of storage</b> — for attachments — additional storage available at $10 per 5 GB per year.</li>
+              <li><b>Automatic Repeating</b> — for Requests and ToDos.</li>
+              <li><b>Request Texting</b> — deliver Requests by SMS text in addition to email.</li>
+              <li><b>Ad-free</b> — removes the ad banner shown to Free accounts.</li>
+              <li><b>Priority support</b> — via email.</li>
               <li><b>Keep everything forever</b> — perpetual history for your requests and files.</li>
-              <li><b>Ad-free</b>, with priority support.</li>
             </ul>
-            <div class="note">Just $1.50 a month — a fraction of team tools. The free plan keeps a full year of history.</div>
+            <div class="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history.</div>
           </div>
         </div>
         <div>
@@ -594,7 +602,7 @@ footer .wrap {
           </div>
           <div class="panel soon">
             <ul>
-              <li><b>Voice search</b> — dictate a search, or speak your request text instead of typing.</li>
+              <li><b>Voice search</b> — dictate a search instead of typing it.</li>
               <li><b>Native apps</b> for iPhone, Android, and Windows, with push notifications.</li>
             </ul>
             <div class="note">Start on the web today — your account, requests, and ToDos carry over automatically when new features and apps arrive.</div>
@@ -614,7 +622,7 @@ footer .wrap {
         </div>
         <div class="price">
           <div class="amt">Free</div>
-          <div class="per">Advanced features with subscription $17.95/yr.</div>
+          <div class="per">Advanced features with a subscription — $17.95 first year, $23.95/yr after.</div>
         </div>
         <a class="btn-white" href="/login?intent=signup">Start Free Account</a>
       </div>

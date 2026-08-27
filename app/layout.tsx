@@ -22,6 +22,24 @@ export const metadata: Metadata = {
     icon: "/icons/icon-192.png",
     apple: "/icons/icon-512.png",
   },
+  // appleWebApp (2026-08-27) — iOS Safari has no beforeinstallprompt event
+  // (see PWAProvider.tsx's own comment), so there's no in-app "Install" row
+  // on an iPhone; the only path is Safari's own Share > Add to Home Screen.
+  // This block is what makes that manual result look right: capable: true
+  // emits apple-mobile-web-app-capable, so the launched icon opens without
+  // Safari's own address bar/chrome (same standalone effect display:
+  // "standalone" already gives Android); title sets the name under the icon
+  // on the home screen independently of the page <title>, which can differ
+  // once a user is deep in the app; statusBarStyle: "default" keeps the
+  // iOS status bar opaque (dark text on light) rather than overlaying it on
+  // page content — this app has no safe-area padding built in anywhere, so
+  // "black-translucent" would draw the WYP header underneath the clock/
+  // battery icons.
+  appleWebApp: {
+    capable: true,
+    title: "Would You Please",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({

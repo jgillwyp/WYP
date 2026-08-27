@@ -6,6 +6,106 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-27 — Landing page subscription content caught up to real pricing/features; how Jim can view `/` while permanently signed in
+
+Jim: the landing page "needs to be caught up to the latest subscription/etc
+changes," and separately asked how to actually see it, since his own
+device stays signed in (`getSession()` reads the locally persisted
+"Keep me signed in" session, per `app/page.tsx`'s own routing logic — see
+that file's header comment) and logging out on the same browser profile
+still lands him back on a sign-in screen rather than the anonymous
+landing page.
+
+**Viewing it**: a private/incognito window has no access to the regular
+profile's `localStorage`, so `getSession()` finds nothing and `/` renders
+`LandingPage` there regardless of the signed-in state in his normal
+window. No code change needed or made for this part — it's a browser
+feature, not an app gap.
+
+**Content catch-up**: `LandingPage.tsx`'s "Coming with a subscription"
+panel hadn't been touched since 2026-08-17 and had drifted from reality on
+two fronts. Pricing still read a flat "$17.95 / yr," predating the
+2026-08-24/25 pricing revision (Cost/revenue model update, "Become a
+Subscriber" pitch) that split it into a first-year-discount price plus a
+different renewal price ($17.95 first year, $23.95/yr thereafter). And the
+feature list was missing everything shipped since: 5 GB of storage (plus
+the $10/5GB add-on), Automatic Repeating, and Voice dictation — the last
+one doubly wrong, since the "Coming soon" column still pitched "Voice
+search... or speak your request text instead of typing" as a future
+roadmap item, when Voice dictation for Description/Dialog Text had already
+gone live as a real Subscriber feature (2026-08-19/20).
+
+Fixed by importing `SUBSCRIBER_FEATURES` directly from
+`SubscriptionPanels.tsx` — the same canonical array Account Options and
+`/account/subscription` already render from — into `LandingPage.tsx`,
+rather than hand-copying the list a third time into a spot that had
+already proven it goes stale unwatched. `LandingPage.tsx`'s list now maps
+over that array, with "Keep everything forever" kept as its own trailing
+bullet (this app's original free-vs-paid retention distinction — 1-year
+history vs. perpetual — isn't part of `SUBSCRIBER_FEATURES`, which is
+scoped to newer capability additions, not the foundational tier
+definition). The subscription badge changed to "$17.95 1st yr," the
+"Just $1.50 a month" note now explicitly says "for your first year" and
+adds "Renews at $23.95/yr," and the final CTA band's price line was
+reworded the same way. The "Coming soon" column's Voice search bullet was
+trimmed to just the search-dictation piece that's still actually
+unbuilt ("dictate a search instead of typing it"), removing the now-false
+implication that Description dictation was still pending.
+
+`design/marketing/WYP_landing_page.html` (the static mockup this screen
+was originally converted from, kept in sync by hand on every prior landing
+page content change per that file's own precedent) got the identical
+content changes, written out literally since a static HTML file can't
+import a TypeScript array — a comment there points back at
+`SubscriptionPanels.tsx` as the source of truth so a future subscriber-
+feature addition doesn't quietly leave this file behind again.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-08-27 — iOS PWA install: apple-mobile-web-app metadata added
+
+Jim asked whether the WYP app-icon installation works on an iPhone the way
+it does on Android and Windows. Answered directly: Android/Windows Chrome's
+"Install" Housekeeping row is driven by the `beforeinstallprompt` event
+(`PWAProvider.tsx`), which is a Chromium-only API — Safari on iOS never
+fires it, so that row will never appear on an iPhone regardless of anything
+in this codebase. That's a platform gap, not a bug. The path that does work
+on iPhone is manual: Safari's Share sheet -> "Add to Home Screen," which
+already reads `app/manifest.ts` (name, `display: standalone`, icons) and
+`layout.tsx`'s `icons.apple` (rendered as an `apple-touch-icon` link).
+
+Jim asked to close the one flagged gap in that manual path (no
+`apple-mobile-web-app-capable`/`title` metadata) and asked how to describe
+using it on an iPhone. Added a `metadata.appleWebApp` block to
+`app/layout.tsx`:
+
+```ts
+appleWebApp: {
+  capable: true,
+  title: "Would You Please",
+  statusBarStyle: "default",
+},
+```
+
+`capable: true` emits `apple-mobile-web-app-capable`, which is what makes
+the launched home-screen icon open without Safari's own address bar/tab
+chrome — the same standalone effect `display: "standalone"` already gives
+on Android. `title` sets the name shown under the home-screen icon
+independently of whatever the page's own `<title>` happens to be at the
+moment of installing (relevant since this app's title never changes across
+routes anyway, but it's the correct field regardless). `statusBarStyle:
+"default"` was chosen over `"black-translucent"` deliberately — the latter
+draws the app's own content underneath the iOS status bar/notch area, which
+requires safe-area-inset padding this app doesn't have anywhere; "default"
+keeps the status bar opaque and out of the way, matching how every other
+screen in this app already assumes a clean top edge.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-27 — Conversion banner: copy existing Dialog and Attachments into the new item
 
 Jim, with a pasted phone screenshot of the "Create a Request from this
