@@ -1,4 +1,4 @@
-import { getServiceRoleClient, resolvePermission } from '../_shared'
+import { ATTACHMENT_SIGNED_URL_TTL_SECONDS, getServiceRoleClient, resolvePermission } from '../_shared'
 
 export const runtime = 'nodejs'
 
@@ -6,7 +6,8 @@ export const runtime = 'nodejs'
  * POST /api/attachments/list — body `{ requestId, token? }`, optional
  * `Authorization: Bearer <token>` header. Returns every attachment (both
  * kinds) on a Request/ToDo the caller is allowed to see, with a fresh
- * 5-minute signed Storage URL on each `kind = 'file'` row.
+ * signed Storage URL (ATTACHMENT_SIGNED_URL_TTL_SECONDS, 15 min) on each
+ * `kind = 'file'` row.
  *
  * Deliberately does NOT gate on ownerTier — an attachment already added
  * stays visible to everyone who could always see it, whatever anyone's tier
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
       if (row.kind === 'file' && row.storage_path) {
         const { data: signed } = await admin.storage
           .from('attachments')
-          .createSignedUrl(row.storage_path, 300)
+          .createSignedUrl(row.storage_path, ATTACHMENT_SIGNED_URL_TTL_SECONDS)
         url = signed?.signedUrl ?? null
       }
       return {

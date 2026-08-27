@@ -19,6 +19,21 @@ import { createClient } from '@supabase/supabase-js'
  * out a Storage/table write that's already been approved.
  */
 
+/**
+ * Signed Storage URL lifetime, in seconds — shared by upload/route.ts and
+ * list/route.ts's own createSignedUrl calls. Widened from 300 (5 min) to 900
+ * (15 min), 2026-08-27, after an owner report tracing a phone's Excel
+ * attachment straight to a plain OS download with no way to find the file
+ * afterward: attachments.ts's new officeViewerUrl() now routes Office file
+ * types through Microsoft's Office Online viewer instead, which fetches the
+ * signed URL itself, server-side, on its own schedule — a slower mobile
+ * connection or the viewer's own queueing has more room to still land inside
+ * the window before the link goes stale. 15 minutes is still short enough
+ * that a leaked link (e.g. pasted somewhere by accident) closes on its own
+ * quickly.
+ */
+export const ATTACHMENT_SIGNED_URL_TTL_SECONDS = 900
+
 function must(name: string): string {
   const value = process.env[name]
   if (!value) {

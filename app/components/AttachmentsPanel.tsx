@@ -8,6 +8,8 @@ import {
   fileExtension,
   formatBytes,
   isBlockedFileType,
+  isOfficeViewable,
+  officeViewerUrl,
   urlLocationHref,
   type AttachmentRow,
 } from '@/lib/attachments'
@@ -387,7 +389,15 @@ export default function AttachmentsPanel({
                   <div className="attitem" key={row.id}>
                     <span className="attname">
                       {row.url ? (
-                        <a href={row.url} target="_blank" rel="noopener noreferrer">
+                        <a
+                          href={
+                            row.file_name && isOfficeViewable(row.file_name)
+                              ? officeViewerUrl(row.url)
+                              : row.url
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           {row.file_name}
                         </a>
                       ) : (

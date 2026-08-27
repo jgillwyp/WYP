@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 
-import { getServiceRoleClient, resolvePermission } from '../_shared'
+import { ATTACHMENT_SIGNED_URL_TTL_SECONDS, getServiceRoleClient, resolvePermission } from '../_shared'
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_ITEM,
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
 
   const { data: signed } = await admin.storage
     .from('attachments')
-    .createSignedUrl(storagePath, 300)
+    .createSignedUrl(storagePath, ATTACHMENT_SIGNED_URL_TTL_SECONDS)
 
   return Response.json({
     attachment: {

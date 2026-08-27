@@ -3030,3 +3030,29 @@ link is built only after the stack is proven on Add Contact.
   second manual resend by the owner. Flagged for the owner to note the
   exact address-bar contents if this recurs. `npx tsc --noEmit`/`npm run
   lint` clean.
+- **Office attachments (.xlsx/.docx/.pptx) now open through Microsoft's
+  Office Online viewer instead of downloading (2026-08-27).** Owner-
+  reported, tracing a real phone test to its root cause across a short back-
+  and-forth: tapping an Excel attachment correctly triggered Chrome's own
+  "Download this file?" prompt (not a bug — a browser can't render .xlsx
+  natively on any platform) and downloaded successfully, but a download's
+  only destination is a device folder most users don't know how to find
+  afterward, with no in-app confirmation once it completes. New
+  `isOfficeViewable()`/`officeViewerUrl()` (`app/src/lib/attachments.ts`) —
+  for `.doc/.docx/.xls/.xlsx/.xlsm/.ppt/.pptx/.rtf/.odt/.ods/.odp`,
+  `AttachmentsPanel.tsx`'s attachment link now points at
+  `view.officeapps.live.com/op/view.aspx?src=<signed URL>` instead of the
+  signed URL directly — the document renders in-browser, no download,
+  nothing to go looking for afterward. Confirmed with the owner before
+  building it (`AskUserQuestion`) rather than assumed: this sends the
+  attachment's temporary signed link to Microsoft's own servers to fetch
+  and render, a real third-party dependency and a privacy consideration
+  for sensitive file content, accepted in exchange for a phone experience
+  that doesn't depend on which apps happen to be installed — replaces the
+  download outright rather than sitting alongside it as a second option.
+  Every other file type (PDFs, images, zips, ToDo Locations) is untouched.
+  New shared `ATTACHMENT_SIGNED_URL_TTL_SECONDS` (`app/api/attachments/
+  _shared.ts`, 900 — was a 300-second literal duplicated in both
+  `list/route.ts` and `upload/route.ts`) gives the viewer's own server-side
+  fetch more headroom on a slow mobile connection before the link goes
+  stale. `npx tsc --noEmit`/`npm run lint` clean.

@@ -190,6 +190,44 @@ export function linkifySegments(text: string): TextSegment[] {
   return segments
 }
 
+/**
+ * Office document extensions Microsoft's own free Office Online viewer
+ * (view.officeapps.live.com) can render — Word/Excel/PowerPoint, old and
+ * new formats plus a few compatible ones it also accepts (rtf, odt/ods/odp).
+ * Anything else (PDF, images, zip, etc.) is unaffected by officeViewerUrl
+ * below — a browser already renders PDFs/images inline on its own, and
+ * there's no equivalent free viewer worth adding for other binary types.
+ */
+const OFFICE_VIEWABLE_EXTENSIONS = new Set([
+  '.doc', '.docx', '.xls', '.xlsx', '.xlsm', '.ppt', '.pptx',
+  '.rtf', '.odt', '.ods', '.odp',
+])
+
+export function isOfficeViewable(fileName: string): boolean {
+  return OFFICE_VIEWABLE_EXTENSIONS.has(fileExtension(fileName))
+}
+
+/**
+ * Wraps a signed attachment URL in Microsoft's free Office Online viewer
+ * (2026-08-27) — owner-reported, testing on a phone: tapping an .xlsx
+ * attachment correctly triggered Chrome's own "Download this file?"
+ * prompt (not a bug), but a download's only destination is a device
+ * folder ("Downloads") most users don't know how to find afterward, and
+ * a bare download gives no in-page confirmation once it completes. Office
+ * Online renders the document directly in the browser instead — no
+ * download, nothing to go looking for. Deliberate trade-off, confirmed
+ * with the owner before building: this sends the attachment's temporary
+ * signed URL to Microsoft's own servers so they can fetch and render it,
+ * a real third-party dependency and a privacy consideration for anything
+ * sensitive in the file — accepted in exchange for a phone experience that
+ * doesn't depend on which apps happen to be installed. Only ever called
+ * for isOfficeViewable() file names; everything else (PDFs, images, zips,
+ * ToDo Locations) is untouched and still links straight to its own URL.
+ */
+export function officeViewerUrl(signedUrl: string): string {
+  return `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(signedUrl)}`
+}
+
 export type AttachmentRow = {
   id: string
   kind: 'file' | 'reference'

@@ -6,6 +6,57 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-27 — Office attachments open through Microsoft's Office Online viewer instead of downloading
+
+Jim asked whether the "Show in folder" / "Open" choice Windows offers after
+a download could be presented on a phone too — testing on his phone, he'd
+tapped an attachment and just gotten a plain download with no follow-up.
+Diagnosed step by step rather than guessed at: confirmed he had Excel
+installed on the phone (ruling out "no app to hand the file to"), then
+asked what actually happened on tapping the attachment. Answer: a normal
+Chrome "Download this file?" prompt with the size shown, Download/Cancel —
+he downloaded it, could find the file himself, but "most users would not,"
+and the app screen simply refreshed with no further guidance.
+
+That confirmed the download itself works correctly — Chrome's own
+download-complete UI (a notification with an Open action, on Android) is
+platform chrome this app can't add a second button to, matching the
+answer already given in this same thread to Jim's original question. But
+the real, fixable problem is different: a download's only destination is
+an OS folder, and there is no way to make that folder discoverable from a
+web page. The actual fix is to not download the file at all when browser
+navigation lets the content render directly instead.
+
+Recommended, and confirmed with Jim via `AskUserQuestion` before building:
+route Office document types (.xlsx/.docx/.pptx and a few compatible
+formats) through Microsoft's free Office Online viewer
+(`view.officeapps.live.com`) instead of linking straight to the signed
+Storage URL — the document opens and renders in the browser tab itself, no
+download, nothing to go find afterward. Alternatives considered: Google's
+Docs Viewer works the same way but tends to render Excel's own formatting
+less faithfully than Microsoft's own engine; leaving the download as-is
+and just adding explanatory text near the attachment doesn't solve the
+actual complaint, since "most users wouldn't know where to look" isn't
+fixed by describing where to look. Jim picked the strongest option:
+replace the download outright for these file types rather than keep it
+as a second, competing link. He was told plainly, and accepted, the
+privacy trade-off this implies — the file's temporary signed URL is sent
+to Microsoft's own servers so they can fetch and render it, a real
+third-party dependency for anything sensitive in the file.
+
+Implementation: `isOfficeViewable()`/`officeViewerUrl()` in
+`app/src/lib/attachments.ts`; `AttachmentsPanel.tsx`'s one attachment
+`<a href>` now branches on file extension. Everything else — PDFs, images
+(already render inline on their own), zips, and ToDo Locations — is
+untouched. Separately widened the signed-URL lifetime shared by
+`upload/route.ts` and `list/route.ts` from a duplicated 300-second literal
+to a single `ATTACHMENT_SIGNED_URL_TTL_SECONDS = 900` constant in
+`_shared.ts` — gives the viewer's own server-side fetch (which happens on
+Microsoft's schedule, not the moment the page loads) more headroom on a
+slow mobile connection. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-27 — Auth-failure hash silently dropped when it lands on /auth/callback instead of the landing page
 
 Jim signed out and back in; sending took longer than usual and produced two
