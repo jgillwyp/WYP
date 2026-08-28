@@ -53,12 +53,15 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
 .card{border:1px solid var(--rule);border-radius:9px;padding:9px 11px;background:#fff;}
 .card .ct{font-size:13px;font-weight:800;color:var(--brand-blue);}
+.card .ct-note{font-weight:600;color:var(--brand-blue);opacity:.65;} /* 2026-08-28, see landing.css's identical rule */
 .card .cb{font-size:11.5px;line-height:1.42;color:var(--ink);margin-top:3px;}
 .card.hi{background:var(--focus-tint);border-color:#BcCcEE;}
 .card.hi .ct{color:var(--brand-blue);}
 
-/* Subscription + soon two-column */
-.cols{display:grid;grid-template-columns:1.15fr 1fr;gap:12px;margin-top:2px;}
+/* Subscription + soon two-column — 2/3-1/3 ratio, 2026-08-28 (was
+   1.15fr 1fr, ~53/47), Jim's own pasted mockup; also shared by the
+   Advanced Features row above (single child, lands at 2/3 width). */
+.cols{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:2px;}
 .panel{border:1px solid var(--rule);border-radius:10px;padding:11px 13px;}
 .panel.sub{background:#fff;border-color:#E7D98A;}
 .panel h3{font-size:14px;font-weight:800;color:var(--ink);display:flex;align-items:baseline;gap:8px;}
@@ -95,14 +98,15 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .comparetable td:first-child{font-weight:600;}
 .comparetable tbody tr:nth-child(even) td{background:var(--row-tint);}
 
-/* Footer CTA */
+/* Footer CTA — centered, 2026-08-28 (was a left-text/right-price flex row) —
+   Jim's own pasted mockup: repeating the subscription pricing here was
+   redundant clutter, and with no button on this printed piece (unlike the
+   live page's own CTA band) there's nothing to justify a two-column flex
+   layout, so the remaining text centers in the band instead. */
 .cta{margin-top:auto;padding-top:14px;}
-.ctabar{background:var(--brand-blue);border-radius:11px;padding:13px 16px;display:flex;align-items:center;gap:14px;}
+.ctabar{background:var(--brand-blue);border-radius:11px;padding:13px 16px;text-align:center;}
 .ctabar .big{font-size:16px;font-weight:800;color:#fff;}
 .ctabar .sub{font-size:12px;color:#DCE6FA;margin-top:2px;}
-.ctabar .price{margin-left:auto;text-align:right;color:#fff;}
-.ctabar .price .amt{font-size:16px;font-weight:800;}
-.ctabar .price .per{font-size:11px;color:#DCE6FA;}
 .foot{font-size:10.5px;color:var(--ink-soft);margin-top:9px;display:flex;justify-content:space-between;}
 </style></head>
 <body>
@@ -129,7 +133,14 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
     <div class="card"><div class="ct">ToDos with Priorities</div><div class="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a Request in two taps.</div></div>
     <div class="card"><div class="ct">Dialog Threads</div><div class="cb">Questions, answers, and comments stay attached to the item itself &#8212; a clear, auditable record, never lost in chat.</div></div>
     <div class="card"><div class="ct">One Dashboard &amp; Search</div><div class="cb">Sent, Received, and My ToDos on one screen &#8212; filter, sort, print, and search. Find anything by person, category, or date.</div></div>
-    <div class="card hi"><div class="ct">Advanced Subscription Features</div><div class="cb"><b>File Attachments with 100&nbsp;MB of Storage</b> &#8212; send and receive documents, photos, and PDFs with your Requests and Responses &#8212; additional storage available with a subscription. <b>Automatic Repeating</b> &#8212; for all Requests and ToDos &#8212; up to 5 occurrences; a subscription is unlimited.</div></div>
+  </div>
+
+  <!-- Advanced Features — pulled out of the 3-up grid above into its own
+       2/3-width row, 2026-08-28, Jim's own pasted mockup; see
+       LandingPage.tsx's identical comment for the full reasoning. Reuses
+       .cols (now 2fr/1fr) with a single child. -->
+  <div class="cols" style="margin-top:9px;">
+    <div class="card hi"><div class="ct">Advanced Features <span class="ct-note">(limited unless subscribed)</span></div><div class="cb"><b>File Attachments with 100&nbsp;MB of Storage</b> &#8212; send and receive documents, photos, and PDFs with your Requests and Responses &#8212; additional storage available with a subscription. <b>Automatic Repeating</b> &#8212; for all Requests and ToDos &#8212; up to 5 occurrences; a subscription is unlimited.</div></div>
   </div>
 
   <div class="slabel"><span class="t">Who benefits from Would You Please?</span><span class="rule"></span></div>
@@ -174,7 +185,7 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
       </div>
     </div>
     <div>
-      <div class="slabel"><span class="t">Coming soon</span><span class="badge soon">Roadmap</span><span class="rule"></span></div>
+      <div class="slabel"><span class="t">Coming soon</span><span class="rule"></span></div>
       <div class="panel soon">
         <ul>
           <li><b>Voice search</b> &#8212; dictate a search, or speak your request text instead of typing.</li>
@@ -187,8 +198,8 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 
   <div class="cta">
     <div class="ctabar">
-      <div><div class="big">Start free today at wouldyouplease.com</div><div class="sub">No download. No setup. Send your first request in under a minute.</div></div>
-      <div class="price"><div class="amt">Free</div><div class="per">for advanced features &#8212; $17.95 first year, $23.95/yr after (or $2.95/mo)</div></div>
+      <div class="big">Start free today at wouldyouplease.com</div>
+      <div class="sub">No download. No setup. Send your first request in under a minute.</div>
     </div>
     <div class="foot"><span>&#169; 2026 Would You Please</span><span>wouldyouplease.com</span></div>
   </div>

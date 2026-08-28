@@ -278,18 +278,26 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 <div className="ct">One Dashboard & Search</div>
                 <div className="cb">Sent, Received, and My ToDos on one screen — filter, sort, print, and search. Find anything by person, category, or date.</div>
               </div>
-              {/* Free-tier "Advanced Subscription Features" card, 2026-08-27
-                  — Jim's own instruction to let Free accounts get familiar
-                  with more features (with limits) rather than seeing
-                  Attachments/Repeat as fully locked away. Bullets render
-                  from FREE_TIER_ADVANCED_FEATURES (SubscriptionPanels.tsx),
-                  the same single-source-of-truth pattern SUBSCRIBER_FEATURES
-                  already uses, so this card can't drift from what's actually
-                  enforced. `.hi` reuses the same highlight treatment as the
-                  Add to Calendar card above — this is the one other Free
-                  card worth calling out visually. */}
+            </div>
+          </div>
+        </section>
+
+        {/* Advanced Features — pulled out of the 3-up grid above and given
+            its own row, 2026-08-28, Jim's own pasted mockup: repeating the
+            subscription pricing at the bottom of the page was cluttered,
+            and this card reads better on its own line than squeezed into
+            the grid. Reuses the .cols grid (now 2fr/1fr, see landing.css)
+            with only one child, so the card naturally lands at 2/3 width
+            with the remaining 1/3 left blank — the same ratio the
+            Subscription/Coming soon row below uses, no new CSS needed.
+            Bullets still render from FREE_TIER_ADVANCED_FEATURES
+            (SubscriptionPanels.tsx), same single-source-of-truth pattern
+            SUBSCRIBER_FEATURES already uses. */}
+        <section className="section">
+          <div className="wrap">
+            <div className="cols">
               <div className="card hi">
-                <div className="ct">Advanced Subscription Features</div>
+                <div className="ct">Advanced Features <span className="ct-note">(limited unless subscribed)</span></div>
                 <div className="cb cb-list">
                   {FREE_TIER_ADVANCED_FEATURES.map((f) => (
                     <div key={f.title}><b>{f.title}</b> — {f.desc}</div>
@@ -368,7 +376,6 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               <div>
                 <div className="slabel">
                   <span className="t">Coming soon</span>
-                  <span className="badge soon">Roadmap</span>
                 </div>
                 <div className="lpanel soon">
                   <ul>
@@ -382,22 +389,25 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
           </div>
         </section>
 
-        {/* Final CTA — owner request, 2026-08-17: dropped "Start free today at
-            wouldyouplease.com" (this band is only ever seen already at
-            wouldyouplease.com, so naming the site was redundant) and
-            replaced it with the "No credit card..." line promoted to equal
-            weight with "Send your first request...", both now bold — see
-            the owner's own reference image and landing.css's .lead rule. */}
+        {/* Final CTA — reworked 2026-08-28, Jim's own pasted mockup: repeating
+            the subscription pricing here (already stated once, right above,
+            in the Subscription panel) was redundant clutter — "It seems
+            that repeating the subscription costs in that bottom element is
+            not needed." Back to a single bold headline ("Start free today
+            at wouldyouplease.com" — the site name reads fine here now that
+            it's the *only* line, unlike the crowded 2026-08-17 version this
+            supersedes) plus one smaller subtext line, no price block at
+            all. Mirrors the wording docs/WYP onepager.html's own .ctabar
+            never actually dropped (its .big/.sub pair was never migrated to
+            the live page's old two-.lead-line treatment) — reusing that
+            proven shape here closes the divergence rather than inventing a
+            third wording. */}
         <section className="section">
           <div className="wrap">
             <div className="ctaband">
               <div>
-                <div className="lead">No credit card. No download. No setup.</div>
-                <div className="lead">Send your first request in under a minute.</div>
-              </div>
-              <div className="price">
-                <div className="amt">Free</div>
-                <div className="per">Advanced features with a subscription — $17.95 first year, $23.95/yr after.</div>
+                <div className="lead">Start free today at wouldyouplease.com</div>
+                <div className="subtext">No download. No setup. Send your first request in under a minute.</div>
               </div>
               <button type="button" className="btn-white" onClick={() => setTestingDialogOpen(true)}>
                 Start Free Account

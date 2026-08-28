@@ -252,6 +252,11 @@
 }
 .wyp-landing .card.hi { background: var(--focus-tint); border-color: #BCCCEE; }
 .wyp-landing .card .ct { font-size: 14.5px; font-weight: 800; color: var(--brand-blue); }
+/* "(limited unless subscribed)" qualifier, 2026-08-28 — Jim's own pasted
+   mockup: lighter weight/tint of the same brand blue used for .ct itself,
+   not a new color, not muted grey (--ink-soft would read as unrelated to
+   the heading it modifies). */
+.wyp-landing .card .ct-note { font-weight: 600; color: var(--brand-blue); opacity: .65; }
 .wyp-landing .card .cb { font-size: 13px; line-height: 1.48; color: var(--ink); margin-top: 5px; }
 /* Free-tier "Advanced Subscription Features" card (2026-08-27) — its body
    lists three items instead of one sentence; stacked lines rather than a
@@ -294,15 +299,13 @@
   padding: 22px 18px;
   text-align: center;
 }
-/* .lead replaces the old single .big headline + .sub sub-line, 2026-08-17 —
-   owner dropped "Start free today at wouldyouplease.com" (redundant, since
-   this band is only ever seen already on the site) in favor of two equal-
-   weight bold lines, per his own reference image. */
-.wyp-landing .ctaband .lead { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.35; }
-.wyp-landing .ctaband .lead + .lead { margin-top: 2px; }
-.wyp-landing .ctaband .price { margin-top: 14px; color: #fff; }
-.wyp-landing .ctaband .price .amt { font-size: 17px; font-weight: 800; }
-.wyp-landing .ctaband .price .per { font-size: 11.5px; color: #DCE6FA; margin-top: 2px; }
+/* .lead — bold headline line. Briefly used for two equal-weight lines
+   (2026-08-17), reverted 2026-08-28 back to a single headline + a smaller
+   .subtext line (Jim's own pasted mockup — the pricing repeated below it
+   was cut, and re-adding "Start free today at wouldyouplease.com" as the
+   one line needed a real headline weight again, not two co-equal ones). */
+.wyp-landing .ctaband .lead { font-size: 16px; font-weight: 800; color: #fff; line-height: 1.35; }
+.wyp-landing .ctaband .subtext { font-size: 13px; color: #DCE6FA; margin-top: 3px; line-height: 1.4; }
 .wyp-landing .ctaband .btn-white { margin-top: 16px; width: 100%; }
 .wyp-landing footer { padding: 22px 0 34px; }
 .wyp-landing footer .wrap {
@@ -317,7 +320,11 @@
 /* Tablet and up (~600px) */
 @media (min-width: 600px) {
   .wyp-landing .grid { grid-template-columns: 1fr 1fr; }
-  .wyp-landing .cols { grid-template-columns: 1.1fr 1fr; }
+  /* 2/3 - 1/3 ratio, 2026-08-28 (was 1.1fr 1fr, ~52/48) — Jim's own pasted
+     mockup, shared by the Advanced Features row (single child, so it lands
+     at 2/3 width with the remaining 1/3 left blank) and the Subscription /
+     Coming soon row below it. */
+  .wyp-landing .cols { grid-template-columns: 2fr 1fr; }
   .wyp-landing .brandmark svg { height: 40px; }
   .wyp-landing .brandmark .word { font-size: 19px; }
   .wyp-landing .brandmark .tag { font-size: 12.5px; }
@@ -326,7 +333,6 @@
   .wyp-landing .hero-btns .btn-white { padding: 10px 18px; font-size: 13.5px; }
   .wyp-landing .ctaband { display: flex; align-items: center; text-align: left; gap: 18px; }
   .wyp-landing .ctaband > div:first-child { flex: 1 1 auto; }
-  .wyp-landing .ctaband .price { margin-top: 0; text-align: right; }
   .wyp-landing .ctaband .btn-white { margin-top: 0; width: auto; flex: 0 0 auto; }
   .wyp-landing footer .wrap { flex-direction: row; justify-content: space-between; text-align: left; }
 }

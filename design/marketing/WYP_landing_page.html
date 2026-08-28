@@ -293,6 +293,7 @@ img, svg { display: block; max-width: 100%; }
 }
 .card.hi { background: var(--focus-tint); border-color: #BCCCEE; }
 .card .ct { font-size: 14.5px; font-weight: 800; color: var(--brand-blue); }
+.card .ct-note { font-weight: 600; color: var(--brand-blue); opacity: .65; } /* 2026-08-28, see landing.css's identical rule */
 .card .cb { font-size: 13px; line-height: 1.48; color: var(--ink); margin-top: 5px; }
 .card .cb-list div { margin-top: 4px; }
 .card .cb-list div:first-child { margin-top: 0; }
@@ -351,11 +352,8 @@ img, svg { display: block; max-width: 100%; }
 }
 /* .lead replaces the old single .big headline + .sub sub-line, 2026-08-17 —
    see landing.css's identical comment (this mockup stays hand-synced). */
-.ctaband .lead { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.35; }
-.ctaband .lead + .lead { margin-top: 2px; }
-.ctaband .price { margin-top: 14px; color: #fff; }
-.ctaband .price .amt { font-size: 17px; font-weight: 800; }
-.ctaband .price .per { font-size: 11.5px; color: #DCE6FA; margin-top: 2px; }
+.ctaband .lead { font-size: 16px; font-weight: 800; color: #fff; line-height: 1.35; }
+.ctaband .subtext { font-size: 13px; color: #DCE6FA; margin-top: 3px; line-height: 1.4; }
 .ctaband .btn-white { margin-top: 16px; width: 100%; }
 footer { padding: 22px 0 34px; }
 footer .wrap {
@@ -373,7 +371,9 @@ footer .wrap {
    ---------------------------------------------------------------------- */
 @media (min-width: 600px) {
   .grid { grid-template-columns: 1fr 1fr; }
-  .cols { grid-template-columns: 1.1fr 1fr; }
+  /* 2/3 - 1/3 ratio, 2026-08-28 (was 1.1fr 1fr, ~52/48) — see
+     landing.css's identical rule for the full reasoning. */
+  .cols { grid-template-columns: 2fr 1fr; }
   .brandmark svg { height: 40px; }
   .brandmark .word { font-size: 19px; }
   .brandmark .tag { font-size: 12.5px; }
@@ -382,7 +382,6 @@ footer .wrap {
   .hero-btns .btn-white { padding: 10px 18px; font-size: 13.5px; }
   .ctaband { display: flex; align-items: center; text-align: left; gap: 18px; }
   .ctaband > div:first-child { flex: 1 1 auto; }
-  .ctaband .price { margin-top: 0; text-align: right; }
   .ctaband .btn-white { margin-top: 0; width: auto; flex: 0 0 auto; }
   footer .wrap { flex-direction: row; justify-content: space-between; text-align: left; }
 }
@@ -585,12 +584,24 @@ footer .wrap {
           <div class="ct">One Dashboard &amp; Search</div>
           <div class="cb">Sent, Received, and My ToDos on one screen — filter, sort, print, and search. Find anything by person, category, or date.</div>
         </div>
-        <!-- Free-tier "Advanced Subscription Features" card, 2026-08-27 —
-             kept in sync by hand with LandingPage.tsx's own
-             FREE_TIER_ADVANCED_FEATURES (SubscriptionPanels.tsx is the
-             canonical source; this static mockup has no import mechanism). -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Advanced Features — pulled out of the 3-up grid above into its own
+       row, 2026-08-28, Jim's own pasted mockup: repeating the subscription
+       pricing at the bottom of the page was cluttered, and this card reads
+       better on its own line. Reuses .cols (now 2fr/1fr) with a single
+       child, so the card lands at 2/3 width with the remaining 1/3 left
+       blank — same ratio as the Subscription/Coming soon row below.
+       Bullets kept in sync by hand with LandingPage.tsx's own
+       FREE_TIER_ADVANCED_FEATURES (SubscriptionPanels.tsx is the canonical
+       source; this static mockup has no import mechanism). -->
+  <section class="section">
+    <div class="wrap">
+      <div class="cols">
         <div class="card hi">
-          <div class="ct">Advanced Subscription Features</div>
+          <div class="ct">Advanced Features <span class="ct-note">(limited unless subscribed)</span></div>
           <div class="cb cb-list">
             <div><b>File attachments</b> — send and receive documents, photos, and PDFs with your Requests and Responses.</div>
             <div><b>100 MB of storage</b> — for attachments — additional storage available with a subscription.</div>
@@ -677,7 +688,6 @@ footer .wrap {
         <div>
           <div class="slabel">
             <span class="t">Coming soon</span>
-            <span class="badge soon">Roadmap</span>
           </div>
           <div class="panel soon">
             <ul>
@@ -696,12 +706,8 @@ footer .wrap {
     <div class="wrap">
       <div class="ctaband">
         <div>
-          <div class="lead">No credit card. No download. No setup.</div>
-          <div class="lead">Send your first request in under a minute.</div>
-        </div>
-        <div class="price">
-          <div class="amt">Free</div>
-          <div class="per">Advanced features with a subscription — $17.95 first year, $23.95/yr after.</div>
+          <div class="lead">Start free today at wouldyouplease.com</div>
+          <div class="subtext">No download. No setup. Send your first request in under a minute.</div>
         </div>
         <a class="btn-white" href="/login?intent=signup">Start Free Account</a>
       </div>

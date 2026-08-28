@@ -6,6 +6,104 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-28 — 2/3-1/3 layout for Advanced Features/Subscription/Coming soon; Final CTA band simplified back to a single headline (landing + onepager + mockup)
+
+Jim, with three pasted images — one showing the onepager's own reformatted
+bottom band (no button, centered text), one a fuller mockup (placeholder/
+garbled body text, but real layout and two pieces of real wording) showing
+the new proportions, plus his own explicit description of the ratios used.
+Two changes, both applied to `LandingPage.tsx`, `docs/WYP onepager.html`,
+and `design/marketing/WYP_landing_page.html`:
+
+**2/3-1/3 layout.** The "Advanced Features" card was pulled out of the 3-up
+feature-card grid (where, paired with a sibling card at whatever the grid's
+current breakpoint width happened to be, it could land at 50%) and given
+its own row, reusing the existing `.cols` grid with only one child — a
+single child in a `2fr 1fr` grid naturally occupies the first (2/3) column,
+leaving the second (1/3) column blank, so no new CSS was needed beyond
+widening the ratio itself. The Subscription / Coming soon row below it
+shares the same `.cols` class, so widening it from ~50/50 (`1.1fr 1fr` on
+the live page and mockup, `1.15fr 1fr` on the onepager) to `2fr 1fr` gives
+Subscription 2/3 and Coming soon 1/3 in the same stroke — exactly Jim's own
+description ("2/3 width for the Advanced Features and for the SUBSCRIPTION
+elements instead of 50% and 1/3 width for the Coming Soon element instead
+of 50%"). Mobile is untouched — `.cols`/`.grid` both still stack to a
+single column below the 600px breakpoint, same as before.
+
+**"Coming soon" loses its "Roadmap" badge.** Jim's own instruction: the
+heading should read as just "Coming Soon," not "Coming Soon Roadmap." The
+`<span class="badge soon">Roadmap</span>` next to the heading was removed
+outright in all three files — the heading text itself needed no change,
+since `.slabel .t`'s own CSS already uppercases it regardless of source
+casing.
+
+**Final CTA band simplified.** Jim: "It seems that repeating the
+subscription costs in that bottom element is not needed" — the pricing had
+already been stated once, directly above, in the redesigned Subscription
+panel (2026-08-28's earlier "Better disclose" entry, further above in this
+file). The band drops its `.price`/`.amt`/`.per` block entirely and goes
+back to a single bold headline plus a smaller subtext line: "Start free
+today at wouldyouplease.com" / "No download. No setup. Send your first
+request in under a minute." — this supersedes the two-equal-`.lead`-lines
+treatment from 2026-08-17, which itself had dropped this exact headline
+sentence as "redundant" at the time; it reads fine again now that it's the
+only line in the band, rather than one of two. On the live page and the
+marketing mockup (both keep the "Start Free Account" button), the new
+`.subtext` class was added to `landing.css`/the mockup's own CSS
+(`font-size: 13px; color: #DCE6FA`) alongside the existing `.lead`; the old
+`.price`/`.amt`/`.per` rules and the now-single-line `.lead + .lead`
+sibling rule were deleted as dead code. The onepager's own `.ctabar` never
+migrated off its original `.big`/`.sub` pair in the first place (a
+pre-existing divergence noted in earlier entries), so reusing that same
+proven wording there — dropping only its own `.price` div — closes the gap
+rather than inventing a third phrasing; with no button and only one child
+left, `.ctabar` switched from a flex row to `text-align: center` per Jim's
+own instruction ("accordingly has the text centered horizontally").
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-08-28 — Advanced Features heading retitled; final CTA band amt/per reworded (landing + onepager + mockup)
+
+Jim, with two pasted mockups: (1) on the landing page and the sales
+one-pager, retitle the Free-tier feature-grid card heading from "Advanced
+Subscription Features" to "Advanced Features (limited unless
+subscribed)" — the qualifier in a lighter tint of the same brand blue,
+bullet body content underneath left completely unchanged; (2) reword the
+final CTA band's pricing side from "Free" / "for advanced features —
+$17.95 first year, $23.95/yr after (or $2.95/mo)" to a single sentence,
+"Free, or Advanced Features with a Subscription," with the actual prices
+moved to their own em-dash-led sub-line, "— $17.95 first year, $23.95/yr
+after, or monthly at $2.95."
+
+**Heading retitle** — new `.ct-note` class (`landing.css`,
+`docs/WYP onepager.html`'s own CSS, and `design/marketing/
+WYP_landing_page.html`'s own CSS) reuses `var(--brand-blue)` at `opacity:
+.65` rather than introducing a new color or falling back to the generic
+muted `--ink-soft` token, which would have read as unrelated to the blue
+heading it modifies. Applied to `LandingPage.tsx`'s Free-tier "Advanced
+Features" card, the onepager's matching card, and the marketing mockup's
+own copy — all three now read `<div class="ct">Advanced Features <span
+class="ct-note">(limited unless subscribed)</span></div>`.
+
+**CTA band reword** — `.amt`/`.per` text updated identically in all three
+places (`LandingPage.tsx`'s Final CTA section, `docs/WYP onepager.html`'s
+`.ctabar`, and the marketing mockup's own Final CTA). The onepager's own
+`.ctabar` left-side lead text ("Start free today at wouldyouplease.com...")
+was deliberately left untouched — it already diverges from the live
+page's own left-side wording from an earlier, unrelated 2026-08-17 batch,
+and today's instruction was scoped to the pricing/amt/per side only, not
+a request to reconcile that older divergence.
+
+**Typo caught and corrected** — Jim's own pasted mockup read "or monhly at
+$2.95"; corrected to "monthly" in all three documents before it could ship,
+per his own follow-up flagging the typo.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-28 — "Better disclose" subscription pricing; Private Testing dialog on Start Free Account; canceled spelling fix
 
 Jim, with two pasted mockups of the redesigned Account Options Subscriber

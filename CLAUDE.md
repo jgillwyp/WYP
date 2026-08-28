@@ -3302,3 +3302,37 @@ link is built only after the stack is proven on Add Contact.
   `<script>` anywhere; flagged with a header comment rather than adding a
   first script tag for one interaction. `npx tsc --noEmit`/`npm run lint`
   clean.
+- **Advanced Features heading retitled; final CTA band amt/per reworded —
+  landing page, onepager, and the marketing mockup, same-day follow-up
+  (2026-08-28).** Jim's own pasted mockup: the Free-tier feature-grid card
+  heading changes from "Advanced Subscription Features" to "Advanced
+  Features (limited unless subscribed)" (new `.ct-note` class, `var(--brand-
+  blue)` at `opacity: .65` — reusing the existing token rather than a new
+  hex value), bullet content unchanged; the final CTA band's pricing side
+  becomes one sentence, "Free, or Advanced Features with a Subscription,"
+  with prices on their own line, "— $17.95 first year, $23.95/yr after, or
+  monthly at $2.95." Applied identically to `LandingPage.tsx`, `docs/WYP
+  onepager.html`, and `design/marketing/WYP_landing_page.html`. Jim's own
+  screenshot had a typo ("monhly") — caught and corrected to "monthly" in
+  all three places before it shipped. `npx tsc --noEmit`/`npm run lint`
+  clean.
+- **2/3-1/3 layout for Advanced Features/Subscription/Coming soon; Final CTA
+  band simplified back to a single headline (landing + onepager + mockup,
+  2026-08-28).** Jim's own pasted mockups: pulled the "Advanced Features"
+  card out of the 3-up feature grid into its own row, reusing `.cols` with
+  one child (a single child in a `2fr 1fr` grid lands at 2/3 width, 1/3 left
+  blank) — the same `.cols` class already used by the Subscription/Coming
+  soon row, so widening its ratio from ~50/50 to `2fr 1fr` gives both rows
+  the 2/3-1/3 split in one change. "Coming soon" dropped its "Roadmap"
+  badge, per Jim's instruction to read as just "Coming Soon." The Final CTA
+  band dropped its repeated `.price`/`.amt`/`.per` pricing block (already
+  stated once in the Subscription panel above) in favor of a single bold
+  headline + smaller subtext line — "Start free today at
+  wouldyouplease.com" / "No download. No setup. Send your first request in
+  under a minute." — reviving the exact wording the 2026-08-17 batch had
+  dropped as "redundant" back when it sat alongside a second `.lead` line;
+  it reads fine now as the only line. The onepager's own `.ctabar` never
+  migrated off its original `.big`/`.sub` pair, so this closes that
+  divergence rather than adding a third wording; with no button and one
+  child left, it switched from a flex row to centered text. `npx tsc
+  --noEmit`/`npm run lint` clean.
