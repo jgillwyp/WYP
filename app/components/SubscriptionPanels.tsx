@@ -38,43 +38,120 @@ import { useState } from 'react'
  */
 type Variant = 'full' | 'embedded'
 
+// Title Case throughout, per Jim's own explicit list (2026-08-27): "Voice
+// Dictation, File Attachments with 5 GB of Storage, Automatic Repeating,
+// Request Texting, Ad-Free, and Priority Support." Supersedes the
+// "Unlimited File attachments"/"Unlimited Automatic Repeating" prefixes
+// added earlier the same day — now that File Attachments' own title spells
+// out the 5 GB/100 MB difference directly, and the new
+// SubscriberComparisonTable below carries the Free-vs-Subscribed contrast
+// for Automatic Repeating (up to 5 vs. Unlimited), the prefix was
+// redundant; dropped per this same instruction rather than kept alongside.
 export const SUBSCRIBER_FEATURES: { title: string; desc: string }[] = [
   {
-    title: 'Voice dictation',
+    title: 'Voice Dictation',
     desc: 'speak your Request and ToDo Description and Dialog entries instead of typing.',
   },
   {
-    title: 'File attachments',
-    desc: 'send and receive documents, photos, and PDFs with your Requests and Responses.',
-  },
-  {
-    title: '5 GB of storage',
-    desc: 'for attachments — additional storage available at $10 per 5 GB per year.',
+    // File Attachments and storage merged into one bullet, 2026-08-27 —
+    // Jim's own drafted wording. Previously two separate bullets.
+    title: 'File Attachments with 5 GB of Storage',
+    desc: 'send and receive documents, photos, and PDFs with your Requests and Responses — additional storage available at $10 per 5 GB per year.',
   },
   {
     title: 'Automatic Repeating',
-    desc: 'for Requests and ToDos.',
+    desc: 'for all Requests and ToDos.',
   },
   {
     title: 'Request Texting',
     desc: 'deliver Requests by SMS text in addition to email.',
   },
   {
-    title: 'Ad-free',
+    title: 'Ad-Free',
     desc: 'removes the ad banner shown to Free accounts.',
   },
   {
-    title: 'Priority support',
+    title: 'Priority Support',
     desc: 'via email.',
   },
 ]
 
-function SubscriberFeatureList({ heading }: { heading: string }) {
+/** Free-tier's own "Advanced Subscription Features" card (2026-08-27) —
+ * Jim's own wording, expanding Free from no Attachments/no Repeat at all
+ * to a real, limited version of both: "There needs to be more feature
+ * access for Free Accounts... let users get familiar with more features
+ * (with limits)." Consumed by LandingPage.tsx's free feature grid, same
+ * single-source-of-truth pattern as SUBSCRIBER_FEATURES above — keeps the
+ * landing page's marketing copy from drifting out of sync with what's
+ * actually enforced server-side (app/api/attachments/_shared.ts's
+ * getOwnerStorageStatus(), app/src/lib/repeatRule.ts's
+ * FREE_TIER_MAX_REPEAT_OCCURRENCES). File Attachments and storage merged
+ * into one bullet the same day, matching SUBSCRIBER_FEATURES' own merge. */
+export const FREE_TIER_ADVANCED_FEATURES: { title: string; desc: string }[] = [
+  {
+    title: 'File Attachments with 100 MB of Storage',
+    desc: 'send and receive documents, photos, and PDFs with your Requests and Responses — additional storage available with a subscription.',
+  },
+  {
+    title: 'Automatic Repeating',
+    desc: 'for all Requests and ToDos — up to 5 occurrences; a subscription is unlimited.',
+  },
+]
+
+/** Free vs. Subscriber comparison table (2026-08-27) — Jim's own drafted
+ * mockup, an alternative to the bulleted Subscriber Features list that
+ * takes roughly the same vertical space (so switching between the two
+ * views on Account Options' Subscriber section doesn't jump/pop the
+ * layout — his own design goal). Exported so LandingPage.tsx can render it
+ * directly (always visible there, no toggle — see that file's own comment)
+ * as well as BecomeSubscriberPitch below (toggle-gated). Colors/borders use
+ * the same design tokens (--rule/--strip/--row-tint/--ink) every other
+ * panel in this app already reads from `:root`, not new one-off values. */
+const COMPARISON_ROWS: { feature: string; free: string; subscribed: string }[] = [
+  { feature: 'Voice Dictation', free: 'Not available', subscribed: 'Available' },
+  { feature: 'File Attachments', free: '100 MB', subscribed: '5 GB' },
+  { feature: 'Automatic Repeating', free: 'up to 5', subscribed: 'Unlimited' },
+  { feature: 'Request Texting', free: 'Not available', subscribed: 'Available' },
+  { feature: 'Ads', free: 'Shown', subscribed: 'Not shown' },
+  { feature: 'Support', free: 'Help files', subscribed: 'Email' },
+]
+
+export function SubscriberComparisonTable() {
+  return (
+    <table className="comparetable">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Free</th>
+          <th>Subscribed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {COMPARISON_ROWS.map((r) => (
+          <tr key={r.feature}>
+            <td>{r.feature}</td>
+            <td>{r.free}</td>
+            <td>{r.subscribed}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+// heading is now optional (2026-08-27) — BecomeSubscriberPitch's new
+// Subscriber Features/Comparison toggle buttons serve as the visible
+// heading for that context, so passing no heading there avoids a
+// redundant second "Subscriber Features" label; PlanSummaryPanel's own
+// "What's included" call site is unaffected, still passing a heading.
+function SubscriberFeatureList({ heading }: { heading?: string }) {
   return (
     <>
-      <div className="promo-sub" style={{ marginTop: 10 }}>
-        {heading}
-      </div>
+      {heading && (
+        <div className="promo-sub" style={{ marginTop: 10 }}>
+          {heading}
+        </div>
+      )}
       <ul className="promo-features">
         {SUBSCRIBER_FEATURES.map((f) => (
           <li key={f.title}>
@@ -89,22 +166,59 @@ function SubscriberFeatureList({ heading }: { heading: string }) {
 // "Become a Subscriber" — the Free-account pitch (Jim's own written content,
 // unchanged from the 2026-08-24 batch, just relocated into this shared
 // file so both call sites read the identical copy).
+//
+// Subscriber Features / Free vs. Subscriber Comparison toggle added
+// 2026-08-27, Jim's own drafted mockups (two pasted screenshots): a
+// two-button view switch above the feature content, with "Subscription
+// Cost" (renamed from "Cost") and everything below it staying fixed
+// regardless of which view is showing — his own explicit design goal,
+// so the sign-up button and cancel-anytime note don't jump position when
+// the person switches views.
 export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
   const [clicked, setClicked] = useState(false)
+  const [view, setView] = useState<'features' | 'comparison'>('features')
 
   return (
     <div className="promo" style={{ margin: '0 0 4px' }}>
       {variant === 'full' && <div className="promo-h">Become a Subscriber</div>}
 
-      <SubscriberFeatureList heading="Subscriber Features" />
+      <div className="viewtoggle" role="tablist" aria-label="Subscriber Features view">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'features'}
+          className={view === 'features' ? 'sel' : ''}
+          onClick={() => setView('features')}
+        >
+          Subscriber Features
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'comparison'}
+          className={view === 'comparison' ? 'sel' : ''}
+          onClick={() => setView('comparison')}
+        >
+          Free vs. Subscriber Comparison
+        </button>
+      </div>
+
+      {view === 'features' ? <SubscriberFeatureList /> : <SubscriberComparisonTable />}
 
       <div className="promo-sub" style={{ marginTop: 12 }}>
-        Cost
+        Subscription Cost
       </div>
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
         1st year subscription — 25% discount, only <strong>$17.95</strong>
         <br />
         Per year subscription — <strong>$23.95</strong> thereafter
+        <br />
+        {/* Monthly option added 2026-08-27, Jim's own drafted addition —
+            no discount attaches to it (unlike the annual plan's 1st-year
+            25% off), since it's meant as a low-commitment alternative, not
+            a cheaper path to the same year of service. */}
+        Monthly subscription — <strong>$2.95/mo</strong>, renews each month
+        until cancelled
       </p>
 
       <button
@@ -266,6 +380,16 @@ function PlanSummaryPanel() {
           <span className="plan-sub">automatically, each year thereafter</span>
         </span>
         <span className="plan-price">$23.95/yr</span>
+      </div>
+      {/* Monthly option added 2026-08-27, Jim's own drafted addition — an
+          alternative plan shown for reference alongside the annual one,
+          not a live plan switch (no checkout path exists for either yet). */}
+      <div className="planrow">
+        <span className="plan-name">
+          Monthly
+          <span className="plan-sub">renews each month until cancelled</span>
+        </span>
+        <span className="plan-price">$2.95/mo</span>
       </div>
 
       <SubscriberFeatureList heading="What's included" />

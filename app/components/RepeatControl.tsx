@@ -28,6 +28,7 @@ import { useState } from 'react'
 import {
   type RepeatRule,
   type RepeatType,
+  FREE_TIER_MAX_REPEAT_OCCURRENCES,
   clampInterval,
   defaultRepeatRule,
   describeRepeat,
@@ -46,6 +47,15 @@ type Props = {
    * checkbox's own disabled/tooltip pattern. */
   disabled: boolean
   disabledReason?: string
+  /** Added 2026-08-27 when Repeat moved from subscriber-only to
+   * free-with-limits. Free renders a note in the modal warning that
+   * generation stops automatically after FREE_TIER_MAX_REPEAT_OCCURRENCES
+   * occurrences regardless of the Stops Repeating choice below — the actual
+   * enforcement lives server-side in cron Phase E
+   * (app/api/cron/tick/route.ts), this is purely informational so a Free
+   * user isn't surprised later. Omit/undefined shows no note (used nowhere
+   * currently — every call site now passes a real tier). */
+  tier?: 'free' | 'subscriber'
 }
 
 const TYPE_LABELS: Record<RepeatType, string> = { day: 'Day', week: 'Week', month: 'Month', year: 'Year' }
@@ -72,7 +82,7 @@ function numDisplay(n: number | null | undefined): number | string {
   return n === null || n === undefined || Number.isNaN(n) ? '' : n
 }
 
-export default function RepeatControl({ rule, dueDate, onSave, onRemove, disabled, disabledReason }: Props) {
+export default function RepeatControl({ rule, dueDate, onSave, onRemove, disabled, disabledReason, tier }: Props) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<RepeatRule>(rule ?? defaultRepeatRule())
 
@@ -330,6 +340,15 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
               month that only has four), the closest earlier date is used
               instead &mdash; the 30th, or the 4th Wednesday.
             </p>
+
+            {tier === 'free' && (
+              <p className="checknote repeat-invalid-note">
+                <strong>Note:</strong> Free accounts stop Repeating
+                automatically after {FREE_TIER_MAX_REPEAT_OCCURRENCES}{' '}
+                occurrences, regardless of the Stops Repeating choice above.
+                Subscribe for unlimited Repeats.
+              </p>
+            )}
           </div>
         </>
       )}

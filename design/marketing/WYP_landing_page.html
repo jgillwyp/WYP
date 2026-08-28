@@ -223,6 +223,12 @@ img, svg { display: block; max-width: 100%; }
   font-weight: 600;
   color: #CFE0F7;
 }
+.reassure-note {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #B9CDEE;
+}
 .hero-art { align-self: center; width: 100%; max-width: 420px; }
 
 /* ----------------------------------------------------------------------
@@ -275,6 +281,8 @@ img, svg { display: block; max-width: 100%; }
 .card.hi { background: var(--focus-tint); border-color: #BCCCEE; }
 .card .ct { font-size: 14.5px; font-weight: 800; color: var(--brand-blue); }
 .card .cb { font-size: 13px; line-height: 1.48; color: var(--ink); margin-top: 5px; }
+.card .cb-list div { margin-top: 4px; }
+.card .cb-list div:first-child { margin-top: 0; }
 
 /* ----------------------------------------------------------------------
    Subscription / Coming soon panels — stacked mobile, side by side once
@@ -305,6 +313,18 @@ img, svg { display: block; max-width: 100%; }
   background: var(--brand-blue);
 }
 .panel.soon li::before { background: var(--ink-soft); }
+
+/* Free vs. Subscriber Comparison table (2026-08-27) — mirrors globals.css's
+   .comparetable/.promo-sub rules verbatim (same tokens), duplicated here
+   since this mockup is fully self-contained (no linked stylesheet). Kept
+   in sync by hand with app/globals.css and SubscriptionPanels.tsx. */
+.promo-sub { font-size: 12.5px; font-weight: 800; color: var(--brand-blue); }
+.comparetable { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+.comparetable th, .comparetable td { border: 1px solid var(--rule); padding: 6px 8px; text-align: left; }
+.comparetable th { background: var(--strip); color: var(--ink); font-weight: 700; font-size: 11.5px; }
+.comparetable td { color: var(--ink); }
+.comparetable td:first-child { font-weight: 600; }
+.comparetable tbody tr:nth-child(even) td { background: var(--row-tint); }
 .panel .note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; line-height: 1.5; }
 
 /* ----------------------------------------------------------------------
@@ -422,7 +442,8 @@ footer .wrap {
           Overdue, or Done — visible to both of you. Your personal ToDos live right
           alongside, on one dashboard.
         </div>
-        <div class="reassure">No credit card. Nothing to install — works right in your phone's browser.</div>
+        <div class="reassure">No credit card. No App to install* — works right in your phone's browser.</div>
+        <div class="reassure-note">* We offer the ability to add a Would You Please icon to your home screen.</div>
       </div>
 
       <!-- Hero illustration — hand-built SVG, not the AI placeholder photo;
@@ -529,7 +550,7 @@ footer .wrap {
       <div class="grid">
         <div class="card">
           <div class="ct">Trackable Requests</div>
-          <div class="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar.</div>
+          <div class="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar. Convert any Request into a ToDo in two taps.</div>
         </div>
         <div class="card">
           <div class="ct">Formal Responses</div>
@@ -541,7 +562,7 @@ footer .wrap {
         </div>
         <div class="card">
           <div class="ct">ToDos with Priorities</div>
-          <div class="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a request in one tap.</div>
+          <div class="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a Request in two taps.</div>
         </div>
         <div class="card">
           <div class="ct">Dialog Threads</div>
@@ -550,6 +571,18 @@ footer .wrap {
         <div class="card">
           <div class="ct">One Dashboard &amp; Search</div>
           <div class="cb">Sent, Received, and My ToDos on one screen — filter, sort, print, and search. Find anything by person, category, or date.</div>
+        </div>
+        <!-- Free-tier "Advanced Subscription Features" card, 2026-08-27 —
+             kept in sync by hand with LandingPage.tsx's own
+             FREE_TIER_ADVANCED_FEATURES (SubscriptionPanels.tsx is the
+             canonical source; this static mockup has no import mechanism). -->
+        <div class="card hi">
+          <div class="ct">Advanced Subscription Features</div>
+          <div class="cb cb-list">
+            <div><b>File attachments</b> — send and receive documents, photos, and PDFs with your Requests and Responses.</div>
+            <div><b>100 MB of storage</b> — for attachments — additional storage available with a subscription.</div>
+            <div><b>Automatic Repeating</b> — for Requests and ToDos — up to 5 occurrences; a subscription is unlimited.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -580,18 +613,44 @@ footer .wrap {
           <!-- List content (2026-08-27) mirrors app/components/SubscriptionPanels.tsx's
                own SUBSCRIBER_FEATURES array, the live app's single canonical source
                for this list — kept in sync by hand here since this static mockup has
-               no way to import it directly. Update both places together. -->
+               no way to import it directly. Update both places together.
+               Merged File Attachments+Storage bullet and Title Case wording,
+               2026-08-27 — supersedes the earlier "Unlimited" prefixes, now
+               redundant since this bullet states 5 GB directly and the new
+               comparison table below carries the Free-vs-Subscribed contrast
+               for Automatic Repeating. -->
           <div class="panel sub">
             <ul>
-              <li><b>Voice dictation</b> — speak your Request and ToDo Description and Dialog entries instead of typing.</li>
-              <li><b>File attachments</b> — send and receive documents, photos, and PDFs with your Requests and Responses.</li>
-              <li><b>5 GB of storage</b> — for attachments — additional storage available at $10 per 5 GB per year.</li>
-              <li><b>Automatic Repeating</b> — for Requests and ToDos.</li>
+              <li><b>Voice Dictation</b> — speak your Request and ToDo Description and Dialog entries instead of typing.</li>
+              <li><b>File Attachments with 5 GB of Storage</b> — send and receive documents, photos, and PDFs with your Requests and Responses — additional storage available at $10 per 5 GB per year.</li>
+              <li><b>Automatic Repeating</b> — for all Requests and ToDos.</li>
               <li><b>Request Texting</b> — deliver Requests by SMS text in addition to email.</li>
-              <li><b>Ad-free</b> — removes the ad banner shown to Free accounts.</li>
-              <li><b>Priority support</b> — via email.</li>
+              <li><b>Ad-Free</b> — removes the ad banner shown to Free accounts.</li>
+              <li><b>Priority Support</b> — via email.</li>
               <li><b>Keep everything forever</b> — perpetual history for your requests and files.</li>
             </ul>
+            <!-- Free vs. Subscriber Comparison table (2026-08-27) — Jim's own
+                 instruction: shown always here, not gated behind a view
+                 toggle like Account Options' own BecomeSubscriberPitch
+                 ("that could just be added instead of offering it as a
+                 button selection"). Mirrors SubscriptionPanels.tsx's
+                 SubscriberComparisonTable/COMPARISON_ROWS and globals.css's
+                 .comparetable rule verbatim — same tokens, kept in sync by
+                 hand here for the same reason as the list above. -->
+            <div class="promo-sub" style="margin-top:14px;">Free vs. Subscriber Comparison</div>
+            <table class="comparetable">
+              <thead>
+                <tr><th>Feature</th><th>Free</th><th>Subscribed</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Voice Dictation</td><td>Not available</td><td>Available</td></tr>
+                <tr><td>File Attachments</td><td>100 MB</td><td>5 GB</td></tr>
+                <tr><td>Automatic Repeating</td><td>up to 5</td><td>Unlimited</td></tr>
+                <tr><td>Request Texting</td><td>Not available</td><td>Available</td></tr>
+                <tr><td>Ads</td><td>Shown</td><td>Not shown</td></tr>
+                <tr><td>Support</td><td>Help files</td><td>Email</td></tr>
+              </tbody>
+            </table>
             <div class="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history.</div>
           </div>
         </div>

@@ -1078,23 +1078,26 @@ export default function ResponseDetailForm() {
               </>
             )}
 
-            {/* owner_tier gating unchanged. Real Add/list/delete via
-                AttachmentsPanel as of Week 5 Priority 3 (2026-08-14) — this
-                signed-in recipient can delete their own uploads (unlike the
-                anonymous Request Response screen), never the owner's. */}
-            {data.owner_tier === 'subscriber' && (
-              <AttachmentsPanel
-                requestId={requestId}
-                mode="file"
-                canAdd={true}
-                authToken={authToken}
-                recipientToken={null}
-                isOwner={false}
-                currentUserId={currentUserId}
-                ownerLabel="You"
-                standalone
-              />
-            )}
+            {/* Attachments now shown regardless of the issuer's tier
+                (2026-08-27) — see RequestResponseForm.tsx's identical
+                change for the full reasoning. extraNote reads owner_tier
+                (the Request's issuer, never this viewer's own tier). Real
+                Add/list/delete via AttachmentsPanel as of Week 5 Priority 3
+                (2026-08-14) — this signed-in recipient can delete their own
+                uploads (unlike the anonymous Request Response screen),
+                never the owner's. */}
+            <AttachmentsPanel
+              requestId={requestId}
+              mode="file"
+              canAdd={true}
+              extraNote={data.owner_tier !== 'subscriber' ? '100 MB total' : null}
+              authToken={authToken}
+              recipientToken={null}
+              isOwner={false}
+              currentUserId={currentUserId}
+              ownerLabel="You"
+              standalone
+            />
 
             {sendError && (
               <p className="ferror" role="alert" style={{ margin: '0 var(--pad) 12px' }}>

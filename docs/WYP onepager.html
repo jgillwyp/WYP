@@ -11,7 +11,15 @@
 html,body{background:#fff;}
 body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
   -webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1;}
-.page{width:8.5in;min-height:11in;padding:0.5in 0.55in 0.45in;margin:0 auto;display:flex;flex-direction:column;}
+/* 2026-08-27 — dropped the earlier one-printed-page constraint (Jim's own
+   instruction: it had "extended past a page and does not easily reformat
+   onto one page"). .page no longer needs its content compressed to fit
+   min-height:11in exactly; the browser's own print pagination breaks the
+   flow onto a second page wherever it naturally lands. If this is used as
+   printed sales literature, an explicit page-break point for two-sided
+   printing is a follow-up decision, not yet made — no @media print rule
+   forces one here. */
+.page{width:8.5in;padding:0.5in 0.55in 0.45in;margin:0 auto;display:flex;flex-direction:column;}
 
 /* Header */
 .hdr{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:2px solid var(--brand-blue);}
@@ -62,12 +70,26 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .panel .note{font-size:11px;color:var(--ink-soft);margin-top:7px;line-height:1.45;}
 
 /* Who benefits — owner request, 2026-08-17, inserted directly before the
-   Coming-with-a-subscription/soon .cols block. Kept deliberately compact
-   (smaller than .lede's 12.5px) since this is a fixed one-page letter
-   layout with no room to spare — not visually re-verified against a real
-   print in this session (no headless browser/Chrome extension reachable);
-   flagged for the owner to confirm it still fits one page. */
-.who{font-size:11.5px;line-height:1.5;color:var(--ink);max-width:7.4in;}
+   Coming-with-a-subscription/soon .cols block. No longer squeezed to a
+   fixed one-page budget — see the 2026-08-27 rework note near .page below
+   — so this reads at a size closer to the landing page's own .lede rather
+   than artificially undersized. */
+.who{font-size:12.5px;line-height:1.5;color:var(--ink);max-width:7.4in;}
+
+/* Free vs. Subscriber Comparison table (2026-08-27) — Jim's own drafted
+   addition to the Coming-with-a-subscription panel, following
+   LandingPage.tsx's own always-visible placement (no view toggle here,
+   same as that page — "that could just be added instead of offering it as
+   a button selection"). Mirrors app/globals.css's .comparetable/.promo-sub
+   rules and SubscriptionPanels.tsx's SubscriberComparisonTable verbatim,
+   same tokens already declared in this file's own :root. */
+.promo-sub{font-size:11.5px;font-weight:800;color:var(--brand-blue);}
+.comparetable{width:100%;border-collapse:collapse;margin-top:7px;font-size:11px;}
+.comparetable th,.comparetable td{border:1px solid var(--rule);padding:5px 7px;text-align:left;}
+.comparetable th{background:var(--strip);color:var(--ink);font-weight:700;font-size:10.5px;}
+.comparetable td{color:var(--ink);}
+.comparetable td:first-child{font-weight:600;}
+.comparetable tbody tr:nth-child(even) td{background:var(--row-tint);}
 
 /* Footer CTA */
 .cta{margin-top:auto;padding-top:14px;}
@@ -92,17 +114,18 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
     <div class="h1">Send it. Track it. Get it done.</div>
     <div class="h2">The simple way to ask anyone for anything &#8212; and actually see it through.</div>
     <div class="lede">Asks sent by email or chat get buried, forgotten, and lost in long threads. Would You Please turns every ask into a structured, trackable request with a due date, a formal response, and a clear status &#8212; Open, Overdue, or Done &#8212; visible to both of you. Your personal ToDos live right alongside, on one dashboard.</div>
-    <div class="install"><b>Nothing to install. Works wherever you are.</b> Open it in any browser on your computer, tablet, or phone &#8212; and the people you send requests to can respond through a secure web link without creating an account or downloading anything.</div>
+    <div class="install"><b>No App to install.* Works wherever you are.</b> Open it in any browser on your computer, tablet, or phone &#8212; and the people you send requests to can respond through a secure web link without creating an account or downloading anything.<br><span style="font-weight:400;color:var(--ink-soft);font-size:11px;">* We offer the ability to add a Would You Please icon to your home screen.</span></div>
   </div>
 
   <div class="slabel"><span class="t">Everything you need to follow through</span><span class="badge free">Free</span><span class="rule"></span></div>
   <div class="grid">
-    <div class="card"><div class="ct">Trackable Requests</div><div class="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar.</div></div>
+    <div class="card"><div class="ct">Trackable Requests</div><div class="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar. Convert any Request into a ToDo in two taps.</div></div>
     <div class="card"><div class="ct">Formal Responses</div><div class="cb">Recipients reply with answers. A timestamped Done confirmation closes the loop &#8212; no more &#8220;did you get to it?&#8221;</div></div>
     <div class="card hi"><div class="ct">Add to Calendar</div><div class="cb">Every request a recipient receives drops onto their calendar in one tap &#8212; the due date never gets lost.</div></div>
-    <div class="card"><div class="ct">ToDos with Priorities</div><div class="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a request in one tap.</div></div>
+    <div class="card"><div class="ct">ToDos with Priorities</div><div class="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a Request in two taps.</div></div>
     <div class="card"><div class="ct">Dialog Threads</div><div class="cb">Questions, answers, and comments stay attached to the item itself &#8212; a clear, auditable record, never lost in chat.</div></div>
-    <div class="card"><div class="ct">One Dashboard &amp; Search</div><div class="cb">Sent, Received, and My ToDos on one screen &#8212; filter, sort, print, and expand. Find anything by person, category, or date.</div></div>
+    <div class="card"><div class="ct">One Dashboard &amp; Search</div><div class="cb">Sent, Received, and My ToDos on one screen &#8212; filter, sort, print, and search. Find anything by person, category, or date.</div></div>
+    <div class="card hi"><div class="ct">Advanced Subscription Features</div><div class="cb"><b>File Attachments with 100&nbsp;MB of Storage</b> &#8212; send and receive documents, photos, and PDFs with your Requests and Responses &#8212; additional storage available with a subscription. <b>Automatic Repeating</b> &#8212; for all Requests and ToDos &#8212; up to 5 occurrences; a subscription is unlimited.</div></div>
   </div>
 
   <div class="slabel"><span class="t">Who benefits from Would You Please?</span><span class="rule"></span></div>
@@ -110,15 +133,37 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 
   <div class="cols">
     <div>
-      <div class="slabel"><span class="t">Coming with a subscription</span><span class="badge sub">$17.95 / yr</span><span class="rule"></span></div>
+      <div class="slabel"><span class="t">Coming with a subscription</span><span class="badge sub">$17.95 1st yr</span><span class="rule"></span></div>
+      <!-- Bullet wording matched to app/components/SubscriptionPanels.tsx's
+           SUBSCRIBER_FEATURES, 2026-08-27 — merged File Attachments+Storage
+           into one bullet, Title Case throughout, "Unlimited" prefixes
+           dropped (now redundant with the merged bullet's own "5 GB" and
+           the new comparison table's own Free-vs-Subscribed contrast). -->
       <div class="panel sub">
         <ul>
-          <li><b>File attachments</b> &#8212; send and receive documents, photos, and PDFs with your requests and responses.</li>
-          <li><b>Request Texting</b> &#8212; deliver requests by SMS text in addition to email.</li>
+          <li><b>Voice Dictation</b> &#8212; speak your Request and ToDo Description and Dialog entries instead of typing.</li>
+          <li><b>File Attachments with 5&nbsp;GB of Storage</b> &#8212; send and receive documents, photos, and PDFs with your Requests and Responses &#8212; additional storage available at $10 per 5&nbsp;GB per year.</li>
+          <li><b>Automatic Repeating</b> &#8212; for all Requests and ToDos.</li>
+          <li><b>Request Texting</b> &#8212; deliver Requests by SMS text in addition to email.</li>
+          <li><b>Ad-Free</b> &#8212; removes the ad banner shown to Free accounts.</li>
+          <li><b>Priority Support</b> &#8212; via email.</li>
           <li><b>Keep everything forever</b> &#8212; perpetual history for your requests and files.</li>
-          <li><b>Ad-free</b>, with priority support.</li>
         </ul>
-        <div class="note">Just $1.50 a month &#8212; a fraction of team tools. The free plan keeps a full year of history.</div>
+        <!-- Free vs. Subscriber Comparison table, 2026-08-27 — see the
+             .comparetable/.promo-sub CSS comment above for provenance. -->
+        <div class="promo-sub" style="margin-top:10px;">Free vs. Subscriber Comparison</div>
+        <table class="comparetable">
+          <thead><tr><th>Feature</th><th>Free</th><th>Subscribed</th></tr></thead>
+          <tbody>
+            <tr><td>Voice Dictation</td><td>Not available</td><td>Available</td></tr>
+            <tr><td>File Attachments</td><td>100&nbsp;MB</td><td>5&nbsp;GB</td></tr>
+            <tr><td>Automatic Repeating</td><td>up to 5</td><td>Unlimited</td></tr>
+            <tr><td>Request Texting</td><td>Not available</td><td>Available</td></tr>
+            <tr><td>Ads</td><td>Shown</td><td>Not shown</td></tr>
+            <tr><td>Support</td><td>Help files</td><td>Email</td></tr>
+          </tbody>
+        </table>
+        <div class="note">Just $1.50 a month for your first year &#8212; a fraction of team tools. Renews at $23.95/yr, or $2.95/mo. The free plan keeps a full year of history.</div>
       </div>
     </div>
     <div>
@@ -136,7 +181,7 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
   <div class="cta">
     <div class="ctabar">
       <div><div class="big">Start free today at wouldyouplease.com</div><div class="sub">No download. No setup. Send your first request in under a minute.</div></div>
-      <div class="price"><div class="amt">Free</div><div class="per">for advanced features, subscription $17.95/yr</div></div>
+      <div class="price"><div class="amt">Free</div><div class="per">for advanced features &#8212; $17.95 first year, $23.95/yr after (or $2.95/mo)</div></div>
     </div>
     <div class="foot"><span>&#169; 2026 Would You Please</span><span>wouldyouplease.com</span></div>
   </div>

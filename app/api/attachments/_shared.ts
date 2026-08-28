@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
+import { FREE_TIER_STORAGE_LIMIT_BYTES } from '@/lib/attachments'
+
 /**
  * Shared helpers for app/api/attachments/{upload,list,delete}/route.ts.
  * Not a route itself (no GET/POST export, and Next's App Router only treats
@@ -69,6 +71,56 @@ export function getAnonClient() {
   return createClient(must('NEXT_PUBLIC_SUPABASE_URL'), must('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   })
+}
+
+/**
+ * Owner's current total Attachment storage usage and allowance, by tier —
+ * added 2026-08-27 when Attachments moved from a subscriber-only feature to
+ * free-with-limits. A two-step query (the owner's own request ids, then
+ * attachments summed over those ids) rather than one joined query — the
+ * supabase-js client has no clean way to express "sum over a subquery," and
+ * this is fine at personal/testing scale, the same reasoning this codebase
+ * already accepts elsewhere (e.g. CreateRequestForm.tsx's fetch-all-then-
+ * filter-client-side contacts/categories lookups). Always computed against
+ * the REQUEST OWNER's account, never the uploader — CLAUDE.md's own
+ * Entitlements section ("gates govern adding... rights come from its
+ * issuer") applies to a storage allowance exactly as it already does to
+ * feature availability. Subscriber limit reads profiles.subscription_
+ * storage_gb (migration 047) — the account's real granted storage, not a
+ * fixed number, since it's meant to grow via the (not yet built) storage
+ * add-on purchase; defaults to 5 if somehow null.
+ */
+export async function getOwnerStorageStatus(
+  admin: ReturnType<typeof getServiceRoleClient>,
+  ownerId: string
+): Promise<{ usedBytes: number; limitBytes: number; tier: string }> {
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('tier, subscription_storage_gb')
+    .eq('id', ownerId)
+    .single()
+
+  const tier = profile?.tier === 'subscriber' ? 'subscriber' : 'free'
+  const limitBytes =
+    tier === 'subscriber'
+      ? (profile?.subscription_storage_gb ?? 5) * 1024 * 1024 * 1024
+      : FREE_TIER_STORAGE_LIMIT_BYTES
+
+  const { data: ownedRequests } = await admin.from('requests').select('id').eq('owner_id', ownerId)
+  const requestIds = (ownedRequests ?? []).map((r) => r.id as string)
+
+  let usedBytes = 0
+  if (requestIds.length > 0) {
+    const { data: rows } = await admin
+      .from('attachments')
+      .select('size_bytes')
+      .in('request_id', requestIds)
+      .eq('kind', 'file')
+      .is('deleted_at', null)
+    usedBytes = (rows ?? []).reduce((sum, r) => sum + (r.size_bytes ?? 0), 0)
+  }
+
+  return { usedBytes, limitBytes, tier }
 }
 
 export type Permission = {

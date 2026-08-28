@@ -190,6 +190,15 @@
   font-weight: 600;
   color: #CFE0F7;
 }
+/* Footnote for the "No App to install*" claim (2026-08-27) — smaller and
+   unbolded relative to .reassure itself, since it's a clarifying aside
+   rather than a second reassurance of equal weight. */
+.wyp-landing .reassure-note {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #B9CDEE;
+}
 .wyp-landing .hero-art { align-self: center; width: 100%; max-width: 420px; }
 
 /* Section labels */
@@ -236,6 +245,11 @@
 .wyp-landing .card.hi { background: var(--focus-tint); border-color: #BCCCEE; }
 .wyp-landing .card .ct { font-size: 14.5px; font-weight: 800; color: var(--brand-blue); }
 .wyp-landing .card .cb { font-size: 13px; line-height: 1.48; color: var(--ink); margin-top: 5px; }
+/* Free-tier "Advanced Subscription Features" card (2026-08-27) — its body
+   lists three items instead of one sentence; stacked lines rather than a
+   bulleted <ul> to match every other card's plain-prose .cb style. */
+.wyp-landing .card .cb-list div { margin-top: 4px; }
+.wyp-landing .card .cb-list div:first-child { margin-top: 0; }
 
 /* Subscription / Coming soon panels — .lpanel, not .panel; see file header */
 .wyp-landing .cols { display: grid; grid-template-columns: 1fr; gap: 16px; }

@@ -1,11 +1,17 @@
 import { randomUUID } from 'crypto'
 
-import { ATTACHMENT_SIGNED_URL_TTL_SECONDS, getServiceRoleClient, resolvePermission } from '../_shared'
+import {
+  ATTACHMENT_SIGNED_URL_TTL_SECONDS,
+  getOwnerStorageStatus,
+  getServiceRoleClient,
+  resolvePermission,
+} from '../_shared'
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_ITEM,
   dedupeFileName,
   fileExtension,
+  formatBytes,
   isBlockedFileType,
 } from '@/lib/attachments'
 
@@ -21,12 +27,19 @@ export const runtime = 'nodejs'
  * recipient) or a `token` field (anonymous Request Response visitor).
  *
  * Every check here is real, not a courtesy on top of a client-side one —
- * size, extension, the 10-item cap, and the ownerTier === 'subscriber' gate
- * are all re-verified server-side even though CreateRequestForm.tsx/
+ * size, extension, the 10-item cap, and the storage-quota gate are all
+ * re-verified server-side even though CreateRequestForm.tsx/
  * RequestDetailForm.tsx/etc. already check most of these before ever
  * calling this route, matching CLAUDE.md's "the locked button is a
  * courtesy... assume the control was bypassed" rule for every gated write
  * in this app.
+ *
+ * Storage-quota gate (2026-08-27) — supersedes the old flat
+ * ownerTier !== 'subscriber' 403. Attachments are now available to every
+ * tier; what differs is how much storage the *request owner* (never the
+ * uploader — CLAUDE.md's Entitlements section) is allowed in total, across
+ * every Request/ToDo they own, not just this one item. See
+ * getOwnerStorageStatus() in ../_shared.ts.
  */
 export async function POST(request: Request) {
   let form: FormData
@@ -60,13 +73,6 @@ export async function POST(request: Request) {
     return Response.json({ error: 'not_found' }, { status: 404 })
   }
 
-  // Rights on a Request come from its issuer, never the uploader — same
-  // entitlements principle CLAUDE.md's own section already establishes.
-  // Gates govern adding only; this is the "adding" gate.
-  if (permission.ownerTier !== 'subscriber') {
-    return Response.json({ error: 'not_subscriber' }, { status: 403 })
-  }
-
   if (isBlockedFileType(file.name)) {
     return Response.json(
       { error: 'blocked_type', detail: `${fileExtension(file.name) || 'that file type'} isn't supported.` },
@@ -79,6 +85,34 @@ export async function POST(request: Request) {
   }
 
   const admin = getServiceRoleClient()
+
+  // Storage-quota gate — rights (and now storage allowance) on a Request
+  // come from its issuer, never the uploader, same entitlements principle
+  // CLAUDE.md's own section already establishes. Resolved from the actual
+  // owner_id on the row, not permission.ownerTier alone, since that field
+  // only ever carried the tier string, not enough to also compute the
+  // real running total.
+  const { data: ownerRow } = await admin
+    .from('requests')
+    .select('owner_id')
+    .eq('id', permission.requestId)
+    .single()
+
+  if (!ownerRow) {
+    return Response.json({ error: 'not_found' }, { status: 404 })
+  }
+
+  const { usedBytes, limitBytes } = await getOwnerStorageStatus(admin, ownerRow.owner_id)
+
+  if (usedBytes + file.size > limitBytes) {
+    return Response.json(
+      {
+        error: 'storage_limit',
+        detail: `This would exceed the account's ${formatBytes(limitBytes)} storage allowance.`,
+      },
+      { status: 400 }
+    )
+  }
 
   const { count } = await admin
     .from('attachments')

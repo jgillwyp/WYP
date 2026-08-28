@@ -1144,12 +1144,14 @@ export default function TodoDetailForm() {
                 </p>
               )}
 
-            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — hidden entirely for free
-                tier and when Due/Done Dates is off, same gate as ToDo Detail's
-                own CreateTodoForm.tsx counterpart. Greyed when archived (no
-                Due Date to anchor generation on while inactive) or before a
-                Due Date has been entered. */}
-            {tier === 'subscriber' && todoDatesEnabled && (
+            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — available to every tier
+                as of 2026-08-27, still gated on Due/Done Dates being on
+                (no Due Date to anchor generation on otherwise), same as
+                CreateTodoForm.tsx's own counterpart. Free's own occurrence
+                cap is enforced server-side in cron Phase E, RepeatControl's
+                tier prop only adds an informational note. Greyed when
+                archived or before a Due Date has been entered. */}
+            {todoDatesEnabled && (
               <RepeatControl
                 rule={repeatRule}
                 dueDate={form.dueDate}
@@ -1164,6 +1166,7 @@ export default function TodoDetailForm() {
                     ? 'Repeats are not available for archived ToDos.'
                     : 'Please select a Due Date before adding a Repeat.'
                 }
+                tier={tier}
               />
             )}
 
@@ -1333,7 +1336,8 @@ export default function TodoDetailForm() {
             <AttachmentsPanel
               requestId={todoId}
               mode="file"
-              canAdd={tier === 'subscriber'}
+              canAdd={true}
+              extraNote={tier !== 'subscriber' ? '100 MB total' : null}
               authToken={authToken}
               recipientToken={null}
               isOwner={true}

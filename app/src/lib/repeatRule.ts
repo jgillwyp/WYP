@@ -181,6 +181,18 @@ export function computeNextDueDate(currentDueDate: string, rule: RepeatRule): st
   }
 }
 
+/** Free-tier cap on automatic Repeat generation — Jim's own wording
+ * (2026-08-27), expanding Repeat from subscriber-only to free-with-limits:
+ * "Automatic Repeating — for Requests and ToDos. (up to 5 available, a
+ * subscription is unlimited)." Checked by the cron job (app/api/cron/
+ * tick/route.ts, Phase E) alongside — never instead of — the rule's own
+ * shouldStopBeforeGenerating() below, since a Free-tier owner's chosen
+ * Stop condition (e.g. "Never") would otherwise silently generate past
+ * this limit with no warning. Kept out of shouldStopBeforeGenerating()'s
+ * own signature deliberately — this function stays pure recurrence logic,
+ * with no tier/account awareness of its own. */
+export const FREE_TIER_MAX_REPEAT_OCCURRENCES = 5
+
 /** nextOccurrenceIndex is 1-based and counts the *original* Request as 1 —
  * so the first generated successor is index 2. Checked by the cron job
  * before it inserts that successor. */

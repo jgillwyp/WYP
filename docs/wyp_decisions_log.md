@@ -6,6 +6,215 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-27 — Merged File Attachments+Storage bullet, Title Case feature wording, Free vs. Subscriber Comparison table, Subscribe/onepager updates
+
+Jim, with two pasted Account Options screenshots (one showing the
+"Subscriber Features" bullet list with the File Attachments/Storage bullet
+merger circled in red, the other showing a "Free vs. Subscriber Comparison"
+table replacing that list): asked to (1) merge the separate File
+Attachments and Storage bullets into one, using his drafted wording; (2)
+add a two-view toggle to Account Options' Subscriber section — "Subscriber
+Features" vs. "Free vs. Subscriber Comparison" — sized so switching views
+doesn't jump/pop the layout; (3) rename "Cost" to "Subscription Cost" and
+keep it (and everything below it — pricing, Sign Up button, cancel note)
+fixed regardless of which view is showing; (4) apply exact Title Case
+everywhere the feature list appears: "Voice Dictation, File Attachments
+with 5 GB of Storage, Automatic Repeating, Request Texting, Ad-Free, and
+Priority Support" — his own mockups didn't show this capitalization
+correctly, explicitly flagged as needing the fix; (5) reword Automatic
+Repeating's description to "for all Requests and ToDos"; (6) carry the
+same merged/Title-Case wording into the landing page and onepager; (7) add
+the comparison table to the landing page too, but always visible rather
+than behind a button toggle; (8) stop forcing `docs/WYP onepager.html`
+onto one printed page — it had already grown past one — and instead have
+it follow the landing page's own content/formatting with the comparison
+table added, leaving an eventual two-sided-print page-break decision for
+later.
+
+**Dropped the "Unlimited" prefix** on File Attachments/Automatic
+Repeating in `SUBSCRIBER_FEATURES` — added just the day before to
+distinguish the paid tier once Free also got capped versions of both
+features. Jim's own exact capitalization list omits "Unlimited" from
+both; read as a deliberate supersession, not an oversight, since the
+merged File Attachments bullet already states "5 GB" directly and the
+new comparison table now carries the Free-vs-Subscribed contrast for
+Automatic Repeating ("up to 5" vs. "Unlimited") on its own.
+
+**Built**: `SUBSCRIBER_FEATURES` (`app/components/SubscriptionPanels.tsx`)
+rewritten with the merged bullet and full Title Case. New exported
+`FREE_TIER_ADVANCED_FEATURES`-adjacent `SubscriberComparisonTable`
+component plus a `COMPARISON_ROWS` data array (Voice Dictation, File
+Attachments, Automatic Repeating, Request Texting, Ads, Support), styled
+with new `.comparetable`/`.viewtoggle` CSS in `app/globals.css` — reusing
+existing design tokens (`--rule`/`--brand-blue`/`--ink`/`--ink-soft`/
+`--strip`/`--row-tint`) rather than introducing new colors, per this
+project's own rule. `BecomeSubscriberPitch` gained a `view` state
+(`'features' | 'comparison'`) driving two pill-style toggle buttons
+(`role="tablist"`/`role="tab"`), rendering `SubscriberFeatureList` or
+`SubscriberComparisonTable` beneath them; "Cost" renamed "Subscription
+Cost," and everything from that heading down (pricing lines, Sign Up
+button, cancel-anytime note) sits outside the `view` conditional so it
+never moves when the toggle is clicked — Jim's own explicit design goal.
+`SubscriberFeatureList`'s `heading` prop was changed from required to
+optional, since the toggle buttons themselves now serve as the visible
+heading in this context; `PlanSummaryPanel`'s own "What's included" call
+site is unaffected. `LandingPage.tsx` imports the same
+`SubscriberComparisonTable` and renders it always-visible in the "Coming
+with a subscription" panel, directly below the bullet list, per Jim's own
+instruction that the landing page doesn't need the toggle mechanism.
+
+**Mockups updated by hand**, per this project's established sync
+convention: `design/screens/WYP_subscribe_palette1.html` (bullet wording
+only — this is a checkout/Plan-Summary screen, not the comparison pitch,
+so no toggle was added here) and `design/marketing/WYP_landing_page.html`
+(bullet wording plus the comparison table, with its own local
+`.comparetable`/`.promo-sub` CSS added to this fully self-contained
+mockup's `<style>` block, matching `globals.css`'s rules token-for-token).
+
+**`docs/WYP onepager.html` reworked**, not just re-worded: dropped the
+`.page`'s implicit one-page-fits budget (font sizes had been shrunk
+repeatedly across earlier batches trying to hold everything to 11in;
+that effort is now abandoned per Jim's own instruction) — content is
+allowed to flow onto a second printed page via the browser's own default
+pagination, with no explicit `@media print` page-break rule added yet
+("an appropriate page-break — to be determined later"). The "Who
+benefits" paragraph's font size was restored from an artificially
+undersized 11.5px back to 12.5px, matching the landing page's own `.lede`
+scale, now that the one-page budget no longer applies. Both the free-tier
+"Advanced Subscription Features" card and the "Coming with a
+subscription" bullet list were updated to the same merged/Title-Case
+wording as `SUBSCRIBER_FEATURES`/`FREE_TIER_ADVANCED_FEATURES`, and the
+same comparison table (identical rows) was added beneath the subscription
+bullet list, using a locally-duplicated `.comparetable`/`.promo-sub` CSS
+block (this file has no shared stylesheet to import from, same reasoning
+as the landing-page mockup). Task #355 (verify onepager still fits one
+page — blocked, no headless browser reachable) is now moot given this
+change; not separately closed out, since it was already blocked and its
+premise no longer applies.
+
+`npx tsc --noEmit` and `npm run lint` both clean for the whole batch.
+
+\---
+
+## 2026-08-27 — Free-tier feature expansion: Attachments (100 MB cap) and Repeat (5-occurrence cap); "Unlimited" prefix on the two Subscriber equivalents; landing page + subscription pricing updates; $2.95/mo Monthly option
+
+Jim, with two pasted screenshots (a rendered landing page and an annotated
+Account Options screen): "I got some feedback that it would be better to
+let users get familiar with more features (with limits)." Free accounts
+now get real, working — not locked, not preview-only — Attachments and
+Repeat, each with a hard limit instead of the full subscriber allowance.
+Several smaller wording fixes rode along in the same batch.
+
+**Attachments — free with a 100 MB cap.** Previously fully gated on
+`owner_tier === 'subscriber'` (Request Response/Response Detail) or
+`tier === 'subscriber'` (Create Request/Request Detail/Create ToDo/ToDo
+Detail) — the whole panel, or its Add control, simply didn't work for a
+Free account. Now unconditional everywhere; the real gate moved server-side
+into `app/api/attachments/upload/route.ts` via a new `getOwnerStorageStatus()`
+helper (`_shared.ts`), which sums every `kind = 'file'` attachment across
+every Request/ToDo the *owner* has (never the uploader — same Entitlements
+principle CLAUDE.md's own section already states: rights, and now storage
+allowance, come from the issuer) and compares it against a new
+`FREE_TIER_STORAGE_LIMIT_BYTES` constant (100 MB, `app/src/lib/attachments.ts`)
+for Free, or `profiles.subscription_storage_gb` for Subscriber. A new
+`extraNote` prop on `AttachmentsPanel.tsx` surfaces "(optional, 100 MB
+total)" next to the label for a Free account, so the cap isn't a surprise
+only discovered at upload time. No migration needed — both the used-bytes
+and the limit already live in existing columns.
+
+**Repeat — free with a 5-occurrence cap.** Previously hidden entirely
+behind `{tier === 'subscriber' && ...}` at all four call sites (Create
+Request, Request Detail, Create ToDo, ToDo Detail). Now always rendered
+(ToDo screens keep their existing `todoDatesEnabled` gate, unrelated to
+tier); `RepeatControl.tsx` gained an optional `tier` prop that shows an
+informational note in the modal when Free ("Free accounts stop Repeating
+automatically after 5 occurrences..."), and a new
+`FREE_TIER_MAX_REPEAT_OCCURRENCES = 5` constant
+(`app/src/lib/repeatRule.ts`) is checked in `app/api/cron/tick/route.ts`'s
+Phase E generation loop alongside — never instead of — the rule's own
+`shouldStopBeforeGenerating()` Stops-Repeating check. `ProfileRow` gained
+`tier`/`subscription_storage_gb` fields (both existing `profiles` selects
+updated) since Phase E needed the owner's tier for this check anyway, and,
+separately, the file-carry-forward loop that duplicates real attachments
+onto each generated occurrence needed the same storage-quota safety net
+Attachments' own upload route already enforces — otherwise an unattended
+Repeat could silently carry a Free-tier owner's attachments straight past
+their 100 MB allowance over several generations with no request in the
+loop to reject. Implemented inline (not imported from the attachments
+route's own `_shared.ts`) per this codebase's established
+per-file-duplication convention; skips only the individual file that would
+exceed the remaining allowance, not the whole occurrence.
+
+**"Unlimited" prefix.** Jim's own annotation on the Account Options
+screenshot: "Add the word 'Unlimited' in front of File attachments and
+Automatic Repeating" — both `SUBSCRIBER_FEATURES` entries
+(`SubscriptionPanels.tsx`, and therefore Account Options, `/account/
+subscription`, and the landing page's "Coming with a subscription" panel)
+now read "Unlimited File attachments" / "Unlimited Automatic Repeating,"
+distinguishing what a subscription still adds now that limited versions of
+both exist at Free. Same change ported to `WYP_subscribe_palette1.html`
+and `docs/WYP onepager.html`.
+
+**New landing-page Free-tier card.** A new `FREE_TIER_ADVANCED_FEATURES`
+array (`SubscriptionPanels.tsx`, same single-source-of-truth pattern as
+`SUBSCRIBER_FEATURES`) backs a 7th, highlighted ("Advanced Subscription
+Features") card in the feature grid — File attachments / 100 MB storage /
+Automatic Repeating (up to 5) — on both `LandingPage.tsx` and its mockup,
+plus a matching compact card on `docs/WYP onepager.html`.
+
+**Wording fixes, Jim's own literal requests.** (1) The hero's "No credit
+card. Nothing to install..." line is now "No credit card. No App to
+install*..." with a new footnote ("* We offer the ability to add a Would
+You Please icon to your home screen.") — since the app *does* offer an
+installable PWA icon (2026-08-18), the old "nothing to install" claim was
+inaccurate. (2) "Convert any ToDo into a request in one tap." → "Convert
+any ToDo into a Request in two taps." (matches the app's real Convert flow,
+which is a banner + confirmation, not a single tap). (3) The converse
+sentence — "Convert any Request into a ToDo in two taps." — added to the
+Trackable Requests card, which previously said nothing about conversion at
+all. All three applied to `LandingPage.tsx`, its mockup, and
+`docs/WYP onepager.html`; the one-pager's own equivalent install line and
+"filter, sort, print, and expand" (a second, unprompted fix — Expand was
+removed app-wide 2026-08-12, so this text was already stale) were corrected
+alongside.
+
+**$2.95/mo Monthly option.** Jim's own drafted addition to both the
+Subscribe mockup and "the subscription information for the app": a third,
+informational row in `PlanSummaryPanel` ("Monthly — $2.95/mo, renews each
+month until cancelled") below the existing 1st-year/renewal rows, plus a
+matching third line in `BecomeSubscriberPitch`'s Cost section. Both are
+shared components (`SubscriptionPanels.tsx`), so Account Options and
+`/account/subscription` picked this up automatically; ported by hand into
+`WYP_subscribe_palette1.html` and `docs/WYP onepager.html`. Informational
+only — no plan-switching mechanism exists for any of the three prices yet,
+same "checkout isn't available yet" posture as every other subscription
+control in this app.
+
+**Flagged, not built: "Storage Management" → "Storage and Usage
+Management."** Jim's own framing was tentative — "this probably expands
+the original Storage Management to 'Storage and Usage Management'" — and
+no such screen exists live today (Storage Maintenance is a mockup-only
+screen, `design/screens/WYP_storage_maintenance_palette1.html`, never
+converted). Recorded here as an open rename/scope question for whenever
+that screen is actually built, not actioned this batch.
+
+**Known inconsistency, flagged rather than silently left**: `canCopyAttachments`
+on `RequestDetailForm.tsx`/`TodoDetailForm.tsx`'s `<ConversionBanner>` and
+`app/api/attachments/copy/route.ts`'s own tier check are both still hard-gated
+to `tier === 'subscriber'` — Jim's message didn't mention the
+Conversion-copy feature, so it was left as Subscriber-only this batch
+rather than assumed to expand along with everything else. Revisit if he
+wants Free-tier ToDo↔Request conversion to be able to copy an owner's own
+(now Free-available) attachments too.
+
+**No mockups updated for the Attachments/Repeat gating logic itself** —
+none of the six affected screens' static HTML has real tier-gating JS to
+change; only the landing/onepager/subscribe wording and pricing changes
+above touch static files. `npx tsc --noEmit`/`npm run lint` clean across
+the whole batch.
+
+\---
+
 ## 2026-08-27 — Landing page subscription content caught up to real pricing/features; how Jim can view `/` while permanently signed in
 
 Jim: the landing page "needs to be caught up to the latest subscription/etc

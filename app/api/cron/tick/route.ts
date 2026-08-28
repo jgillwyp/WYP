@@ -4,7 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
 
 import { buildIcsContent, type IcsRequestFields } from '@/lib/ics'
-import { type RepeatRule, computeNextDueDate, shouldStopBeforeGenerating } from '@/lib/repeatRule'
+import { type RepeatRule, FREE_TIER_MAX_REPEAT_OCCURRENCES, computeNextDueDate, shouldStopBeforeGenerating } from '@/lib/repeatRule'
+import { FREE_TIER_STORAGE_LIMIT_BYTES } from '@/lib/attachments'
 import {
   EMAIL_FROM_ADDRESS,
   buildRequestEmailFromName,
@@ -171,6 +172,21 @@ type ProfileRow = {
   // are no longer read here — as of 2026-08-25 they're pure UI-visibility
   // toggles (Account Options' "Show Reminders"), not sending gates. See
   // this file's header comment.
+  //
+  // tier (2026-08-27) — added when Repeat moved from subscriber-only to
+  // free-with-limits (Jim's own wording: "up to 5 available, a
+  // subscription is unlimited"). Read by Phase E to decide whether
+  // FREE_TIER_MAX_REPEAT_OCCURRENCES applies to a given owner's repeat
+  // generation. Not used by any other phase.
+  tier: string | null
+  // subscription_storage_gb (2026-08-27, same batch) — Phase E's
+  // attachment carry-forward duplicates real files onto every generated
+  // occurrence; this is read alongside tier to compute that owner's real
+  // storage allowance (mirrors app/api/attachments/_shared.ts's
+  // getOwnerStorageStatus(), duplicated here rather than imported — this
+  // route already has its own ProfileRow/profile-fetching shape, per this
+  // codebase's per-file-duplication convention).
+  subscription_storage_gb: number | null
 }
 
 type ContactInfo = { email: string; display_name: string | null; time_zone: string | null } | null
@@ -328,7 +344,7 @@ async function handle(request: Request) {
     const { data: profileData } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb'
       )
       .in('id', ownerIds)
     for (const p of (profileData ?? []) as ProfileRow[]) profileMap.set(p.id, p)
@@ -795,7 +811,7 @@ async function handle(request: Request) {
     const { data: moreProfiles } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb'
       )
       .in('id', Array.from(new Set(repeatOwnerIds)))
     for (const p of (moreProfiles ?? []) as ProfileRow[]) profileMap.set(p.id, p)
@@ -810,7 +826,16 @@ async function handle(request: Request) {
     const nextOccurrenceIndex = (row.repeat_occurrence_index ?? 1) + 1
     const nextDueDate = computeNextDueDate(row.due_date, rule)
 
-    if (shouldStopBeforeGenerating(rule, nextOccurrenceIndex, nextDueDate)) {
+    // Free-tier occurrence cap (2026-08-27) — Jim's own wording expanding
+    // Repeat to free-with-limits: "up to 5 available, a subscription is
+    // unlimited." Checked alongside — never instead of — the rule's own
+    // Stops Repeating choice, since a Free owner could otherwise pick
+    // "Never" (or a distant "On" date) and generate past this limit with
+    // no warning. A missing/unrecognized tier is treated as free, the same
+    // conservative default this file's other tier reads already use.
+    const freeTierCapped = profile?.tier !== 'subscriber' && nextOccurrenceIndex > FREE_TIER_MAX_REPEAT_OCCURRENCES
+
+    if (shouldStopBeforeGenerating(rule, nextOccurrenceIndex, nextDueDate) || freeTierCapped) {
       await sb.from('requests').update({ repeat_next_generated_at: now.toISOString() }).eq('id', row.id)
       continue
     }
@@ -851,8 +876,39 @@ async function handle(request: Request) {
       .eq('carry_into_repeats', true)
       .is('deleted_at', null)
 
+    // Storage-quota safety net (2026-08-27) — same cap Attachments' own
+    // upload route enforces on a manual add (app/api/attachments/_shared.ts
+    // getOwnerStorageStatus()), applied here too so an automatic Repeat
+    // can't silently carry a Free-tier owner past their 100 MB allowance
+    // over a run of generations. Computed once per generated occurrence,
+    // only when there's an actual file to carry (a 'reference' row has no
+    // storage cost). Duplicated inline rather than importing the
+    // attachments route's own helper — this file has no other dependency
+    // on that module tree, per this codebase's per-file-duplication
+    // convention for small, stateless helpers.
+    const hasFileCarry = (carryRows ?? []).some((r) => r.kind === 'file')
+    let remainingBytes = Infinity
+    if (hasFileCarry) {
+      const storageLimitBytes =
+        profile?.tier === 'subscriber' ? (profile?.subscription_storage_gb ?? 5) * 1024 * 1024 * 1024 : FREE_TIER_STORAGE_LIMIT_BYTES
+      const { data: ownedForStorage } = await sb.from('requests').select('id').eq('owner_id', row.owner_id)
+      const ownedIdsForStorage = (ownedForStorage ?? []).map((r) => r.id as string)
+      let usedBytes = 0
+      if (ownedIdsForStorage.length > 0) {
+        const { data: usageRows } = await sb
+          .from('attachments')
+          .select('size_bytes')
+          .in('request_id', ownedIdsForStorage)
+          .eq('kind', 'file')
+          .is('deleted_at', null)
+        usedBytes = (usageRows ?? []).reduce((sum, r) => sum + (r.size_bytes ?? 0), 0)
+      }
+      remainingBytes = storageLimitBytes - usedBytes
+    }
+
     for (const att of (carryRows ?? []) as CarryAttachmentRow[]) {
       if (att.kind === 'file' && att.storage_path && att.file_name) {
+        if ((att.size_bytes ?? 0) > remainingBytes) continue // would exceed the owner's storage allowance — skip this file only
         const newId = randomUUID()
         const newPath = `${newRow.id}/${newId}-${att.file_name}`
         const { error: copyError } = await sb.storage.from('attachments').copy(att.storage_path, newPath)
@@ -872,6 +928,7 @@ async function handle(request: Request) {
           mime_type: att.mime_type,
           carry_into_repeats: true,
         })
+        remainingBytes -= att.size_bytes ?? 0
       } else if (att.kind === 'reference') {
         await sb.from('attachments').insert({
           request_id: newRow.id,

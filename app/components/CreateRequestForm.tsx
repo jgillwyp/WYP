@@ -721,7 +721,9 @@ export default function CreateRequestForm() {
         throw new Error(
           detail.error === 'limit_reached'
             ? `Attachment limit reached (${MAX_ATTACHMENTS_PER_ITEM}).`
-            : `Could not upload ${file.name}.`
+            : detail.error === 'storage_limit'
+              ? (detail.detail ?? 'This would exceed the storage allowance.')
+              : `Could not upload ${file.name}.`
         )
       }
     }
@@ -1331,19 +1333,20 @@ export default function CreateRequestForm() {
             </div>
             {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
 
-            {/* Repeat (§6.42 PROPOSED) — hidden entirely for free tier, same
-                posture as Attachments' own owner_tier gate. Greyed until a
-                Due Date is entered — Jim's own spec. */}
-            {tier === 'subscriber' && (
-              <RepeatControl
-                rule={repeatRule}
-                dueDate={form.dueDate}
-                onSave={setRepeatRule}
-                onRemove={() => setRepeatRule(null)}
-                disabled={form.dueDate.trim() === ''}
-                disabledReason="Please select a Due Date before adding a Repeat."
-              />
-            )}
+            {/* Repeat (§6.42 PROPOSED) — available to every tier as of
+                2026-08-27; Free's own occurrence cap is enforced
+                server-side in cron Phase E, RepeatControl's tier prop only
+                adds an informational note. Greyed until a Due Date is
+                entered — Jim's own spec. */}
+            <RepeatControl
+              rule={repeatRule}
+              dueDate={form.dueDate}
+              onSave={setRepeatRule}
+              onRemove={() => setRepeatRule(null)}
+              disabled={form.dueDate.trim() === ''}
+              disabledReason="Please select a Due Date before adding a Repeat."
+              tier={tier}
+            />
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). Off by default:
@@ -1512,71 +1515,61 @@ export default function CreateRequestForm() {
               )}
             </div>
 
-            {/* Attachments (Week 5 Priority 3, 2026-08-14) — subscriber-gated,
-                re-checked server-side regardless of what this renders.
-                Staged as real File objects, same pattern as Dialog above,
-                uploaded via /api/attachments/upload once Send has a real
-                request id. Free-tier keeps the original locked row. */}
-            {tier === 'subscriber' ? (
-              <div className="fgroup">
-                {stagedFiles.length === 0 ? (
-                  <div className="frow">
-                    <span className="actlabel">
-                      Attachments <span className="subnote">(optional)</span>
+            {/* Attachments (Week 5 Priority 3, 2026-08-14) — free-with-a-
+                storage-cap as of 2026-08-27 (was subscriber-only); every
+                check here is re-verified server-side regardless of what
+                this renders (see /api/attachments/upload/route.ts's own
+                storage-quota gate). Staged as real File objects, same
+                pattern as Dialog above, uploaded via
+                /api/attachments/upload once Send has a real request id. */}
+            <div className="fgroup">
+              {stagedFiles.length === 0 ? (
+                <div className="frow">
+                  <span className="actlabel">
+                    Attachments{' '}
+                    <span className="subnote">
+                      (optional{tier !== 'subscriber' ? ', 100 MB total' : ''})
                     </span>
+                  </span>
+                  <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
+                    Add Attachment
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="fieldact">
                     <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
                       Add Attachment
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <div className="fieldact">
-                      <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
-                        Add Attachment
-                      </button>
-                    </div>
-                    <div className="dlgstaged">
-                      {stagedFiles.map((f, i) => (
-                        <div className="attitem" key={i}>
-                          <span className="attname">
-                            {f.name} <span className="subnote">({formatBytes(f.size)})</span>
-                          </span>
-                          <button
-                            className="attremove"
-                            type="button"
-                            aria-label={`Remove ${f.name}`}
-                            onClick={() => removeStagedFile(i)}
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={handleFilesSelected}
-                />
-                {attachError && <p className="ferror">{attachError}</p>}
-              </div>
-            ) : (
-              <div className="donerow">
-                <span className="donenote">
-                  <b>Note:</b> Attachments are a Subscription feature.
-                </span>
-                <button className="btn is-locked" type="button" aria-disabled="true">
-                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                  </svg>
-                  Add Attachment
-                </button>
-              </div>
-            )}
+                  <div className="dlgstaged">
+                    {stagedFiles.map((f, i) => (
+                      <div className="attitem" key={i}>
+                        <span className="attname">
+                          {f.name} <span className="subnote">({formatBytes(f.size)})</span>
+                        </span>
+                        <button
+                          className="attremove"
+                          type="button"
+                          aria-label={`Remove ${f.name}`}
+                          onClick={() => removeStagedFile(i)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleFilesSelected}
+              />
+              {attachError && <p className="ferror">{attachError}</p>}
+            </div>
 
             {/* Reminders until Done banner, standalone-row placement — only
                 when Due Time is on (the inline placement above already

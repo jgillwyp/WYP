@@ -3166,3 +3166,103 @@ link is built only after the stack is proven on Add Contact.
   `getSession()` finds nothing there and `/` renders the landing page
   regardless of his normal window's signed-in state. No code change for
   that part. `npx tsc --noEmit`/`npm run lint` clean.
+- **Free-tier feature expansion: Attachments (100 MB cap) and Repeat
+  (5-occurrence cap); "Unlimited" prefix on the two Subscriber equivalents;
+  landing/onepager/Subscribe pricing updates; $2.95/mo Monthly option
+  (2026-08-27).** Jim: "I got some feedback that it would be better to let
+  users get familiar with more features (with limits)." Attachments moved
+  from fully `tier === 'subscriber'`-gated (all six Request/ToDo screens)
+  to always-available, gated instead by a real server-side storage quota —
+  new `getOwnerStorageStatus()` (`app/api/attachments/_shared.ts`) sums
+  every `kind = 'file'` attachment across everything the *owner* (never the
+  uploader) has, checked in `upload/route.ts` against a new
+  `FREE_TIER_STORAGE_LIMIT_BYTES` (100 MB, `app/src/lib/attachments.ts`) for
+  Free or `profiles.subscription_storage_gb` for Subscriber; no migration
+  needed. `AttachmentsPanel.tsx` gained an `extraNote` prop surfacing
+  "(optional, 100 MB total)" for Free. Repeat moved from hidden-entirely
+  behind the same tier check (four call sites) to always rendered, capped
+  instead at a new `FREE_TIER_MAX_REPEAT_OCCURRENCES = 5`
+  (`app/src/lib/repeatRule.ts`) checked in `cron/tick/route.ts`'s Phase E
+  generation loop alongside the rule's own Stops-Repeating check;
+  `RepeatControl.tsx` gained an optional `tier` prop showing an
+  informational cap note when Free. `ProfileRow` (cron route) gained
+  `tier`/`subscription_storage_gb`, and Phase E's attachment
+  carry-forward loop gained its own inline storage-quota safety net (same
+  query shape as `getOwnerStorageStatus()`, duplicated per this codebase's
+  established convention rather than imported) so an unattended Repeat
+  can't silently carry a Free owner past their cap over several
+  generations. **"Unlimited" prefix** — Jim's own annotation — added to
+  `SUBSCRIBER_FEATURES`' "File attachments"/"Automatic Repeating" entries
+  (`SubscriptionPanels.tsx`), propagating to Account Options, `/account/
+  subscription`, the landing page, `WYP_subscribe_palette1.html`, and
+  `docs/WYP onepager.html`. **New landing-page Free-tier card** — a new
+  `FREE_TIER_ADVANCED_FEATURES` array backs a 7th "Advanced Subscription
+  Features" card in the feature grid (`LandingPage.tsx` + its mockup +
+  `docs/WYP onepager.html`). **Wording fixes**, Jim's own literal wording:
+  the hero's "Nothing to install" line is now "No App to install*" with a
+  new footnote about the home-screen icon; both ToDo↔Request conversion
+  card sentences now read "in two taps" (was "in one tap," ToDo card only)
+  and the Trackable Requests card gained its own converse sentence. **$2.95/mo
+  Monthly option** — a third, informational row/line in `PlanSummaryPanel`
+  and `BecomeSubscriberPitch` (`SubscriptionPanels.tsx`, so Account Options
+  and `/account/subscription` picked it up automatically), ported by hand
+  into `WYP_subscribe_palette1.html` and `docs/WYP onepager.html` — no
+  plan-switching mechanism exists yet, same "checkout isn't available yet"
+  posture as every other subscription control. **Flagged, not built**:
+  "Storage Management" -> "Storage and Usage Management" (Jim's own
+  tentative wording; no such screen is live — Storage Maintenance is
+  mockup-only, see `design/README.md`). **Flagged inconsistency**: Conversion's
+  `canCopyAttachments` (`RequestDetailForm.tsx`/`TodoDetailForm.tsx`) and
+  `/api/attachments/copy/route.ts`'s own tier check are both still
+  Subscriber-only — not mentioned in Jim's request, left as-is rather than
+  assumed to expand. `docs/WYP onepager.html`'s one-pager remains
+  **unverified against a real one-page print** (task blocked, no headless
+  browser/Chrome extension reachable this session) — the new 7th feature
+  card and expanded subscription-bullet list make this more likely to spill
+  onto a second page than before; flagged for Jim to check. `npx tsc
+  --noEmit`/`npm run lint` clean.
+- **Merged File Attachments+Storage bullet, Title Case feature wording,
+  Free vs. Subscriber Comparison table — supersedes the "Unlimited" prefix
+  and resolves the onepager one-page flag above (2026-08-27).** Jim, with
+  two pasted Account Options screenshots: merge File Attachments and
+  Storage into one bullet (his own drafted wording); add a two-view toggle
+  to Account Options' Subscriber section ("Subscriber Features" / "Free
+  vs. Subscriber Comparison") sized so switching doesn't jump/pop the
+  layout; rename "Cost" to "Subscription Cost" and keep it (and everything
+  below — pricing, Sign Up button, cancel note) fixed regardless of view;
+  apply exact Title Case everywhere the feature list appears: "Voice
+  Dictation, File Attachments with 5 GB of Storage, Automatic Repeating,
+  Request Texting, Ad-Free, and Priority Support" — supersedes the
+  "Unlimited" prefix added the day before, now redundant since the merged
+  bullet states "5 GB" directly and the new table itself carries the
+  Free-vs-Subscribed contrast for Automatic Repeating. `SUBSCRIBER_FEATURES`
+  rewritten accordingly (`SubscriptionPanels.tsx`); new exported
+  `SubscriberComparisonTable`/`COMPARISON_ROWS` and `.comparetable`/
+  `.viewtoggle` CSS (`app/globals.css`, reusing existing tokens only).
+  `BecomeSubscriberPitch` gained a `view` state driving the toggle;
+  `SubscriberFeatureList`'s `heading` prop is now optional (the toggle
+  buttons serve as the heading there; `PlanSummaryPanel`'s own "What's
+  included" call site is unaffected). `LandingPage.tsx` renders the same
+  comparison table always-visible (no toggle there, per Jim's own
+  instruction), directly under its own bullet list. Ported by hand into
+  `WYP_subscribe_palette1.html` (wording only — no toggle on this
+  checkout/Plan-Summary screen) and `design/marketing/WYP_landing_page.html`
+  (wording plus table, with its own local CSS copy — this mockup is fully
+  self-contained). **`docs/WYP onepager.html` reworked, not just
+  re-worded** — resolves the prior entry's own "unverified against a
+  real one-page print" flag by dropping the one-page goal outright, per
+  Jim's own instruction ("it has extended past a page and does not
+  easily reformat onto one page... it can follow the formatting of the
+  landing page with a comparison table added"): the `.page` no longer
+  targets `min-height:11in`, content is allowed to flow onto a second
+  printed page via the browser's own pagination, and an eventual
+  two-sided-print page-break point is explicitly left undecided ("to be
+  determined later") rather than guessed at. The "Who benefits" paragraph
+  reverted from an artificially undersized 11.5px back to 12.5px now that
+  the one-page budget is gone. Both the free-tier "Advanced Subscription
+  Features" card and the subscription bullet list were updated to the
+  same merged/Title-Case wording, and the identical comparison table was
+  added beneath the bullet list, with its own locally-duplicated
+  `.comparetable`/`.promo-sub` CSS (no shared stylesheet to import from,
+  same as the landing-page mockup). `npx tsc --noEmit`/`npm run lint`
+  clean.

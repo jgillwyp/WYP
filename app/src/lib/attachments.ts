@@ -18,6 +18,20 @@ export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
  * 'file-transfer service'" — picked 10. */
 export const MAX_ATTACHMENTS_PER_ITEM = 10
 
+/** Free-tier total Attachment storage allowance, in bytes — 100 MB.
+ * Added 2026-08-27 when Attachments moved from a subscriber-only feature to
+ * free-with-limits (Jim's own wording: "100MB of storage — for attachments
+ * (additional storage available with a subscription)"). Enforced against
+ * the owning account's running total across every Request/ToDo they own,
+ * never a single item — see app/api/attachments/_shared.ts's
+ * getOwnerStorageStatus(), the actual, can't-be-bypassed check. This
+ * constant exists here only so client-side messaging can quote the same
+ * number without duplicating it. A Subscriber's own allowance is instead
+ * profiles.subscription_storage_gb (migration 047) — a real per-account
+ * value, not a fixed constant, since it can grow via the (not yet built)
+ * storage add-on purchase. */
+export const FREE_TIER_STORAGE_LIMIT_BYTES = 100 * 1024 * 1024
+
 /**
  * Executable/installer/script extensions only — everything else (documents,
  * images, PDFs, archives, media, anything else) is allowed. Owner: "I don't

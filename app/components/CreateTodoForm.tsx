@@ -506,7 +506,9 @@ export default function CreateTodoForm() {
         throw new Error(
           detail.error === 'limit_reached'
             ? `Attachment limit reached (${MAX_ATTACHMENTS_PER_ITEM}).`
-            : `Could not upload ${file.name}.`
+            : detail.error === 'storage_limit'
+              ? (detail.detail ?? 'This would exceed the storage allowance.')
+              : `Could not upload ${file.name}.`
         )
       }
     }
@@ -1037,14 +1039,16 @@ export default function CreateTodoForm() {
               </div>
             )}
 
-            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — hidden entirely for free
-                tier, same posture as Locations' own tier gate above. Also
-                gated on todoDatesEnabled: with Due/Done Dates turned off
-                there's no Due Date field for Repeat to anchor generation on
-                (Jim's own confirmed rule — "the Due Date should be the
-                determinant"). Greyed with its own reason once Due/Done Dates
-                is on but no Due Date has been entered yet. */}
-            {tier === 'subscriber' && todoDatesEnabled && (
+            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — available to every tier
+                as of 2026-08-27; Free's own occurrence cap is enforced
+                server-side in cron Phase E, RepeatControl's tier prop only
+                adds an informational note. Still gated on todoDatesEnabled:
+                with Due/Done Dates turned off there's no Due Date field for
+                Repeat to anchor generation on (Jim's own confirmed rule —
+                "the Due Date should be the determinant"). Greyed with its
+                own reason once Due/Done Dates is on but no Due Date has
+                been entered yet. */}
+            {todoDatesEnabled && (
               <RepeatControl
                 rule={repeatRule}
                 dueDate={form.dueDate}
@@ -1052,6 +1056,7 @@ export default function CreateTodoForm() {
                 onRemove={() => setRepeatRule(null)}
                 disabled={form.dueDate.trim() === ''}
                 disabledReason="Please select a Due Date before adding a Repeat."
+                tier={tier}
               />
             )}
 
@@ -1213,68 +1218,57 @@ export default function CreateTodoForm() {
             {/* Attachments (2026-08-26) — replaces the old Locations feature
                 outright; same real-file mechanism a Request's Create screen
                 already uses (staged as File objects, uploaded once Save
-                produces a real id). Subscriber-gated, same as a Request's
-                Attachments; free-tier keeps the original locked row. */}
-            {tier === 'subscriber' ? (
-              <div className="fgroup">
-                {stagedFiles.length === 0 ? (
-                  <div className="frow">
-                    <span className="actlabel">
-                      Attachments <span className="subnote">(optional)</span>
+                produces a real id). Free-with-a-storage-cap as of
+                2026-08-27 (was subscriber-only) — see
+                CreateRequestForm.tsx's identical change. */}
+            <div className="fgroup">
+              {stagedFiles.length === 0 ? (
+                <div className="frow">
+                  <span className="actlabel">
+                    Attachments{' '}
+                    <span className="subnote">
+                      (optional{tier !== 'subscriber' ? ', 100 MB total' : ''})
                     </span>
+                  </span>
+                  <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
+                    Add Attachment
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="fieldact">
                     <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
                       Add Attachment
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <div className="fieldact">
-                      <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
-                        Add Attachment
-                      </button>
-                    </div>
-                    <div className="dlgstaged">
-                      {stagedFiles.map((f, i) => (
-                        <div className="attitem" key={i}>
-                          <span className="attname">
-                            {f.name} <span className="subnote">({formatBytes(f.size)})</span>
-                          </span>
-                          <button
-                            className="attremove"
-                            type="button"
-                            aria-label={`Remove ${f.name}`}
-                            onClick={() => removeStagedFile(i)}
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={handleFilesSelected}
-                />
-                {attachError && <p className="ferror">{attachError}</p>}
-              </div>
-            ) : (
-              <div className="donerow">
-                <span className="donenote">
-                  <b>Note:</b> Attachments are a Subscription feature.
-                </span>
-                <button className="btn is-locked" type="button" aria-disabled="true">
-                  <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                  </svg>
-                  Add Attachment
-                </button>
-              </div>
-            )}
+                  <div className="dlgstaged">
+                    {stagedFiles.map((f, i) => (
+                      <div className="attitem" key={i}>
+                        <span className="attname">
+                          {f.name} <span className="subnote">({formatBytes(f.size)})</span>
+                        </span>
+                        <button
+                          className="attremove"
+                          type="button"
+                          aria-label={`Remove ${f.name}`}
+                          onClick={() => removeStagedFile(i)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleFilesSelected}
+              />
+              {attachError && <p className="ferror">{attachError}</p>}
+            </div>
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

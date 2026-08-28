@@ -940,28 +940,31 @@ export default function RequestResponseForm() {
               </>
             )}
 
-            {/* Owner's ask (2026-08-10): don't show an Attachments segment
-                at all when the Request's issuer is a free user — a
-                free-tier promo hits the recipient elsewhere on this screen
-                already (the Free Account Features block below). Reads
-                owner_tier (migration 011). Real Add/list via
-                AttachmentsPanel as of Week 5 Priority 3 (2026-08-14) — no
-                delete UI here (see app/api/attachments/delete/route.ts's
+            {/* Attachments now shown regardless of the issuer's tier
+                (2026-08-27) — the segment used to disappear entirely for a
+                free-tier issuer, since Attachments was subscriber-only; now
+                every account gets a real, capped allowance (100 MB free,
+                profiles.subscription_storage_gb for a Subscriber), so
+                there's always something real to offer here. extraNote
+                reads the issuer's own tier (owner_tier, migration 011),
+                never the viewer's — the storage allowance is the Request
+                owner's, per CLAUDE.md's Entitlements section. Real Add/list
+                via AttachmentsPanel as of Week 5 Priority 3 (2026-08-14) —
+                no delete UI here (see app/api/attachments/delete/route.ts's
                 own header comment: an anonymous visitor has no session to
                 attribute a delete to). */}
-            {data.owner_tier === 'subscriber' && (
-              <AttachmentsPanel
-                requestId={data.id}
-                mode="file"
-                canAdd={true}
-                authToken={null}
-                recipientToken={token}
-                isOwner={false}
-                currentUserId={null}
-                ownerLabel="Recipient"
-                standalone
-              />
-            )}
+            <AttachmentsPanel
+              requestId={data.id}
+              mode="file"
+              canAdd={true}
+              extraNote={data.owner_tier !== 'subscriber' ? '100 MB total' : null}
+              authToken={null}
+              recipientToken={token}
+              isOwner={false}
+              currentUserId={null}
+              ownerLabel="Recipient"
+              standalone
+            />
 
             {/* Owner-reported, 2026-08-10: dropped the "Free Account
                 Features" kicker line — the button's own label already says

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 
 import './landing.css'
-import { SUBSCRIBER_FEATURES } from './SubscriptionPanels'
+import { SUBSCRIBER_FEATURES, FREE_TIER_ADVANCED_FEATURES, SubscriberComparisonTable } from './SubscriptionPanels'
 
 // Live conversion of design/marketing/WYP_landing_page.html, 2026-08-13 —
 // owner asked for this to become the actual unauthenticated `/` route
@@ -122,7 +122,8 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 Overdue, or Done — visible to both of you. Your personal ToDos live right
                 alongside, on one dashboard.
               </div>
-              <div className="reassure">No credit card. Nothing to install — works right in your phone’s browser.</div>
+              <div className="reassure">No credit card. No App to install* — works right in your phone’s browser.</div>
+              <div className="reassure-note">* We offer the ability to add a Would You Please icon to your home screen.</div>
             </div>
 
             {/* Hero illustration — hand-built SVG, not the AI placeholder photo;
@@ -237,7 +238,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
             <div className="grid">
               <div className="card">
                 <div className="ct">Trackable Requests</div>
-                <div className="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar.</div>
+                <div className="cb">Send a request to any contact with a due date. Status and overdue alerts keep it on the radar. Convert any Request into a ToDo in two taps.</div>
               </div>
               <div className="card">
                 <div className="ct">Formal Responses</div>
@@ -249,7 +250,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               </div>
               <div className="card">
                 <div className="ct">ToDos with Priorities</div>
-                <div className="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a request in one tap.</div>
+                <div className="cb">Track your own tasks as ASAP, SOON, or LATER, organized by category. Convert any ToDo into a Request in two taps.</div>
               </div>
               <div className="card">
                 <div className="ct">Dialog Threads</div>
@@ -258,6 +259,24 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               <div className="card">
                 <div className="ct">One Dashboard & Search</div>
                 <div className="cb">Sent, Received, and My ToDos on one screen — filter, sort, print, and search. Find anything by person, category, or date.</div>
+              </div>
+              {/* Free-tier "Advanced Subscription Features" card, 2026-08-27
+                  — Jim's own instruction to let Free accounts get familiar
+                  with more features (with limits) rather than seeing
+                  Attachments/Repeat as fully locked away. Bullets render
+                  from FREE_TIER_ADVANCED_FEATURES (SubscriptionPanels.tsx),
+                  the same single-source-of-truth pattern SUBSCRIBER_FEATURES
+                  already uses, so this card can't drift from what's actually
+                  enforced. `.hi` reuses the same highlight treatment as the
+                  Add to Calendar card above — this is the one other Free
+                  card worth calling out visually. */}
+              <div className="card hi">
+                <div className="ct">Advanced Subscription Features</div>
+                <div className="cb cb-list">
+                  {FREE_TIER_ADVANCED_FEATURES.map((f) => (
+                    <div key={f.title}><b>{f.title}</b> — {f.desc}</div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -310,6 +329,19 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                     ))}
                     <li><b>Keep everything forever</b> — perpetual history for your requests and files.</li>
                   </ul>
+                  {/* Comparison table, 2026-08-27 — Jim's own instruction:
+                      the landing page gets this always visible, not gated
+                      behind a view toggle like Account Options' own
+                      BecomeSubscriberPitch ("that could just be added
+                      instead of offering it as a button selection"). Same
+                      shared SubscriberComparisonTable component, reused
+                      verbatim — globals.css's own .comparetable/.promo-sub
+                      rules aren't scoped to .wyp-landing, so no landing.css
+                      duplicate is needed. */}
+                  <div className="promo-sub" style={{ marginTop: 14 }}>
+                    Free vs. Subscriber Comparison
+                  </div>
+                  <SubscriberComparisonTable />
                   <div className="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history.</div>
                 </div>
               </div>

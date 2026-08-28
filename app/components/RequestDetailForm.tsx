@@ -1396,27 +1396,29 @@ export default function RequestDetailForm() {
               </p>
             )}
 
-            {/* Repeat (§6.42 PROPOSED) — hidden entirely for free tier, same
-                posture as Attachments' own owner_tier gate. Greyed until a
-                Due Date is entered, or when this Request is archived —
-                Jim's own spec. */}
-            {tier === 'subscriber' && (
-              <RepeatControl
-                rule={repeatRule}
-                dueDate={form.dueDate}
-                onSave={(rule) => {
-                  setRepeatRule(rule)
-                  setRepeatOccurrenceIndex((current) => current ?? 1)
-                }}
-                onRemove={() => setRepeatRule(null)}
-                disabled={form.dueDate.trim() === '' || archivedAt !== null}
-                disabledReason={
-                  archivedAt !== null
-                    ? 'Repeats are not available for archived Requests.'
-                    : 'Please select a Due Date before adding a Repeat.'
-                }
-              />
-            )}
+            {/* Repeat (§6.42 PROPOSED) — available to every tier as of
+                2026-08-27 (Jim's own wording: "up to 5 available, a
+                subscription is unlimited"); Free's own occurrence cap is
+                enforced server-side in cron Phase E, RepeatControl's tier
+                prop only adds an informational note. Greyed until a Due
+                Date is entered, or when this Request is archived — Jim's
+                own spec. */}
+            <RepeatControl
+              rule={repeatRule}
+              dueDate={form.dueDate}
+              onSave={(rule) => {
+                setRepeatRule(rule)
+                setRepeatOccurrenceIndex((current) => current ?? 1)
+              }}
+              onRemove={() => setRepeatRule(null)}
+              disabled={form.dueDate.trim() === '' || archivedAt !== null}
+              disabledReason={
+                archivedAt !== null
+                  ? 'Repeats are not available for archived Requests.'
+                  : 'Please select a Due Date before adding a Repeat.'
+              }
+              tier={tier}
+            />
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). See
@@ -1579,12 +1581,16 @@ export default function RequestDetailForm() {
             </div>
 
             {/* Attachments (Week 5 Priority 3, 2026-08-14) — real upload/
-                list/delete via AttachmentsPanel, gated on the signed-in
-                owner's own tier (re-checked server-side regardless). */}
+                list/delete via AttachmentsPanel. Free-with-a-storage-cap
+                as of 2026-08-27 (was subscriber-only) — canAdd is now
+                always true; extraNote surfaces the Free-tier 100 MB
+                allowance before the owner hits it (re-checked server-side
+                regardless). */}
             <AttachmentsPanel
               requestId={requestId}
               mode="file"
-              canAdd={tier === 'subscriber'}
+              canAdd={true}
+              extraNote={tier !== 'subscriber' ? '100 MB total' : null}
               authToken={authToken}
               recipientToken={null}
               isOwner={true}

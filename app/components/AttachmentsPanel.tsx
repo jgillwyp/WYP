@@ -28,8 +28,11 @@ const referenceNote = 'Locations are URLs or File paths.'
  * mode = 'file' (Requests): a real upload via /api/attachments/upload,
  * listed via /api/attachments/list, removed via /api/attachments/delete —
  * every one of those routes is the actual enforcement point (size, type,
- * the 10-item cap, the tier gate, the delete-permission rule); nothing here
- * is trusted on its own, see each route's own header comment.
+ * the 10-item cap, the storage-quota cap, the delete-permission rule);
+ * nothing here is trusted on its own, see each route's own header comment.
+ * Attachments moved from subscriber-only to free-with-a-storage-cap
+ * (2026-08-27) — see extraNote below and getOwnerStorageStatus() in
+ * app/api/attachments/_shared.ts.
  *
  * mode = 'reference' (ToDos): a typed "Location" (a file path or URL) plus
  * an optional Description — owner's own proposal, 2026-08-14 decisions log
@@ -43,12 +46,24 @@ const referenceNote = 'Locations are URLs or File paths.'
 type Props = {
   requestId: string
   mode: 'file' | 'reference'
-  /** Whether Add Attachment/Add Location should be offered at all — the
-   * caller has already resolved this from the relevant tier (their own for
-   * an owner-side screen, the issuer's owner_tier for a recipient-side one)
-   * before rendering this panel. Re-checked server-side regardless for
-   * mode = 'file'; mode = 'reference' relies on RLS (owner-only insert). */
+  /** Whether Add Attachment/Add Location should be offered at all. Always
+   * true on every current call site as of 2026-08-27 (Attachments moved
+   * from subscriber-only to free-with-a-storage-cap — see
+   * app/api/attachments/_shared.ts's getOwnerStorageStatus) — kept as a
+   * real prop, not hardcoded, in case a future caller needs to disable
+   * adding for some other reason (e.g. an archived item). Re-checked
+   * server-side regardless for mode = 'file'; mode = 'reference' relies on
+   * RLS (owner-only insert). */
   canAdd: boolean
+  /** Short parenthetical appended after "(optional" on the empty-state
+   * label, e.g. "100 MB total" for a Free-tier owner — 2026-08-27, added
+   * alongside the storage-cap change above so the limit is visible before
+   * someone hits it, not just after. Owner-side screens compute this from
+   * their own tier; recipient-facing screens (Request Response, Response
+   * Detail) use the issuer's owner_tier instead, since the storage
+   * allowance is the Request owner's, never the viewer's. Omitted (no
+   * comma, just "(optional)") when null. */
+  extraNote?: string | null
   /** Session access token — present for the owner and a signed-in
    * recipient, null for an anonymous Request Response visitor. */
   authToken: string | null
@@ -110,6 +125,7 @@ export default function AttachmentsPanel({
   requestId,
   mode,
   canAdd,
+  extraNote = null,
   authToken,
   recipientToken,
   isOwner,
@@ -235,7 +251,9 @@ export default function AttachmentsPanel({
           setError(
             resBody.error === 'limit_reached'
               ? `Attachment limit reached (${MAX_ATTACHMENTS_PER_ITEM}).`
-              : `Could not upload ${f.name}.`
+              : resBody.error === 'storage_limit'
+                ? (resBody.detail ?? 'This would exceed the storage allowance.')
+                : `Could not upload ${f.name}.`
           )
         } else {
           setRows((current) => [resBody.attachment, ...current])
@@ -380,7 +398,7 @@ export default function AttachmentsPanel({
             <span className="actlabel">
               {mode === 'file' ? (
                 <>
-                  {label} <span className="subnote">(optional)</span>
+                  {label} <span className="subnote">(optional{extraNote ? `, ${extraNote}` : ''})</span>
                 </>
               ) : (
                 referenceNote
@@ -397,7 +415,7 @@ export default function AttachmentsPanel({
         ) : (
           <div className="donerow">
             <span className="donenote">
-              <b>Note:</b> {label} are a Subscription feature.
+              <b>Note:</b> {label} cannot be added right now.
             </span>
             <button className="btn is-locked" type="button" aria-disabled="true">
               <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
