@@ -6,6 +6,30 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-28 — Fixed: Private Testing dialog appeared off-screen when opened from the bottom of the landing page
+
+Jim: clicking Start Free Account in the final CTA band (near the bottom of
+a long page) seemed to do nothing — the dialog was in fact opening, just
+scrolled out of view. Root cause: globals.css's shared `.scrim`/`.modal`
+(§6.12) use `position: absolute`, which is correct for every screen
+elsewhere in the app — those all render inside `.app`, a viewport-height
+frame with its own internal `.scroll` region, so the modal's containing
+block never moves regardless of how far the user has scrolled that inner
+list. `LandingPage.tsx` has no such frame; it's an ordinary scrolling
+document, so `position: absolute` with no positioned ancestor anchors to
+the height of the *entire page*, not the current viewport — a click near
+the bottom of a long page opened the modal up near the top of the document,
+well above what was actually on screen. Fixed with a page-scoped override
+in `landing.css`: `.wyp-landing .scrim`/`.wyp-landing .modal` set `position:
+fixed` instead, which keeps the dialog centered in whatever the current
+viewport is regardless of scroll position — no JS/scroll-to-top needed, and
+none of the shared global `.scrim`/`.modal` rules that every other screen
+depends on were touched.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-28 — 2/3-1/3 layout for Advanced Features/Subscription/Coming soon; Final CTA band simplified back to a single headline (landing + onepager + mockup)
 
 Jim, with three pasted images — one showing the onepager's own reformatted

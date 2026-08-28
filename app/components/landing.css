@@ -292,6 +292,22 @@
 .wyp-landing .lpanel.soon li::before { background: var(--ink-soft); }
 .wyp-landing .lpanel .note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; line-height: 1.5; }
 
+/* Private Testing modal — fixed positioning override, 2026-08-28.
+   Owner-reported: clicking Start Free Account in the final CTA band (near
+   the bottom of a long page) opened the dialog, but nothing visibly
+   happened. Root cause: globals.css's shared .scrim/.modal (§6.12) use
+   `position: absolute`, which is correct everywhere else in the app — every
+   other screen renders inside `.app`, a viewport-height frame with its own
+   internal `.scroll` region, so the modal's containing block never moves
+   regardless of how far the user has scrolled that inner list. This page
+   has no such frame — it's a normal scrolling document — so `position:
+   absolute` with no positioned ancestor anchors to the height of the
+   *entire document*, landing the dialog above the visible viewport
+   whenever the click came from further down the page. `position: fixed`
+   instead keeps it centered in whatever the current viewport is. */
+.wyp-landing .scrim { position: fixed; }
+.wyp-landing .modal { position: fixed; }
+
 /* Final CTA band + footer */
 .wyp-landing .ctaband {
   background: var(--brand-blue);

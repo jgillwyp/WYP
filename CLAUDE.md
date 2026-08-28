@@ -3336,3 +3336,18 @@ link is built only after the stack is proven on Add Contact.
   divergence rather than adding a third wording; with no button and one
   child left, it switched from a flex row to centered text. `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Fixed: Private Testing dialog appeared off-screen from the landing
+  page's bottom CTA (2026-08-28).** Jim: clicking Start Free Account near
+  the bottom of the page seemed to do nothing. Root cause: globals.css's
+  shared `.scrim`/`.modal` (§6.12) use `position: absolute`, correct
+  everywhere else in the app since `.app` is a viewport-height frame with
+  its own internal `.scroll` region — the modal's containing block never
+  moves there. `LandingPage.tsx` has no such frame; it's an ordinary
+  scrolling document, so `position: absolute` with no positioned ancestor
+  anchors to the height of the *whole page*, not the visible viewport — a
+  click from far down the page opened the modal well above what was on
+  screen. Fixed with a page-scoped override in `landing.css`:
+  `.wyp-landing .scrim`/`.wyp-landing .modal { position: fixed; }` — always
+  centers in the current viewport regardless of scroll position, no JS or
+  scroll-to-top needed, and none of the shared global rules other screens
+  depend on were touched. `npx tsc --noEmit`/`npm run lint` clean.
