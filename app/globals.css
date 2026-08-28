@@ -3136,7 +3136,9 @@ body {
 }
 
 .comparetable th {
-  background: var(--strip);
+  /* White header background, 2026-08-28 — Jim's own pasted mockup, part of
+     "better disclosing" the subscription pricing/comparison; was --strip. */
+  background: #fff;
   color: var(--ink);
   font-weight: 700;
   font-size: 11.5px;

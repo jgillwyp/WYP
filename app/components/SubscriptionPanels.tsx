@@ -208,17 +208,22 @@ export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
       <div className="promo-sub" style={{ marginTop: 12 }}>
         Subscription Cost
       </div>
+      {/* Simplified 2026-08-28, Jim's own drafted wording — drops the
+          repeated "subscription" suffix on each line and states the
+          renewal behavior directly ("renews each year/month until
+          canceled") rather than the vaguer "thereafter". "canceled" is
+          Jim's identified preferred spelling — see this file's other
+          "cancelled" fix at the note below and in PlanSummaryPanel. */}
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        1st year subscription — 25% discount, only <strong>$17.95</strong>
+        1st year — 25% discount, only <strong>$17.95</strong>
         <br />
-        Per year subscription — <strong>$23.95</strong> thereafter
+        Per year — <strong>$23.95</strong>, renews each year until canceled
         <br />
         {/* Monthly option added 2026-08-27, Jim's own drafted addition —
             no discount attaches to it (unlike the annual plan's 1st-year
             25% off), since it's meant as a low-commitment alternative, not
             a cheaper path to the same year of service. */}
-        Monthly subscription — <strong>$2.95/mo</strong>, renews each month
-        until cancelled
+        Monthly — <strong>$2.95/mo</strong>, renews each month until canceled
       </p>
 
       <button
@@ -387,7 +392,7 @@ function PlanSummaryPanel() {
       <div className="planrow">
         <span className="plan-name">
           Monthly
-          <span className="plan-sub">renews each month until cancelled</span>
+          <span className="plan-sub">renews each month until canceled</span>
         </span>
         <span className="plan-price">$2.95/mo</span>
       </div>

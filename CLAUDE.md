@@ -3266,3 +3266,39 @@ link is built only after the stack is proven on Add Contact.
   `.comparetable`/`.promo-sub` CSS (no shared stylesheet to import from,
   same as the landing-page mockup). `npx tsc --noEmit`/`npm run lint`
   clean.
+- **"Better disclose" subscription pricing; Private Testing dialog on Start
+  Free Account; "canceled" spelling fix (2026-08-28).** Jim, with two
+  pasted mockups: landing page's "Coming with a subscription" `.slabel`
+  became plain "Subscription," with the 25%-discount/price/monthly cadence
+  spelled out inline via new `.subline` spans flanking the existing
+  `.badge.sub` pill, in `LandingPage.tsx`/`landing.css`, ported into
+  `design/marketing/WYP_landing_page.html` and `docs/WYP onepager.html`.
+  Subscription note gained "A month-to-month subscription is available for
+  $2.95." (all three places — the onepager's own note previously folded an
+  "or $2.95/mo" clause mid-sentence instead, normalized to match). The
+  Free vs. Subscriber Comparison table's column-header background changed
+  from `var(--strip)` to white (`app/globals.css`, plus both static
+  copies). `BecomeSubscriberPitch`'s Subscription Cost paragraph
+  (`SubscriptionPanels.tsx`) simplified — drops the repeated "subscription"
+  suffix per line, states renewal behavior directly ("renews each
+  year/month until canceled" instead of "thereafter"). **"cancelled" →
+  "canceled"** audited codebase-wide: the vast majority of matches were the
+  unrelated `let cancelled = false` async-effect-guard variable name (left
+  untouched, not user-facing) or historical prose in `CLAUDE.md`/
+  `design/README.md`/the decisions log itself (left untouched, per their
+  own historical-record purpose); the two real user-facing occurrences —
+  `PlanSummaryPanel`'s Monthly `.plan-sub` text and the identical text in
+  `WYP_subscribe_palette1.html` — were fixed. **Private Testing dialog** —
+  both landing page Start Free Account controls (hero-top, final CTA band)
+  now open a `.scrim`/`.modal` (§6.12) dialog with Jim's own wording and a
+  real `mailto:notifications@wouldyouplease.com` link, instead of
+  navigating to `/login?intent=signup` — new `testingDialogOpen` state in
+  `LandingPage.tsx`; with no `.app` ancestor on this page, the overlay
+  correctly covers the full viewport rather than confining to a 480px
+  frame. Sign In is unaffected; `RequestResponseForm.tsx`'s own
+  differently-worded "Create your own Free Account" link (a different
+  pitch, anonymous-recipient-only) is untouched. **Not ported into
+  `design/marketing/WYP_landing_page.html`** — that mockup has no
+  `<script>` anywhere; flagged with a header comment rather than adding a
+  first script tag for one interaction. `npx tsc --noEmit`/`npm run lint`
+  clean.

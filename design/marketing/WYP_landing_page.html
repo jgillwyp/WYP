@@ -18,6 +18,16 @@
    "Sign-up flow" diagram, which already anticipated a "sales page" leading
    here and is the reason this file finally exists).
 
+   NOT ported into this static mockup, 2026-08-28: the live LandingPage.tsx's
+   two Start Free Account controls no longer link to /login?intent=signup —
+   they open a "Private Testing" .scrim/.modal dialog instead (the app is in
+   a small, limited Private Testing mode; see CLAUDE.md). This file has no
+   <script> anywhere and has never carried interactive demo JS the way a
+   handful of other mockups do, so the two <a class="btn-tint"/"btn-white">
+   below are left pointing at /login?intent=signup rather than adding a
+   first script tag just for this one interaction. Flagged, not silently
+   diverged from.
+
    Copy is adapted from the owner's own sales one-pager
    (uploads: "WYP onepager.html") rather than invented fresh — same feature
    descriptions, same $17.95/yr figure, same "Send it. Track it. Get it
@@ -264,6 +274,9 @@ img, svg { display: block; max-width: 100%; }
 .badge.sub { background: var(--sort); color: var(--ink); }
 .badge.soon { background: var(--band); color: var(--ink-soft); }
 
+/* Plain (non-badge) header text, 2026-08-28 — see landing.css's identical rule. */
+.slabel .subline { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+
 /* Who benefits — plain paragraph under a bare .slabel (no badge), 2026-08-17 */
 .benefits { font-size: 14.5px; line-height: 1.55; color: var(--ink); max-width: 760px; }
 
@@ -321,7 +334,7 @@ img, svg { display: block; max-width: 100%; }
 .promo-sub { font-size: 12.5px; font-weight: 800; color: var(--brand-blue); }
 .comparetable { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
 .comparetable th, .comparetable td { border: 1px solid var(--rule); padding: 6px 8px; text-align: left; }
-.comparetable th { background: var(--strip); color: var(--ink); font-weight: 700; font-size: 11.5px; }
+.comparetable th { background: #fff; color: var(--ink); font-weight: 700; font-size: 11.5px; } /* white header, 2026-08-28 — was var(--strip) */
 .comparetable td { color: var(--ink); }
 .comparetable td:first-child { font-weight: 600; }
 .comparetable tbody tr:nth-child(even) td { background: var(--row-tint); }
@@ -606,9 +619,16 @@ footer .wrap {
     <div class="wrap">
       <div class="cols">
         <div>
+          <!-- Header redesigned 2026-08-28 — Jim's own pasted mockup,
+               "better disclose" the subscription pricing: plain
+               "Subscription" heading, with the discount/price/monthly
+               cadence spelled out inline via .subline (matches
+               LandingPage.tsx/landing.css's own class verbatim). -->
           <div class="slabel">
-            <span class="t">Coming with a subscription</span>
+            <span class="t">Subscription</span>
+            <span class="subline">25% Discount</span>
             <span class="badge sub">$17.95 1st yr</span>
+            <span class="subline">or, $2.95 monthly</span>
           </div>
           <!-- List content (2026-08-27) mirrors app/components/SubscriptionPanels.tsx's
                own SUBSCRIBER_FEATURES array, the live app's single canonical source
@@ -651,7 +671,7 @@ footer .wrap {
                 <tr><td>Support</td><td>Help files</td><td>Email</td></tr>
               </tbody>
             </table>
-            <div class="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history.</div>
+            <div class="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history. A month-to-month subscription is available for $2.95.</div>
           </div>
         </div>
         <div>

@@ -6,6 +6,96 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-28 — "Better disclose" subscription pricing; Private Testing dialog on Start Free Account; canceled spelling fix
+
+Jim, with two pasted mockups of the redesigned Account Options Subscriber
+section: (1) on the landing page, retitle the "COMING WITH A SUBSCRIPTION"
+panel header to plain "SUBSCRIPTION," with the 25%-discount/price/monthly
+cadence spelled out inline in the header row rather than folded into one
+badge; (2) add a sentence to the subscription note calling out the
+month-to-month option explicitly; (3) in the in-app Free vs. Subscriber
+Comparison table, change the column-header background to white; (4)
+simplify and make more consistent the Subscription Cost wording; (5)
+change every use of "cancelled" to "canceled," his identified preferred
+spelling; (6) replace the Start Free Account button's behavior with a
+dialog explaining the app's Private Testing status and inviting an email
+introduction to notifications@wouldyouplease.com (mailto link), rather
+than navigating straight to `/login`.
+
+**Header redesign** — `LandingPage.tsx`'s "Coming with a subscription"
+`.slabel` (badge only) became a plain `.t` "Subscription" heading plus two
+new `.subline` spans ("25% Discount" before the badge, "or, $2.95 monthly"
+after it) flanking the unchanged `.badge.sub` "$17.95 1st yr" pill. New
+`.wyp-landing .slabel .subline` rule in `landing.css`, plain muted text
+(`--ink-soft`), not a second badge. Ported into `design/marketing/
+WYP_landing_page.html` (own local `.subline` CSS copy, this mockup is
+self-contained) and `docs/WYP onepager.html` (same header structure, its
+own smaller `.subline` size to match its already-compact `.slabel` scale;
+also added `flex-wrap: wrap` to that file's `.slabel`, which had never
+needed it before this header grew from two elements to four).
+
+**Note sentence** — "A month-to-month subscription is available for
+$2.95." appended to the existing "Just $1.50 a month..." note under the
+comparison table, in `LandingPage.tsx`, the landing mockup, and the
+onepager (whose own note previously folded an "or $2.95/mo" clause
+mid-sentence instead — normalized to match the live page's phrasing
+exactly rather than keeping two different treatments of the same fact).
+
+**Comparison table header background** — `.comparetable th` changed from
+`var(--strip)` to plain white (`#fff`) in `app/globals.css`,
+`design/marketing/WYP_landing_page.html`'s own CSS copy, and the
+onepager's own CSS copy. Affects every consumer of the shared
+`SubscriberComparisonTable` (Account Options, `/account/subscription`,
+landing page) plus both static copies.
+
+**Subscription Cost wording** — `BecomeSubscriberPitch`'s three price
+lines (`SubscriptionPanels.tsx`) rewritten from "1st year subscription —
+25% discount, only $17.95 / Per year subscription — $23.95 thereafter /
+Monthly subscription — $2.95/mo, renews each month until cancelled" to
+"1st year — 25% discount, only $17.95 / Per year — $23.95, renews each
+year until canceled / Monthly — $2.95/mo, renews each month until
+canceled" — drops the repeated "subscription" suffix on every line and
+states each plan's renewal behavior directly and consistently rather than
+the vaguer "thereafter" on the per-year line alone.
+
+**"cancelled" → "canceled"** — audited every occurrence of the word across
+the codebase; the overwhelming majority were the unrelated `let cancelled
+= false` async-effect-guard boolean used throughout this app's own
+`useEffect` cleanup convention (variable name, not user-facing text, left
+untouched) or historical prose in `CLAUDE.md`/`design/README.md`/the
+decisions log itself (left untouched — rewriting past history entries
+would defeat their own purpose as a record). The two real user-facing
+occurrences were fixed: `SubscriptionPanels.tsx`'s `PlanSummaryPanel`
+Monthly `.plan-sub` text, and the identical text in
+`design/screens/WYP_subscribe_palette1.html`'s own Plan Summary.
+
+**Private Testing dialog** — Jim's reasoning: the app is in a small,
+limited Private Testing mode (migration 015's `beta_allowlist`/signup
+gate), and a visitor clicking Start Free Account was previously sent
+straight to `/login`, only learning about the testing restriction after
+typing an email and hitting that screen's own "Private Testing" gated
+message. Both `LandingPage.tsx` Start Free Account controls (hero-top,
+final CTA band) now open a dialog instead of navigating anywhere — new
+`testingDialogOpen` state, reusing the shared `.scrim`/`.modal` frame
+(§6.12, `app/globals.css`) verbatim rather than inventing a new one; with
+no `.app` ancestor on this page to confine the overlay to a 480px frame
+(unlike every other screen that uses this modal pattern), it correctly
+covers the full viewport instead — the right behavior for a full-width
+marketing page. Wording is Jim's own, verbatim, with the email address as
+a real `mailto:` link. Sign In is unaffected — an already-allowlisted
+account still signs in normally, and `RequestResponseForm.tsx`'s own,
+differently worded "Create your own Free Account" link (a different
+pitch, reached only by an anonymous recipient responding to a Request) is
+untouched, out of scope for this instruction. **Not ported into
+`design/marketing/WYP_landing_page.html`** — that mockup has no
+`<script>` anywhere and has never carried interactive demo JS the way a
+handful of other mockups do; flagged with a header comment rather than
+adding a first script tag for one interaction.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-27 — Merged File Attachments+Storage bullet, Title Case feature wording, Free vs. Subscriber Comparison table, Subscribe/onepager updates
 
 Jim, with two pasted Account Options screenshots (one showing the

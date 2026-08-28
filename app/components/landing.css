@@ -231,6 +231,14 @@
 .wyp-landing .badge.sub { background: var(--sort); color: var(--ink); }
 .wyp-landing .badge.soon { background: var(--band); color: var(--ink-soft); }
 
+/* "Better disclose the subscription pricing" — 2026-08-28, Jim's own
+   pasted mockup: the "Coming with a subscription" slabel became a plain
+   "Subscription" heading with the discount/price/monthly cadence spelled
+   out inline right in the header, rather than folded into a single badge.
+   .subline is plain, non-badge text for the "25% Discount" and "or, $2.95
+   monthly" pieces that flank the existing .badge.sub pill. */
+.wyp-landing .slabel .subline { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+
 /* Who benefits — plain paragraph under a bare .slabel (no badge), 2026-08-17 */
 .wyp-landing .benefits { font-size: 14.5px; line-height: 1.55; color: var(--ink); max-width: 760px; }
 

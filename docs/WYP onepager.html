@@ -41,7 +41,7 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .install b{color:var(--brand-blue);}
 
 /* Section label */
-.slabel{display:flex;align-items:center;gap:9px;margin:16px 0 9px;}
+.slabel{display:flex;align-items:center;gap:9px;margin:16px 0 9px;flex-wrap:wrap;}
 .slabel .t{font-size:13px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--ink);white-space:nowrap;}
 .slabel .badge{font-size:10.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:2px 8px;border-radius:999px;}
 .badge.free{background:var(--brand-blue);color:#fff;}
@@ -86,7 +86,11 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .promo-sub{font-size:11.5px;font-weight:800;color:var(--brand-blue);}
 .comparetable{width:100%;border-collapse:collapse;margin-top:7px;font-size:11px;}
 .comparetable th,.comparetable td{border:1px solid var(--rule);padding:5px 7px;text-align:left;}
-.comparetable th{background:var(--strip);color:var(--ink);font-weight:700;font-size:10.5px;}
+.comparetable th{background:#fff;color:var(--ink);font-weight:700;font-size:10.5px;} /* white header, 2026-08-28 — was var(--strip) */
+
+/* "Better disclose the subscription pricing," 2026-08-28 — see landing.css's
+   identical rule for the live page's own .subline. */
+.slabel .subline{font-size:11px;font-weight:600;color:var(--ink-soft);}
 .comparetable td{color:var(--ink);}
 .comparetable td:first-child{font-weight:600;}
 .comparetable tbody tr:nth-child(even) td{background:var(--row-tint);}
@@ -133,7 +137,10 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 
   <div class="cols">
     <div>
-      <div class="slabel"><span class="t">Coming with a subscription</span><span class="badge sub">$17.95 1st yr</span><span class="rule"></span></div>
+      <!-- Header redesigned 2026-08-28 — Jim's own pasted mockup, "better
+           disclose" the subscription pricing: matches landing.css's own
+           .slabel .subline treatment. -->
+      <div class="slabel"><span class="t">Subscription</span><span class="subline">25% Discount</span><span class="badge sub">$17.95 1st yr</span><span class="subline">or, $2.95 monthly</span><span class="rule"></span></div>
       <!-- Bullet wording matched to app/components/SubscriptionPanels.tsx's
            SUBSCRIBER_FEATURES, 2026-08-27 — merged File Attachments+Storage
            into one bullet, Title Case throughout, "Unlimited" prefixes
@@ -163,7 +170,7 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
             <tr><td>Support</td><td>Help files</td><td>Email</td></tr>
           </tbody>
         </table>
-        <div class="note">Just $1.50 a month for your first year &#8212; a fraction of team tools. Renews at $23.95/yr, or $2.95/mo. The free plan keeps a full year of history.</div>
+        <div class="note">Just $1.50 a month for your first year &#8212; a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history. A month-to-month subscription is available for $2.95.</div>
       </div>
     </div>
     <div>

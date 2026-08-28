@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 
 import './landing.css'
@@ -48,7 +49,22 @@ import { SUBSCRIBER_FEATURES, FREE_TIER_ADVANCED_FEATURES, SubscriberComparisonT
 // neutral Strip background, not a new error-banner treatment — this app
 // has no bright-red banner precedent anywhere, only inline .ferror text,
 // which doesn't fit a whole-sentence message here).
+// testingDialogOpen (2026-08-28) — Start Free Account no longer navigates
+// straight to /login?intent=signup. Jim: the app is in a small, limited
+// Private Testing mode (migration 015's beta_allowlist/signup gate), and
+// he'd rather a visitor learn that immediately on the landing page than
+// click through to /login and land on that screen's own "Private Testing"
+// gated message after typing an email. Both Start Free Account buttons
+// (hero-top and the final CTA band) now open this dialog instead; Sign In
+// is unaffected — an existing, already-allowlisted account still signs in
+// normally. Reuses the shared .scrim/.modal frame (§6.12, globals.css) —
+// with no .app ancestor on this page to confine it to a 480px frame, the
+// overlay covers the full viewport, which is the right behavior for a
+// full-width marketing page. RequestResponseForm.tsx's own, differently
+// worded "Create your own Free Account" link (a different pitch, reached
+// only by an anonymous recipient) is untouched — not in scope here.
 export default function LandingPage({ errorMessage }: { errorMessage?: string | null }) {
+  const [testingDialogOpen, setTestingDialogOpen] = useState(false)
   return (
     <div className="wyp-landing">
       <header className="topbar">
@@ -110,7 +126,9 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                   <div className="hero-line">Get it Done.</div>
                 </div>
                 <div className="hero-btns">
-                  <Link className="btn-tint" href="/login?intent=signup">Start Free Account</Link>
+                  <button type="button" className="btn-tint" onClick={() => setTestingDialogOpen(true)}>
+                    Start Free Account
+                  </button>
                   <Link className="btn-white" href="/login">Sign In</Link>
                 </div>
               </div>
@@ -319,8 +337,10 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
             <div className="cols">
               <div>
                 <div className="slabel">
-                  <span className="t">Coming with a subscription</span>
+                  <span className="t">Subscription</span>
+                  <span className="subline">25% Discount</span>
                   <span className="badge sub">$17.95 1st yr</span>
+                  <span className="subline">or, $2.95 monthly</span>
                 </div>
                 <div className="lpanel sub">
                   <ul>
@@ -342,7 +362,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                     Free vs. Subscriber Comparison
                   </div>
                   <SubscriberComparisonTable />
-                  <div className="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history.</div>
+                  <div className="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history. A month-to-month subscription is available for $2.95.</div>
                 </div>
               </div>
               <div>
@@ -379,11 +399,33 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 <div className="amt">Free</div>
                 <div className="per">Advanced features with a subscription — $17.95 first year, $23.95/yr after.</div>
               </div>
-              <Link className="btn-white" href="/login?intent=signup">Start Free Account</Link>
+              <button type="button" className="btn-white" onClick={() => setTestingDialogOpen(true)}>
+                Start Free Account
+              </button>
             </div>
           </div>
         </section>
       </main>
+
+      {testingDialogOpen && (
+        <>
+          <div className="scrim" onClick={() => setTestingDialogOpen(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="testing-dialog-title">
+            <p className="modal-title" id="testing-dialog-title">Private Testing</p>
+            <p className="promo-p" style={{ margin: '0 0 12px' }}>
+              This app is currently in a small and limited Private Testing mode. If you
+              would like to participate, send an email to{' '}
+              <a href="mailto:notifications@wouldyouplease.com">notifications@wouldyouplease.com</a>{' '}
+              and introduce yourself and how you found out about us.
+            </p>
+            <div className="modalacts">
+              <button type="button" className="btn" onClick={() => setTestingDialogOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <footer>
         <div className="wrap">
