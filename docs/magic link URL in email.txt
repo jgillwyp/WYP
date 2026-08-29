@@ -1,1 +1,3 @@
 https://xgdkqcwxoeaiamvocubl.supabase.co/auth/v1/verify?token=d9563cc2cabf03cdb376ac3706c58fd3fb2e2013f4aebcee11c29ac0&type=magiclink&redirect_to=http://localhost:3000/auth/callback
+
+added this text to force a GIT  push on 8-29-26
