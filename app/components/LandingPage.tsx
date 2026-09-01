@@ -458,6 +458,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
         <div className="wrap">
           <span>© 2026 Would You Please</span>
           <span>wouldyouplease.com</span>
+          <span><Link href="/privacy">Privacy Policy</Link></span>
         </div>
       </footer>
     </div>

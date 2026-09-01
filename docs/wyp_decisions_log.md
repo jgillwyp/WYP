@@ -6,6 +6,68 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-01 — Live Privacy Policy page built (`/privacy`)
+
+Jim asked for a data privacy statement to give end users. Offered a choice
+of a reviewable document (.docx/markdown) vs. building it directly as a
+live page on the site; he chose live.
+
+Not legal advice, and said so directly to Jim rather than only in a code
+comment: this was written to accurately describe the app's actual current
+data practices, not as a substitute for review by a lawyer — particularly
+before relying on it for any jurisdiction-specific compliance obligation
+(GDPR, CCPA, etc.) the user base might eventually be subject to.
+
+Built as `app/privacy/page.tsx` + a scoped `app/privacy/privacy.css`
+(`.wyp-privacy` root, same isolation convention `landing.css` already
+established for `.wyp-landing`, reading `globals.css`'s `:root` tokens
+directly rather than redeclaring them). No `design/screens/` mockup —
+this is plain prose content (headings, paragraphs, a couple of lists), not
+a Palette-1 "screen," and none of the app's form/button component classes
+apply to a legal document, so the mockup-first rule in CLAUDE.md's Design
+System section doesn't fit this case; flagged as a deliberate scoping call
+rather than a silent departure from convention. No `RequireAuth` — reachable
+by a signed-out visitor, same posture as `/` and `/login`.
+
+Content was written from the app's actual current behavior rather than
+generic privacy-policy boilerplate, cross-checked against this file's own
+history rather than assumed:
+
+- Named real sub-processors by name and by what each one actually
+  receives: Supabase (database/auth/storage), Vercel (hosting + the hourly
+  cron reminder jobs), Hostinger (outbound email delivery), the Microsoft
+  Office Online Viewer (only triggered when a user opens an Office-format
+  attachment; sends that file's temporary signed link to Microsoft), and
+  the visitor's own browser's built-in speech-to-text engine (only if Voice
+  Dictation is used — WYP itself never receives audio, only the resulting
+  text).
+- Explicitly did **not** overstate two things that aren't real yet: no
+  payment processor is connected (the "Subscribed?" toggle is a private-
+  testing-only switch, migration 035/024) — worded as current state with a
+  forward note that this section will be updated once real billing exists;
+  and the PRD's free-tier one-year-retention model has no automated
+  deletion job behind it yet (the lapse-and-auto-delete job is still a
+  deferred priority per the Attachments section above) — worded as
+  "designed around," not as an enforced mechanism today.
+- Stated plainly that no advertising network or third-party analytics is
+  currently connected — the `.adslot` reserved placement and Vercel
+  Analytics (visible unused on the "Production Checklist" in Vercel's own
+  dashboard) are both real but both currently inert.
+- Cookies/local-storage section matches this app's actual, already-built
+  behavior (2026-08-09's `sessionStorage` filter-chip persistence,
+  `supabaseClient.ts`'s `localStorage`-based "Keep me signed in," the
+  2026-08-15 remembered-sign-in-email fallback) — no third-party tracking
+  cookie exists to disclose.
+
+Linked from the landing page's footer only (`LandingPage.tsx` + a small
+`landing.css` addition for the link's brand-blue styling) — not yet linked
+from `/login` or the authenticated app's own Account screen; flagged as a
+lightweight follow-up rather than built unprompted.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-08-30 — Private Testing dialog gained a Sign In link
 
 Jim's own follow-up on the 2026-08-28 Private Testing dialog: he realized

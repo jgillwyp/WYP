@@ -149,6 +149,23 @@ link is built only after the stack is proven on Add Contact.
 
 ## Known gaps
 
+- **Live Privacy Policy page, `/privacy` (2026-09-01, `app/privacy/page.tsx`
+  + `app/privacy/privacy.css`).** Jim asked for a data privacy statement to
+  give end users; built directly as a live route (his choice over a
+  reviewable .docx/markdown file) rather than mocked up first — plain prose
+  content with no Palette-1 form/button components involved, so the
+  mockup-first rule doesn't apply. No `RequireAuth`, same as `/` and
+  `/login`. Content names real sub-processors (Supabase, Vercel, Hostinger,
+  the Microsoft Office Online Viewer, the visitor's own browser's speech
+  engine for Voice Dictation) and is careful not to overstate two things
+  that aren't live yet — no payment processor is connected (Subscribed? is
+  still testing-only) and the PRD's free-tier one-year-retention model has
+  no automated deletion job behind it. This was written to be accurate, not
+  as legal advice — flagged directly to Jim that a lawyer should review it
+  before relying on it for jurisdiction-specific obligations (GDPR, CCPA,
+  etc.). Linked from the landing page's footer only; not yet linked from
+  `/login` or the authenticated app's own Account screen.
+
 - The UI spec is `design/spec/WouldYouPlease_UI_Design_Specification_v2_9.docx`.
   All 27 `§` references in the repo resolve against it. §6 is fully occupied
   through §6.18, so newly proposed components take §6.19 and upward — check the

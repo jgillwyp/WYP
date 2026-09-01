@@ -332,6 +332,10 @@
   color: var(--ink-soft);
   text-align: center;
 }
+/* Privacy Policy link, 2026-09-01 — reuses the footer's existing plain-text
+   sizing/color; only the link itself picks up brand-blue + underline. */
+.wyp-landing footer .wrap a { color: var(--brand-blue); text-decoration: none; }
+.wyp-landing footer .wrap a:hover { text-decoration: underline; }
 
 /* Tablet and up (~600px) */
 @media (min-width: 600px) {

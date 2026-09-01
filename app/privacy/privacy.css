@@ -1,0 +1,71 @@
+/* Privacy Policy page — 2026-09-01. Scoped under .wyp-privacy, same
+   convention LandingPage.tsx established for landing.css (avoids leaking
+   into globals.css's app-wide rules; :root tokens are read directly from
+   globals.css, not redeclared here). This is treated as informational
+   prose content, not a Palette-1 "screen" — there is no mockup for it and
+   none of the app's form/button component classes (.finput, .btn, etc.)
+   apply here, so it was built directly rather than mocked up first. See
+   the decisions log's 2026-09-01 entry for the full reasoning. */
+
+.wyp-privacy { background: #fff; color: var(--ink); min-height: 100vh; }
+
+.wyp-privacy .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+
+.wyp-privacy header.ptop {
+  border-bottom: 1px solid var(--rule);
+  padding: 16px 0;
+}
+.wyp-privacy header.ptop .wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wyp-privacy .brandmark { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.wyp-privacy .brandmark svg { height: 30px; width: auto; display: block; }
+.wyp-privacy .brandmark .word { font-size: 17px; font-weight: 800; color: var(--brand-blue); letter-spacing: -.01em; }
+.wyp-privacy header.ptop .back { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--brand-blue); text-decoration: none; }
+.wyp-privacy header.ptop .back:hover { text-decoration: underline; }
+
+.wyp-privacy main { padding: 36px 0 60px; }
+.wyp-privacy h1 { font-size: 26px; font-weight: 800; letter-spacing: -.015em; color: var(--ink); }
+.wyp-privacy .eff { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+.wyp-privacy .intro { font-size: 14.5px; line-height: 1.6; color: var(--ink); margin-top: 18px; max-width: 66ch; }
+
+.wyp-privacy h2 {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--brand-blue);
+  margin-top: 34px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.wyp-privacy p { font-size: 14px; line-height: 1.65; color: var(--ink); margin-top: 11px; max-width: 66ch; }
+.wyp-privacy ul { margin-top: 10px; padding-left: 20px; max-width: 66ch; }
+.wyp-privacy li { font-size: 14px; line-height: 1.6; color: var(--ink); margin-bottom: 7px; }
+.wyp-privacy li b { color: var(--ink); }
+.wyp-privacy a { color: var(--brand-blue); }
+.wyp-privacy .note {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  background: var(--focus-tint);
+  border-radius: 8px;
+  padding: 10px 13px;
+  margin-top: 12px;
+  max-width: 66ch;
+}
+
+.wyp-privacy footer.pfoot {
+  border-top: 1px solid var(--rule);
+  padding: 18px 0 30px;
+}
+.wyp-privacy footer.pfoot .wrap {
+  font-size: 12px;
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+@media (min-width: 600px) {
+  .wyp-privacy footer.pfoot .wrap { flex-direction: row; justify-content: space-between; }
+}
