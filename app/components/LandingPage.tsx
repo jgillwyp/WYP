@@ -63,6 +63,20 @@ import { SUBSCRIBER_FEATURES, FREE_TIER_ADVANCED_FEATURES, SubscriberComparisonT
 // full-width marketing page. RequestResponseForm.tsx's own, differently
 // worded "Create your own Free Account" link (a different pitch, reached
 // only by an anonymous recipient) is untouched — not in scope here.
+// Dialog gained a "Already an invited tester? Sign In" link, 2026-08-30 —
+// Jim's own follow-up concern: an already-allowlisted tester on a new
+// device might reasonably click Start Free Account (not remembering they
+// already have an account) and see this dialog with no way forward but
+// email. That's a discoverability gap, not an actual block — can_create_
+// account() (migration 015) already always returns true for any email
+// already in auth.users, so Sign In has never been gated for a returning
+// user on any device. Considered and rejected a `?tester` URL-parameter
+// bypass instead (Jim's own initial idea): it's a shared secret that could
+// leak beyond the intended test group, undermining the whole point of the
+// gate, and it's one more thing testers would need to remember and type
+// versus a button that's just there. The added link is a plain <Link
+// href="/login"> — no new state, no gating logic, since Sign In already
+// works correctly for this case.
 export default function LandingPage({ errorMessage }: { errorMessage?: string | null }) {
   const [testingDialogOpen, setTestingDialogOpen] = useState(false)
   return (
@@ -427,6 +441,9 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               would like to participate, send an email to{' '}
               <a href="mailto:notifications@wouldyouplease.com">notifications@wouldyouplease.com</a>{' '}
               and introduce yourself and how you found out about us.
+            </p>
+            <p className="promo-p" style={{ margin: '0 0 12px' }}>
+              Already an invited tester? <Link href="/login">Sign In</Link>
             </p>
             <div className="modalacts">
               <button type="button" className="btn" onClick={() => setTestingDialogOpen(false)}>

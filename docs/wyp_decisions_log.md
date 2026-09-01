@@ -6,6 +6,134 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-08-30 — Private Testing dialog gained a Sign In link
+
+Jim's own follow-up on the 2026-08-28 Private Testing dialog: he realized
+he'd asked for a message that could read as blocking an already-authorized
+tester who clicks Start Free Account on a new device, without a stated way
+back in, and proposed a `?tester` URL-parameter bypass as a fix.
+
+Checked the actual behavior first rather than assuming: the header's Sign
+In link/button on the landing page was never gated in the first place —
+it's a plain `<Link href="/login">`, untouched by the 2026-08-28 change.
+`can_create_account()` (migration 015) always returns `true` for any email
+already present in `auth.users`, regardless of the allowlist or the gate's
+on/off setting, so a returning tester can already sign in from any device
+with no friction. The actual problem was discoverability, not a real
+block — a tester who forgets they have an account and clicks the more
+prominent Start Free Account button instead lands on the Private Testing
+message with no visible way forward except email.
+
+Recommended, and built: a plain "Already an invited tester? Sign In" line
+inside the dialog itself, linking to `/login`, right below the existing
+mailto instructions. No new state, no gating logic — Sign In already
+handles this case correctly, the dialog just needed to say so.
+
+Rejected the `?tester` URL-parameter idea: it's a shared secret that could
+leak past the group Jim is deliberately trying to keep small (forwarded in
+a screenshot, a copied link, etc.), which defeats the actual purpose of the
+gate, and it asks testers to remember and type something rather than just
+click a button that's already sitting in front of them.
+
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-08-30 — Sales one-pager rebuilt as an explicit two-page front/back flyer
+
+Jim pasted two reference images of his own fiddled-with print output — a
+repeating masthead on both pages, a repeating "Start free today at
+wouldyouplease.com" CTA band + copyright footer at the bottom of *each*
+page, a hard break landing right after "Who benefits from Would You
+Please?", and a new "&#8230;Continued on the back of this page&#8230;" note on page
+one — and asked for `docs/WYP onepager.html` to be set up that way
+permanently, noting he'd gotten the break and a taller header working
+himself but not the repeating footer.
+
+This supersedes the 2026-08-27 decision to drop the one-page constraint and
+let the browser's own pagination "break the flow wherever it naturally
+lands." That was the right call when the goal was just not fighting an
+overflowing single page — it's the wrong model for a two-sided printed
+flyer, where the position of the break and what repeats on each side are
+the whole point. The file now has two literal `<div class="page">`
+elements instead of one continuous flow: page one carries the header,
+hero, the Free feature grid, the Advanced Features row, and Who Benefits;
+page two repeats the identical header, then Subscription (bullets +
+Free-vs-Subscriber table) and Coming Soon. Each page ends in a new
+`.pagefoot` wrapper holding the same CTA band + footer markup — previously
+that block existed once, at the very end of the document. `.pagefoot`
+carries the `margin-top:auto` that used to sit directly on `.cta`, so it
+(and, on page one only, the new `.contd` "Continued on the back" line
+above it) get pushed to the bottom of whichever page they're in, matching
+the reference images' generous whitespace above that note rather than it
+sitting right under the Who Benefits paragraph.
+
+The actual pagination mechanism is CSS, not markup position: `.page{page-
+break-after:always}` forces a break after every `.page` regardless of how
+much content it holds, with `.page:last-child{page-break-after:auto}`
+stopping that from adding an unwanted trailing blank third page. `.page`
+also gained `min-height:10in` so the on-screen (non-printed) view already
+shows two distinct full-sheet-shaped blocks, rather than only revealing the
+page split once actually printed.
+
+**Not done**: the reference image's page-two header looked "slightly
+taller" than page one's, per Jim's own description of his fiddling — built
+both headers from identical markup/CSS instead, since nothing in the
+request explained why they'd deliberately differ, and matching component
+styling exactly is this codebase's own default absent a stated reason.
+Revisit if Jim confirms the height difference was intentional rather than
+an artifact of his own manual edit.
+
+**Still blocked, same as the prior "visually verify one page" task**: no
+headless browser or Chrome connection is reachable from this sandbox to
+render and screenshot the actual two-page print output — this was built
+and reasoned through structurally (CSS pagination rules, matching
+dimensions) but not visually confirmed against Jim's reference images.
+Flagged for Jim to check the real print/print-preview output.
+
+**Same-day fix, from Jim's own print-preview screenshots**: the footer sat
+too high on both pages, with a large gap of blank page below it. Root
+cause: `.page{min-height:10in}` was wrong by a full inch — `*{box-sizing:
+border-box}` means padding counts *inside* a min-height value, the same
+way `.page`'s own `width:8.5in` already correctly counts its left/right
+padding inside the full physical page width. The height should have used
+the same logic: the full Letter page is 11in tall (`@page{size:letter;
+margin:0}`), so `min-height` needed to be `11in`, not `10in` (which had
+been a rough "leave room for padding" guess, not a matching calculation).
+Fixed to `min-height:11in` — `.pagefoot`'s `margin-top:auto` now pushes the
+CTA band/footer to the true bottom edge of each physical page.
+
+\---
+
+## 2026-08-30 — Vercel auto-deploy silently stopped firing on push; fixed by re-saving GitHub App repo access
+
+Not a code change — a deployment-pipeline incident, recorded here since it
+cost real time and the fix wasn't obvious. Jim reported a landing-page CSS
+fix (the modal `position:fixed` change, above) wasn't showing up live even
+after repeating the deployment himself. Diagnosis ruled out, in order: a
+slow build (Vercel's own deployment list showed no new deployment at all,
+not a pending one), a git/push failure on Jim's end (his own local `git
+log`/`git remote -v`/`git branch` output confirmed the fix commit was
+genuinely on `origin/main`), Vercel's Spend Management pausing deployments
+(Billing page showed $0.81/$20 used, Pause Projects off), and a broken
+project-level Git integration (Vercel's own Settings → Git page showed
+`jgillwyp/WYP` connected since Jul 28 with the relevant webhook event
+toggles on). None of those were it.
+
+The actual fix: Jim revisited GitHub's own Vercel App installation page
+(`github.com/settings/installations/<id>`) and explicitly re-saved the
+repository access list (`jgillwyp/WYP`, "Only select repositories") even
+though it already looked correctly selected. A trivial test commit pushed
+immediately afterward triggered a new deployment within seconds — confirmed
+live via the Vercel MCP's `list_deployments` tool, which showed the new
+commit in `BUILDING` state moments after the push. Whatever caused the
+original silent failure, GitHub Apps evidently sometimes need an explicit
+re-save to actually re-register a repo's webhook event subscription, even
+when the UI shows no visible problem beforehand. No lasting configuration
+change was needed on Vercel's side.
+
+\---
+
 ## 2026-08-28 — Fixed: Private Testing dialog appeared off-screen when opened from the bottom of the landing page
 
 Jim: clicking Start Free Account in the final CTA band (near the bottom of

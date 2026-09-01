@@ -11,15 +11,21 @@
 html,body{background:#fff;}
 body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
   -webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1;}
-/* 2026-08-27 — dropped the earlier one-printed-page constraint (Jim's own
-   instruction: it had "extended past a page and does not easily reformat
-   onto one page"). .page no longer needs its content compressed to fit
-   min-height:11in exactly; the browser's own print pagination breaks the
-   flow onto a second page wherever it naturally lands. If this is used as
-   printed sales literature, an explicit page-break point for two-sided
-   printing is a follow-up decision, not yet made — no @media print rule
-   forces one here. */
-.page{width:8.5in;padding:0.5in 0.55in 0.45in;margin:0 auto;display:flex;flex-direction:column;}
+/* 2026-08-30 — reinstated a controlled, explicit two-page layout, superseding
+   the 2026-08-27 "let it flow wherever it naturally lands" note below it.
+   Jim's own reference images (a real front/back printed flyer, header and
+   the Start-Free-Account CTA band + footer repeating on both pages, a hard
+   break between "Who benefits" and "Subscription") call for exact control,
+   not natural reflow. There are now two `.page` elements in the body, each
+   a self-contained sheet with its own header and footer — `.page{page-
+   break-after:always}` forces the split regardless of how much content is
+   in page one; `.page:last-child{page-break-after:auto}` stops that from
+   producing a trailing blank third page. `min-height` gives each `.page`
+   the same full-sheet shape on screen, not just when printed, so the
+   on-screen preview already looks like the two flyer sides. */
+.page{width:8.5in;min-height:11in;padding:0.5in 0.55in 0.45in;margin:0 auto;display:flex;flex-direction:column;
+  page-break-after:always;}
+.page:last-child{page-break-after:auto;}
 
 /* Header */
 .hdr{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:2px solid var(--brand-blue);}
@@ -98,12 +104,24 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .comparetable td:first-child{font-weight:600;}
 .comparetable tbody tr:nth-child(even) td{background:var(--row-tint);}
 
+/* "...Continued on the back of this page..." — 2026-08-30, page 1 only,
+   sits directly above the CTA band inside .pagefoot (see below). */
+.contd{font-size:11.5px;font-style:italic;color:var(--ink-soft);text-align:center;margin-bottom:10px;}
+
+/* Page-bottom wrapper — 2026-08-30. Carries the margin-top:auto that used
+   to live on .cta directly; now shared by the optional .contd line above
+   it, so both are pushed to the bottom of whichever .page they're in
+   together, rather than only the CTA band itself. */
+.pagefoot{margin-top:auto;}
+
 /* Footer CTA — centered, 2026-08-28 (was a left-text/right-price flex row) —
    Jim's own pasted mockup: repeating the subscription pricing here was
    redundant clutter, and with no button on this printed piece (unlike the
    live page's own CTA band) there's nothing to justify a two-column flex
-   layout, so the remaining text centers in the band instead. */
-.cta{margin-top:auto;padding-top:14px;}
+   layout, so the remaining text centers in the band instead. Now repeated
+   once per .page (2026-08-30) rather than appearing only at the very end
+   of the document — each printed sheet gets its own matching footer. */
+.cta{padding-top:14px;}
 .ctabar{background:var(--brand-blue);border-radius:11px;padding:13px 16px;text-align:center;}
 .ctabar .big{font-size:16px;font-weight:800;color:#fff;}
 .ctabar .sub{font-size:12px;color:#DCE6FA;margin-top:2px;}
@@ -146,7 +164,28 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
   <div class="slabel"><span class="t">Who benefits from Would You Please?</span><span class="rule"></span></div>
   <div class="who">Busy people who assign tasks &#8212; across business, professional, community, religious, government, and political organizations, as well as individuals.</div>
 
-  <div class="cols">
+  <div class="pagefoot">
+    <div class="contd">&#8230;Continued on the back of this page&#8230;</div>
+    <div class="cta">
+      <div class="ctabar">
+        <div class="big">Start free today at wouldyouplease.com</div>
+        <div class="sub">No download. No setup. Send your first request in under a minute.</div>
+      </div>
+      <div class="foot"><span>&#169; 2026 Would You Please</span><span>wouldyouplease.com</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="page">
+
+  <div class="hdr">
+    <span class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg></span>
+    <span class="brand"><span class="word">Would You Please</span><span class="tag">For Request Tracking and ToDos</span></span>
+    <span class="meta"><div class="url">wouldyouplease.com</div><div class="avail">Now available in your web browser</div></span>
+  </div>
+
+  <div class="cols" style="margin-top:16px;">
     <div>
       <!-- Header redesigned 2026-08-28 — Jim's own pasted mockup, "better
            disclose" the subscription pricing: matches landing.css's own
@@ -196,12 +235,14 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
     </div>
   </div>
 
-  <div class="cta">
-    <div class="ctabar">
-      <div class="big">Start free today at wouldyouplease.com</div>
-      <div class="sub">No download. No setup. Send your first request in under a minute.</div>
+  <div class="pagefoot">
+    <div class="cta">
+      <div class="ctabar">
+        <div class="big">Start free today at wouldyouplease.com</div>
+        <div class="sub">No download. No setup. Send your first request in under a minute.</div>
+      </div>
+      <div class="foot"><span>&#169; 2026 Would You Please</span><span>wouldyouplease.com</span></div>
     </div>
-    <div class="foot"><span>&#169; 2026 Would You Please</span><span>wouldyouplease.com</span></div>
   </div>
 
 </div>
