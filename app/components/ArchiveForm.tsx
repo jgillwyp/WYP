@@ -529,8 +529,20 @@ const ARCHIVE_ROUNDTRIP_KEY = 'wyp.archiveDetailRoundTrip'
 
 // UnArchive (2026-08-25, migration 046) — same "which mode am I in, not a
 // filter" reasoning and persistence shape as RecordType/readStoredType just
-// above.
-type ArchiveAction = 'archive' | 'unarchive'
+// above. Delete (2026-09-01, Jim's own follow-up ask, same session as the
+// Contact-cascade-delete batch) is a third mode, not a fourth Record-Type-
+// like dimension — same UI location and candidate-selection mechanism as
+// Archive/UnArchive. Its candidate set is deliberately the ALREADY-ARCHIVED
+// one (the ternary in the `rows` useMemo below already routes any non-
+// 'archive' action to the `archived_at`-is-set branch, so Delete needed no
+// filtering change at all) — permanent removal reads as a later "final
+// cleanup" step on records already moved out of the way, not something you'd
+// reach for on a record still sitting in the live Archive-eligible list.
+// Flagged as a scoping judgment call, not an explicit instruction — easy to
+// widen to the Done-not-yet-archived set too if Jim wants that. Never
+// offered for Received Requests — see the Delete chip's own guard below and
+// /api/requests/delete-many/route.ts's header comment for why.
+type ArchiveAction = 'archive' | 'unarchive' | 'delete'
 
 function readStoredType(): RecordType {
   if (typeof window === 'undefined') return 'sent'
@@ -541,7 +553,7 @@ function readStoredType(): RecordType {
 function readStoredAction(): ArchiveAction {
   if (typeof window === 'undefined') return 'archive'
   const v = window.sessionStorage.getItem(ARCHIVE_ACTION_KEY)
-  return v === 'archive' || v === 'unarchive' ? v : 'archive'
+  return v === 'archive' || v === 'unarchive' || v === 'delete' ? v : 'archive'
 }
 
 function readStoredString(key: string): string {
@@ -704,6 +716,12 @@ export default function ArchiveForm() {
   const [archiving, setArchiving] = useState(false)
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const [confirmMessage, setConfirmMessage] = useState<string | null>(null)
+
+  // Delete confirmation modal (2026-09-01) — Delete is irreversible, unlike
+  // Archive/UnArchive, so it gets a confirm step before the band button
+  // actually acts; reuses `archiving`/`archiveError` as the generic busy/
+  // error flags rather than adding parallel ones.
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   // Print (2026-08-15) — same afterprint-driven pattern as MainScreen.tsx's
   // own Print Reports; printDetail is fetched fresh for whichever Record
@@ -986,6 +1004,12 @@ export default function ArchiveForm() {
   // not a filter, and are stale the moment the list underneath changes.
   function selectType(type: RecordType) {
     setCurrentType(type)
+    // Delete isn't offered for Received (see the Delete chip's own guard
+    // below) — switching there while in Delete mode falls back to Archive
+    // rather than leaving `action` pointing at a hidden, unselectable chip.
+    if (type === 'received' && action === 'delete') {
+      setAction('archive')
+    }
     setConfirmMessage(null)
     setArchiveError(null)
   }
@@ -999,6 +1023,7 @@ export default function ArchiveForm() {
     setAction(next)
     setConfirmMessage(null)
     setArchiveError(null)
+    setDeleteConfirmOpen(false)
   }
 
   function toggleChecked(id: string, checked: boolean) {
@@ -1103,6 +1128,61 @@ export default function ArchiveForm() {
     )
   }
 
+  // handleDeleteSelected (2026-09-01) — permanent, so it's only ever called
+  // from the confirmation modal's own Delete button, never straight off the
+  // band button the way Archive/UnArchive are. Sent and ToDos only — the
+  // Delete chip is hidden for Received (see that chip's own comment below),
+  // so this never runs with currentType === 'received' in practice.
+  async function handleDeleteSelected() {
+    const toDelete = matches.filter((r) => !currentDeselected.has(r.id))
+    if (toDelete.length === 0) {
+      setDeleteConfirmOpen(false)
+      return
+    }
+
+    setArchiving(true)
+    setArchiveError(null)
+
+    const ids = toDelete.map((r) => r.id)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setArchiving(false)
+      setArchiveError('Not signed in.')
+      return
+    }
+
+    const res = await fetch('/api/requests/delete-many', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ requestIds: ids }),
+    })
+    const json = await res.json().catch(() => ({}) as { ok?: boolean; error?: string; detail?: string })
+
+    setArchiving(false)
+
+    if (!res.ok || !json.ok) {
+      setArchiveError(json.detail || json.error || 'Could not delete these records.')
+      return
+    }
+
+    if (currentType === 'sent') {
+      setSentData((prev) => prev.filter((r) => !ids.includes(r.id)))
+    } else {
+      setTodoData((prev) => prev.filter((r) => !ids.includes(r.id)))
+    }
+
+    setDeselected((prev) => {
+      const next = new Set(prev[currentType])
+      ids.forEach((id) => next.delete(id))
+      return { ...prev, [currentType]: next }
+    })
+
+    setDeleteConfirmOpen(false)
+    setConfirmMessage(`${toDelete.length} ${toDelete.length === 1 ? 'record' : 'records'} permanently deleted.`)
+  }
+
   function openDetail(id: string) {
     // Marks this as the one round trip whose filters/selection should
     // survive the remount on the way back — see ARCHIVE_ROUNDTRIP_KEY's
@@ -1160,10 +1240,22 @@ export default function ArchiveForm() {
         <div className="band">
           <span className="glabel">Archive</span>
           <span className="bandcluster">
-            <button className="btn" type="button" onClick={handleActionSelected} disabled={archiving}>
-              {selectedCount > 0
-                ? `${action === 'archive' ? 'Archive' : 'UnArchive'} Selected (${selectedCount})`
-                : `${action === 'archive' ? 'Archive' : 'UnArchive'} Selected`}
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                if (action === 'delete') {
+                  if (selectedCount > 0) setDeleteConfirmOpen(true)
+                  return
+                }
+                handleActionSelected()
+              }}
+              disabled={archiving}
+            >
+              {(() => {
+                const verb = action === 'archive' ? 'Archive' : action === 'unarchive' ? 'UnArchive' : 'Delete'
+                return selectedCount > 0 ? `${verb} Selected (${selectedCount})` : `${verb} Selected`
+              })()}
             </button>
             <button className="btn-secondary" type="button" onClick={() => router.push('/')}>
               Close
@@ -1189,6 +1281,23 @@ export default function ArchiveForm() {
               >
                 UnArchive
               </button>
+              {/* Delete (2026-09-01) — hidden for Received: the RLS-scoped
+                  delete in /api/requests/delete-many only ever matches rows
+                  the caller owns, and a recipient never owns the Request
+                  they're viewing (same Entitlements reasoning as everywhere
+                  else in this app). Hidden entirely rather than shown
+                  disabled — see selectType's own guard above for what
+                  happens if Delete was active when Record Type switches to
+                  Received. */}
+              {currentType !== 'received' && (
+                <button
+                  className={`chip${action === 'delete' ? ' sel' : ''}`}
+                  type="button"
+                  onClick={() => selectAction('delete')}
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
 
@@ -1221,17 +1330,18 @@ export default function ArchiveForm() {
 
           <p className="archnote">
             <b>
-              {action === 'archive'
-                ? currentType === 'todos'
-                  ? 'Select records to Archive by the Before Done Date.'
-                  : `Select records to Archive by ${noun} and/or Before Done Date.`
-                : currentType === 'todos'
-                  ? 'Select records to UnArchive by the Before Done Date.'
-                  : `Select records to UnArchive by ${noun} and/or Before Done Date.`}
+              {(() => {
+                const verb = action === 'archive' ? 'Archive' : action === 'unarchive' ? 'UnArchive' : 'Delete'
+                return currentType === 'todos'
+                  ? `Select records to ${verb} by the Before Done Date.`
+                  : `Select records to ${verb} by ${noun} and/or Before Done Date.`
+              })()}
             </b>{' '}
             {action === 'archive'
               ? 'You can uncheck any you do not want to Archive. Although Archived records are no longer displayed, they are included when a Search is done.'
-              : 'You can uncheck any you do not want to UnArchive. UnArchived records are shown again here and on the Main Screen.'}
+              : action === 'unarchive'
+                ? 'You can uncheck any you do not want to UnArchive. UnArchived records are shown again here and on the Main Screen.'
+                : 'You can uncheck any you do not want to Delete. Deletion is permanent — the record, its Dialog, and its Attachments cannot be recovered.'}
           </p>
 
           {archiveError && (
@@ -1570,6 +1680,44 @@ export default function ArchiveForm() {
 
           {confirmMessage && <div className="archconfirm">{confirmMessage}</div>}
         </div>
+
+        {deleteConfirmOpen && (
+          <>
+            <div className="scrim" onClick={() => (archiving ? null : setDeleteConfirmOpen(false))} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="archive-delete-title">
+              <div className="modalhead">
+                <p className="modal-title" id="archive-delete-title">
+                  Delete {selectedCount} {selectedCount === 1 ? 'record' : 'records'}?
+                </p>
+              </div>
+
+              <p className="subnote">
+                This permanently deletes the selected {currentType === 'todos' ? 'ToDos' : 'Sent Requests'},
+                including their full Dialog and Attachments history. This cannot be undone.
+              </p>
+
+              {archiveError && (
+                <p className="ferror" role="alert">
+                  {archiveError}
+                </p>
+              )}
+
+              <div className="modalacts" style={{ marginTop: 12 }}>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  disabled={archiving}
+                >
+                  Cancel
+                </button>
+                <button className="btn-danger" type="button" onClick={handleDeleteSelected} disabled={archiving}>
+                  {archiving ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Print (2026-08-15) — same .print-report/.prow shape as

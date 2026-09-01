@@ -586,10 +586,12 @@ export default function ContactDetailForm() {
 
               {activity && activity.open > 0 && (
                 <div className="deletewarn" role="alert">
-                  {activity.open} Open {activity.open === 1 ? 'Request is' : 'Requests are'} still
-                  outstanding. If {form.name || 'this Contact'} clicks a Response link for one of
-                  them after you delete, they will see &ldquo;this link is no longer
-                  available.&rdquo;
+                  {/* Built as one template string rather than relying on
+                      JSX's own whitespace-collapsing rules across a wrapped
+                      expression/text boundary — Jim reported a real missing
+                      space ("Snyderclicks") from the original line-wrapped
+                      JSX text version, 2026-09-01. */}
+                  {`${activity.open} Open ${activity.open === 1 ? 'Request is' : 'Requests are'} still outstanding. If ${form.name || 'this Contact'} clicks a Response link for one of them after you delete, they will see “this link is no longer available.”`}
                 </div>
               )}
 

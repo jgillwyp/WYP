@@ -28,7 +28,7 @@ comment on column public.contacts.time_zone is
   'IANA zone name for this Contact, not the signed-in owner. Defaults from the owner''s own profiles.time_zone (or the browser''s detected zone if that isn''t set yet) on Add Contact''s initial render; editable per-contact from there.';
 
 commit;
-
+  
 -- ============================================================================
 -- Verify as a client, not here — same caution as every earlier migration:
 -- this connection is superuser and auth.uid() is null, so an RLS-dependent

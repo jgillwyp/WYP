@@ -6,6 +6,65 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-01 — Same-day follow-up: warning-text space bug, and a Delete
+## Action chip on Archive (Sent Requests + ToDos)
+
+Two items from Jim's own live testing of the Contact-deletion batch above.
+
+**Space bug.** The `.deletewarn` paragraph's contact-name interpolation
+("...Snyderclicks a Response link...") was missing a space, even though
+the JSX source had one, because the text spanned a line-wrapped JSX text/
+expression boundary and JSX's own whitespace-collapsing rules didn't
+preserve it the way it read on the page. Rebuilt as a single JS template-
+string expression instead of relying on that collapsing behavior at all,
+and switched the `&ldquo;`/`&rdquo;` HTML entities (invalid inside a plain
+JS string) to literal curly-quote characters.
+
+**Delete on Archive.** Jim: "For the Archive screen, I don't see a Delete
+chip alongside Archive and UnArchive" — a genuine scope addition, not a
+bug; my own earlier response had said standalone Request/ToDo deletion
+stayed "Archive-only, not needed now," and this is Jim asking for exactly
+that Archive-only entry point. New `ArchiveAction` value `'delete'`,
+alongside `'archive'`/`'unarchive'`, same chip-row/sessionStorage-
+persistence shape. **Candidate set is the already-Archived one** (the
+existing `action === 'archive' ? ... : ...` ternary in the `rows` useMemo
+already routed any non-`'archive'` action to the archived-only branch, so
+no filtering logic needed to change at all) — a scoping judgment call, not
+an explicit instruction: permanent removal reads as a later "final
+cleanup" step on records already moved out of the Main Screen's way, not
+something to reach for on a record still sitting in the live
+Archive-eligible list. Flagged for Jim; easy to widen to the Done-but-not-
+yet-archived set too if he'd rather.
+
+**Delete chip hidden for Received Requests.** `requests`' DELETE RLS
+policy is owner-only (migration 003) — a recipient never owns the Request
+they're viewing, so there's no permission model under which "Delete" could
+mean anything for a Received row. Hidden entirely (not shown disabled),
+matching this app's own convention for a control that doesn't apply
+(Category's own on/off gating, etc.) rather than a locked one (which means
+"available if you upgrade," a different situation). `selectType()` falls
+back from Delete to Archive if the Record Type switches to Received while
+Delete is the active mode, so the chip row is never left with nothing
+selected.
+
+New `app/api/requests/delete-many/route.ts` — near-identical structure to
+`/api/contacts/delete-cascade/route.ts` above, just keyed directly by a
+list of request ids instead of derived from a Contact: owner-scoped via the
+caller's own forwarded JWT (any id the caller doesn't own silently drops
+out of the delete, the same defensive pattern as the Contact route), real
+file Attachments' Storage objects removed first via service_role, then the
+`requests` rows themselves (cascading away Dialog/Attachments DB rows via
+their own FKs).
+
+Since Delete is irreversible unlike Archive/UnArchive, the band button
+opens a confirmation modal first (`.scrim`/`.modal`/`.btn-danger`, same
+components as the Contact-delete batch) rather than acting immediately —
+Archive/UnArchive are unchanged, still one click. `npx tsc --noEmit`/`npm
+run lint` clean. No mockup — `design/screens/WYP_archive_palette1.html`
+still only shows Archive; flagged in `design/README.md`.
+
+\---
+
 ## 2026-09-01 — Contact deletion, cascading to its Requests (§6.46 PROPOSED)
 
 Jim raised the gap directly: the new `/privacy` page promises deletion, but

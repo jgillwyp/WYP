@@ -185,7 +185,14 @@ link is built only after the stack is proven on Add Contact.
   (outside a Contact cascade) stays out of scope — Jim confirmed
   Archive-only is fine, no Detail-screen entry point needed. No mockup —
   built directly from Jim's own reference screenshot; flagged in
-  `design/README.md`.
+  `design/README.md`. **Same-day follow-up**: Jim then asked for exactly
+  that Archive-only entry point after all — a third "Delete" Action chip
+  on `/archive` (`app/api/requests/delete-many/route.ts`), alongside
+  Archive/UnArchive, operating on the already-Archived Sent Requests/ToDos
+  set and hidden for Received (no permission model for a recipient to
+  delete a Request they don't own). See the decisions log's second
+  2026-09-01 entry for the full write-up, including the same-day
+  `.deletewarn` missing-space bug fix on Contact Detail.
 
 - The UI spec is `design/spec/WouldYouPlease_UI_Design_Specification_v2_9.docx`.
   All 27 `§` references in the repo resolve against it. §6 is fully occupied
