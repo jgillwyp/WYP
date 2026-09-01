@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 import WypHeader from './WypHeader'
@@ -228,6 +228,7 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
 export default function RequestResponseForm() {
   const params = useParams<{ token: string }>()
   const token = params.token
+  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -1000,7 +1001,15 @@ export default function RequestResponseForm() {
           </form>
         </div>
 
-        <div className="subbanner" role="button" tabIndex={0}>
+        <div
+          className="subbanner"
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push('/account/subscription')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') router.push('/account/subscription')
+          }}
+        >
           See Subscription Features and Other Options
         </div>
         {/* Gated on data.owner_tier (2026-08-25), not a viewer tier — this

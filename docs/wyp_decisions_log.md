@@ -6,6 +6,106 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-01 — Contact deletion, cascading to its Requests (§6.46 PROPOSED)
+
+Jim raised the gap directly: the new `/privacy` page promises deletion, but
+nothing in the app actually offers it, and an open Request's response link
+would otherwise dangle if a Contact (or its Requests) simply vanished.
+Recommended a soft-delete (`deleted_at`) approach first; Jim's own
+follow-up, with a crude reference mockup of a "Request Activity Summary"
+(Open/Done/Total) panel on Contact Detail, refined the scope: deleting a
+Contact should cascade to delete all of that Contact's Requests, showing
+the recap plus a conditional Open-Requests warning at delete time;
+standalone Request/ToDo deletion stays Archive-only, not needed from
+Request Detail/ToDo Detail directly, "not needed now"; and the recipient's
+dead-link message should stay generic, unchanged.
+
+Built as a genuine **hard delete**, not the `deleted_at` soft-delete
+originally proposed — reconsidered once actually reading the schema:
+`contacts` and `requests` both already carry an owner-only DELETE RLS
+policy (migrations 002/003), and `dialog.request_id`/`attachments.
+request_id` are both `on delete cascade` (migrations 004/025), so deleting
+a Request's row already cleans up its own Dialog and Attachments metadata
+automatically. Adopting `deleted_at` instead would have meant touching
+every existing read path (Main Screen, Archive, Search, Print Reports,
+`get_request_by_token`, `get_received_request`, `get_received_requests`,
+`get_received_print_detail`, every cron phase) for a feature Jim scoped as
+Contact-triggered, explicit, and confirmation-gated — not the silent or
+automated deletion a soft-delete-with-undo would really be protecting
+against. Flagged to Jim as a considered deviation from the earlier
+recommendation, not a silent one.
+
+One real trap in the schema: `requests.contact_id` is `on delete set null`
+(migration 003), so deleting the Contact row *alone* would NOT remove its
+Requests — it would silently turn each one into an orphaned ToDo instead.
+The new route deletes the Requests first, then the Contact.
+
+New `app/api/contacts/delete-cascade/route.ts` (Node runtime,
+Authorization-forwarded owner-only — no recipient/anonymous path at all):
+verifies Contact ownership via the caller's own RLS-scoped client, removes
+any real file Attachments' underlying Storage objects first via
+service_role (same posture as `/api/attachments/delete/route.ts` — the
+bucket has no anon/authenticated grants, migration 026 — duplicated here
+per this codebase's own per-file convention rather than importing
+attachments' `_shared.ts`), deletes the matching `requests` rows via the
+RLS-scoped client (cascades away Dialog/Attachments DB rows), then deletes
+the Contact row itself. A deleted Request's response-link token (if one
+was ever issued) simply stops resolving once the row is gone —
+`get_request_by_token`/`get_received_request` already return the same
+generic "not available" error for a token/id matching no row, so no
+`revoke_request_link()` call was needed; Jim confirmed the generic
+dead-link wording should stay exactly as-is.
+
+`ContactDetailForm.tsx` gained: a Request Activity Summary panel (new
+`.actsummary`/`.actstat` CSS, §6.46 PROPOSED) showing live Open/Done/Total
+counts for this Contact's Requests — a plain RLS-scoped client query
+(`requests.done_date is null` = Open, folding in Overdue, matching the Main
+Screen Open chip's own 2026-08-13 convention), no new RPC; a "Delete
+Contact" control (new `.btn-danger` — no prior "delete a whole record"
+component existed anywhere in the app, only small in-row × removals); and
+a confirmation modal (`.scrim`/`.modal`, matching `ConversionBanner.tsx`'s
+own structure) repeating the recap, a plain-language summary of what's
+about to be removed, and — only when Open > 0 — a `.deletewarn` band
+explaining a Response link opened after deletion will show "this link is
+no longer available," per Jim's own wording. On success, navigates to
+`/contacts` via `router.push` (not `back()` — the Contact no longer exists,
+so "back" could land on a stale Detail screen for it).
+
+**Also fixed the same day**: item 4 of Jim's same message — "The 'See
+Subscription Features and Other Options' in the app are not all linked to
+the Housekeeping, Account Options page" — see the entry immediately below.
+
+No mockup — built directly from Jim's own crude reference screenshot, no
+`design/screens/` source exists for Contact Detail's newly added elements;
+flagged in `design/README.md`. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-09-01 — Fixed 8 dead "See Subscription Features and Other Options" banners
+
+Jim: "The 'See Subscription Features and Other Options' in the app are not
+all linked to the Housekeeping, Account Options page." Grepped every
+occurrence of the banner's exact text and found only `MainScreen.tsx`'s own
+copy was ever wired to `onClick`/`onKeyDown` -> `router.push('/account/
+subscription')` (2026-08-26 batch, `SubscriptionForm.tsx`) — the other 8
+were static, inert copies of the same markup, left unfinished when the
+component was duplicated per-file across the app's established
+per-file-duplication convention. Fixed identically in `AddContactForm.tsx`,
+`ContactDetailForm.tsx`, `CreateRequestForm.tsx`, `CreateTodoForm.tsx`,
+`RequestDetailForm.tsx`, `ResponseDetailForm.tsx`, `TodoDetailForm.tsx`
+(`router` already available in all seven), and `RequestResponseForm.tsx`
+(the one anonymous `/r/[token]` screen — needed `useRouter` added to its
+`next/navigation` import and a new `const router = useRouter()` first,
+since this screen had only ever used `next/link`'s `<Link>` before).
+`/account/subscription` is `RequireAuth`-wrapped, so an anonymous visitor
+clicking it from Request Response is redirected to `/login` — the same
+behavior every other protected route already gives a signed-out visitor,
+not a new gap. `SubscriptionForm.tsx`'s own occurrence of the phrase is a
+code comment describing the destination screen itself, not a banner —
+correctly left untouched. `npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-09-01 — Live Privacy Policy page built (`/privacy`)
 
 Jim asked for a data privacy statement to give end users. Offered a choice

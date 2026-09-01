@@ -3680,3 +3680,102 @@ body {
   color: var(--ink-soft);
   line-height: 1.34;
 }
+
+/* ============================================================================
+   CONTACT DELETION (2026-09-01, §6.46 PROPOSED) — Contact Detail's Request
+   Activity Summary panel, Delete Contact control, and the confirmation
+   modal's warning text. No mockup — built directly from Jim's own crude
+   reference screenshot (Open/Done/Total three-column recap).
+   ========================================================================= */
+
+/* Request Activity Summary — three stat columns in a bordered box, mirrors
+   the visual weight of .panel (Dialog/Attachments) without reusing its
+   class, since this has no header row or Add action. */
+.actsummary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 11px;
+  padding: 12px 8px;
+  margin-top: 4px;
+}
+
+.actsummary-title {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-align: center;
+  margin: 0 0 8px;
+}
+
+.actstat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.actstat-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--brand-blue);
+  line-height: 1;
+}
+
+.actstat-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* Destructive action — one visual step below .btn-secondary's own outline
+   treatment, in --alert-red rather than --brand-blue. No prior "delete a
+   whole record" control existed anywhere in the app before this (only
+   small in-row × removals, .attremove), so this is a new component rather
+   than a reuse. */
+.btn-danger {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--alert-red);
+  text-align: center;
+  cursor: pointer;
+  background: #fff;
+  border: 1.5px solid var(--alert-red);
+  border-radius: 11px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
+.btn-danger:active {
+  background: var(--row-tint);
+}
+
+.btn-danger:focus-visible {
+  outline: 2px solid var(--alert-red);
+  outline-offset: 2px;
+}
+
+.btn-danger:disabled {
+  color: var(--ink-soft);
+  border-color: var(--rule);
+  cursor: not-allowed;
+}
+
+/* Conditional Open-Requests warning inside the Delete Contact confirmation
+   modal — explains the recipient's dead-link experience up front, per
+   Jim's own instruction, rather than only after the fact. */
+.deletewarn {
+  background: var(--row-tint);
+  border: 1px solid var(--alert-red);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--ink);
+  line-height: 1.4;
+  margin: 10px 0;
+}

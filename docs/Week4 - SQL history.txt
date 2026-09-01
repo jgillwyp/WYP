@@ -29,7 +29,7 @@
 -- Every function grants execute to `authenticated` only, never `anon` — this
 -- whole path requires a real signed-in session, unlike the token path.
 -- ============================================================================
-
+  
 begin;
 
 -- ----------------------------------------------------------------------------

@@ -56,6 +56,22 @@ export default function ContactDetailForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Request Activity Summary (2026-09-01) — Open/Done/Total recap of this
+  // Contact's own Requests, per Jim's own crude reference mockup. A plain
+  // RLS-scoped client query ("requests: owners select own", migration 003)
+  // — no new RPC needed, same reasoning given for the Sent/Rec'd counts on
+  // the Contacts print report (migration 030), except this is a live-read
+  // count, not a print-only one. "Open" here folds in Overdue, matching the
+  // Main Screen Open chip's own 2026-08-13 convention (a Request with no
+  // done_date is Open regardless of whether it's also overdue).
+  const [activity, setActivity] = useState<{ open: number; done: number; total: number } | null>(null)
+
+  // Delete Contact (2026-09-01) — see delete-cascade/route.ts's own header
+  // comment for the full reasoning (hard delete, not deleted_at).
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   const [timeZones] = useState<string[]>(() => getAllTimeZones())
   const [selectedTimeZone, setSelectedTimeZone] = useState<string | null>(null)
   const [showTimeZoneResults, setShowTimeZoneResults] = useState(false)
@@ -85,6 +101,22 @@ export default function ContactDetailForm() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!contactId) return
+    let cancelled = false
+    async function loadActivity() {
+      const { data } = await supabase.from('requests').select('done_date').eq('contact_id', contactId)
+      if (cancelled) return
+      const rows = data ?? []
+      const done = rows.filter((r) => r.done_date !== null).length
+      setActivity({ open: rows.length - done, done, total: rows.length })
+    }
+    loadActivity()
+    return () => {
+      cancelled = true
+    }
+  }, [contactId])
 
   useEffect(() => {
     if (!contactId) return
@@ -220,6 +252,38 @@ export default function ContactDetailForm() {
 
   function handleClose() {
     router.back()
+  }
+
+  async function handleDeleteConfirmed() {
+    setDeleting(true)
+    setDeleteError(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setDeleteError('Not signed in.')
+      setDeleting(false)
+      return
+    }
+
+    const res = await fetch('/api/contacts/delete-cascade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ contactId }),
+    })
+    const json = await res.json().catch(() => ({}) as { ok?: boolean; error?: string; detail?: string })
+
+    setDeleting(false)
+
+    if (!res.ok || !json.ok) {
+      setDeleteError(json.detail || json.error || 'Could not delete this Contact.')
+      return
+    }
+
+    // Not router.back() — the Contact no longer exists, so returning "back"
+    // could land on a stale Detail screen for it. Contacts list is the one
+    // route that reaches this screen in the first place.
+    router.push('/contacts')
   }
 
   if (loading) {
@@ -461,9 +525,106 @@ export default function ContactDetailForm() {
           <div className="minreq">
             <b>Minimum required</b>&nbsp; A Name and an Email. Phone is optional and can be used for Text delivery with a subscription.
           </div>
+
+          {activity && (
+            <div className="actsummary" role="group" aria-label="Request Activity Summary">
+              <p className="actsummary-title">Request Activity Summary</p>
+              <div className="actstat">
+                <span className="actstat-num">{activity.open}</span>
+                <span className="actstat-label">Open</span>
+              </div>
+              <div className="actstat">
+                <span className="actstat-num">{activity.done}</span>
+                <span className="actstat-label">Done</span>
+              </div>
+              <div className="actstat">
+                <span className="actstat-num">{activity.total}</span>
+                <span className="actstat-label">Total</span>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 14, textAlign: 'right' }}>
+            <button className="btn-danger" type="button" onClick={() => setDeleteOpen(true)}>
+              Delete Contact
+            </button>
+          </div>
         </div>
 
-        <div className="subbanner" role="button" tabIndex={0}>
+        {deleteOpen && (
+          <>
+            <div className="scrim" onClick={() => (deleting ? null : setDeleteOpen(false))} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-contact-title">
+              <div className="modalhead">
+                <p className="modal-title" id="delete-contact-title">
+                  Delete {form.name || 'this Contact'}?
+                </p>
+              </div>
+
+              {activity && (
+                <div className="actsummary" role="group" aria-label="Request Activity Summary">
+                  <p className="actsummary-title">Request Activity Summary</p>
+                  <div className="actstat">
+                    <span className="actstat-num">{activity.open}</span>
+                    <span className="actstat-label">Open</span>
+                  </div>
+                  <div className="actstat">
+                    <span className="actstat-num">{activity.done}</span>
+                    <span className="actstat-label">Done</span>
+                  </div>
+                  <div className="actstat">
+                    <span className="actstat-num">{activity.total}</span>
+                    <span className="actstat-label">Total</span>
+                  </div>
+                </div>
+              )}
+
+              <p className="subnote" style={{ marginTop: 10 }}>
+                This permanently deletes {form.name || 'this Contact'} and every Request sent to
+                them, including their full Dialog and Attachments history.
+              </p>
+
+              {activity && activity.open > 0 && (
+                <div className="deletewarn" role="alert">
+                  {activity.open} Open {activity.open === 1 ? 'Request is' : 'Requests are'} still
+                  outstanding. If {form.name || 'this Contact'} clicks a Response link for one of
+                  them after you delete, they will see &ldquo;this link is no longer
+                  available.&rdquo;
+                </div>
+              )}
+
+              {deleteError && (
+                <p className="ferror" role="alert">
+                  {deleteError}
+                </p>
+              )}
+
+              <div className="modalacts" style={{ marginTop: 12 }}>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button className="btn-danger" type="button" onClick={handleDeleteConfirmed} disabled={deleting}>
+                  {deleting ? 'Deleting…' : 'Delete Contact'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div
+          className="subbanner"
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push('/account/subscription')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') router.push('/account/subscription')
+          }}
+        >
           See Subscription Features and Other Options
         </div>
         {tier !== 'subscriber' && (

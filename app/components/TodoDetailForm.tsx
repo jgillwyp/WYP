@@ -1376,7 +1376,15 @@ export default function TodoDetailForm() {
           </form>
         </div>
 
-        <div className="subbanner" role="button" tabIndex={0}>
+        <div
+          className="subbanner"
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push('/account/subscription')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') router.push('/account/subscription')
+          }}
+        >
           See Subscription Features and Other Options
         </div>
         {tier !== 'subscriber' && (

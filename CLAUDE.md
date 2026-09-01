@@ -166,6 +166,27 @@ link is built only after the stack is proven on Add Contact.
   etc.). Linked from the landing page's footer only; not yet linked from
   `/login` or the authenticated app's own Account screen.
 
+- **Contact deletion, cascading to its Requests (2026-09-01,
+  `app/api/contacts/delete-cascade/route.ts`,
+  `app/components/ContactDetailForm.tsx`).** Answers `/privacy`'s own
+  deletion promise. A genuine hard delete (both `contacts` and `requests`
+  already carry owner-only DELETE RLS policies, and `dialog`/`attachments`
+  cascade away via their own FKs) — not the `deleted_at` soft-delete
+  originally proposed; see the decisions log's 2026-09-01 entry for the
+  full reasoning, including the `requests.contact_id on delete set null`
+  trap that meant deleting the Contact row alone would have silently
+  orphaned its Requests into ToDos instead of removing them. Contact
+  Detail gained a live Request Activity Summary (Open/Done/Total, new
+  `.actsummary` CSS) and a Delete Contact control (new `.btn-danger`) with
+  a confirmation modal — the modal warns about outstanding Open Requests
+  ("this link is no longer available" for any recipient who clicks after
+  deletion) but the generic dead-link message on `/r/[token]` itself is
+  unchanged, per Jim's own instruction. Standalone Request/ToDo deletion
+  (outside a Contact cascade) stays out of scope — Jim confirmed
+  Archive-only is fine, no Detail-screen entry point needed. No mockup —
+  built directly from Jim's own reference screenshot; flagged in
+  `design/README.md`.
+
 - The UI spec is `design/spec/WouldYouPlease_UI_Design_Specification_v2_9.docx`.
   All 27 `§` references in the repo resolve against it. §6 is fully occupied
   through §6.18, so newly proposed components take §6.19 and upward — check the
