@@ -850,7 +850,7 @@ export default function ResponseDetailForm() {
         <div className="band">
           <span className="glabel">Response Detail</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="response-detail-form" disabled={sending}>
+            <button className="btn" type="submit" form="response-detail-form" disabled={sending || !hasChanges}>
               {sending ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={sending}>
@@ -1146,16 +1146,13 @@ export default function ResponseDetailForm() {
           </form>
         </div>
 
-        <div
-          className="subbanner"
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push('/account/subscription')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') router.push('/account/subscription')
-          }}
-        >
-          See Subscription Features and Other Options
+        <div className="subbanner-row">
+          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
+            Subscription Features and Options
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
+            Privacy
+          </button>
         </div>
         {viewerTier !== 'subscriber' && (
           <div className="adslot" aria-hidden="true">

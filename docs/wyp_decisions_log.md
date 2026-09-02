@@ -6,6 +6,80 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-02 — Send Reminder wording fix, Housekeeping wording, "Help"
+## rename, two-button footer (Subscription + Privacy), grey Send/Save
+## before edits
+
+Five items from Jim's own message, all built the same session.
+
+**Send Reminder panel wording.** `RequestDetailForm.tsx`'s `sendReminderPanel()`
+donenote fallback text referenced "the Reminder schedule above" even when
+Show Reminders (the account-level visibility toggle, migration 044) is off
+and no such schedule is actually showing above it. Jim: "It could be
+modified to always read 'This action is unrelated to scheduled
+Reminders.'" — changed unconditionally, not just when Show Reminders is
+off, per his own "always" wording.
+
+**Housekeeping Tasks wording.** `MainScreen.tsx`'s three Tasks-tab
+`.hknote` lines (Contacts/Account Options/Archive) replaced with Jim's own
+literal text: "— add, view, edit, or delete" / "— personalize Would You
+Please" / "— view, edit, or delete archived items."
+
+**"How-to Videos" → "Help."** Chip label only — the underlying `hkTab`
+state value stays `'videos'` (unchanged since 2026-08-09), avoiding any
+need to migrate an already-stored `sessionStorage`/`main_chip_prefs`
+value for a purely cosmetic rename.
+
+**Footer banner: two buttons instead of one link.** Every "See
+Subscription Features and Other Options" `.subbanner` div (9 files:
+`MainScreen.tsx`, `RequestDetailForm.tsx`, `ContactDetailForm.tsx`,
+`RequestResponseForm.tsx`, `TodoDetailForm.tsx`, `ResponseDetailForm.tsx`,
+`CreateRequestForm.tsx`, `CreateTodoForm.tsx`, `AddContactForm.tsx`)
+replaced with a `.subbanner-row` holding two `.btn-secondary` buttons —
+"Subscription Features and Options" (unchanged destination,
+`/account/subscription`) and a new "Privacy" button linking to `/privacy`
+(built 2026-09-01). Styled to match the reference Jim named ("as in
+'Create a ToDo from this Request'") — same `.btn-secondary` component
+`ConversionBanner.tsx`'s `.fieldact` row already uses, not a new button
+style. Jim's own stated reasoning: privacy information belongs in the
+site footer, and the landing page's own footer link "goes away" once a
+visitor signs in, since `/` then renders `MainScreen` instead of
+`LandingPage`. The old `.subbanner`/`.subbanner:active` CSS rules were
+left in `globals.css`, unused, rather than deleted, in case a future
+screen wants the single-link version back. `SubscriptionForm.tsx`
+(`/account/subscription` itself) was checked and left alone — its own
+match on the banner text was a doc comment, not live markup, and linking
+back to itself from its own page would be pointless.
+
+**Send/Save button greyed until an actual edit is made.** Jim: "Request
+Detail, before edits should grey the Send button - and the same for
+other screens." Applied to the three Detail-type edit screens that
+already carry the 2026-08-20 `hasChanges` dirty-check snapshot (built
+originally for the Close/Cancel dynamic label) — `RequestDetailForm.tsx`
+("Send", `disabled={saving || !hasChanges}`), `TodoDetailForm.tsx`
+("Save", `disabled={saving || !hasChanges}`), and
+`ResponseDetailForm.tsx` ("Send", `disabled={sending || !hasChanges}`) —
+reusing the identical snapshot each screen already had rather than
+building a new one. **Scoped to these three, not literally every screen
+with a Send/Save button**: `RequestResponseForm.tsx` (the anonymous
+`/r/[token]` path) has no `hasChanges` tracking at all — it never got the
+2026-08-20 Close/Cancel feature, since its own Cancel button was removed
+outright that same day as having "no useful purpose." Building a new
+dirty-check there, or on either Create screen (which start from an empty
+form with nothing to compare "before edits" against), would be a
+materially bigger change than Jim's literal example implied; read his
+"other screens" as the sibling Detail screens that already share the
+identical mechanism Request Detail demonstrates, and flagged here rather
+than silently expanded past that. `.btn:disabled` styling (grey
+background, not-allowed cursor) already existed in `globals.css` from the
+existing Close/Cancel button usage — no new CSS needed.
+
+`npx tsc --noEmit`/`npm run lint` clean across the whole batch. No
+mockup changes — none of the affected screens' static HTML has
+interactive Send/Save-disabling or footer-link JS to update.
+
+\---
+
 ## 2026-09-01 — Same-day follow-up: warning-text space bug, and a Delete
 ## Action chip on Archive (Sent Requests + ToDos)
 

@@ -3396,3 +3396,31 @@ link is built only after the stack is proven on Add Contact.
   centers in the current viewport regardless of scroll position, no JS or
   scroll-to-top needed, and none of the shared global rules other screens
   depend on were touched. `npx tsc --noEmit`/`npm run lint` clean.
+- **Five wording/UX fixes from Jim's 5-part message (2026-09-02).** (1) Send
+  Reminder panel's donenote fallback text (`RequestDetailForm.tsx`) no
+  longer references "the Reminder schedule above" — reads "This action is
+  unrelated to scheduled Reminders." unconditionally, per Jim's own
+  wording. (2) `MainScreen.tsx`'s three Housekeeping Tasks lines
+  (Contacts/Account Options/Archive) updated to Jim's exact text. (3)
+  "How-to Videos" chip relabeled "Help" — internal `hkTab` value stays
+  `'videos'`, unchanged. (4) The "See Subscription Features and Other
+  Options" `.subbanner` (9 files: `MainScreen.tsx`, `RequestDetailForm.tsx`,
+  `ContactDetailForm.tsx`, `RequestResponseForm.tsx`, `TodoDetailForm.tsx`,
+  `ResponseDetailForm.tsx`, `CreateRequestForm.tsx`, `CreateTodoForm.tsx`,
+  `AddContactForm.tsx`) replaced with a new `.subbanner-row` holding two
+  `.btn-secondary` buttons — "Subscription Features and Options" and a new
+  "Privacy" button linking to `/privacy` — per Jim's own reasoning that
+  privacy access belongs in the footer and the landing page's own footer
+  link disappears once a visitor signs in. (5) The Send/Save band button on
+  `RequestDetailForm.tsx` ("Send"), `ResponseDetailForm.tsx` ("Send"), and
+  `TodoDetailForm.tsx` ("Save") now stays disabled until the existing
+  `hasChanges` dirty-check snapshot (2026-08-20) detects a real edit —
+  reused verbatim, no new tracking built. **Deliberately not extended to
+  `RequestResponseForm.tsx`** (the anonymous `/r/[token]` path never got a
+  `hasChanges` snapshot — its own Cancel button was removed outright
+  2026-08-20 as having no purpose) or to either Create screen (nothing to
+  compare "before edits" against on a blank form) — flagged as a scoping
+  read of Jim's "and the same for other screens," not a literal
+  every-screen sweep. `npx tsc --noEmit`/`npm run lint` clean. No mockup
+  changes — none of the affected screens' static HTML has interactive
+  footer-link or Send/Save-disabling JS to update.

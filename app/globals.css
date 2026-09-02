@@ -1762,6 +1762,37 @@ body {
   background: var(--row-tint);
 }
 
+/* Footer banner replaced by two clickable buttons (2026-09-01, §6.47
+   PROPOSED) — Jim: "Replace footer banner text of 'See Subscription
+   Features and Other Options' with two clickable text items 'Subscription
+   Features and Options' and 'Privacy'... maybe show it as two buttons with
+   white or light blue backgrounds [as in 'Create a ToDo from this
+   Request']" — reuses .btn-secondary verbatim (the same Strip-background/
+   brand-blue-outline button ConversionBanner.tsx's .fieldact row already
+   uses), just smaller, to stay compact in this footer's fixed 40px-ish
+   band. Privacy access belongs in a footer per Jim's own research; the
+   landing page's own footer link (2026-09-01, same day) only reaches a
+   signed-out visitor, so this is the equivalent for a signed-in one — every
+   screen that had a .subbanner gets this pair instead, .subbanner itself is
+   no longer rendered live anywhere but kept in case a future screen still
+   wants the single-link version. */
+.subbanner-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px var(--pad);
+  background: #fff;
+  border-top: 1px solid var(--rule);
+}
+
+.subbanner-row .btn-secondary {
+  font-size: 11px;
+  padding: 6px 12px;
+}
+
 .adslot {
   flex: 0 0 auto;
   height: 50px;

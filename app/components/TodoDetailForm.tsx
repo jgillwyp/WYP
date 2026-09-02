@@ -962,7 +962,7 @@ export default function TodoDetailForm() {
         <div className="band">
           <span className="glabel">ToDo Detail</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="todo-detail-form" disabled={saving}>
+            <button className="btn" type="submit" form="todo-detail-form" disabled={saving || !hasChanges}>
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={saving}>
@@ -1376,16 +1376,13 @@ export default function TodoDetailForm() {
           </form>
         </div>
 
-        <div
-          className="subbanner"
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push('/account/subscription')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') router.push('/account/subscription')
-          }}
-        >
-          See Subscription Features and Other Options
+        <div className="subbanner-row">
+          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
+            Subscription Features and Options
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
+            Privacy
+          </button>
         </div>
         {tier !== 'subscriber' && (
           <div className="adslot" aria-hidden="true">

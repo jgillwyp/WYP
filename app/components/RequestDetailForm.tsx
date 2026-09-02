@@ -1031,17 +1031,20 @@ export default function RequestDetailForm() {
   // Request is actually overdue (see isOverdue above), or unconditionally
   // when the owner's own "Always show Send Reminder button" account
   // preference (migration 044, alwaysShowSendReminder) is on. Note text
-  // shortened to Jim's own exact wording, 2026-08-23 ("This action is
-  // unrelated to the Reminder schedule above.") — applies regardless of
-  // overdue state now that the panel can show either way; the earlier
-  // overdue-specific sentence is gone, not conditionally kept, since the
-  // shorter wording is correct either way.
+  // was Jim's own exact wording, 2026-08-23 ("This action is unrelated to
+  // the Reminder schedule above.") — revised 2026-09-01, same batch as the
+  // Archive Delete chip: "above" assumed the Reminders-until-Done banner is
+  // always visible on this screen, which isn't true once the owner's own
+  // "Show Reminders" toggle (request_reminders_enabled) is off — the panel
+  // can render with nothing "above" it to refer to. Now reads "This action
+  // is unrelated to scheduled Reminders." unconditionally, regardless of
+  // whether the banner is currently shown.
   function sendReminderPanel() {
     if (!isOverdue && !alwaysShowSendReminder) return null
     return (
       <div className="donerow">
         <span className="donenote" style={reminderResult && !reminderResult.ok ? { color: 'var(--alert-red)' } : undefined}>
-          {reminderResult ? reminderResult.text : 'This action is unrelated to the Reminder schedule above.'}
+          {reminderResult ? reminderResult.text : 'This action is unrelated to scheduled Reminders.'}
         </span>
         <button
           className="btn-secondary"
@@ -1153,7 +1156,7 @@ export default function RequestDetailForm() {
         <div className="band">
           <span className="glabel">Request Detail</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="request-detail-form" disabled={saving}>
+            <button className="btn" type="submit" form="request-detail-form" disabled={saving || !hasChanges}>
               {saving ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={saving}>
@@ -1629,16 +1632,13 @@ export default function RequestDetailForm() {
           </form>
         </div>
 
-        <div
-          className="subbanner"
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push('/account/subscription')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') router.push('/account/subscription')
-          }}
-        >
-          See Subscription Features and Other Options
+        <div className="subbanner-row">
+          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
+            Subscription Features and Options
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
+            Privacy
+          </button>
         </div>
         {tier !== 'subscriber' && (
           <div className="adslot" aria-hidden="true">

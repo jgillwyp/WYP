@@ -1781,7 +1781,16 @@ export default function MainScreen() {
                     aria-selected={hkTab === 'videos'}
                     onClick={() => setHkTab('videos')}
                   >
-                    How-to Videos
+                    {/* Label only, 2026-09-01 — Jim: "Replace 'How-to
+                        Videos' chip with 'Help'." The internal `hkTab`
+                        value stays 'videos' (sessionStorage + the
+                        server-side main_chip_prefs jsonb column, migration
+                        016, already persist that literal string) — renaming
+                        it would need a backward-compat read for anyone with
+                        an already-stored 'videos' preference, for no
+                        visible benefit, since only the label was asked to
+                        change. */}
+                    Help
                   </button>
                 </div>
               </div>
@@ -1798,7 +1807,7 @@ export default function MainScreen() {
                   >
                     <span className="hktext">
                       <span className="hktitle">Contacts</span>
-                      <span className="hknote"> — view and edit</span>
+                      <span className="hknote"> — add, view, edit, or delete</span>
                     </span>
                   </div>
                   <div
@@ -1810,7 +1819,7 @@ export default function MainScreen() {
                   >
                     <span className="hktext">
                       <span className="hktitle">Account Options</span>
-                      <span className="hknote"> — view and edit</span>
+                      <span className="hknote"> — personalize Would You Please</span>
                     </span>
                   </div>
                   <div
@@ -1822,7 +1831,7 @@ export default function MainScreen() {
                   >
                     <span className="hktext">
                       <span className="hktitle">Archive</span>
-                      <span className="hknote"> — remove completed items from the above lists</span>
+                      <span className="hknote"> — view, edit, or delete archived items</span>
                     </span>
                   </div>
                   {/* Owner-reported, 2026-08-18: accepted the browser's own
@@ -1987,16 +1996,13 @@ export default function MainScreen() {
           <div className="scroll-pad" />
         </div>
 
-        <div
-          className="subbanner"
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push('/account/subscription')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') router.push('/account/subscription')
-          }}
-        >
-          See Subscription Features and Other Options
+        <div className="subbanner-row">
+          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
+            Subscription Features and Options
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
+            Privacy
+          </button>
         </div>
         {tier !== 'subscriber' && (
           <div className="adslot" aria-hidden="true"><span className="adbox">AD — 320×50 RESERVED</span></div>

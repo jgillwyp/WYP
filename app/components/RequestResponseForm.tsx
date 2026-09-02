@@ -1001,16 +1001,13 @@ export default function RequestResponseForm() {
           </form>
         </div>
 
-        <div
-          className="subbanner"
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push('/account/subscription')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') router.push('/account/subscription')
-          }}
-        >
-          See Subscription Features and Other Options
+        <div className="subbanner-row">
+          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
+            Subscription Features and Options
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
+            Privacy
+          </button>
         </div>
         {/* Gated on data.owner_tier (2026-08-25), not a viewer tier — this
             anonymous screen has no signed-in identity of its own for an
