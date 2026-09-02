@@ -1672,7 +1672,7 @@ export default function MainScreen() {
               </span>
             </div>
             <div className="subbody">
-              <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}${categoriesEnabled ? ' cat' : ''}`}>
+              <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}${categoriesEnabled ? ' catcol' : ''}`}>
                 <span className="namecell">
                   <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
                   {/* Description -> Category, sortable, when Private

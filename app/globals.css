@@ -2056,19 +2056,26 @@ body {
 }
 
 /* ToDos' "Date" header nudged right (2026-09-02, owner request, phone-only
-   report) — scoped to .colbar.dcols.cat only, not .dcols generally.
+   report) — scoped to .colbar.dcols.catcol only, not .dcols generally.
    Jim's follow-up narrowed this: the overlap only happens when Private
    Category is actually shown (Category is what grows wide enough to reach
    "Date" when Priority or Category is the active sort column) — with
    Category off there's nothing to overlap, so nudging "Date" then would
-   just be an unexplained shift. .cat is a new modifier class added to the
-   ToDos colbar only when categoriesEnabled is true (MainScreen.tsx,
+   just be an unexplained shift. .catcol is a new modifier class added to
+   the ToDos colbar only when categoriesEnabled is true (MainScreen.tsx,
    ArchiveForm.tsx), alongside the existing .wide (todoDatesEnabled)
-   modifier. Sent/Received's own .colbar.sr is unaffected either way, per
-   the owner's own note that this isn't an issue there. The date VALUES in
-   the rows below (.trd .dt) are untouched, still centered; only this
-   header moves, and only when Category is on. */
-.colbar.dcols.cat .c-dt {
+   modifier — deliberately not named .cat: that class already exists
+   (below, the ToDo row's own Category text span, color: var(--ink)) and,
+   applied directly to the colbar div itself, collided with .colbar's own
+   `color: #fff` at equal specificity, silently painting the whole ToDos
+   header dark instead of white (Jim-reported, same day; the exact same
+   collision shape as the .tdd/.dcols bug fixed 2026-08-17 — see that
+   entry's own comment above). Sent/Received's own .colbar.sr is
+   unaffected either way, per the owner's own note that this isn't an
+   issue there. The date VALUES in the rows below (.trd .dt) are
+   untouched, still centered; only this header moves, and only when
+   Category is on. */
+.colbar.dcols.catcol .c-dt {
   text-align: right;
 }
 

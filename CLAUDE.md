@@ -3556,3 +3556,15 @@ link is built only after the stack is proven on Add Contact.
   deliberate substitution for the literal nbsp request, flagged as an
   engineering-judgment call rather than assumed uncontroversial. `npx tsc
   --noEmit`/`npm run lint` clean across all three. No mockup changes.
+- **Same-day follow-up: fixed a real color-collision bug the `cat` modifier
+  class introduced (2026-09-02).** Jim, from a screenshot: every ToDos
+  column heading (Priority/Category/Date/Due/Done) rendered dark instead of
+  white. `cat` collided with a pre-existing, unrelated `.cat` class
+  (`font-weight: 700; color: var(--ink)`, a ToDo row's own Category text
+  span) — applied directly to the colbar `<div>`, `.cat`'s color rule and
+  `.colbar`'s own `color: #fff` sat at equal specificity, and `.cat`'s later
+  source position won, exactly the same collision shape as the `.tdd`/
+  `.dcols` bug fixed 2026-08-17. Renamed the modifier `cat` -> `catcol`
+  everywhere (`MainScreen.tsx`, `ArchiveForm.tsx`, `globals.css`'s
+  `.colbar.dcols.catcol .c-dt` selector). `npx tsc --noEmit`/`npm run lint`
+  clean.

@@ -18,6 +18,8 @@ Three follow-ups from Jim in one message, each a correction or completion of a f
 
 `npx tsc --noEmit`/`npm run lint` clean across all three fixes. No mockup changes — none of the affected screens' static HTML models this app's own scroll mechanics, header-checkbox alignment, or colbar/namecell structure.
 
+**Same-day follow-up: the new `cat` modifier class broke ToDos' colbar text color.** Jim, from a screenshot: every ToDos column heading (Priority/Category/Date/Due/Done) rendered in dark text instead of white. Root cause: `cat` — added moments earlier as the ToDos colbar's new conditional modifier class — collided directly with a pre-existing, unrelated `.cat` class (`font-weight: 700; color: var(--ink)`, the small Category text span inside a ToDo row's own description line). Applied to the colbar `<div>` itself, `.cat`'s `color: var(--ink)` and `.colbar`'s own `color: #fff` sit at equal specificity, and `.cat`'s later position in the source order won the cascade — the exact same collision shape as the `.tdd`/`.dcols` bug fixed 2026-08-17 (see that entry). Renamed the modifier `cat` -> `catcol` throughout (`MainScreen.tsx`, `ArchiveForm.tsx`, `globals.css`'s `.colbar.dcols.catcol .c-dt` selector) — no class with that name exists elsewhere. `npx tsc --noEmit`/`npm run lint` clean.
+
 \---
 
 ## 2026-09-02 — Archive: "select/deselect all" master checkbox
