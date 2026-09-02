@@ -1791,6 +1791,18 @@ body {
 .subbanner-row .btn-secondary {
   font-size: 11px;
   padding: 6px 12px;
+  /* White, not the usual Strip-tint .btn-secondary background (2026-09-02,
+     owner-reported) — the light-blue version drew more visual attention
+     than this footer-level pair of links warrants, adding perceived
+     complexity to an already-busy bottom-of-screen area. White reads as
+     quieter without giving up the button affordance (border + brand-blue
+     text are unchanged). Scoped to this row only, not a change to
+     .btn-secondary itself, which stays Strip-tint everywhere else. */
+  background: #fff;
+}
+
+.subbanner-row .btn-secondary:active {
+  background: var(--row-tint);
 }
 
 .adslot {

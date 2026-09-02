@@ -6,6 +6,21 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-02 — Same-day follow-up: subbanner-row buttons switched to white
+
+Jim, from a screenshot comparing the two new footer buttons side by side
+with the rest of the screen: "the white backgrounds are better - they do
+not as much draw attention resulting in the screen being a little less
+visually complicated." `.subbanner-row .btn-secondary` (added earlier the
+same day) overrides `.btn-secondary`'s usual Strip-tint background with
+white, plus a matching `:active` state — scoped to this one row via a more
+specific selector, so `.btn-secondary` itself is unchanged everywhere else
+it's used app-wide. Border and brand-blue text are untouched, so the pair
+still reads as clickable. CSS-only, no component files touched. `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-09-02 — Send Reminder wording fix, Housekeeping wording, "Help"
 ## rename, two-button footer (Subscription + Privacy), grey Send/Save
 ## before edits
