@@ -29,6 +29,48 @@ now unused in `ArchiveForm.tsx` but left in `globals.css` — still read by
 mockup update made for this change, flagged rather than silently skipped.
 `npx tsc --noEmit`/`npm run lint` clean.
 
+**Same-day follow-up — column-header alignment fix.** Jim, from a
+screenshot: the new master checkbox sat right of the row checkboxes below
+it, and separately the To/Date/Due/Done labels themselves were shifted
+right of the data columns they head. Root cause was two independent
+mismatches. First, the header's own `.archrow` sat inside a div padded
+with `var(--pad)` (14px), while each data row's `.archrow` sits inside
+`.row`, which pads itself only 6px (`padding: 7px 6px 8px`) — an 8px
+mismatch that alone offset the checkbox. Second, `.colbar` (the header
+band) carries its own built-in 6px left/right padding, while `.r1`/`.trd`
+(the data rows' own grids) carry none — so even with the wrapper padding
+matched, the header's grid content would still sit 6px further in on both
+sides than the data below. New `.archcolhead` class replaces the inline
+`padding: '8px var(--pad) 0'`: matches the wrapper's own padding to
+`.row`'s (6px), fixing the checkbox, and zeroes `.colbar`'s own left/right
+padding for this one header instance only (`.archcolhead .colbar`) — the
+shared `.colbar` class itself is untouched, so Main Screen's identical
+header-over-`.r1` pairing (which has no checkbox and already relies on
+`.colbar`'s and `.row`'s paddings being equal) is unaffected. `npx tsc
+--noEmit`/`npm run lint` clean.
+
+\---
+
+## 2026-09-02 — ToDos colbar: "Date" header right-aligned to stop
+## overlapping "Category" on phone
+
+Jim, phone-only report, ToDos only (confirmed not an issue for Sent): when
+Private Category is shown and either Priority or Category is the active
+sort column, that ColSort button's highlighted `.pill` (bold, with a sort
+arrow) grows wide enough to visually run into "Date" beside it.
+
+`.colbar .c-dt` was `text-align: center`, shared by every colbar variant
+(Sent/Received's `.sr`, ToDos' `.dcols`). Added a narrower override,
+`.colbar.dcols .c-dt { text-align: right; }`, scoped to the ToDos colbar
+only — right-aligning "Date" within its fixed 58px column opens breathing
+room on exactly the side Category grows into. The actual date values in
+the rows below (`.trd .dt`) are untouched, still centered — Jim's own
+wording framed this as moving the header, not the data, and the header
+already sits in its own 58px column independent of how the value below it
+is aligned. Applies automatically to both Main Screen's and Archive's
+ToDos lists, since both already share the identical `.colbar.dcols`
+markup. `npx tsc --noEmit`/`npm run lint` clean.
+
 \---
 
 ## 2026-09-02 — Dead-link message reworded to name the sender, not the app —

@@ -1493,7 +1493,7 @@ export default function ArchiveForm() {
             <span className="glabel" style={{ fontSize: 17 }}>{listTitle}</span>
           </div>
 
-          <div style={{ padding: '8px var(--pad) 0' }}>
+          <div className="archcolhead">
             <div className="archrow">
               <input
                 className="archcheck"

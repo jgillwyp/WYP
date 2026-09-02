@@ -2055,6 +2055,19 @@ body {
   white-space: nowrap;
 }
 
+/* ToDos' "Date" header nudged right (2026-09-02, owner request, phone-only
+   report) — scoped to .colbar.dcols (ToDos) only; Sent/Received's own
+   .colbar.sr is unaffected, per the owner's own note that this isn't an
+   issue there. When Private Category is on and either Priority or Category
+   is the active sort column, that ColSort button's highlighted .pill grows
+   wide enough on a narrow phone to run into "Date" beside it. Right-
+   aligning "Date" within its own 58px column opens breathing room on
+   exactly the side Category grows into — the date VALUES in the rows below
+   (.trd .dt) are untouched, still centered; only this header moves. */
+.colbar.dcols .c-dt {
+  text-align: right;
+}
+
 /* "Description" label (2026-08-17) — a plain, non-interactive column
    heading added to the leftmost cell of Sent/Received's and ToDos'
    colbars, greyed the same way a disabled Done column already is
@@ -2388,6 +2401,30 @@ body {
 .archspacer {
   flex: 0 0 auto;
   width: 18px;
+}
+
+/* Column-header row alignment fix (2026-09-02, owner-reported) — the header
+   row's .archrow used to sit inside a div padded with var(--pad) (14px),
+   while each data row's own .archrow sits inside .row, which pads itself
+   6px (padding: 7px 6px 8px). That 8px mismatch shifted the header's own
+   "all" checkbox right of the row checkboxes below it. A second, separate
+   6px mismatch affected the column labels themselves: .colbar has its own
+   built-in 6px left/right padding (its blue band always insets its grid
+   content that much), but .r1/.trd — the data rows' own grids — have none,
+   so even with the wrapper padding matched, the header's grid content would
+   still start (and end) 6px inside where the data below actually starts.
+   .archcolhead fixes both: matches the wrapper's own padding to .row's
+   (6px), and zeroes .colbar's own left/right padding for this one header
+   instance only — .colbar itself is untouched, so Main Screen's identical
+   header-over-.r1 pairing (which has no checkbox and relies on .colbar's
+   and .row's paddings already being equal) is unaffected. */
+.archcolhead {
+  padding: 8px 6px 0;
+}
+
+.archcolhead .colbar {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* Opens the record's own Detail screen (Request/Response/ToDo Detail) — same

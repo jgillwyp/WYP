@@ -3500,3 +3500,29 @@ link is built only after the stack is proven on Add Contact.
   `design/screens/WYP_archive_palette1.html`'s own self-contained styles;
   no mockup update made for this change, flagged rather than silently
   skipped. `npx tsc --noEmit`/`npm run lint` clean.
+- **Archive: column-header alignment fix, same-day follow-up (2026-09-02).**
+  Jim, from a screenshot: the new master checkbox sat right of the row
+  checkboxes below it, and the To/Date/Due/Done labels were themselves
+  shifted right of the data columns they head. Two independent mismatches —
+  the header's `.archrow` sat inside a div padded `var(--pad)` (14px) vs.
+  each data row's own `.row` padding (6px), offsetting the checkbox; and
+  `.colbar`'s own built-in 6px left/right padding vs. `.r1`/`.trd`'s none,
+  offsetting the labels even once the wrapper padding matched. New
+  `.archcolhead` class replaces the inline wrapper padding (now 6px, matching
+  `.row`) and zeroes `.colbar`'s own left/right padding for this one header
+  instance only — the shared `.colbar` class itself is untouched, so Main
+  Screen's identical header-over-`.r1` pairing (no checkbox, already relies
+  on `.colbar`'s and `.row`'s paddings being equal) is unaffected. `npx tsc
+  --noEmit`/`npm run lint` clean.
+- **ToDos colbar "Date" header right-aligned to stop overlapping "Category"
+  on phone (2026-09-02).** Jim, phone-only, ToDos only (confirmed not an
+  issue for Sent): when Private Category is shown and either Priority or
+  Category is the active sort column, that ColSort button's highlighted
+  `.pill` grows wide enough to run into "Date" beside it. Added
+  `.colbar.dcols .c-dt { text-align: right; }`, scoped to the ToDos colbar
+  only — right-aligns "Date" within its fixed 58px column, opening
+  breathing room on the side Category grows into. The date values in the
+  rows below (`.trd .dt`) are untouched, still centered — only the header
+  moves. Applies to both Main Screen's and Archive's ToDos lists, since
+  both share the identical `.colbar.dcols` markup. `npx tsc --noEmit`/`npm
+  run lint` clean.
