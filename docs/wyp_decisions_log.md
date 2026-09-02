@@ -6,8 +6,33 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-02 — Archive: "select/deselect all" master checkbox
+
+Jim, testing a 23-item Sent Requests Delete list: add an "all" checkbox at
+the top of the checkbox column to select or deselect every visible row at
+once. Same message also confirmed the dead-link fix below still showed the
+old wording — expected, migration 049 (previous entry) hadn't been run yet
+at the time he tested it.
+
+`ArchiveForm.tsx`'s header row previously used `.archspacer` — an inert
+18px placeholder — purely to keep the To/Date/Due/Done labels aligned with
+the checkbox column below. Replaced with a real `.archcheck` input (same
+class every row checkbox already uses, so it's visually identical) driven
+by a new `allChecked` derived value (`sortedMatches.length > 0 &&
+sortedMatches.every(...)`) and a new `toggleAllChecked(checked)` handler
+that adds/removes every currently-displayed row's id from `deselected[
+currentType]` in one `setDeselected` call — deliberately scoped to
+`sortedMatches` (what's actually on screen) rather than the full unfiltered
+`matches`, matching every other control on this screen. `.archspacer` is
+now unused in `ArchiveForm.tsx` but left in `globals.css` — still read by
+`design/screens/WYP_archive_palette1.html`'s own self-contained styles; no
+mockup update made for this change, flagged rather than silently skipped.
+`npx tsc --noEmit`/`npm run lint` clean.
+
+\---
+
 ## 2026-09-02 — Dead-link message reworded to name the sender, not the app —
-## migration 049 DRAFTED, NOT YET CONFIRMED RUN
+## migration 049 confirmed run by the owner, same day
 
 Jim: worried that an email recipient clicking an old Request Response link
 after the WYP user deleted the underlying Request — via a Contact deletion
@@ -23,7 +48,8 @@ against reintroducing any tombstone row to make that distinction real,
 since it would reopen the 2026-09-01 hard-delete-for-privacy decision for a
 wording problem — Jim agreed, scope stayed to copy only.
 
-Migration 049 (drafted, not yet run) changes `get_request_by_token`'s one
+Migration 049 (confirmed run 2026-09-02 — Jim tested it live and the new
+wording showed up on a real dead link) changes `get_request_by_token`'s one
 generic exception message from "This link is no longer valid." to "This
 link is no longer active. The sender has removed the Request it pointed
 to." — applies uniformly to every failure branch (never-existed, expired,

@@ -3460,7 +3460,7 @@ link is built only after the stack is proven on Add Contact.
   --noEmit`/`npm run lint` clean. No mockup — this page still has none, per
   its own 2026-09-01 reasoning (prose content, not a Palette-1 screen).
 - **Dead-link message reworded to name the sender, not the app — migration
-  049 DRAFTED, NOT YET CONFIRMED RUN (2026-09-02).** Jim: worried that an
+  049 confirmed run by the owner, same day (2026-09-02).** Jim: worried that an
   email recipient clicking an old Request Response link after the WYP user
   deleted the underlying Request — via a Contact deletion cascade
   (2026-09-01) or Archive's own standalone Delete (2026-08-15) — has no way
@@ -3485,3 +3485,18 @@ link is built only after the stack is proven on Add Contact.
   inaccurate for the rare case of a link that was truly never valid (a
   mistyped or truncated URL) — it will still say "the sender has removed"
   something that was never there. `npx tsc --noEmit`/`npm run lint` clean.
+- **Archive: "select/deselect all" master checkbox (2026-09-02).** Jim,
+  testing a 23-item Sent Requests Delete list: add an "all" checkbox at the
+  top of the checkbox column. `ArchiveForm.tsx`'s header row previously
+  used `.archspacer` — an inert 18px placeholder just to keep the
+  To/Date/Due/Done labels aligned with the checkbox column below — replaced
+  with a real `.archcheck` input (same class every row checkbox already
+  uses) driven by a new `allChecked` derived value and a new
+  `toggleAllChecked(checked)` handler that adds/removes every currently
+  *displayed* row's id (`sortedMatches`, not the full unfiltered `matches`)
+  from `deselected[currentType]` in one `setDeselected` call, matching
+  every other control on this screen's own scoping. `.archspacer` is now
+  unused in `ArchiveForm.tsx` but left in `globals.css` — still read by
+  `design/screens/WYP_archive_palette1.html`'s own self-contained styles;
+  no mockup update made for this change, flagged rather than silently
+  skipped. `npx tsc --noEmit`/`npm run lint` clean.

@@ -3105,7 +3105,7 @@ commit;
 -- ============================================================================
 -- WYP migration 049 — reword get_request_by_token's generic dead-link
 -- message so it reads as sender action, not app failure
--- DRAFTED 2026-09-02 — NOT YET CONFIRMED RUN.
+-- CONFIRMED RUN by the owner 2026-09-02.
 --
 -- Jim, concerned that a recipient clicking an old Request Response email
 -- link after the WYP user has deleted the underlying Request (via a Contact

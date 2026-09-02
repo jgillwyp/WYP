@@ -978,6 +978,13 @@ export default function ArchiveForm() {
   const currentDeselected = deselected[currentType]
   const selectedCount = matches.filter((r) => !currentDeselected.has(r.id)).length
 
+  // "All" master checkbox (2026-09-02, owner request) — reflects/drives the
+  // checked state of every currently *displayed* row (sortedMatches, not the
+  // full unsorted matches — same set toggleChecked's own per-row calls
+  // already operate on), so it only ever acts on what the user can actually
+  // see, consistent with every other filter/sort control on this screen.
+  const allChecked = sortedMatches.length > 0 && sortedMatches.every((r) => !currentDeselected.has(r.id))
+
   // Distinct names present in the current Record Type's own (unfiltered)
   // data — same "minimal type-ahead over already-loaded candidate data"
   // approach as the mockup, not the full Contacts table: a Received row's
@@ -1031,6 +1038,21 @@ export default function ArchiveForm() {
       const next = new Set(prev[currentType])
       if (checked) next.delete(id)
       else next.add(id)
+      return { ...prev, [currentType]: next }
+    })
+  }
+
+  // Master "select/deselect all" checkbox, 2026-09-02 — owner request, seen
+  // testing a 23-item Sent Requests Delete list. Only touches the ids in
+  // sortedMatches (what's actually on screen right now), same scoping
+  // toggleChecked's own single-row calls already use.
+  function toggleAllChecked(checked: boolean) {
+    setDeselected((prev) => {
+      const next = new Set(prev[currentType])
+      for (const r of sortedMatches) {
+        if (checked) next.delete(r.id)
+        else next.add(r.id)
+      }
       return { ...prev, [currentType]: next }
     })
   }
@@ -1473,7 +1495,13 @@ export default function ArchiveForm() {
 
           <div style={{ padding: '8px var(--pad) 0' }}>
             <div className="archrow">
-              <span className="archspacer" aria-hidden="true" />
+              <input
+                className="archcheck"
+                type="checkbox"
+                checked={allChecked}
+                onChange={(e) => toggleAllChecked(e.target.checked)}
+                aria-label={allChecked ? 'Deselect all' : 'Select all'}
+              />
               <div className="archbody">
                 {currentType === 'todos' ? (
                   <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}`}>
