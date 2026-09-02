@@ -20,6 +20,16 @@ Three follow-ups from Jim in one message, each a correction or completion of a f
 
 **Same-day follow-up: the new `cat` modifier class broke ToDos' colbar text color.** Jim, from a screenshot: every ToDos column heading (Priority/Category/Date/Due/Done) rendered in dark text instead of white. Root cause: `cat` — added moments earlier as the ToDos colbar's new conditional modifier class — collided directly with a pre-existing, unrelated `.cat` class (`font-weight: 700; color: var(--ink)`, the small Category text span inside a ToDo row's own description line). Applied to the colbar `<div>` itself, `.cat`'s `color: var(--ink)` and `.colbar`'s own `color: #fff` sit at equal specificity, and `.cat`'s later position in the source order won the cascade — the exact same collision shape as the `.tdd`/`.dcols` bug fixed 2026-08-17 (see that entry). Renamed the modifier `cat` -> `catcol` throughout (`MainScreen.tsx`, `ArchiveForm.tsx`, `globals.css`'s `.colbar.dcols.catcol .c-dt` selector) — no class with that name exists elsewhere. `npx tsc --noEmit`/`npm run lint` clean.
 
+## 2026-09-02 — Category column heading: white text, not greyed
+
+Jim: the "Category" column heading (Main Screen, ToDos — same pattern on Sent, and on Archive) rendered greyed out. This app used to grey out column headings that weren't the active sort ("Done" while an Open/Overdue chip is selected is the one surviving case, `.colbar button:disabled`, 2026-08-17) — but Category is a real, always-sortable column, not a disabled one, so it should read the same solid white as Priority/Date/Due/Done.
+
+Root cause: the sortable Category `ColSort` button (Main Screen's Sent and ToDos colbars, Archive's Sent and ToDos colbars — 4 call sites) reused `.c-desc`, a class written for a different purpose entirely: the plain, non-interactive "Description" heading (2026-08-17), whose `opacity: .55` dims `.colbar`'s inherited white to read as grey. That was never right for Category, an interactive, always-sortable column.
+
+New `.c-cat` class (`globals.css`) — the same layout rules `.c-desc` carries (font-weight, `white-space: nowrap`, flex-basis) with no opacity override, so it inherits `.colbar`'s own `color: #fff` at full strength. Swapped in at the 4 live `ColSort` call sites (`MainScreen.tsx`'s Sent and ToDos colbars, `ArchiveForm.tsx`'s Sent and ToDos colbars). Deliberately left unchanged: the genuinely non-interactive "Description" labels (`.c-desc`, still correct on Create Request/Request Detail/Response Detail/ToDo Detail) and the printed reports' own static Category headings (`.pcolbar .c-desc`) — Jim's report was about the on-screen colbar only, and print's own greyed convention wasn't part of it.
+
+`npx tsc --noEmit`/`npm run lint` clean. No mockup changes — none of the affected screens' static HTML models sortable column headers.
+
 \---
 
 ## 2026-09-02 — Archive: "select/deselect all" master checkbox

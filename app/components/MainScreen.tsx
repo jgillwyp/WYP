@@ -1458,7 +1458,7 @@ export default function MainScreen() {
                       is new for Sent: unlike ToDos, Sent has never had a
                       Category column heading before. */}
                   {categoriesEnabled && (
-                    <ColSort className="c-desc" label="Category" active={sentSort.key === 'category'} dir={sentSort.dir} onClick={() => sortSent('category')} />
+                    <ColSort className="c-cat" label="Category" active={sentSort.key === 'category'} dir={sentSort.dir} onClick={() => sortSent('category')} />
                   )}
                 </span>
                 <ColSort className="c-dt" label="Date" active={sentSort.key === 'date'} dir={sentSort.dir} onClick={() => sortSent('date')} />
@@ -1682,7 +1682,7 @@ export default function MainScreen() {
                       live sort column (retired 2026-08-17, see TodoSortKey's
                       own comment above). */}
                   {categoriesEnabled && (
-                    <ColSort className="c-desc" label="Category" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
+                    <ColSort className="c-cat" label="Category" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
                   )}
                 </span>
                 <ColSort className="c-dt" label="Date" active={todoSort.key === 'date'} dir={todoSort.dir} onClick={() => sortTodos('date')} />

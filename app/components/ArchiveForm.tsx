@@ -1520,7 +1520,7 @@ export default function ArchiveForm() {
                           before this. */}
                       {categoriesEnabled && (
                         <ColSort
-                          className="c-desc"
+                          className="c-cat"
                           label="Category"
                           active={todoSort.key === 'category'}
                           dir={todoSort.dir}
@@ -1569,7 +1569,7 @@ export default function ArchiveForm() {
                           allows the key). */}
                       {currentType === 'sent' && categoriesEnabled && (
                         <ColSort
-                          className="c-desc"
+                          className="c-cat"
                           label="Category"
                           active={currentReqSort.key === 'category'}
                           dir={currentReqSort.dir}

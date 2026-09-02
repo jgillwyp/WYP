@@ -2103,6 +2103,28 @@ body {
   flex: 0 0 auto;
 }
 
+/* Category column heading, on-screen colbars only (2026-09-02,
+   owner-reported) — until now the sortable Category ColSort button
+   (Main Screen's/Archive's Sent and ToDos colbars) reused .c-desc, whose
+   opacity: .55 was written for a plain, non-interactive label ("Description",
+   above) and reads as grey against the blue band. Jim: this app used to grey
+   out column headings that weren't the top-line sort ("Done" while an
+   Open/Overdue chip is selected is the one surviving case of that,
+   .colbar button:disabled above) — but Category is a real, always-sortable
+   column here, not a disabled one, so it should read the same solid white as
+   Priority/Date/Due/Done. .c-cat carries the same layout rules .c-desc has
+   (font-weight, nowrap, flex-basis) with no opacity override — inherits
+   .colbar's own `color: #fff` at full strength. Scoped to the on-screen
+   ColSort buttons only (MainScreen.tsx, ArchiveForm.tsx); the plain
+   "Description" labels (.c-desc, Create Request/Request Detail/Response
+   Detail/ToDo Detail) and the printed reports' own static Category headings
+   (.pcolbar .c-desc) are unaffected — neither was part of Jim's report. */
+.c-cat {
+  font-weight: 700;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 /* Printed reports' own Description heading (2026-08-18) — owner: it should
    read "centered between the 'To'/'From' and the 'Date' column," not
    right-aligned against the Date column the way the on-screen colbar's own

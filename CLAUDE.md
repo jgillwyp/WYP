@@ -3568,3 +3568,18 @@ link is built only after the stack is proven on Add Contact.
   everywhere (`MainScreen.tsx`, `ArchiveForm.tsx`, `globals.css`'s
   `.colbar.dcols.catcol .c-dt` selector). `npx tsc --noEmit`/`npm run lint`
   clean.
+- **Category column heading recolored white, not greyed (2026-09-02).** Jim:
+  the sortable "Category" heading (Main Screen ToDos, and the same pattern
+  on Sent, and on Archive) read as greyed text against the blue band —
+  wrong now, since this app's own convention is to grey a column heading
+  only when it's genuinely non-interactive/disabled (the "Description"
+  label, or "Done" while Open/Overdue is selected), and Category is always
+  a real, sortable column. Root cause: the 4 live Category `ColSort` call
+  sites (`MainScreen.tsx`'s and `ArchiveForm.tsx`'s Sent/ToDos colbars) all
+  reused `.c-desc` — the plain-label class, whose `opacity: .55` was never
+  meant for an interactive column. New `.c-cat` class (`globals.css`, same
+  layout rules, no opacity override) swapped in at those 4 sites; the
+  genuinely non-interactive `.c-desc` usages (Description labels on the
+  Detail/Create screens, and the print reports' own static Category
+  headings) are unaffected — not part of Jim's report. `npx tsc --noEmit`/
+  `npm run lint` clean.

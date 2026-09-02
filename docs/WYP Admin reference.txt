@@ -22,5 +22,3 @@ Incoming server (IMAP)			imap.hostinger.com	993	Yes
 Outgoing server (SMTP)			smtp.hostinger.com	465	Yes	
 Incoming server (POP3)Not recommended	pop.hostinger.com	995	Yes
     
-
-   
