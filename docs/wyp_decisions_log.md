@@ -6,6 +6,20 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-02 — Privacy page scroll fix; ToDos Date-header alignment narrowed to Category-shown only; Archive "To"/"From"/"Priority" breathing room
+
+Three follow-ups from Jim in one message, each a correction or completion of a fix earlier the same day.
+
+**Privacy page now scrolls its body only, not the header.** Jim: the header/title band/Close button used to scroll away with the rest of the page content, so reaching Close required scrolling all the way back to the top first — unlike every other screen, where only content below the title band scrolls (`.scroll`, `globals.css`). `app/privacy/page.tsx` can't reuse `.frame-none`/`.app`/`.scroll` directly — those cap width at 480px, wrong for this wide reading-width content page — so the same fixed-header/scrolling-body mechanism was reproduced at its own scale: `.wyp-privacy` (`privacy.css`) became a `100vh`/`100dvh` flex column holding `WypHeader`, the `.band`, and the `.noticeband` as fixed, un-scrolled children, and a new `.privacy-scroll` div (wrapping `<main>` + `<footer>`) is the one scrolling region. Both files' own doc comments updated to describe this.
+
+**ToDos "Date" column-header right-alignment narrowed to when Private Category is actually shown.** The earlier same-day fix (`.colbar.dcols .c-dt { text-align: right; }`) applied unconditionally to every ToDos colbar — too broad. Jim's correction: the overlap this addressed only happens when Private Category is on (Category is what grows wide enough to reach "Date"); with Category off there's nothing to overlap, so the shift there was an unexplained change with no visible cause. Both `MainScreen.tsx` and `ArchiveForm.tsx`'s ToDos colbar `className` gained a new conditional `cat` modifier (`` `colbar dcols${todoDatesEnabled ? ' wide' : ''}${categoriesEnabled ? ' cat' : ''}` ``, alongside the existing `wide` modifier), and the CSS selector narrowed to `.colbar.dcols.cat .c-dt`.
+
+**Archive's "To"/"From"/"Priority" header label needs breathing room against the blue band's left edge.** A real side effect of the same-day `.archcolhead .colbar { padding-left: 0; padding-right: 0; }` alignment fix (previous entry) — that zeroing correctly aligned the Date/Due/Done grid columns with the data rows below, but also left the leftmost label jammed flush against the colored band's own left edge, since `.colbar`'s own padding was the only thing that used to supply that inset. Padding `.colbar` itself again would re-shift every column in the grid, breaking the very alignment just fixed — so the fix targets `.namecell` (the leftmost grid cell's own wrapper, shared by all three record types: To/From on Sent/Received, Priority on ToDos) instead, via a new `.archcolhead .colbar .namecell { padding-left: 6px; }` rule that leaves the grid's own track positions untouched. Jim's own literal wording asked for "one or two nonbreaking spaces in front of it" — implemented as a scoped CSS inset instead of literal ` ` characters in the label text, since it produces the identical visual result without adding whitespace that would also surface through `aria-label`/copy-paste; flagged as an engineering-judgment substitution, not silently assumed uncontroversial.
+
+`npx tsc --noEmit`/`npm run lint` clean across all three fixes. No mockup changes — none of the affected screens' static HTML models this app's own scroll mechanics, header-checkbox alignment, or colbar/namecell structure.
+
+\---
+
 ## 2026-09-02 — Archive: "select/deselect all" master checkbox
 
 Jim, testing a 23-item Sent Requests Delete list: add an "all" checkbox at

@@ -46,6 +46,17 @@ import './privacy.css'
 // accessibility/SEO; .glabel is a plain class rule, so it renders
 // identically on an h1 as it does on the span every other screen uses).
 //
+// Fixed header, scrolling body (2026-09-02, same-day follow-up,
+// owner-reported) — the header/.band/.noticeband above used to scroll away
+// with the rest of the page, so reaching Close required scrolling all the
+// way back to the top first, unlike every other screen (.scroll,
+// globals.css). Wrapped <main>+<footer> in a new .privacy-scroll div
+// (privacy.css) so only that region scrolls; .wyp-privacy itself became a
+// 100vh/100dvh flex column so the header/band/notice stay fixed above it —
+// this page can't reuse .frame-none/.app/.scroll directly (those cap width
+// at 480px, wrong for this wide reading-width page), so the same
+// fixed-header mechanism is reproduced at its own scale instead.
+//
 // Content reflects this app's actual current practices as built, not
 // generic boilerplate — see each section for specifics (Supabase, Vercel,
 // Hostinger, the Office Online viewer, the browser's own Voice Dictation
@@ -85,6 +96,7 @@ export default function PrivacyPolicyPage() {
 
       <div className="noticeband"><b>Note:</b> Effective September 1, 2026.</div>
 
+      <div className="privacy-scroll">
       <main className="wrap">
         <p className="intro">
           Would You Please (&ldquo;WYP,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) helps people track
@@ -231,6 +243,7 @@ export default function PrivacyPolicyPage() {
           <span>wouldyouplease.com</span>
         </div>
       </footer>
+      </div>
     </div>
   )
 }

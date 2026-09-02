@@ -3526,3 +3526,33 @@ link is built only after the stack is proven on Add Contact.
   moves. Applies to both Main Screen's and Archive's ToDos lists, since
   both share the identical `.colbar.dcols` markup. `npx tsc --noEmit`/`npm
   run lint` clean.
+- **Privacy page scroll fix; ToDos Date-header alignment narrowed to
+  Category-shown only; Archive "To"/"From"/"Priority" breathing room
+  (2026-09-02, same-day follow-ups).** Three corrections/completions from
+  Jim in one message. (1) `/privacy` used to scroll its header/band/Close
+  button away with the rest of the page — reaching Close required
+  scrolling all the way back up. `app/privacy/page.tsx`/`privacy.css`
+  reproduce this app's own fixed-header/scrolling-body pattern (`.scroll`,
+  globals.css) at Privacy's own wider scale: `.wyp-privacy` is now a
+  `100vh`/`100dvh` flex column, and a new `.privacy-scroll` div (wrapping
+  `<main>`+`<footer>`) is the one region that actually scrolls. (2) The
+  bullet directly above was too broad — right-aligning ToDos' "Date" header
+  should only happen when Private Category is actually shown, since
+  Category is what grows wide enough to cause the overlap in the first
+  place; with Category off, nudging "Date" was an unexplained shift with
+  no visible cause. Both `MainScreen.tsx`'s and `ArchiveForm.tsx`'s ToDos
+  colbar `className` gained a new conditional `cat` modifier alongside the
+  existing `wide` one, and the CSS narrowed from `.colbar.dcols .c-dt` to
+  `.colbar.dcols.cat .c-dt`. (3) A real side effect of the Archive
+  header-alignment fix two bullets up: zeroing `.colbar`'s own left/right
+  padding correctly aligned Date/Due/Done with the data rows below, but
+  left "To"/"From"/"Priority" (the leftmost label) jammed flush against
+  the blue band's own left edge, with no breathing room at all — Jim's own
+  wording asked for "one or two nonbreaking spaces in front of it."
+  Implemented instead as a scoped CSS inset, `.archcolhead .colbar
+  .namecell { padding-left: 6px; }` — targets just the leftmost grid
+  cell's wrapper rather than `.colbar` itself, so it doesn't re-shift the
+  Date/Due/Done columns the way padding `.colbar` again would; a
+  deliberate substitution for the literal nbsp request, flagged as an
+  engineering-judgment call rather than assumed uncontroversial. `npx tsc
+  --noEmit`/`npm run lint` clean across all three. No mockup changes.

@@ -7,7 +7,32 @@
    apply here, so it was built directly rather than mocked up first. See
    the decisions log's 2026-09-01 entry for the full reasoning. */
 
-.wyp-privacy { background: #fff; color: var(--ink); min-height: 100vh; }
+/* Fixed header/band/notice, scrolling body (2026-09-02, owner-reported) —
+   the page used to be one long block scrolling at the document level, which
+   scrolled the header and Close button out of view too; reaching Close then
+   required scrolling all the way back up, unlike every other screen, where
+   only the content below the title band scrolls (.scroll, globals.css).
+   This page can't reuse .frame-none/.app/.scroll directly — those cap width
+   at 480px, wrong for a wide reading-width content page — so the same
+   fixed-header/scrolling-body mechanism is reproduced here at its own,
+   wider scale: .wyp-privacy is a 100vh/100dvh flex column (WypHeader, the
+   .band, and the .noticeband are its first three children, sized to their
+   own content and never scrolled), and .privacy-scroll is the one scrolling
+   region below them, holding <main> and <footer>. */
+.wyp-privacy {
+  background: #fff;
+  color: var(--ink);
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.privacy-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 
 .wyp-privacy .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
 

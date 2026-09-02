@@ -1504,7 +1504,7 @@ export default function ArchiveForm() {
               />
               <div className="archbody">
                 {currentType === 'todos' ? (
-                  <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}`}>
+                  <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}${categoriesEnabled ? ' cat' : ''}`}>
                     <span className="namecell">
                       <ColSort
                         className="c-pri"

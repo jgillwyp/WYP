@@ -2056,15 +2056,19 @@ body {
 }
 
 /* ToDos' "Date" header nudged right (2026-09-02, owner request, phone-only
-   report) — scoped to .colbar.dcols (ToDos) only; Sent/Received's own
-   .colbar.sr is unaffected, per the owner's own note that this isn't an
-   issue there. When Private Category is on and either Priority or Category
-   is the active sort column, that ColSort button's highlighted .pill grows
-   wide enough on a narrow phone to run into "Date" beside it. Right-
-   aligning "Date" within its own 58px column opens breathing room on
-   exactly the side Category grows into — the date VALUES in the rows below
-   (.trd .dt) are untouched, still centered; only this header moves. */
-.colbar.dcols .c-dt {
+   report) — scoped to .colbar.dcols.cat only, not .dcols generally.
+   Jim's follow-up narrowed this: the overlap only happens when Private
+   Category is actually shown (Category is what grows wide enough to reach
+   "Date" when Priority or Category is the active sort column) — with
+   Category off there's nothing to overlap, so nudging "Date" then would
+   just be an unexplained shift. .cat is a new modifier class added to the
+   ToDos colbar only when categoriesEnabled is true (MainScreen.tsx,
+   ArchiveForm.tsx), alongside the existing .wide (todoDatesEnabled)
+   modifier. Sent/Received's own .colbar.sr is unaffected either way, per
+   the owner's own note that this isn't an issue there. The date VALUES in
+   the rows below (.trd .dt) are untouched, still centered; only this
+   header moves, and only when Category is on. */
+.colbar.dcols.cat .c-dt {
   text-align: right;
 }
 
@@ -2425,6 +2429,22 @@ body {
 .archcolhead .colbar {
   padding-left: 0;
   padding-right: 0;
+}
+
+/* "To"/"From"/"Priority" breathing room (2026-09-02, owner-reported) — a
+   follow-up to the alignment fix directly above. Zeroing .colbar's own
+   left/right padding correctly aligned the Date/Due/Done grid columns with
+   the data below, but as a side effect also left the leftmost label ("To"
+   on Sent, "From" on Received, "Priority" on ToDos) jammed flush against
+   the blue band's own left edge, with no breathing room at all. Padding
+   .colbar itself again would shift every column in the grid, re-breaking
+   the fix above — so this targets .namecell (the leftmost grid cell's own
+   wrapper) specifically, leaving the grid's own track positions untouched.
+   A CSS inset rather than literal nonbreaking-space characters in the
+   label text — same visual result, without adding whitespace that would
+   also read back through aria-label/copy-paste. */
+.archcolhead .colbar .namecell {
+  padding-left: 6px;
 }
 
 /* Opens the record's own Detail screen (Request/Response/ToDo Detail) — same
