@@ -3101,3 +3101,131 @@ commit;
 -- real Attachments UI once that code change ships alongside this
 -- migration).
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 049 — reword get_request_by_token's generic dead-link
+-- message so it reads as sender action, not app failure
+-- DRAFTED 2026-09-02 — NOT YET CONFIRMED RUN.
+--
+-- Jim, concerned that a recipient clicking an old Request Response email
+-- link after the WYP user has deleted the underlying Request (via a Contact
+-- deletion cascade, 2026-09-01, or Archive's own standalone Delete,
+-- 2026-08-15) could read the resulting dead link as the app being
+-- unreliable rather than as something the sender did. Both deletion paths
+-- hard-delete the requests row outright — a deliberate choice, see
+-- CLAUDE.md's Contact-deletion history — so link_token_hash is gone with
+-- it; get_request_by_token has nothing left to distinguish "a real Request
+-- the sender removed" from "a malformed or never-valid token" — both hit
+-- the same v_request.id is null branch. Confirmed with Jim: don't try to
+-- distinguish the cases at the DB level (would mean keeping some tombstone
+-- row after every delete, reopening the hard-delete-for-privacy decision)
+-- — just change what the one generic message says, since it already covers
+-- every failure mode (never-existed, expired, revoked, deleted) alike.
+--
+-- Wording changes from "This link is no longer valid." to "This link is no
+-- longer active. The sender has removed the Request it pointed to." —
+-- attributes the dead link to sender action for the common real case
+-- (deletion), at the cost of being technically imprecise for the rare
+-- genuinely-malformed-link case (a mistyped or truncated URL that was
+-- never valid) — an accepted tradeoff, confirmed with Jim rather than
+-- assumed. Same message, same reasoning, still covers the token-expiry and
+-- link-revocation branches too (all three already shared this one message
+-- before this change; still undistinguished after it).
+--
+-- Body is otherwise byte-for-byte identical to migration 045's version —
+-- only the raised exception's message text changes. jsonb-returning, so a
+-- plain create-or-replace is safe (see migration 017's own header for why
+-- the OUT-parameter constraint doesn't apply here).
+--
+-- Scoped to get_request_by_token only — the anonymous /r/[token] mailed-
+-- link path, the actual scenario Jim described. get_received_request's own
+-- "Request not found." message is a different situation (a signed-in
+-- recipient reaching a specific Detail URL directly, not a durable mailed
+-- link meant to keep working indefinitely) and is left unchanged.
+--
+-- The app-side fallback strings in RequestResponseForm.tsx (used only if a
+-- network-level failure returns no message at all) are updated to match in
+-- the same commit as this migration.
+-- ============================================================================
+
+create or replace function public.get_request_by_token(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled, r.reminder_day_of_enabled,
+         r.reminder_day_of_sent_at, r.repeat_rule,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         ct.display_name as contact_name,
+         r.link_expires_at, r.link_revoked_at
+    into v_request
+    from public.requests r
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where r.link_token_hash = v_hash;
+
+  if v_request.id is null
+     or v_request.link_revoked_at is not null
+     or v_request.link_expires_at < now()
+  then
+    raise exception 'This link is no longer active. The sender has removed the Request it pointed to.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text) from public;
+grant execute on function public.get_request_by_token(text) to anon, authenticated;
+
+-- Verify: open an old, now-broken /r/[token] link (e.g. one whose Request
+-- was deleted via Contact deletion or Archive's own Delete) — the page
+-- should show "This link is no longer active. The sender has removed the
+-- Request it pointed to." instead of the old "This link is no longer
+-- valid."
+-- ============================================================================

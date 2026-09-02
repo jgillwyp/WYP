@@ -6,6 +6,42 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-02 — Dead-link message reworded to name the sender, not the app —
+## migration 049 DRAFTED, NOT YET CONFIRMED RUN
+
+Jim: worried that an email recipient clicking an old Request Response link
+after the WYP user deleted the underlying Request — via a Contact deletion
+cascade (2026-09-01) or Archive's own standalone Delete (2026-08-15) — has
+no way to know the sender caused the dead link, and could read it as the
+app being unreliable instead.
+
+Confirmed both deletion paths hard-delete the `requests` row outright, so
+`link_token_hash` is gone with it — `get_request_by_token` genuinely cannot
+tell "a real Request the sender removed" apart from "a malformed or
+never-valid token," both hit the same not-found branch. Recommended
+against reintroducing any tombstone row to make that distinction real,
+since it would reopen the 2026-09-01 hard-delete-for-privacy decision for a
+wording problem — Jim agreed, scope stayed to copy only.
+
+Migration 049 (drafted, not yet run) changes `get_request_by_token`'s one
+generic exception message from "This link is no longer valid." to "This
+link is no longer active. The sender has removed the Request it pointed
+to." — applies uniformly to every failure branch (never-existed, expired,
+revoked, deleted), same as before. `RequestResponseForm.tsx`'s two matching
+fallback strings (used only if a network-level failure returns no message
+at all) were updated to match in the same commit. `get_received_request`'s
+own "Request not found." message (the signed-in-recipient Detail-URL path,
+not a durable mailed link) was deliberately left unchanged — different
+scenario, not what Jim described.
+
+Accepted tradeoff, flagged and confirmed rather than assumed: the new
+wording is technically inaccurate for the rare case of a link that was
+truly never valid (a mistyped or truncated URL) — it will still say "the
+sender has removed" something that was never there. `npx tsc --noEmit`/
+`npm run lint` clean.
+
+\---
+
 ## 2026-09-02 — Privacy Policy page: standard header + grey-band Close,
 ## effective-date note moved to a .noticeband
 

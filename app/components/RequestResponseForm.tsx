@@ -356,9 +356,14 @@ export default function RequestResponseForm() {
 
       if (rpcError || !rpcData) {
         // get_request_by_token returns one generic message for every failure
-        // (not found / expired / revoked) so a bad guess can't be
+        // (not found / expired / revoked / deleted) so a bad guess can't be
         // distinguished from an expired link — shown to the visitor as-is.
-        setLoadError(rpcError?.message ?? 'This link is no longer valid.')
+        // Reworded 2026-09-02 (migration 049) so a recipient reads a dead
+        // link as the sender's own action rather than the app being
+        // unreliable — the fallback here only fires on a network-level
+        // failure with no message at all, so it's kept in sync with the
+        // SQL function's own wording rather than left stale.
+        setLoadError(rpcError?.message ?? 'This link is no longer active. The sender has removed the Request it pointed to.')
         setLoading(false)
         return
       }
@@ -643,7 +648,7 @@ export default function RequestResponseForm() {
       <div className="frame-none">
         <div className="app">
           <WypHeader />
-          <div className="subempty">{loadError ?? 'This link is no longer valid.'}</div>
+          <div className="subempty">{loadError ?? 'This link is no longer active. The sender has removed the Request it pointed to.'}</div>
         </div>
       </div>
     )

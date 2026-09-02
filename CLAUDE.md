@@ -3424,3 +3424,64 @@ link is built only after the stack is proven on Add Contact.
   every-screen sweep. `npx tsc --noEmit`/`npm run lint` clean. No mockup
   changes — none of the affected screens' static HTML has interactive
   footer-link or Send/Save-disabling JS to update.
+- **`.subbanner-row` buttons switched to white; dynamic copyright line
+  added (2026-09-02, same-day follow-ups to the batch above).** Jim: the
+  light-blue `.btn-secondary` background on the new Subscription/Privacy
+  buttons drew more attention than he wanted ("the white backgrounds are
+  better... a little less visually complicated"). Fixed with a scoped
+  override, `.subbanner-row .btn-secondary { background: #fff; }` plus a
+  matching `:active` state, in `app/globals.css` — the app-wide
+  `.btn-secondary` rule itself is untouched. Separately, Jim asked for a
+  centered copyright line below the two buttons, "© 2026 Would You Please,
+  Inc. All rights reserved.," with the year computed live for
+  America/Los_Angeles rather than hardcoded. New `.subcopyright` CSS and a
+  `losAngelesYear()` helper — duplicated per file, this codebase's own
+  small-helper convention — added to all 9 `.subbanner-row` screens. `npx
+  tsc --noEmit`/`npm run lint` clean.
+- **Privacy Policy page: standard header + grey-band Close, effective-date
+  note moved to a `.noticeband` (2026-09-02).** Jim's first ask — a plain
+  Close button inside `WypHeader`'s own right-hand action slot — was
+  superseded the same day by his own follow-up: "otherwise could imply
+  closing the app." `app/privacy/page.tsx` now renders a plain `WypHeader`
+  with no action, followed by the same `.band`/`.glabel`/`.bandcluster`
+  screen-title row every other screen uses (`<h1 className="glabel">Privacy
+  Policy</h1>` plus a `.btn-secondary` Close, `router.back()` — this page
+  has no single fixed return destination, same reasoning as Request/ToDo/
+  Contact Detail's own Close). The old plain `<h1>`/`.eff` caption is gone;
+  the effective date now sits in a `.noticeband`, reusing Request Detail's
+  own "Note: ..." light-blue treatment verbatim ("Note: Effective September
+  1, 2026."). `h1` is deliberately kept as a real heading element (every
+  other screen's band uses a plain `<span>`) — a considered call, not
+  literally instructed: this is real content, not transient app UI, and
+  benefits from a proper heading for accessibility/SEO; `.glabel` is a
+  plain class rule so it renders identically either way. `privacy.css`'s
+  own now-conflicting `.wyp-privacy h1`/`.eff` rules were removed rather
+  than left to silently override the shared `.glabel` class. `npx tsc
+  --noEmit`/`npm run lint` clean. No mockup — this page still has none, per
+  its own 2026-09-01 reasoning (prose content, not a Palette-1 screen).
+- **Dead-link message reworded to name the sender, not the app — migration
+  049 DRAFTED, NOT YET CONFIRMED RUN (2026-09-02).** Jim: worried that an
+  email recipient clicking an old Request Response link after the WYP user
+  deleted the underlying Request — via a Contact deletion cascade
+  (2026-09-01) or Archive's own standalone Delete (2026-08-15) — has no way
+  to know the sender caused the dead link, and could read it as the app
+  being unreliable instead. Confirmed both deletion paths hard-delete the
+  `requests` row outright, so `link_token_hash` is gone with it —
+  `get_request_by_token` genuinely cannot tell "a real Request the sender
+  removed" apart from "a malformed or never-valid token," both hit the same
+  not-found branch. Recommended against a tombstone row to make that
+  distinction real (would reopen the 2026-09-01 hard-delete-for-privacy
+  decision for a wording problem); Jim agreed, scope stayed to copy only.
+  Migration 049 changes the function's one generic exception message from
+  "This link is no longer valid." to "This link is no longer active. The
+  sender has removed the Request it pointed to." — still applies uniformly
+  to every failure branch (never-existed, expired, revoked, deleted).
+  `RequestResponseForm.tsx`'s two matching fallback strings (network-level
+  failure with no message) updated to match in the same commit.
+  `get_received_request`'s own "Request not found." message (the
+  signed-in-recipient Detail-URL path, not a durable mailed link) was
+  deliberately left unchanged — a different scenario than the one Jim
+  described. **Accepted, flagged tradeoff**: the new wording is technically
+  inaccurate for the rare case of a link that was truly never valid (a
+  mistyped or truncated URL) — it will still say "the sender has removed"
+  something that was never there. `npx tsc --noEmit`/`npm run lint` clean.
