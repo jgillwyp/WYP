@@ -1,4 +1,7 @@
-import Link from 'next/link'
+'use client'
+
+import { useRouter } from 'next/navigation'
+import WypHeader from '../components/WypHeader'
 import './privacy.css'
 
 // Privacy Policy — new route, 2026-09-01. Jim asked for a data privacy
@@ -13,6 +16,36 @@ import './privacy.css'
 // now; not yet linked from /login or the authenticated app's own Account
 // screen, flagged as a lightweight follow-up if Jim wants it there too.
 //
+// Header/Close button (2026-09-02, owner request) — the page's own
+// hand-built logo-lockup header + "Back to wouldyouplease.com" text link
+// replaced with the actual shared WypHeader component every other screen
+// uses. Close itself does NOT live in WypHeader's own action slot (that
+// was the first draft) — Jim's follow-up wanted Close presented inside a
+// grey-background .band/.glabel screen-title heading, "like the heading
+// for Request Detail," specifically so it can't be misread as closing the
+// whole app; an icon-style button sitting directly in the plain white
+// header risked exactly that reading. So: WypHeader with no action, then
+// a standard .band row ("Privacy Policy" / Close), same shared classes
+// every other screen's title band uses. Close calls router.back() — this
+// page is reached from several different places (the landing page's own
+// footer, and the .subbanner-row Privacy button now on 9 different
+// in-app screens), so there's no single fixed "return to" destination the
+// way Contacts' own Close (-> '/') has; back() is this codebase's own
+// established convention for exactly that situation (Request/ToDo/Contact
+// Detail all do the same, see CLAUDE.md's Known gaps). This made the page
+// a client component for the first time (WypHeader/useRouter both need
+// it) — no other behavior on the page depends on that.
+//
+// Effective-date note (2026-09-02, same request) — moved out of a small
+// grey caption line under an <h1> (now gone, see below) into a
+// .noticeband, the same light-blue "Note: ..." treatment Request Detail
+// uses for its own "The Request Recipient is notified of changes." The
+// title itself moved into the new .band's own <h1 className="glabel">
+// (kept as a real h1 — unlike the app's transient UI screens, this is a
+// real content page and benefits from a proper heading for
+// accessibility/SEO; .glabel is a plain class rule, so it renders
+// identically on an h1 as it does on the span every other screen uses).
+//
 // Content reflects this app's actual current practices as built, not
 // generic boilerplate — see each section for specifics (Supabase, Vercel,
 // Hostinger, the Office Online viewer, the browser's own Voice Dictation
@@ -25,22 +58,34 @@ import './privacy.css'
 // treating this as a substitute for professional legal review, especially
 // if WYP's user base later includes residents of jurisdictions with their
 // own specific disclosure requirements (e.g. GDPR, CCPA).
+
+// Copyright-line year (2026-09-02, owner request) — computed live in
+// America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
+// never goes stale. Duplicated here rather than imported, matching this
+// codebase's own small-helper convention (the same function is already
+// duplicated per file across the 9 .subbanner-row screens).
+function losAngelesYear(): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
+}
+
 export default function PrivacyPolicyPage() {
+  const router = useRouter()
   return (
     <div className="wyp-privacy">
-      <header className="ptop">
-        <div className="wrap">
-          <Link className="brandmark" href="/">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" strokeWidth="11" strokeLinejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" strokeWidth="40" strokeLinecap="round" strokeLinejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/></g></svg>
-            <span className="word">Would You Please</span>
-          </Link>
-          <Link className="back" href="/">&larr; Back to wouldyouplease.com</Link>
-        </div>
-      </header>
+      <WypHeader />
+
+      <div className="band">
+        <h1 className="glabel">Privacy Policy</h1>
+        <span className="bandcluster">
+          <button className="btn-secondary" type="button" onClick={() => router.back()}>
+            Close
+          </button>
+        </span>
+      </div>
+
+      <div className="noticeband"><b>Note:</b> Effective September 1, 2026.</div>
 
       <main className="wrap">
-        <h1>Privacy Policy</h1>
-        <div className="eff">Effective September 1, 2026</div>
         <p className="intro">
           Would You Please (&ldquo;WYP,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) helps people track
           Requests they send to others and personal ToDos, with a formal response and a due date
@@ -182,7 +227,7 @@ export default function PrivacyPolicyPage() {
 
       <footer className="pfoot">
         <div className="wrap">
-          <span>&#169; 2026 Would You Please</span>
+          <span>{`© ${losAngelesYear()} Would You Please, Inc. All rights reserved.`}</span>
           <span>wouldyouplease.com</span>
         </div>
       </footer>

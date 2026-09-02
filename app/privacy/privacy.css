@@ -11,24 +11,30 @@
 
 .wyp-privacy .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
 
-.wyp-privacy header.ptop {
-  border-bottom: 1px solid var(--rule);
-  padding: 16px 0;
-}
-.wyp-privacy header.ptop .wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.wyp-privacy .brandmark { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.wyp-privacy .brandmark svg { height: 30px; width: auto; display: block; }
-.wyp-privacy .brandmark .word { font-size: 17px; font-weight: 800; color: var(--brand-blue); letter-spacing: -.01em; }
-.wyp-privacy header.ptop .back { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--brand-blue); text-decoration: none; }
-.wyp-privacy header.ptop .back:hover { text-decoration: underline; }
+/* The page's own hand-built .ptop/.brandmark/.back header rules (logo
+   lockup + "Back to wouldyouplease.com" text link) were removed 2026-09-02
+   in favor of the actual shared WypHeader component (.hdr, globals.css) —
+   same header/Close-button pattern every other screen uses. .hdr renders
+   edge-to-edge here (no .frame-none shell on this page, unlike every
+   authenticated screen), matching how the landing page's own from-scratch
+   header also spans the full viewport width rather than being confined to
+   this page's 760px reading-width .wrap. */
+
+/* Screen-title band and effective-date note (2026-09-02, owner request) —
+   "Privacy Policy" and Close now sit in the same grey .band/.glabel/
+   .bandcluster heading Request Detail uses (so Close reads as leaving a
+   section, not closing the app), and the effective date moved into a
+   .noticeband note, matching Request Detail's own "Note: The Request
+   Recipient is notified of changes." treatment — both are shared global
+   classes (globals.css), deliberately not redeclared/overridden here so
+   they render identically to every other screen's version. The old
+   .wyp-privacy h1/.eff rules this replaced are removed — the band's own
+   <h1 className="glabel"> now carries the title (kept as a real h1,
+   unlike the app's transient UI screens, since this is a real content
+   page that benefits from a proper heading for accessibility/SEO; .glabel
+   itself is class-based and renders identically on any element). */
 
 .wyp-privacy main { padding: 36px 0 60px; }
-.wyp-privacy h1 { font-size: 26px; font-weight: 800; letter-spacing: -.015em; color: var(--ink); }
-.wyp-privacy .eff { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
 .wyp-privacy .intro { font-size: 14.5px; line-height: 1.6; color: var(--ink); margin-top: 18px; max-width: 66ch; }
 
 .wyp-privacy h2 {

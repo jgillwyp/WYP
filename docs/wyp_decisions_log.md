@@ -6,6 +6,47 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-02 — Privacy Policy page: standard header + grey-band Close,
+## effective-date note moved to a .noticeband
+
+Jim, refining the same-day header/Close change below: "The close button
+should be presented in a grey-background heading of 'Privacy Policy' like
+the heading for 'Request Detail' — otherwise could imply closing the app.
+The 'Effective September 1, 2026' note could be presented like the
+light-blue background Request Detail 'Note: The Request Recipient is
+notified of changes.'"
+
+Reworked `app/privacy/page.tsx`: `WypHeader` now renders with no `action`
+prop (the first draft's Close-in-the-header-action-slot approach is
+dropped — Jim's own stated reasoning is that a control sitting directly in
+the plain white header can read as closing the whole app, not just the
+page). Close now lives in a standard `.band`/`.bandcluster` row directly
+below the header — the exact shared component every screen's own title
+band already uses — with `<h1 className="glabel">Privacy Policy</h1>` as
+the title and a `.btn-secondary` "Close" button
+(`router.back()`, unchanged reasoning from the first draft: this page has
+no single fixed return destination). The old plain `<h1>`/`.eff` caption
+line is gone; the effective date now sits in a `.noticeband` right below
+the band, reusing Request Detail's own "Note: ..." light-blue treatment
+verbatim, worded "Note: Effective September 1, 2026."
+
+`h1` stays a real heading element (not reverted to a plain `<span>` like
+other screens' bands use) — a considered call, not literally instructed:
+this is real content a visitor/search engine benefits from having a
+proper `<h1>` for, unlike the app's own transient UI screens. `.glabel`
+is a plain class rule with no element-type dependency, so it renders
+identically either way. `privacy.css`'s own scoped `.wyp-privacy h1`/`.eff`
+rules were removed — the shared global `.glabel`/`.band`/`.noticeband`
+classes are used unmodified, deliberately not redeclared or overridden
+here, so the page matches Request Detail's actual rendered appearance
+rather than a close approximation.
+
+`npx tsc --noEmit`/`npm run lint` clean. No mockup — this page still has
+no `design/screens/` counterpart, per its own original 2026-09-01 entry's
+reasoning (prose content, not a Palette-1 form/button screen).
+
+\---
+
 ## 2026-09-02 — Same-day follow-up: dynamic copyright line added under the
 ## subbanner-row buttons
 
