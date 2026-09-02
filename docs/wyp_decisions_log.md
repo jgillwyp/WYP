@@ -6,6 +6,39 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-02 — Same-day follow-up: dynamic copyright line added under the
+## subbanner-row buttons
+
+Jim: the white-button change (previous entry) "will increase the vertical
+size of the banner, but a copyright notice should be in the footer as
+text, perhaps centered below the buttons" — "© YYYY Would You Please, Inc.
+All rights reserved.", with YYYY dynamically set from the current year in
+America/Los_Angeles.
+
+New `<p className="subcopyright">` rendered directly after `.subbanner-row`
+on all 9 screens, and a small `losAngelesYear()` helper
+(`new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles',
+year: 'numeric' }).format(new Date())`) duplicated per file, matching this
+codebase's own small-helper convention (`formatMDY`, `PRIORITY_LABEL`,
+etc. are already duplicated the same way rather than centralized). New
+`.subcopyright` CSS (`app/globals.css`) — 10px, `--ink-soft`, centered,
+same white background as the row above it, deliberately quiet since this
+is boilerplate rather than something meant to draw the eye. `.subbanner-row`'s
+own bottom padding was trimmed slightly so the two elements read as one
+footer block rather than two stacked bands.
+
+**Flagged, not changed**: `LandingPage.tsx`'s own footer already has a
+static `© 2026 Would You Please` (no "Inc.", no "All rights reserved.",
+and not dynamically computed) — a different, older piece of copy that
+predates this request. Left untouched since Jim's ask was specifically
+about the new subbanner-row footer; worth revisiting for consistency if
+he wants one canonical copyright wording site-wide.
+
+`npx tsc --noEmit`/`npm run lint` clean. No mockup changes — none of the
+9 affected screens' static HTML has a footer to update.
+
+\---
+
 ## 2026-09-02 — Same-day follow-up: subbanner-row buttons switched to white
 
 Jim, from a screenshot comparing the two new footer buttons side by side

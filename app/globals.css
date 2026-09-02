@@ -1783,7 +1783,7 @@ body {
   justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 6px var(--pad);
+  padding: 6px var(--pad) 4px;
   background: #fff;
   border-top: 1px solid var(--rule);
 }
@@ -1799,6 +1799,24 @@ body {
      text are unchanged). Scoped to this row only, not a change to
      .btn-secondary itself, which stays Strip-tint everywhere else. */
   background: #fff;
+}
+
+/* Copyright line under the subbanner-row buttons (2026-09-02, owner
+   request) — same white background/horizontal padding as the row above
+   it, its own small bottom padding so the pair together forms one visual
+   footer block. Deliberately quiet (10px, --ink-soft) — informational
+   boilerplate, not something meant to draw the eye the way the two
+   buttons above it do. Year is computed live in America/Los_Angeles
+   (the owner's own reference time zone for this), not hardcoded, so it
+   never goes stale. */
+.subcopyright {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 var(--pad) 6px;
+  background: #fff;
+  text-align: center;
+  font-size: 10px;
+  color: var(--ink-soft);
 }
 
 .subbanner-row .btn-secondary:active {

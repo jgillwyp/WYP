@@ -40,6 +40,14 @@ type ContactFormState = {
   timeZone: string
 }
 
+// Copyright-line year (2026-09-02, owner request) — computed live in
+// America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
+// never goes stale. Duplicated per file that renders the .subbanner-row
+// footer, matching this codebase's own small-helper convention.
+function losAngelesYear(): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
+}
+
 export default function ContactDetailForm() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
@@ -626,6 +634,9 @@ export default function ContactDetailForm() {
             Privacy
           </button>
         </div>
+        <p className="subcopyright">
+          {`© ${losAngelesYear()} Would You Please, Inc. All rights reserved.`}
+        </p>
         {tier !== 'subscriber' && (
           <div className="adslot" aria-hidden="true">
             <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
