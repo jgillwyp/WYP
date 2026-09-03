@@ -397,6 +397,18 @@ export function sanitizeChangedFields(fields: unknown): ChangedFieldLabel[] {
   return out
 }
 
+// Singular/plural-aware "what changed" sentence, plain text (no markup) —
+// shared by both the HTML box below and the plain-text builders, so the
+// one field/fields distinction only has to be written once. 2026-09-02,
+// owner-reported: a single changed field ("Due Date") had read "The
+// following data fields... has changed" — wrong grammar either way, since
+// the old wording never varied "field(s)"/"has"/"have" on count.
+function changedFieldsSentence(fields: string[], list: string): string {
+  const noun = fields.length === 1 ? 'data field' : 'data fields'
+  const verb = fields.length === 1 ? 'has' : 'have'
+  return `The following ${noun} for this Request ${verb} changed: ${list}.`
+}
+
 // Notice box for the "what changed" sentence plus the button, grouped
 // together in one white callout against the Strip-colored body — matches
 // Jim's own mocked-up screenshot, which shows the sentence directly above
@@ -406,7 +418,7 @@ function emailChangedFieldsBox(fields: string[], buttonHtml: string): string {
   const list = fields.map((f) => `<b>${escapeHtml(f)}</b>`).join(', ')
   return [
     '<div style="background:#FFFFFF; border-radius:8px; padding:14px 16px; margin:0 0 18px;">',
-    `<p style="margin:0 0 12px;">The following data fields for this Request have changed: ${list}.</p>`,
+    `<p style="margin:0 0 12px;">${changedFieldsSentence(fields, list)}</p>`,
     `<p style="margin:0;">${buttonHtml}</p>`,
     '</div>',
   ].join('\n')
@@ -572,7 +584,7 @@ export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
   const lines =
     fields.changedFields && fields.changedFields.length > 0
       ? [
-          `The following data fields for this Request have changed: ${fields.changedFields.join(', ')}.`,
+          changedFieldsSentence(fields.changedFields, fields.changedFields.join(', ')),
           '',
           buttonLine,
           fields.link,
@@ -946,7 +958,7 @@ export function buildOwnerUpdateEmailHtml(fields: OwnerUpdateEmailFields): strin
 
 export function buildOwnerUpdateEmailText(fields: OwnerUpdateEmailFields): string {
   return [
-    `The following data fields for this Request have changed: ${fields.changedFields.join(', ')}.`,
+    changedFieldsSentence(fields.changedFields, fields.changedFields.join(', ')),
     '',
     `${OWNER_UPDATE_LINK_TEXT}:`,
     fields.link,
