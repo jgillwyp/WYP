@@ -3936,7 +3936,7 @@ body {
    fits. No mockup — this is app content, not a Palette-1 form/button screen,
    same reasoning /privacy was built directly (see CLAUDE.md's Known gaps). */
 .help {
-  padding: 4px 2px 24px;
+  padding: 4px var(--pad) 24px;
 }
 
 .help-lead {

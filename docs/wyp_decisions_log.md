@@ -7870,3 +7870,13 @@ Also reworded `TodoFeaturesHelp.tsx`'s Attachments paragraph — "with the same 
 Separately, Jim flagged the Create Request / Request Response sample images: the Due Date shown (09-12-26) is a Saturday, and 09-11 (visually adjacent, and what "by Friday" literally described) is a sensitive date for a business example. Changed every sample Due Date from 09-12-26 to 09-18-26 (a Friday) across `CreatingRequestHelp.tsx`, `RespondingRequestHelp.tsx`, and `GettingStartedHelp.tsx`'s Main Screen sample (same date reused there, fixed for consistency though not separately flagged) — verified 2026-09-18 is a Friday and 2026-09-12 a Saturday. Also fixed Creating a Request's sample: Due Date's value text was at x=200 while Recipient's own value sat at x=120 — misaligned. Moved to x=120 so Due Date's value starts at the same left edge as Recipient's.
 
 `npx tsc --noEmit`/`npm run lint` clean.
+
+---
+
+## 2026-09-03 — Help topic content left/right margins
+
+Jim: "A small left and right margin is needed for the help content, next up, and see account options (the images have margins which match the page title margins)" — the sample images already inset correctly against the band's own title margin; the prose, "Next up" nav, and the new Account Options banner did not.
+
+Root cause: `.help`'s own horizontal padding was `2px`, far short of the `14px` (`var(--pad)`) every band/title and every other in-app screen's content region uses. Changed `.help { padding: 4px 2px 24px; }` to `.help { padding: 4px var(--pad) 24px; }` (`app/globals.css`). Since every element in a Help topic — lead paragraph, headings, lists, the sample-image panel, `HelpNext`, and the new `HelpAccountLink` banner — is a plain child of `.help` with no outer margin of its own, this one change aligns all of them to the same left/right inset the images (and the band title above them) already had.
+
+`npx tsc --noEmit`/`npm run lint` clean.
