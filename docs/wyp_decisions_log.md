@@ -6,6 +6,12 @@ The PRD and UI Design Specification remain the canonical source of truth for pro
 
 \---
 
+## 2026-09-03 — Same-day follow-up: "From..." typo confirmed, subtitle restyled into the title band (§6.48 PROPOSED)
+
+Jim, in one message: confirmed "the message related to Archive and Delete should have been UnArchive and Delete" — the data-driven reading implemented same day is correct, no further change needed there. Separately, on styling: "I would prefer the From Active Records or From Archive Records text to be either within the same color background as the section title... and shown under the section title as in the mockup — or in a slightly larger font and to the right of the section title... if done to the right, the three words should wrap together if needed." Picked the first option — inside the same grey `.band` background, stacked below the title — since it matches the reference mockup he'd already pasted for this feature, rather than inventing a new right-of-title placement with its own wrap-together constraint to satisfy. `.band` is normally a single centered row (`align-items: center`, no existing two-line variant anywhere in the app); new `.archsecband` (§6.48 PROPOSED) switches it to a column stack for this one instance (`flex-direction: column; align-items: flex-start; gap: 2px`), and `.archsecsub` styles the subtitle line (12px/600/`--ink-soft`) inside the same band. The subtitle is no longer a separate `<p className="subnote">` below the band — it's now a second `<span>` inside the `.band` div itself. `npx tsc --noEmit`/`npm run lint` clean. No mockup update — `WYP_archive_palette1.html` still shows the original single-field flow, same flagged gap as the batch above.
+
+\---
+
 ## 2026-09-03 — Archive: Search Text field, Starting/Ending Done Date range, fixed instructional text, "From..." record-scope subtitle (§6.39 continuation)
 
 Jim, with a pasted mockup, after using the live Archive screen for real: add a Search Text field alongside the existing Recipient/Requestor field; replace the single "Before Done Date" field with a "Starting Done Date"/"Ending Done Date" range pair; and — "I have added a 'From..' under the section title of for example 'Sent Records (Done)'. The 'From...' would be 'From Active Records' and for Archive and Delete it would be 'From Archived Records'" — a small subtitle under each Record Type's own title band explaining why the visible list changes when Action changes.

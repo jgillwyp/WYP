@@ -182,6 +182,24 @@ body {
   gap: 8px;
 }
 
+/* §6.48 PROPOSED — .archsecband/.archsecsub, 2026-09-03 (Archive screen).
+   .band is normally a single centered row (align-items: center); a section
+   that needs a second, smaller line under its own title stacks instead —
+   Jim's own preferred styling, "within the same color background... shown
+   under the section title," over showing it beside the title at a larger
+   size. Both lines sit inside the same grey .band background. */
+.archsecband {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.archsecsub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
 /* ============================================================================
    BUTTONS (§6.1 primary, §6.11 secondary)
    ========================================================================= */

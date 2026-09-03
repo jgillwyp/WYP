@@ -126,13 +126,16 @@ import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
  * changes: "From Active Records" for Archive, "From Archived Records" for
  * UnArchive and Delete — resolved directly off the `rows` filter above
  * (Archive shows Done-not-yet-archived "active" rows; UnArchive and Delete
- * both show already-archived rows). Flagged, not silently assumed: Jim's
- * own literal wording read "for Archive and Delete it would be 'From
- * Archived Records'" — almost certainly a typo for "for UnArchive and
- * Delete," since "From Active Records" and "From Archived Records" can't
- * both be true of Archive mode at once. Implemented per the logically
- * consistent, data-driven reading above; worth a quick confirmation from
- * Jim rather than assumed final.
+ * both show already-archived rows). Jim's own literal wording read "for
+ * Archive and Delete it would be 'From Archived Records'" — flagged as
+ * almost certainly a typo for "for UnArchive and Delete," since "From
+ * Active Records" and "From Archived Records" can't both be true of
+ * Archive mode at once. Jim confirmed the UnArchive/Delete reading is
+ * correct the same day. Restyled the same day too, per his own follow-up
+ * preference: the subtitle now sits inside the same grey `.band`
+ * background as the title, stacked below it (`.archsecband`/`.archsecsub`,
+ * §6.48 PROPOSED) — his preferred option over showing it beside the title
+ * at a larger size.
  */
 
 type RecordType = 'sent' | 'received' | 'todos'
@@ -1607,17 +1610,25 @@ export default function ArchiveForm() {
               (above, wired to the real startPrint) is the only Print
               control this screen needs; this one was a confusing, broken
               duplicate, not a second intentional entry point. */}
-          <div className="band" style={{ marginTop: 0 }}>
-            <span className="glabel" style={{ fontSize: 17 }}>{listTitle}</span>
-          </div>
-          {/* "From..." subtitle (2026-09-03) — explains why the list changes
+          {/* "From..." subtitle (2026-09-03, restyled same day per Jim's
+              follow-up — §6.48 PROPOSED) — explains why the list changes
               when Action changes, without requiring the visitor to already
               know Archive shows active-Done records while UnArchive/Delete
-              show already-archived ones. See file header comment for the
-              flagged likely typo in Jim's own wording this resolves. */}
-          <p className="subnote" style={{ margin: '2px 0 8px' }}>
-            {action === 'archive' ? 'From Active Records' : 'From Archived Records'}
-          </p>
+              show already-archived ones. Jim confirmed the typo flagged in
+              this file's own header comment: "for Archive and Delete"
+              should have read "for UnArchive and Delete." Stacked inside
+              the same grey `.band` background as the title, per Jim's own
+              preference ("within the same color background... shown under
+              the section title as in the mockup") over the alternative
+              (larger font, to the right, wrapping together) — `.archsecband`
+              switches `.band` from its usual single centered row to a
+              column stack; `.archsecsub` is the subtitle line. */}
+          <div className="band archsecband" style={{ marginTop: 0 }}>
+            <span className="glabel" style={{ fontSize: 17 }}>{listTitle}</span>
+            <span className="archsecsub">
+              {action === 'archive' ? 'From Active Records' : 'From Archived Records'}
+            </span>
+          </div>
 
           <div className="archcolhead">
             <div className="archrow">
