@@ -2,6 +2,7 @@
 
 import HelpTopicShell from './HelpTopicShell'
 import HelpNext from './HelpNext'
+import HelpAccountLink from './HelpAccountLink'
 
 /** Responding to a Request (2026-09-03) — third Help-chip topic. See
  * GettingStartedHelp.tsx's own header comment for the sample-image
@@ -80,10 +81,12 @@ export default function RespondingRequestHelp() {
       <h2>Already Have an Account?</h2>
       <p>
         Responding works exactly the same way, and your response is saved to your own Received
-        list too — see the ToDo Features topic for what else your account can do.
+        list too — see the Getting Started topic for a look at that list and the rest of your
+        Main Screen.
       </p>
 
       <HelpNext current="responding-to-a-request" />
+      <HelpAccountLink section="general" label="See Account Options to Personalize Would You Please" />
     </HelpTopicShell>
   )
 }

@@ -13,10 +13,21 @@ import WypHeader from '../WypHeader'
  * `.glabel`/`.scroll` (see AccountForm.tsx/ArchiveForm.tsx for the identical
  * pattern) — rather than Privacy's own wide reading-width layout, since this
  * content is reached from inside the mobile app UI (Main Screen's Housekeeping
- * Help chip), not from an external signed-out context. Close uses
- * `router.back()`, same convention as every Detail-type screen — returns to
- * Main Screen with its Help tab still selected (hkTab persists via
- * sessionStorage/main_chip_prefs regardless of which topic was open).
+ * Help chip), not from an external signed-out context.
+ *
+ * Close navigates straight to Main Screen (`router.push('/')`), not
+ * `router.back()` (2026-09-03, owner-reported) — the "what to try next" nav
+ * (HelpNext.tsx) pushes a fresh history entry every time it's followed, so
+ * `back()` after walking through several Next-Up hops took multiple clicks
+ * to actually leave Help. Main Screen's own scroll-position persistence
+ * (`MAIN_SCROLL_KEY`, saved on every scroll and restored on every mount,
+ * not gated behind a round-trip marker the way Search/Archive's own state
+ * is) already lands back wherever the visitor last scrolled — the
+ * Housekeeping Help section, since that's what they scrolled to in order to
+ * reach a Help row in the first place — so jumping straight to `/` needs no
+ * extra scroll-restore logic of its own, and the Help tab itself stays
+ * selected via the same `hkTab` persistence every other tab switch already
+ * uses.
  */
 export default function HelpTopicShell({
   title,
@@ -34,7 +45,7 @@ export default function HelpTopicShell({
 
         <div className="band">
           <span className="glabel">{title}</span>
-          <button className="btn" type="button" onClick={() => router.back()}>
+          <button className="btn" type="button" onClick={() => router.push('/')}>
             Close
           </button>
         </div>

@@ -4020,3 +4020,23 @@ body {
   color: var(--ink-soft);
   margin-bottom: 8px;
 }
+
+/* HelpAccountLink (2026-09-03) — the "See Account Options to Personalize..."
+   banner every Help topic ends with. A `.noticeband` (light-Strip
+   informational band) turned into a full-width tappable button rather than
+   a plain link, per Jim's own suggested framing. */
+.help-acct-banner {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--brand-blue);
+  cursor: pointer;
+}
+
+.help-acct-banner:active {
+  opacity: 0.75;
+}

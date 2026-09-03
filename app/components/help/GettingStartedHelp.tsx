@@ -2,6 +2,7 @@
 
 import HelpTopicShell from './HelpTopicShell'
 import HelpNext from './HelpNext'
+import HelpAccountLink from './HelpAccountLink'
 
 /**
  * Getting Started (2026-09-03) — first of four Help-chip topics. Jim: "an
@@ -100,6 +101,7 @@ export default function GettingStartedHelp() {
       </ul>
 
       <HelpNext current="getting-started" />
+      <HelpAccountLink section="general" label="See Account Options to Personalize Would You Please" />
     </HelpTopicShell>
   )
 }

@@ -7830,3 +7830,31 @@ This pattern exists because the project knowledge base does not accept direct `.
 * The main-screen mockup (PRD Figure 12.1, UI spec Figure 9.1) currently renders the mark plus separately-positioned wordmark and tagline text rather than the horizontal lockup SVG. No change required — the mockup composition still matches the design intent — but if Figure 12.1 / 9.1 is ever regenerated, consider whether dropping in `wyp\\\\\\\_logo\\\\\\\_horizontal\\\\\\\_light\\\\\\\_bg.svg` as a single asset would simplify the markup.
 * The Sales One-Pager PDF (in project knowledge) is presumed to use the dark-background mark in its header/footer bands. Confirm at the next sales-collateral refresh.
 
+
+---
+
+## 2026-09-03 — Help chip follow-up fixes (Close navigation, bold-text spacing, wrong topic cross-reference)
+
+Three small fixes from Jim's own testing of the previous day's Help-chip batch.
+
+1. **Close now returns straight to Housekeeping's Help list.** `HelpTopicShell.tsx`'s Close button switched from `router.back()` to `router.push('/')`. The "what to try next" nav (`HelpNext.tsx`) pushes a fresh history entry each time it's followed, so `back()` after walking through several Next-Up hops took several clicks to actually leave Help — Jim: "if you went through all Next Ups, it takes several clicks to get back to the base app... which is not expected." Main Screen's own scroll-position persistence (`MAIN_SCROLL_KEY`, saved on every scroll, restored unconditionally on every mount) already lands back at the Housekeeping Help section with no extra logic needed, and the Help tab itself stays selected via the existing `hkTab` persistence. Jim separately confirmed, after re-testing, that the "lands at the top of Main Screen" symptom he originally reported wasn't actually happening ("I just looked at it again, it does come back to the Housekeeping Help on the last Close") — so no separate scroll-restore fix was needed for that part.
+2. **Bold-text spacing hardened in `TodoFeaturesHelp.tsx`.** Jim reported missing spaces after several `</b>` closes (e.g. "Show Due/Done Dates (ToDos)in Account Options"). Four `<b>` boundaries in this file spanned a line break; one used an inconsistent leading-space-inside-`<b>` workaround instead of the bulletproof `{' '}` JSX-expression-container idiom already used elsewhere in the Help topics (a bare newline at a JSX tag boundary is stripped entirely by React, not collapsed to a space). Normalized all four to use `{' '}` on both sides. The exact root cause of Jim's specific reported example wasn't conclusively reproduced by static analysis, but this is a cheap, harmless, directly-applicable fix for the whole bug class.
+3. **Fixed wrong topic cross-reference in `RespondingRequestHelp.tsx`.** The "Already Have an Account?" section pointed a signed-in Request recipient at "the ToDo Features topic," which doesn't match the sentence's own subject (the Received list, not ToDo features). Jim: "should refer Request Features, not ToDo Features." No topic is literally named "Request Features," so the reference was pointed at **Getting Started** instead, which is the topic that actually covers the Main Screen's Received section this sentence is about.
+
+`npx tsc --noEmit`/`npm run lint` clean for all three fixes.
+
+---
+
+## 2026-09-03 — Help topic "See Account Options" banner
+
+Same-day follow-up. Jim: "Perhaps each help topic should end with a link to the related Account Options, or just to Account Options (and, for that 'excursion', come back to same Help screen)," then refined the wording to a clickable banner: "'See Account Options to Personalize Would You Please' banner?"
+
+New shared `HelpAccountLink.tsx`, appended as the last element of all four Help topics (after `HelpNext`). Renders as a full-width `.noticeband` turned into a tappable button (new `.help-acct-banner` CSS modifier) rather than a plain text link, per Jim's own banner framing. Each topic's banner pre-opens the one Account Options section it actually discusses by writing `AccountForm.tsx`'s own sessionStorage chip-state key (`wyp.acctRequestOpen`/`wyp.acctTodoOpen`/etc. — the same keys `readStoredOpen()` there already reads) immediately before `router.push('/account')`:
+
+- Getting Started / Responding to a Request — general framing, no single specific section: "See Account Options to Personalize Would You Please" (opens the General section, already open by default).
+- Creating a Request — "See Account Options to Personalize Requests" (opens Request Options).
+- ToDo Features — "See Account Options to Personalize ToDos" (opens ToDo Options).
+
+The "come back to same Help screen" half needed no new plumbing: navigating to `/account` is an ordinary forward `router.push`, which pushes a new history entry, and `AccountForm.tsx`'s own Close button already calls `router.back()` — so ordinary browser history already returns to the exact Help topic the visitor came from.
+
+`npx tsc --noEmit`/`npm run lint` clean.

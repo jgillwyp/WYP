@@ -2,6 +2,7 @@
 
 import HelpTopicShell from './HelpTopicShell'
 import HelpNext from './HelpNext'
+import HelpAccountLink from './HelpAccountLink'
 
 /** Creating a Request (2026-09-03) — second Help-chip topic. See
  * GettingStartedHelp.tsx's own header comment for the sample-image
@@ -92,6 +93,7 @@ export default function CreatingRequestHelp() {
       </p>
 
       <HelpNext current="creating-a-request" />
+      <HelpAccountLink section="request" label="See Account Options to Personalize Requests" />
     </HelpTopicShell>
   )
 }

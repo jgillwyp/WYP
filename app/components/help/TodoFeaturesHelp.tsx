@@ -2,6 +2,7 @@
 
 import HelpTopicShell from './HelpTopicShell'
 import HelpNext from './HelpNext'
+import HelpAccountLink from './HelpAccountLink'
 
 /** ToDo Features (2026-09-03) — fourth Help-chip topic, added at Jim's own
  * request ("The three topics work, and add a ToDo features item."). See
@@ -63,27 +64,29 @@ export default function TodoFeaturesHelp() {
 
       <h2>Simple by Default</h2>
       <p>
-        Every ToDo has a Priority — ASAP, SOON, or LATER — and an optional Description. Turn on
-        <b> Show Private Category (ToDos)</b> in Account Options to add your own label (e.g.
-        &ldquo;Personal Fin,&rdquo; &ldquo;Future Dev&rdquo;), visible only to you.
+        Every ToDo has a Priority — ASAP, SOON, or LATER — and an optional Description. Turn on{' '}
+        <b>Show Private Category (ToDos)</b>{' '}
+        in Account Options to add your own label (e.g. &ldquo;Personal Fin,&rdquo;
+        &ldquo;Future Dev&rdquo;), visible only to you.
       </p>
 
       <h2>Status, or Due/Done Dates — Your Choice</h2>
       <p>
         By default a ToDo shows a simple <b>Open/Done</b> Status chip. Turn on{' '}
-        <b>Show Due/Done Dates (ToDos)</b> in Account Options if you&rsquo;d rather track an
-        actual Due Date and Done Date, the same way Requests do — that also unlocks Reminders and
-        the Overdue chip for ToDos.
+        <b>Show Due/Done Dates (ToDos)</b>{' '}
+        in Account Options if you&rsquo;d rather track an actual Due Date and Done Date, the
+        same way Requests do — that also unlocks Reminders and the Overdue chip for ToDos.
       </p>
 
       <h2>Reminders and Repeat for ToDos</h2>
       <p>
         With Due/Done Dates on, a ToDo gets the same <b>Day before / Day of / Day after</b>{' '}
-        Reminder emails a Request does, sent to you. Turn on <b>Add Reminders (ToDos)</b> in
-        Account Options to use them, and set your own defaults there too. <b>Repeat</b> works on
-        ToDos exactly like it does on Requests — up to 5 occurrences free, unlimited for
-        subscribers — handy for anything you do on a recurring basis (watering plants, a weekly
-        check-in).
+        Reminder emails a Request does, sent to you. Turn on{' '}
+        <b>Add Reminders (ToDos)</b>{' '}
+        in Account Options to use them, and set your own defaults there too. <b>Repeat</b>{' '}
+        works on ToDos exactly like it does on Requests — up to 5 occurrences free, unlimited
+        for subscribers — handy for anything you do on a recurring basis (watering plants, a
+        weekly check-in).
       </p>
 
       <h2>Attachments</h2>
@@ -95,13 +98,15 @@ export default function TodoFeaturesHelp() {
       <h2>Turn a ToDo into a Request (and Back)</h2>
       <p>
         Already tracking something as a ToDo that really needs someone else&rsquo;s help? Use the{' '}
-        <b>Create a Request from this ToDo</b> banner at the bottom of ToDo Detail — it carries
-        over the Description, Category, and Due Date, and can optionally mark the ToDo Done
-        and Archive it, and copy its Dialog and Attachments, all in one step. The same works the
-        other direction from a Request&rsquo;s own Detail screen.
+        <b>Create a Request from this ToDo</b>{' '}
+        banner at the bottom of ToDo Detail — it carries over the Description, Category, and Due
+        Date, and can optionally mark the ToDo Done and Archive it, and copy its Dialog and
+        Attachments, all in one step. The same works the other direction from a
+        Request&rsquo;s own Detail screen.
       </p>
 
       <HelpNext current="todo-features" />
+      <HelpAccountLink section="todo" label="See Account Options to Personalize ToDos" />
     </HelpTopicShell>
   )
 }
