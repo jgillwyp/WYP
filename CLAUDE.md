@@ -3653,3 +3653,59 @@ link is built only after the stack is proven on Add Contact.
   fire-and-forget, called only after the underlying Save/Send RPC already
   succeeded. `npx tsc --noEmit`/`npm run lint` clean. No mockup changes. See
   the decisions log's 2026-09-02 entry for the full write-up.
+- **Singular/plural fix on the change-notification email; UTC-vs-local date
+  bug fixed on Dialog/created_at display (2026-09-03, no migration).** Jim:
+  the "have changed" sentence needed to read "has changed: Due Date." for a
+  single field, not always plural — new shared `changedFieldsSentence()`
+  helper in `app/src/lib/email.ts`, used by both the HTML box and the two
+  plain-text builders. Separately, Jim reported Dialog entries showing
+  tomorrow's date in the evening ("Dialog entries are now being dated
+  9/3/26. Am I set up for a wrong time zone?") — root cause was `formatMDY()`
+  (built for date-only columns, reads the date via `value.slice(0, 10)`)
+  being reused on genuine `timestamptz` columns (`dialog.created_at`,
+  `requests.created_at`), where slicing an ISO string reads its **UTC**
+  calendar date rather than the viewer's own local one — wrong for any
+  negative-UTC-offset zone once the timestamp has crossed UTC midnight but
+  not yet local midnight. Fixed with a second helper,
+  `formatMDYFromTimestamp()` (built from `new Date(value).getFullYear()/
+  getMonth()/getDate()`, real local-time getters), repointed at every
+  `created_at` display across `RequestDetailForm.tsx`,
+  `RequestResponseForm.tsx`, `ResponseDetailForm.tsx`, `TodoDetailForm.tsx`,
+  `MainScreen.tsx` (6 sites), and `ArchiveForm.tsx` (3 sites) — 13 sites
+  total. `formatMDY()` itself is unchanged and still correct for genuine
+  date-only columns (`due_date`/`done_date`). Jim's separate report that
+  "changes are not creating emails for Dialog or Description" turned out to
+  be Gmail spam filtering on a still-reputation-building sending domain, not
+  a code issue — confirmed via Vercel production log inspection (clean 200
+  responses, no runtime errors) and Jim's own follow-up. `npx tsc --noEmit`/
+  `npm run lint` clean. See the decisions log's 2026-09-03 entry.
+- **Help-chip topic screens built — Getting Started / Creating a Request /
+  Responding to a Request / new ToDo Features (2026-09-03, §6.46 PROPOSED,
+  no mockup, no migration).** Jim: "an introduction for Private Testing
+  participants which gives them a quick look at what is available with
+  WYP — something focused on how to be more efficient... one or several
+  HTML pages under the Help chip would be ideal." Confirmed scope: "The
+  three topics work, and add a ToDo features item." Four new routes
+  (`app/help/getting-started`, `.../creating-a-request`,
+  `.../responding-to-a-request`, `.../todo-features`), each `RequireAuth`-
+  wrapped (reached only from the signed-in Main Screen's Housekeeping Help
+  tab, unlike `/privacy`). New shared `HelpTopicShell.tsx`
+  (`app/components/help/`) reuses the app's own `.frame-none`/`.app`/`.band`/
+  `.scroll` in-app screen shell, not `/privacy`'s wide reading-width layout —
+  this content lives inside the authenticated mobile UI, not a signed-out
+  external context. Each topic is prose-first with one schematic-SVG "sample
+  screen," hand-built from the app's own `:root` design tokens (brand blue,
+  ink, row tint, alert red) rather than a real screenshot — no headless
+  browser is reachable from this session to capture the live app, and a
+  labeled schematic can call out just the feature being discussed. Content
+  was checked against the app's actual current entitlements rather than
+  assumed — Attachments and Repeat are described as free-tier-available
+  with caps (100 MB / 5 occurrences), not Subscriber-exclusive, matching the
+  2026-08-27 free-tier expansion. New `.help`/`.help-shot`/`.help-next` CSS
+  reuses existing global components (`.panel` for the sample-image frame)
+  rather than inventing new ones. `MainScreen.tsx`'s three placeholder
+  Help-tab rows ("— placeholder, no video linked yet") now `router.push` to
+  their real routes, same onClick/onKeyDown pattern the Tasks tab's own rows
+  already use; a fourth "ToDo Features" row was added the same way. `npx
+  tsc --noEmit`/`npm run lint` clean. See the decisions log's 2026-09-03
+  entry for the full write-up.

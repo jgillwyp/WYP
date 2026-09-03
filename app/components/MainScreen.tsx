@@ -1891,22 +1891,58 @@ export default function MainScreen() {
             ) : (
               <div className="subbody">
                 <div className="hkrows">
-                  <div className="hkrow" role="button" tabIndex={0}>
+                  {/* Help topics (2026-09-03) — replaces the three inert
+                      placeholder rows with real navigation to
+                      app/help/*, plus a new fourth "ToDo Features" row
+                      (Jim: "The three topics work, and add a ToDo
+                      features item."). Same onClick/onKeyDown pattern
+                      the Tasks tab's own rows already use. */}
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/help/getting-started')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/help/getting-started') }}
+                  >
                     <span className="hktext">
                       <span className="hktitle">Getting Started</span>
-                      <span className="hknote"> — placeholder, no video linked yet</span>
+                      <span className="hknote"> — a quick tour and efficiency tips</span>
                     </span>
                   </div>
-                  <div className="hkrow" role="button" tabIndex={0}>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/help/creating-a-request')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/help/creating-a-request') }}
+                  >
                     <span className="hktext">
                       <span className="hktitle">Creating a Request</span>
-                      <span className="hknote"> — placeholder, no video linked yet</span>
+                      <span className="hknote"> — Reminders, Repeat, and Attachments</span>
                     </span>
                   </div>
-                  <div className="hkrow" role="button" tabIndex={0}>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/help/responding-to-a-request')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/help/responding-to-a-request') }}
+                  >
                     <span className="hktext">
                       <span className="hktitle">Responding to a Request</span>
-                      <span className="hknote"> — placeholder, no video linked yet</span>
+                      <span className="hknote"> — quick Done, Dialog, no account needed</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/help/todo-features')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/help/todo-features') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">ToDo Features</span>
+                      <span className="hknote"> — Status, Reminders, Repeat, and Attachments</span>
                     </span>
                   </div>
                 </div>
