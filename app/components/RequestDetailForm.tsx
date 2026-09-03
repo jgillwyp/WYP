@@ -535,6 +535,26 @@ export default function RequestDetailForm() {
       form.overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled ||
       (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId ||
       JSON.stringify(repeatRule) !== JSON.stringify(initialFormRef.current.repeatRule))
+  // contentChanged (2026-09-02, owner-reported) — a second, separate flag
+  // for the Send button's own disabled state, distinct from hasChanges
+  // above. hasChanges deliberately excludes Dialog/Attachments (they save
+  // immediately and independently, so Cancel was never going to discard
+  // them — see the comment above), which is correct for the Close/Cancel
+  // *label*, but wrong for gating Send itself: adding a Dialog entry or
+  // Attachment with no other field touched left Send stuck disabled, with
+  // nothing on screen to unstick it. Set true by handleDialogModalSave on
+  // success and by AttachmentsPanel's onContentChange callback (fires on
+  // add or delete, not on a Repeat-carry toggle); never reset back to
+  // false — once true for this visit, Send stays enabled.
+  const [contentChanged, setContentChanged] = useState(false)
+  // dialogChanged/attachmentsChanged (2026-09-02) — split out of
+  // contentChanged above, purely to describe *which* fields changed for the
+  // "UPDATED:" change-notification email (see computeChangedFieldLabels/
+  // sendChangeNotification below and the decisions log's 2026-09-02 entry).
+  // Set at the exact same two call sites as setContentChanged(true) — never
+  // reset back to false, same lifecycle.
+  const [dialogChanged, setDialogChanged] = useState(false)
+  const [attachmentsChanged, setAttachmentsChanged] = useState(false)
 
   async function loadDialog() {
     const { data } = await supabase
@@ -784,6 +804,8 @@ export default function RequestDetailForm() {
     }
 
     await loadDialog()
+    setContentChanged(true)
+    setDialogChanged(true)
     setDialogModalOpen(false)
   }
 
@@ -1066,11 +1088,65 @@ export default function RequestDetailForm() {
     )
   }
 
+  // Change-notification email (2026-09-02, owner request — "I think all
+  // changes warrant an email to the other party... We don't currently need
+  // an option not to send an email."). computeChangedFieldLabels() diffs
+  // the live form against initialFormRef's own load-time snapshot (already
+  // maintained for hasChanges above), plus the dialogChanged/
+  // attachmentsChanged flags neither snapshot can see. Deliberately
+  // excludes the Reminder checkboxes and Repeat — see CHANGED_FIELD_LABELS'
+  // own comment in email.ts. Gated on categoriesEnabled/requestTimeEnabled
+  // so a hidden field's own value never appears in the list purely because
+  // its stored value happens to differ (it was never shown or editable this
+  // visit either way).
+  function computeChangedFieldLabels(): string[] {
+    if (!initialFormRef.current) return []
+    const snap = initialFormRef.current
+    const labels: string[] = []
+    if (form.dueDate !== snap.dueDate) labels.push('Due Date')
+    if (requestTimeEnabled && form.dueTime !== snap.dueTime) labels.push('Due Time')
+    if (form.description !== snap.description) labels.push('Description')
+    if (categoriesEnabled && (selectedCategory?.id ?? null) !== snap.categoryId) labels.push('Category')
+    if (form.doneDate !== snap.doneDate) labels.push('Done Date')
+    if (requestTimeEnabled && form.doneTime !== snap.doneTime) labels.push('Done Time')
+    if (dialogChanged) labels.push('Dialog')
+    if (attachmentsChanged) labels.push('Attachments')
+    return labels
+  }
+
+  // Fire-and-forget, mirrors handleSendReminder's own token-minting shape
+  // above — never blocks or can undo the Save that already succeeded, same
+  // posture CreateRequestForm.tsx's own Initial Request email call takes.
+  async function sendChangeNotification(changedFieldLabels: string[]) {
+    if (changedFieldLabels.length === 0) return
+    try {
+      const { data: linkToken, error: linkError } = await supabase.rpc('issue_request_link', {
+        p_request_id: requestId,
+      })
+      if (linkError || !linkToken) return
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) return
+      await fetch('/api/email/send-request-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          requestId,
+          link: `${window.location.origin}/r/${linkToken}`,
+          changedFields: changedFieldLabels,
+        }),
+      })
+    } catch {
+      // Best-effort — the Request itself already saved successfully.
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     if (!validate()) return
 
+    const changedFieldLabels = computeChangedFieldLabels()
     setSaving(true)
 
     const { error: updateError } = await supabase
@@ -1102,6 +1178,8 @@ export default function RequestDetailForm() {
       setError(updateError.message)
       return
     }
+
+    void sendChangeNotification(changedFieldLabels)
 
     // router.back(), not push('/') — this screen is only ever reached by
     // clicking a Sent row on the Main Screen, so back() returns to that
@@ -1164,7 +1242,7 @@ export default function RequestDetailForm() {
         <div className="band">
           <span className="glabel">Request Detail</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="request-detail-form" disabled={saving || !hasChanges}>
+            <button className="btn" type="submit" form="request-detail-form" disabled={saving || (!hasChanges && !contentChanged)}>
               {saving ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={saving}>
@@ -1608,6 +1686,10 @@ export default function RequestDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
               showCarryToggle={repeatRule !== null}
+              onContentChange={() => {
+                setContentChanged(true)
+                setAttachmentsChanged(true)
+              }}
             />
 
             {/* Request<->ToDo conversion (2026-08-26) — see

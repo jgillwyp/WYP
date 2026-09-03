@@ -98,6 +98,20 @@ type Props = {
    * on the two recipient-facing call sites (Request Response, Response
    * Detail), which never pass this prop. */
   showCarryToggle?: boolean
+  /** Fired after a file is added, a Location is added, or either is deleted
+   * — anything that changes what this Request/ToDo actually holds. Added
+   * 2026-09-02 (owner-reported): Request Detail/Response Detail/ToDo
+   * Detail's Send/Save button is now disabled until `hasChanges` — a
+   * snapshot of the editable *form fields* only — sees an edit, but Dialog
+   * and Attachments both save independently of Save/Cancel and were never
+   * part of that snapshot, so adding one left the button stuck disabled
+   * with nothing to click. This callback lets the parent screen track that
+   * kind of change separately, without folding Attachments into the
+   * Close/Cancel wording's own `hasChanges` (which deliberately still
+   * excludes it — see each screen's own comment on why). Not fired for
+   * `handleToggleCarry` (a Repeat-carry checkbox toggle on an existing row,
+   * not new/removed content) or the background signed-URL refresh. */
+  onContentChange?: () => void
 }
 
 const emptyLabel = { file: 'Attachments', reference: 'Locations' } as const
@@ -133,6 +147,7 @@ export default function AttachmentsPanel({
   ownerLabel,
   standalone = false,
   showCarryToggle = false,
+  onContentChange,
 }: Props) {
   const [rows, setRows] = useState<AttachmentRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -257,6 +272,7 @@ export default function AttachmentsPanel({
           )
         } else {
           setRows((current) => [resBody.attachment, ...current])
+          onContentChange?.()
         }
       } catch {
         setError(`Could not upload ${f.name}.`)
@@ -274,8 +290,10 @@ export default function AttachmentsPanel({
       // to just "owner" here.
       const { deleteAttachmentReference } = await import('@/lib/attachmentsClient')
       const ok = await deleteAttachmentReference(id)
-      if (ok) setRows((current) => current.filter((r) => r.id !== id))
-      else setError('Could not remove this Location.')
+      if (ok) {
+        setRows((current) => current.filter((r) => r.id !== id))
+        onContentChange?.()
+      } else setError('Could not remove this Location.')
       return
     }
     try {
@@ -284,8 +302,10 @@ export default function AttachmentsPanel({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({ requestId, attachmentId: id }),
       })
-      if (res.ok) setRows((current) => current.filter((r) => r.id !== id))
-      else setError('Could not remove this attachment.')
+      if (res.ok) {
+        setRows((current) => current.filter((r) => r.id !== id))
+        onContentChange?.()
+      } else setError('Could not remove this attachment.')
     } catch {
       setError('Could not remove this attachment.')
     }
@@ -323,6 +343,7 @@ export default function AttachmentsPanel({
       return
     }
     setRows((current) => [result, ...current])
+    onContentChange?.()
     setRefDescription('')
     setRefLocation('')
     setRefFormOpen(false)

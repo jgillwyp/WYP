@@ -245,6 +245,16 @@ export default function RequestResponseForm() {
   const [doneDate, setDoneDate] = useState('')
   const [doneTime, setDoneTime] = useState('')
 
+  // Change-notification email to the owner (2026-09-02) — see
+  // RequestDetailForm.tsx's identical addition for the full reasoning. This
+  // screen never had a hasChanges/Cancel-button snapshot at all (removed
+  // outright 2026-08-20, having no purpose for an anonymous visitor with no
+  // prior history entry to return to), so initialFormRef exists here purely
+  // to feed computeChangedFieldLabels below, not any button-disabled state.
+  const initialFormRef = useRef<{ doneDate: string; doneTime: string } | null>(null)
+  const [dialogChanged, setDialogChanged] = useState(false)
+  const [attachmentsChanged, setAttachmentsChanged] = useState(false)
+
   // Owner-reported, 2026-08-15: opening a Request that was ALREADY marked
   // Done before this visit showed "This Request is now marked as Done, just
   // click Send." — worded as if the visitor had just done something that
@@ -379,6 +389,7 @@ export default function RequestResponseForm() {
       setReminderSentAt(payload.reminder_sent_at)
       setReminderDayOfSentAt(payload.reminder_day_of_sent_at)
       setDialogList(payload.dialog ?? [])
+      initialFormRef.current = { doneDate: payload.done_date ?? '', doneTime: payload.done_time ?? '' }
       setLoading(false)
     }
 
@@ -482,13 +493,48 @@ export default function RequestResponseForm() {
         replies_to_id: dialogModalKind === 'answer' ? dialogSelectedQuestionId : null,
       },
     ])
+    setDialogChanged(true)
     setDialogModalOpen(false)
+  }
+
+  // Change-notification email to the owner (2026-09-02) — see
+  // RequestDetailForm.tsx's identical addition for the full reasoning.
+  // Excludes the Reminder checkboxes (this visitor's own opt-outs, not
+  // meaningful to the owner) and Repeat (owner-only, not editable here).
+  function computeChangedFieldLabels(): string[] {
+    if (!initialFormRef.current) return []
+    const snap = initialFormRef.current
+    const labels: string[] = []
+    if (doneDate !== snap.doneDate) labels.push('Done Date')
+    if (doneTime !== snap.doneTime) labels.push('Done Time')
+    if (dialogChanged) labels.push('Dialog')
+    if (attachmentsChanged) labels.push('Attachments')
+    return labels
+  }
+
+  // Fire-and-forget, mirrors RequestDetailForm.tsx's own
+  // sendChangeNotification — uses the owner-facing route
+  // (send-request-update-to-owner), verified by this visitor's own token,
+  // never an Authorization header (there is no session on this path).
+  async function sendChangeNotification(changedFieldLabels: string[]) {
+    if (changedFieldLabels.length === 0) return
+    try {
+      await fetch('/api/email/send-request-update-to-owner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, changedFields: changedFieldLabels }),
+      })
+    } catch {
+      // Best-effort — the response itself already saved successfully.
+    }
   }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     setSendError(null)
     setSendConfirmed(false)
+
+    const changedFieldLabels = computeChangedFieldLabels()
     setSending(true)
 
     const { error: rpcError } = await supabase.rpc('set_response_done_by_token', {
@@ -506,6 +552,8 @@ export default function RequestResponseForm() {
       setSendError(rpcError.message)
       return
     }
+
+    void sendChangeNotification(changedFieldLabels)
 
     setSendConfirmed(true)
   }
@@ -978,6 +1026,7 @@ export default function RequestResponseForm() {
               currentUserId={null}
               ownerLabel="Recipient"
               standalone
+              onContentChange={() => setAttachmentsChanged(true)}
             />
 
             {/* Owner-reported, 2026-08-10: dropped the "Free Account

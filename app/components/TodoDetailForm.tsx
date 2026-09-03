@@ -455,6 +455,11 @@ export default function TodoDetailForm() {
       form.reminderEnabled !== initialFormRef.current.reminderEnabled ||
       form.reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
       form.overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
+  // contentChanged (2026-09-02, owner-reported) — see
+  // RequestDetailForm.tsx's identical addition: a second flag, separate
+  // from hasChanges, gating Save's own disabled state so adding a Dialog
+  // entry or Attachment isn't left with a stuck-disabled Save button.
+  const [contentChanged, setContentChanged] = useState(false)
 
   // Quick-Done band (§6.31) — added 2026-08-11, matching CreateTodoForm.tsx's
   // identical handleQuickDone: this screen never got the band ported over
@@ -790,6 +795,7 @@ export default function TodoDetailForm() {
     }
 
     await loadDialog()
+    setContentChanged(true)
     setDialogModalOpen(false)
   }
 
@@ -970,7 +976,7 @@ export default function TodoDetailForm() {
         <div className="band">
           <span className="glabel">ToDo Detail</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="todo-detail-form" disabled={saving || !hasChanges}>
+            <button className="btn" type="submit" form="todo-detail-form" disabled={saving || (!hasChanges && !contentChanged)}>
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={saving}>
@@ -1352,6 +1358,7 @@ export default function TodoDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
               showCarryToggle={repeatRule !== null}
+              onContentChange={() => setContentChanged(true)}
             />
 
             {/* Request<->ToDo conversion (2026-08-26) — see

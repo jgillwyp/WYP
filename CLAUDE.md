@@ -3583,3 +3583,73 @@ link is built only after the stack is proven on Add Contact.
   Detail/Create screens, and the print reports' own static Category
   headings) are unaffected — not part of Jim's report. `npx tsc --noEmit`/
   `npm run lint` clean.
+- **Send/Save button gated on Dialog/Attachments too (`contentChanged`);
+  migration 050 fixes a real error answering a Question from Response
+  Detail — migration CONFIRMED RUN by the owner, 2026-09-02.** Jim,
+  three screenshots: the Send/Save button on Request Detail/Response
+  Detail/ToDo Detail stayed disabled after adding a Dialog entry or an
+  Attachment, only enabling once a text/date field was also touched — the
+  same-day `hasChanges` dirty-check batch (#611) had reused the existing
+  `hasChanges` snapshot to gate the button, but that snapshot was
+  deliberately built 2026-08-20 to exclude Dialog/Attachments (which
+  already save independently), for the Close/Cancel *label* only — never
+  meant to gate the button itself. Fixed with a second, separate
+  `contentChanged` boolean per screen, set by a successful Dialog-modal
+  save and by a new `onContentChange` callback prop on `AttachmentsPanel`
+  (fired on upload/Location-add/delete success, deliberately not by the
+  Repeat-carry toggle); the button's `disabled` is now `saving/sending ||
+  (!hasChanges && !contentChanged)`, Close/Cancel's own label logic
+  untouched. Separately, Jim also hit a real SQL error answering a
+  Question on Response Detail ("column 'subject_id' is of type uuid but
+  expression is of type bigint") — the identical uuid/bigint `events`
+  logging bug migration 010 already fixed once in `add_dialog_by_token`
+  (2026-08-10), never ported into its sibling `add_dialog_as_recipient`
+  when that was written a day later (migration 012). **Migration 050**
+  (`docs/Week6 - SQL history.txt`, confirmed run by the owner 2026-09-02)
+  applies the same fix: logs the Request's own uuid as `subject_id`, not
+  the new dialog row's bigint id — the Answer error is now fixed in
+  production. `npx tsc --noEmit`/`npm run lint` clean for the
+  `contentChanged` batch. No mockup changes. See the decisions log's
+  2026-09-02 entry for the full write-up.
+- **Change-notification "UPDATED:" emails, both directions — built end to
+  end, no migration needed (2026-09-02, same-day follow-up).** Jim, with his
+  own mocked-up email screenshot: "I think all changes warrant an email to
+  the other party... We don't currently need an option not to send an
+  email." Makes Request Detail's own long-standing `.noticeband` claim ("The
+  Request Recipient is notified of changes.") actually true for the first
+  time — confirmed no change-triggered email existed anywhere before this.
+  Owner edits (Request Detail) -> notify Recipient, via a new
+  `send-request-update` route (forwarded-JWT posture, mirrors
+  `send-request/route.ts`) and the *same* `buildRequestEmailHtml`/`Text`
+  templates the Initial Request/Reminder emails already use, now accepting
+  an optional `changedFields` that renders a white "have changed: **X**,
+  **Y**." box directly above the existing button. Recipient edits (Response
+  Detail, signed in, or Request Response, anonymous) -> notify the
+  owner/Requestor, via a new, deliberately separate `buildOwnerUpdateEmailSubject/
+  Html/Text` template pair (no "from `<name>`... mark as completed" framing,
+  no `/r/[token]` link — links straight to the owner's own `/requests/[id]`
+  instead) and a new `send-request-update-to-owner` route, which genuinely
+  needs service_role (the same justified exception already carved out for
+  Attachments/cron) since it has to resolve another user's own account
+  email via `auth.admin.getUserById` — gated by verifying the caller's
+  permission first, through the existing `get_request_by_token`/
+  `get_received_request` RPCs, before service_role is ever touched. New
+  exported `CHANGED_FIELD_LABELS` (Due Date, Due Time, Description,
+  Category, Done Date, Done Time, Dialog, Attachments) and
+  `sanitizeChangedFields()` allow-list validator — the changed-field list is
+  the one thing these routes trust from the client by necessity (the server
+  can't reconstruct "what just changed" from the row's current state
+  alone), sanitized before it can reach a third party's inbox.
+  **Deliberately excludes the three Reminders-until-Done checkboxes and
+  Repeat** — neither was in Jim's own mockup/message, both read as internal
+  sender preference rather than something worth telling the other party;
+  flagged as a scoping call, easy to extend later. `RequestDetailForm.tsx`,
+  `ResponseDetailForm.tsx`, and `RequestResponseForm.tsx` each gained
+  `computeChangedFieldLabels()` (diffing the live form against the same
+  load-time snapshot each screen's own dirty-check already maintains, or a
+  new one built for this purpose on Request Response, which never had one)
+  plus `dialogChanged`/`attachmentsChanged`, split out of the same-day
+  `contentChanged` flag at its identical two call sites. Every send is
+  fire-and-forget, called only after the underlying Save/Send RPC already
+  succeeded. `npx tsc --noEmit`/`npm run lint` clean. No mockup changes. See
+  the decisions log's 2026-09-02 entry for the full write-up.

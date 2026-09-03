@@ -362,6 +362,20 @@ export default function ResponseDetailForm() {
       reminderEnabled !== initialFormRef.current.reminderEnabled ||
       reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
       overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
+  // contentChanged (2026-09-02, owner-reported) — see
+  // RequestDetailForm.tsx's identical addition: a second flag, separate
+  // from hasChanges, gating Send's own disabled state so adding a Dialog
+  // entry or Attachment (which save immediately, independently of
+  // hasChanges by design) isn't left with a stuck-disabled Send button.
+  const [contentChanged, setContentChanged] = useState(false)
+  // dialogChanged/attachmentsChanged (2026-09-02) — split out of
+  // contentChanged, purely to describe *which* fields changed for the
+  // "UPDATED:" change-notification email sent to the owner (see
+  // computeChangedFieldLabels/sendChangeNotification below and the
+  // decisions log's 2026-09-02 entry). Set at the same two call sites as
+  // setContentChanged(true).
+  const [dialogChanged, setDialogChanged] = useState(false)
+  const [attachmentsChanged, setAttachmentsChanged] = useState(false)
 
   // Un-archive-on-clear (owner request, 2026-08-17) — the row's own
   // received_archived_at as loaded. Not itself editable, and no
@@ -647,6 +661,8 @@ export default function ResponseDetailForm() {
         replies_to_id: dialogModalKind === 'answer' ? dialogSelectedQuestionId : null,
       },
     ])
+    setContentChanged(true)
+    setDialogChanged(true)
     setDialogModalOpen(false)
   }
 
@@ -751,10 +767,45 @@ export default function ResponseDetailForm() {
     )
   }
 
+  // Change-notification email to the owner (2026-09-02) — see
+  // RequestDetailForm.tsx's identical addition for the full reasoning.
+  // Excludes the Reminder checkboxes (this viewer's own opt-outs, not
+  // meaningful to the owner) and Repeat (owner-only, not editable here).
+  function computeChangedFieldLabels(): string[] {
+    if (!initialFormRef.current) return []
+    const snap = initialFormRef.current
+    const labels: string[] = []
+    if (doneDate !== snap.doneDate) labels.push('Done Date')
+    if (doneTime !== snap.doneTime) labels.push('Done Time')
+    if (dialogChanged) labels.push('Dialog')
+    if (attachmentsChanged) labels.push('Attachments')
+    return labels
+  }
+
+  // Fire-and-forget, mirrors RequestDetailForm.tsx's own
+  // sendChangeNotification — uses the owner-facing route
+  // (send-request-update-to-owner), authenticated via this signed-in
+  // recipient's own forwarded access token, never a minted /r/[token] link.
+  async function sendChangeNotification(changedFieldLabels: string[]) {
+    if (changedFieldLabels.length === 0) return
+    if (!authToken) return
+    try {
+      await fetch('/api/email/send-request-update-to-owner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ requestId, changedFields: changedFieldLabels }),
+      })
+    } catch {
+      // Best-effort — the response itself already saved successfully.
+    }
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     setSendError(null)
     setSendConfirmed(false)
+
+    const changedFieldLabels = computeChangedFieldLabels()
     setSending(true)
 
     const { error: rpcError } = await supabase.rpc('set_response_done_as_recipient', {
@@ -773,6 +824,7 @@ export default function ResponseDetailForm() {
       return
     }
 
+    void sendChangeNotification(changedFieldLabels)
     setSendConfirmed(true)
   }
 
@@ -858,7 +910,7 @@ export default function ResponseDetailForm() {
         <div className="band">
           <span className="glabel">Response Detail</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="response-detail-form" disabled={sending || !hasChanges}>
+            <button className="btn" type="submit" form="response-detail-form" disabled={sending || (!hasChanges && !contentChanged)}>
               {sending ? 'Sending…' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={sending}>
@@ -1105,6 +1157,10 @@ export default function ResponseDetailForm() {
               currentUserId={currentUserId}
               ownerLabel="You"
               standalone
+              onContentChange={() => {
+                setContentChanged(true)
+                setAttachmentsChanged(true)
+              }}
             />
 
             {sendError && (

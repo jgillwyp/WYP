@@ -309,8 +309,13 @@ function formatTime12h(value: string): string {
 // ("DUE TODAY:" rather than "REMINDER:"), since "reminder" as a prefix on
 // an email arriving the same morning something is due reads as ambiguous
 // about how much runway is left; "DUE TODAY" doesn't.
+// 'updated' added 2026-09-02 (owner request, with his own mocked-up email
+// screenshot) — sent to the Recipient whenever the owner edits an existing
+// Request via Request Detail. Reuses this same subject builder/prefix
+// convention rather than a separate function, matching 'reminder'/
+// 'reminder_day_of''s own precedent.
 export function buildRequestEmailSubject(
-  kind: 'initial' | 'reminder' | 'reminder_day_of',
+  kind: 'initial' | 'reminder' | 'reminder_day_of' | 'updated',
   ownerName: string | null,
   dueDate: string,
   dueTime: string | null
@@ -320,6 +325,7 @@ export function buildRequestEmailSubject(
   const base = `A Would You Please Request${from}, Due: ${due}`
   if (kind === 'reminder') return `REMINDER: ${base}`
   if (kind === 'reminder_day_of') return `DUE TODAY: ${base}`
+  if (kind === 'updated') return `UPDATED: ${base}`
   return base
 }
 
@@ -352,9 +358,67 @@ export function buildRequestEmailSubject(
 // sending a new recipient there first is no longer a dead end the way it
 // would have been when /login was the only thing living at "/".
 // ----------------------------------------------------------------------------
+// Change-notification fields (2026-09-02, owner request, with his own
+// mocked-up email screenshot — "I think all changes warrant an email to the
+// other party... We don't currently need an option not to send an email.")
+// — every edit to an existing Request's tracked fields, or an added Dialog
+// entry/Attachment, sends an "UPDATED:" email to the other party (owner
+// edits -> Recipient; Recipient edits -> owner). CHANGED_FIELD_LABELS is the
+// one canonical vocabulary both the owner-to-Recipient and Recipient-to-
+// owner email builders below draw from, and the one allow-list the two API
+// routes validate a client-supplied field list against before it can appear
+// in an email sent to a third party — a client can only ever request one of
+// these fixed labels, never arbitrary text. Deliberately excludes the
+// Reminders-until-Done checkboxes and Repeat (both a sender's own internal
+// preference, not something the PRD's or Jim's own mockup described
+// reporting) — flagged as a scoping call, not a literal instruction.
+export const CHANGED_FIELD_LABELS = [
+  'Due Date',
+  'Due Time',
+  'Description',
+  'Category',
+  'Done Date',
+  'Done Time',
+  'Dialog',
+  'Attachments',
+] as const
+export type ChangedFieldLabel = (typeof CHANGED_FIELD_LABELS)[number]
+
+export function sanitizeChangedFields(fields: unknown): ChangedFieldLabel[] {
+  if (!Array.isArray(fields)) return []
+  const allowed = new Set<string>(CHANGED_FIELD_LABELS)
+  const seen = new Set<string>()
+  const out: ChangedFieldLabel[] = []
+  for (const f of fields) {
+    if (typeof f !== 'string' || !allowed.has(f) || seen.has(f)) continue
+    seen.add(f)
+    out.push(f as ChangedFieldLabel)
+  }
+  return out
+}
+
+// Notice box for the "what changed" sentence plus the button, grouped
+// together in one white callout against the Strip-colored body — matches
+// Jim's own mocked-up screenshot, which shows the sentence directly above
+// the button inside one highlighted box. Reuses emailDescriptionBox's own
+// white-box treatment rather than a new visual language.
+function emailChangedFieldsBox(fields: string[], buttonHtml: string): string {
+  const list = fields.map((f) => `<b>${escapeHtml(f)}</b>`).join(', ')
+  return [
+    '<div style="background:#FFFFFF; border-radius:8px; padding:14px 16px; margin:0 0 18px;">',
+    `<p style="margin:0 0 12px;">The following data fields for this Request have changed: ${list}.</p>`,
+    `<p style="margin:0;">${buttonHtml}</p>`,
+    '</div>',
+  ].join('\n')
+}
+
 type RequestEmailBodyFields = {
   description: string
   link: string
+  // Set only for the 'updated' subject kind — see emailChangedFieldsBox
+  // above. null/omitted (every other kind) renders the button on its own,
+  // unchanged from before this batch.
+  changedFields?: string[] | null
   // Replaced 2026-08-22 (second same-day follow-up) — was a single boolean
   // (reminderPromised) gating one fixed "day before" sentence. Now a full
   // ReminderSchedule describing all three independent Reminders-until-Done
@@ -474,10 +538,12 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
     ? `Click to respond or mark this Request from ${escapeHtml(fields.ownerName)} as completed`
     : 'Click to respond or mark this Request as completed'
 
-  const parts = [
-    `<p style="margin:0 0 18px;">${emailButtonRaw(fields.link, buttonInner)}</p>`,
-    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
-  ]
+  const buttonHtml = emailButtonRaw(fields.link, buttonInner)
+  const parts =
+    fields.changedFields && fields.changedFields.length > 0
+      ? [emailChangedFieldsBox(fields.changedFields, buttonHtml)]
+      : [`<p style="margin:0 0 18px;">${buttonHtml}</p>`]
+  parts.push(emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`))
 
   if (fields.reminderSchedule) {
     parts.push(
@@ -503,7 +569,17 @@ export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
   const buttonLine = fields.ownerName
     ? `Click to respond or mark this Request from ${fields.ownerName} as completed:`
     : 'Click to respond or mark this Request as completed:'
-  const lines = [buttonLine, fields.link, '', fields.description]
+  const lines =
+    fields.changedFields && fields.changedFields.length > 0
+      ? [
+          `The following data fields for this Request have changed: ${fields.changedFields.join(', ')}.`,
+          '',
+          buttonLine,
+          fields.link,
+          '',
+          fields.description,
+        ]
+      : [buttonLine, fields.link, '', fields.description]
 
   if (fields.reminderSchedule) {
     lines.push('', buildReminderScheduleSentence(fields.dueDate, fields.dueTime, fields.reminderSchedule))
@@ -818,5 +894,63 @@ export function buildOverdueDigestEmailText(items: DigestItem[]): string {
     'These Requests just became Overdue — their Due Date has passed and they have not been reported as Done:',
     '',
     ...items.map(digestRowText),
+  ].join('\n')
+}
+
+// ----------------------------------------------------------------------------
+// Owner-facing change notice (2026-09-02) — the other direction of the
+// change-notification feature above: sent to the Requestor/owner when the
+// Recipient edits an existing Request (Response Detail's signed-in path, or
+// Request Response's anonymous /r/[token] path — Done Date/Time, Dialog, or
+// Attachments). Deliberately its own template, not a reuse of
+// buildRequestEmailHtml/Text: that template's "from <ownerName>... mark as
+// completed" framing is written for the Recipient, and its button links to
+// the /r/[token] response screen — neither is right for an email arriving in
+// the owner's own inbox about their own Request. This one names the
+// Recipient instead ("to <recipientName>"), matching the existing digest
+// rows' own convention, and its button links straight to the owner's own
+// Request Detail screen (/requests/[id]) — no response-link token needs
+// minting for this direction at all, since only the owner can open that
+// route (RLS owner-only).
+// ----------------------------------------------------------------------------
+type OwnerUpdateEmailFields = {
+  recipientName: string | null
+  description: string
+  dueDate: string
+  dueTime: string | null
+  changedFields: string[]
+  link: string
+  siteUrl: string
+}
+
+export function buildOwnerUpdateEmailSubject(
+  recipientName: string | null,
+  dueDate: string,
+  dueTime: string | null
+): string {
+  const to = recipientName ? ` to ${recipientName}` : ''
+  const due = formatMDY(dueDate) + (dueTime && dueTime.trim() !== '' ? ` ${formatTime12h(dueTime)}` : '')
+  return `UPDATED: A Would You Please Request${to}, Due: ${due}`
+}
+
+const OWNER_UPDATE_LINK_TEXT = 'Open Request to view or modify'
+
+export function buildOwnerUpdateEmailHtml(fields: OwnerUpdateEmailFields): string {
+  const buttonHtml = emailButtonRaw(fields.link, OWNER_UPDATE_LINK_TEXT)
+  const body = [
+    emailChangedFieldsBox(fields.changedFields, buttonHtml),
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
+  ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
+}
+
+export function buildOwnerUpdateEmailText(fields: OwnerUpdateEmailFields): string {
+  return [
+    `The following data fields for this Request have changed: ${fields.changedFields.join(', ')}.`,
+    '',
+    `${OWNER_UPDATE_LINK_TEXT}:`,
+    fields.link,
+    '',
+    fields.description,
   ].join('\n')
 }

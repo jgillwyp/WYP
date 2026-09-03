@@ -3229,3 +3229,121 @@ grant execute on function public.get_request_by_token(text) to anon, authenticat
 -- Request it pointed to." instead of the old "This link is no longer
 -- valid."
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 050 — fixes add_dialog_as_recipient's events insert
+-- (same uuid/bigint bug migration 010 already fixed once, in a sibling
+-- function) — CONFIRMED RUN by the owner, 2026-09-02.
+--
+-- BUG, owner-reported: a signed-in recipient answering a Question on
+-- Response Detail (get_received_request's own write path) failed with
+-- `column "subject_id" is of type uuid but expression is of type bigint`.
+-- Jim also reported answering his own Question via Request Detail worked
+-- fine — expected, since the owner's own screens (Create Request/Request
+-- Detail) write Dialog with a plain client-side insert, never through this
+-- RPC at all; only the recipient-facing path is affected.
+--
+-- Root cause is byte-for-byte the same defect migration 010 (Week3 SQL
+-- history) already found and fixed in add_dialog_by_token: the events row
+-- was logged as ('dialog', v_new_id, ...) — v_new_id is the new dialog
+-- row's own id, a plain bigint identity column (same type
+-- dialog.replies_to_id already points at) — but events.subject_id is uuid
+-- (migration 002) and always has been; no bigint value can ever be cast
+-- into it. add_dialog_as_recipient was written at migration 012
+-- (2026-08-11, Week4 SQL history), a day AFTER migration 010 already fixed
+-- this exact shape of bug in add_dialog_by_token — the fix was never
+-- ported across to this sibling function, which reintroduced the identical
+-- defect. get_request_by_token, set_response_done_by_token, and
+-- set_response_done_as_recipient all already log with the Request's own
+-- uuid as subject_id, so none of them ever hit this; add_dialog_by_token
+-- and add_dialog_as_recipient are the only two functions that ever insert
+-- a *new* dialog row and log it, which is exactly the shape that trips the
+-- type mismatch.
+--
+-- FIX: identical to migration 010's own fix — subject_id = v_request_id
+-- (the Request's own uuid, already available in this function), not the
+-- new dialog row's bigint id. The dialog id is preserved inside detail
+-- instead (dialog_id), same convention as every other events insert in
+-- this function family.
+--
+-- Body is otherwise byte-for-byte identical to the version in Week4 SQL
+-- history (migration 012) — only the events insert changes.
+-- ----------------------------------------------------------------------------
+
+create or replace function public.add_dialog_as_recipient(
+  p_request_id uuid,
+  p_kind text,
+  p_body text,
+  p_replies_to_id bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request_id uuid;
+  v_who text;
+  v_new_id bigint;
+  v_created_at timestamptz;
+begin
+  select r.id into v_request_id
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id
+      and v_email <> ''
+      and lower(trim(c.email)) = v_email;
+
+  if v_request_id is null then
+    raise exception 'Request not found.';
+  end if;
+
+  if p_kind not in ('question', 'answer', 'comment') then
+    raise exception 'Invalid Dialog entry type.';
+  end if;
+
+  if trim(coalesce(p_body, '')) = '' then
+    raise exception 'Enter Dialog Text.';
+  end if;
+
+  select coalesce(p.display_name, v_email) into v_who
+    from public.profiles p where p.id = auth.uid();
+  v_who := coalesce(v_who, v_email, 'Recipient'); -- defensive only
+
+  insert into public.dialog (request_id, kind, body, who, author_user_id, replies_to_id)
+    values (
+      v_request_id, p_kind, p_body, v_who, auth.uid(),
+      case when p_kind = 'answer' then p_replies_to_id else null end
+    )
+    returning id, created_at into v_new_id, v_created_at;
+
+  -- FIXED (migration 050): subject_id is the Request's own uuid, not the
+  -- new dialog row's bigint id — events.subject_id cannot hold a bigint.
+  -- The dialog id is still recorded, inside detail.
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'dialog', v_request_id, v_request_id, 'created_by_recipient',
+      jsonb_build_object('kind', p_kind, 'dialog_id', v_new_id)
+    );
+
+  return jsonb_build_object('id', v_new_id, 'created_at', v_created_at, 'who', v_who);
+end;
+$$;
+
+revoke all on function public.add_dialog_as_recipient(uuid, text, text, bigint) from public;
+grant execute on function public.add_dialog_as_recipient(uuid, text, text, bigint) to authenticated;
+
+-- Verify as a client, not here (superuser connection bypasses auth.uid()).
+--
+--   Sign in as a Request's recipient (a Contact whose email matches the
+--   session), open that Request's Response Detail, answer an open
+--   Question -> should succeed (previously failed with the uuid/bigint
+--   type error).
+--   select * from events where subject_type = 'dialog' and action =
+--     'created_by_recipient' order by at desc limit 1;
+--     -- run as a client with an authenticated owner session that can read
+--     -- events (migration 002's own read policy) — subject_id should be
+--     -- the Request's own uuid, and detail should carry the new dialog
+--     -- entry's id.
+-- ============================================================================
