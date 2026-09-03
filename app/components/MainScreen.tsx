@@ -244,6 +244,24 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
+// formatMDYFromTimestamp (2026-09-02, owner-reported: Dialog entries and the
+// "Date" column showing tomorrow's date) — for a real timestamptz like
+// created_at, unlike formatMDY above. formatMDY slices the ISO string's
+// first 10 characters, correct for a date-only column (due_date/done_date)
+// but wrong for created_at: it reads the UTC calendar date, which has
+// already rolled to the next day whenever local time is evening or later in
+// a negative-UTC-offset zone. new Date(value)'s getFullYear/getMonth/
+// getDate are local-time-based, so they read the correct calendar day for
+// the viewer.
+function formatMDYFromTimestamp(value: string | null): string {
+  if (!value) return ''
+  const d = new Date(value)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${m}-${day}-${String(y).slice(2)}`
+}
+
 // Same helper as RequestResponseForm.tsx/ResponseDetailForm.tsx — duplicated
 // per this codebase's established convention for small stateless formatters
 // rather than extracted to a shared lib file. Only needed here for the
@@ -1503,7 +1521,7 @@ export default function MainScreen() {
                     >
                       <div className="r1">
                         <span className="nm">{r.contacts?.display_name ?? '—'}</span>
-                        <span className="dt">{formatMDY(r.created_at)}</span>
+                        <span className="dt">{formatMDYFromTimestamp(r.created_at)}</span>
                         <span className="due">{formatMDY(r.due_date)}</span>
                         <span className={`dn${late ? ' late' : ''}`}>{formatMDY(r.done_date)}</span>
                       </div>
@@ -1621,7 +1639,7 @@ export default function MainScreen() {
                     >
                       <div className="r1">
                         <span className="nm">{r.owner_name ?? '—'}</span>
-                        <span className="dt">{formatMDY(r.created_at)}</span>
+                        <span className="dt">{formatMDYFromTimestamp(r.created_at)}</span>
                         <span className="due">{formatMDY(r.due_date)}</span>
                         <span className={`dn${late ? ' late' : ''}`}>{formatMDY(r.done_date)}</span>
                       </div>
@@ -1728,7 +1746,7 @@ export default function MainScreen() {
                     >
                       <div className={`trd${todoDatesEnabled ? ' wide' : ''}`}>
                         <span className="pri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>
-                        <span className="dt">{formatMDY(t.created_at)}</span>
+                        <span className="dt">{formatMDYFromTimestamp(t.created_at)}</span>
                         {todoDatesEnabled && <span className="due">{formatMDY(t.due_date)}</span>}
                         <span className="dn">{formatMDY(t.done_date)}</span>
                       </div>
@@ -2063,7 +2081,7 @@ export default function MainScreen() {
                     <div key={r.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
                       <div className="pr1">
                         <span className="pnm">{r.contacts?.display_name ?? '—'}</span>
-                        <span className="pdt">{formatMDY(r.created_at)}</span>
+                        <span className="pdt">{formatMDYFromTimestamp(r.created_at)}</span>
                         <span className="pdue">
                           {formatMDYSlash(r.due_date)}
                           {/* Due Time, inline on the same line as the date
@@ -2117,7 +2135,7 @@ export default function MainScreen() {
                     <div key={r.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
                       <div className="pr1">
                         <span className="pnm">{r.owner_name ?? '—'}</span>
-                        <span className="pdt">{formatMDY(r.created_at)}</span>
+                        <span className="pdt">{formatMDYFromTimestamp(r.created_at)}</span>
                         <span className="pdue">
                           {formatMDYSlash(r.due_date)}
                           {/* Inline, same line as the date (2026-08-15) —
@@ -2185,7 +2203,7 @@ export default function MainScreen() {
                     <div key={t.id} className={`prow${status === 'overdue' ? ' overdue' : ''}${status === 'done' ? ' done' : ''}`}>
                       <div className={`pr1 pdcols${todoDatesEnabled ? ' wide' : ''}`}>
                         <span className="ppri">{t.priority ? PRIORITY_LABEL[t.priority] : ''}</span>
-                        <span className="pdt">{formatMDY(t.created_at)}</span>
+                        <span className="pdt">{formatMDYFromTimestamp(t.created_at)}</span>
                         {todoDatesEnabled && <span className="pdue">{formatMDY(t.due_date)}</span>}
                         <span className="pdn">{formatMDY(t.done_date)}</span>
                       </div>

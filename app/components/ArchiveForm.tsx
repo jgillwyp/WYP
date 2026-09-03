@@ -174,6 +174,24 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
+// formatMDYFromTimestamp (2026-09-02, owner-reported: Dialog entries and the
+// "Date" column showing tomorrow's date) — for a real timestamptz like
+// created_at, unlike formatMDY above. formatMDY slices the ISO string's
+// first 10 characters, correct for a date-only column (due_date/done_date)
+// but wrong for created_at: it reads the UTC calendar date, which has
+// already rolled to the next day whenever local time is evening or later in
+// a negative-UTC-offset zone. new Date(value)'s getFullYear/getMonth/
+// getDate are local-time-based, so they read the correct calendar day for
+// the viewer.
+function formatMDYFromTimestamp(value: string | null): string {
+  if (!value) return ''
+  const d = new Date(value)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${m}-${day}-${String(y).slice(2)}`
+}
+
 // Print (2026-08-15) — same shapes/helpers as MainScreen.tsx's own Print
 // Reports, duplicated per this app's established convention. Owner: "the
 // same formats would work along with the insertion of a checkbox in its own
@@ -816,7 +834,7 @@ export default function ArchiveForm() {
           name: r.contacts?.display_name ?? null,
           desc: r.description,
           due: formatMDY(r.due_date),
-          date: formatMDY(r.created_at),
+          date: formatMDYFromTimestamp(r.created_at),
           dueISO: r.due_date ? r.due_date.slice(0, 10) : null,
           dateISO: r.created_at ? r.created_at.slice(0, 10) : null,
           doneDisp: formatMDY(r.done_date),
@@ -837,7 +855,7 @@ export default function ArchiveForm() {
           name: r.owner_name ?? null,
           desc: r.description,
           due: formatMDY(r.due_date),
-          date: formatMDY(r.created_at),
+          date: formatMDYFromTimestamp(r.created_at),
           dueISO: r.due_date ? r.due_date.slice(0, 10) : null,
           dateISO: r.created_at ? r.created_at.slice(0, 10) : null,
           doneDisp: formatMDY(r.done_date),
@@ -861,7 +879,7 @@ export default function ArchiveForm() {
         name: null,
         desc: t.description,
         due: formatMDY(t.due_date),
-        date: formatMDY(t.created_at),
+        date: formatMDYFromTimestamp(t.created_at),
         dueISO: t.due_date ? t.due_date.slice(0, 10) : null,
         dateISO: t.created_at ? t.created_at.slice(0, 10) : null,
         doneDisp: formatMDY(t.done_date),

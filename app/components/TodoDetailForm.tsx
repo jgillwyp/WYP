@@ -130,6 +130,23 @@ function formatMDY(value: string | null): string {
   return `${m}-${d}-${y.slice(2)}`
 }
 
+// formatMDYFromTimestamp (2026-09-02, owner-reported: Dialog entries showing
+// tomorrow's date) — for a real timestamptz like dialog.created_at, unlike
+// formatMDY above. formatMDY slices the ISO string's first 10 characters,
+// correct for a date-only column but wrong here: it reads the UTC calendar
+// date, which has already rolled to the next day whenever local time is
+// evening or later in a negative-UTC-offset zone. new Date(value)'s
+// getFullYear/getMonth/getDate are local-time-based, so they read the
+// correct calendar day for the viewer.
+function formatMDYFromTimestamp(value: string | null): string {
+  if (!value) return ''
+  const d = new Date(value)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${m}-${day}-${String(y).slice(2)}`
+}
+
 // 2026-08-17 — single-item print's new Priority column needs the same
 // label the chip UI already renders as literal text ("ASAP"/"SOON"/
 // "LATER"); no shared constant existed for it in this file until now.
@@ -1317,7 +1334,7 @@ export default function TodoDetailForm() {
                       const q = e.kind === 'answer' && e.replies_to_id != null ? questionById(e.replies_to_id) : null
                       return (
                         <div className="dlg" key={e.id}>
-                          <span className="dlgdate">{formatMDY(e.created_at)}</span>{' '}
+                          <span className="dlgdate">{formatMDYFromTimestamp(e.created_at)}</span>{' '}
                           <span className="dlgkind">{kindLabel}</span> <span className="dlgwho">({e.who})</span>
                           {e.kind === 'answer' ? (
                             <>

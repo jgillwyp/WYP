@@ -186,10 +186,22 @@ function losAngelesYear(): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
 }
 
-function formatMDY(value: string | null): string {
+// formatMDYFromTimestamp (2026-09-02, owner-reported: Dialog entries showing
+// tomorrow's date) — for a real timestamptz like dialog.created_at, unlike
+// formatMDYSlash below (that one slices the ISO string's first 10
+// characters, correct for a date-only column with no time/zone to misread).
+// Slicing a timestamptz's ISO text reads its UTC calendar date, which has
+// already rolled to the next day whenever local time is evening or later in
+// a negative-UTC-offset zone. new Date(value)'s getFullYear/getMonth/
+// getDate are local-time-based, so they read the correct calendar day for
+// the viewer.
+function formatMDYFromTimestamp(value: string | null): string {
   if (!value) return ''
-  const [y, m, d] = value.slice(0, 10).split('-')
-  return `${m}-${d}-${y.slice(2)}`
+  const d = new Date(value)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${m}-${day}-${String(y).slice(2)}`
 }
 
 // due_date/done_date come back as plain "YYYY-MM-DD" — build the Date from
@@ -1115,7 +1127,7 @@ export default function ResponseDetailForm() {
                       const q = e.kind === 'answer' && e.replies_to_id != null ? questionById(e.replies_to_id) : null
                       return (
                         <div className="dlg" key={e.id}>
-                          <span className="dlgdate">{formatMDY(e.created_at)}</span>{' '}
+                          <span className="dlgdate">{formatMDYFromTimestamp(e.created_at)}</span>{' '}
                           <span className="dlgkind">{kindLabel}</span> <span className="dlgwho">({e.who})</span>
                           {e.kind === 'answer' ? (
                             <>
