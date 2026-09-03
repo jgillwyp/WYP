@@ -3709,3 +3709,34 @@ link is built only after the stack is proven on Add Contact.
   already use; a fourth "ToDo Features" row was added the same way. `npx
   tsc --noEmit`/`npm run lint` clean. See the decisions log's 2026-09-03
   entry for the full write-up.
+- **Install Housekeeping row extended: Apple/Safari guidance, platform-
+  sensed Homepage/Desktop naming (2026-09-03, no mockup, no migration).**
+  Jim: extend the existing Chromium-only install row (`canInstall`/
+  `promptInstall`, PWAProvider.tsx — no equivalent exists on Apple
+  platforms, since Safari never fires `beforeinstallprompt`) to also guide
+  iOS/iPadOS/macOS Safari users through their own real manual install step,
+  and name the row "Homepage Icon Installation" or "Desktop Icon
+  Installation" depending on the sensed OS. New `app/src/lib/platform.ts` —
+  `isIOSDevice()`/`isMacOSDevice()`/`isSafariBrowser()`/`isAndroidDevice()`/
+  `isMobileDevice()`/`isStandaloneDisplay()`, all client-only UA/media-query
+  heuristics, none security-relevant (worst case is showing the wrong
+  install copy, never a data-access decision). `MainScreen.tsx` gained
+  `installGuidance` (`'none' | 'ios-safari' | 'ios-other' | 'mac-safari'`)
+  and `installLabel` (`'Homepage' | 'Desktop'`), both computed once in a
+  microtask-deferred mount effect (same `react-hooks/set-state-in-effect`-
+  satisfying pattern as `CreateRequestForm.tsx`'s own `voiceSupported`).
+  `isStandaloneDisplay()` wins outright and leaves `installGuidance` at
+  `'none'` on every platform, so an already-installed visitor is never
+  offered a second icon — the same guarantee the pre-existing `canInstall`
+  behavior already gave on Chromium. The Apple-guidance row (shown only
+  when `!canInstall && installGuidance !== 'none'`) opens a new `.scrim`/
+  `.modal` (§6.12) instructions dialog instead of calling the
+  Chromium-only `promptInstall()` — platform-specific copy for Safari on
+  iOS (Share icon → Add to Home Screen → Add), a non-Safari iOS browser
+  (explains only Safari can install there), and Safari on macOS (File menu
+  → Add to Dock… → Add). Steps are plain bold-numbered `<p>` tags, not
+  `<ol>`/`<li>` — no confirmed precedent that native list markers render
+  under this app's Tailwind v4 preflight (only `.promo-features` uses a
+  `<ul>`, and it explicitly resets `list-style` itself). `npx tsc
+  --noEmit`/`npm run lint` clean. See the decisions log's 2026-09-03 entry
+  for the full write-up.

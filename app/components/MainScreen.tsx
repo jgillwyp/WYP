@@ -7,6 +7,13 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
+import {
+  isIOSDevice,
+  isMacOSDevice,
+  isMobileDevice,
+  isSafariBrowser,
+  isStandaloneDisplay,
+} from '@/lib/platform'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
 /**
@@ -826,6 +833,27 @@ function SearchIcon() {
 export default function MainScreen() {
   const router = useRouter()
   const { canInstall, promptInstall } = usePWAInstall()
+  // Apple/Safari has no `beforeinstallprompt` event at all, so `canInstall`
+  // above is never true there — this is the fallback path (2026-09-03):
+  // sense the platform once after mount and, if it's one with a real manual
+  // install step Apple actually supports, show an Install row that opens an
+  // instructions modal instead of `promptInstall()`. `isStandaloneDisplay()`
+  // is checked first and wins outright (both branches stay 'none') so an
+  // already-installed visitor is never offered a second icon, matching the
+  // existing Chromium behavior where `canInstall` also goes false forever
+  // once real installation happens.
+  const [installGuidance, setInstallGuidance] = useState<
+    'none' | 'ios-safari' | 'ios-other' | 'mac-safari'
+  >('none')
+  const [installHelpOpen, setInstallHelpOpen] = useState(false)
+  // Jim: "the actual Icon Installation could be named Homepage Icon
+  // Installation or Desktop Icon Installation" — sensed from the OS, not
+  // fixed text, so the same row reads correctly for both the Chromium
+  // (`canInstall`) and Apple (`installGuidance`) paths below. Starts at the
+  // desktop wording (matches every existing account until this effect runs)
+  // rather than an empty string, so there's no flash of blank/placeholder
+  // text on the rare frame before the mount effect resolves.
+  const [installLabel, setInstallLabel] = useState<'Homepage' | 'Desktop'>('Desktop')
 
   const [sent, setSent] = useState<SentRow[]>([])
   const [received, setReceived] = useState<ReceivedRow[]>([])
@@ -909,6 +937,26 @@ export default function MainScreen() {
   // No setState involved, so this can't trip react-hooks/set-state-in-effect.
   useEffect(() => {
     window.sessionStorage.removeItem(MAIN_SEARCH_ROUNDTRIP_KEY)
+  }, [])
+
+  // Senses platform once after mount, for the Install Housekeeping row below
+  // (2026-09-03) — deferred a microtask before calling setState, same
+  // pattern CreateRequestForm.tsx's own `voiceSupported` effect already
+  // established, to satisfy react-hooks/set-state-in-effect since there's no
+  // real async event to key off here. Already-installed (`isStandaloneDisplay`)
+  // wins outright and leaves `installGuidance` at its 'none' default, so the
+  // Apple-guidance row never shows alongside — or instead of — an icon
+  // that's already there.
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setInstallLabel(isMobileDevice() ? 'Homepage' : 'Desktop')
+      if (isStandaloneDisplay()) return
+      if (isIOSDevice()) {
+        setInstallGuidance(isSafariBrowser() ? 'ios-safari' : 'ios-other')
+      } else if (isMacOSDevice() && isSafariBrowser()) {
+        setInstallGuidance('mac-safari')
+      }
+    })
   }, [])
 
   // Sets the round-trip marker, then navigates to a Sent/Received/ToDo row's
@@ -1871,7 +1919,11 @@ export default function MainScreen() {
                       alternative — only rendered when canInstall is true, so
                       it's never a dead control on a browser that doesn't
                       support installation or a device that already has it
-                      installed. */}
+                      installed. Jim's own 2026-09-03 naming request (via
+                      isMobileDevice()) — "Homepage" on a phone/tablet,
+                      "Desktop" on a laptop/desktop — applies to this
+                      Chromium row and the Apple-guidance row just below it
+                      alike. */}
                   {canInstall && (
                     <div
                       className="hkrow"
@@ -1881,8 +1933,41 @@ export default function MainScreen() {
                       onKeyDown={(e) => { if (e.key === 'Enter') promptInstall() }}
                     >
                       <span className="hktext">
-                        <span className="hktitle">Install</span>
-                        <span className="hknote"> — add a Would You Please icon to your home screen</span>
+                        <span className="hktitle">{installLabel} Icon Installation</span>
+                        <span className="hknote">
+                          {' '}— add a Would You Please icon to your{' '}
+                          {installLabel === 'Homepage' ? 'home screen' : 'desktop'}
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                  {/* Apple/Safari (iOS, iPadOS, macOS) never fires
+                      `beforeinstallprompt` at all, so `canInstall` above is
+                      always false there — this is the fallback, per Jim's
+                      2026-09-03 request ("extend that process to incorporate
+                      an explanation for Apple/Safari users when appropriate,
+                      can you sense for platform type?"). `installGuidance`
+                      is computed once after mount (see the effect above) and
+                      stays 'none' — hiding this row entirely — on any
+                      platform that has real `beforeinstallprompt` support
+                      instead, and on any platform (including these) where
+                      `isStandaloneDisplay()` shows the app is already
+                      installed, so a returning visitor is never offered a
+                      second icon. */}
+                  {!canInstall && installGuidance !== 'none' && (
+                    <div
+                      className="hkrow"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { setInstallHelpOpen(true) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') setInstallHelpOpen(true) }}
+                    >
+                      <span className="hktext">
+                        <span className="hktitle">{installLabel} Icon Installation</span>
+                        <span className="hknote">
+                          {' '}— add a Would You Please icon to your{' '}
+                          {installLabel === 'Homepage' ? 'home screen' : 'desktop'}
+                        </span>
                       </span>
                     </div>
                   )}
@@ -2259,6 +2344,80 @@ export default function MainScreen() {
             </>
           )}
         </div>
+      )}
+
+      {/* Apple/Safari install-instructions modal (2026-09-03) — Jim's own
+          request: Chromium's `beforeinstallprompt` (canInstall/promptInstall,
+          PWAProvider.tsx) has no equivalent API on iOS/iPadOS/macOS Safari,
+          so there's nothing to auto-trigger there; this walks the visitor
+          through the platform's own real manual step instead. Numbered
+          steps are plain bold-prefixed <p> tags rather than <ol>/<li> — this
+          app has no confirmed-rendering precedent for list markers under its
+          Tailwind v4 preflight (only .promo-features does, and it explicitly
+          resets list-style itself), so plain paragraphs avoid depending on
+          an unverified default. Reuses the app's own .scrim/.modal (§6.12)
+          pattern verbatim, same as ContactDetailForm.tsx's Delete Contact
+          dialog. */}
+      {installHelpOpen && (
+        <>
+          <div className="scrim" onClick={() => setInstallHelpOpen(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="install-help-title">
+            <div className="modalhead">
+              <p className="modal-title" id="install-help-title">
+                {installLabel} Icon Installation
+              </p>
+            </div>
+
+            {installGuidance === 'ios-safari' && (
+              <>
+                <p className="subnote" style={{ marginTop: 10 }}>
+                  <b>1.</b> Tap the Share icon in Safari&rsquo;s toolbar (a
+                  square with an arrow pointing up).
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>2.</b> Scroll down and tap &ldquo;Add to Home Screen.&rdquo;
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>3.</b> Tap &ldquo;Add&rdquo; in the top-right corner.
+                </p>
+              </>
+            )}
+
+            {installGuidance === 'ios-other' && (
+              <p className="subnote" style={{ marginTop: 10 }}>
+                On an iPhone or iPad, only Safari can add a Home Screen icon
+                — this browser doesn&rsquo;t support it. Open{' '}
+                <b>wouldyouplease.com</b> in Safari, then use its Share icon
+                and choose &ldquo;Add to Home Screen.&rdquo;
+              </p>
+            )}
+
+            {installGuidance === 'mac-safari' && (
+              <>
+                <p className="subnote" style={{ marginTop: 10 }}>
+                  <b>1.</b> In Safari&rsquo;s menu bar, open the{' '}
+                  <b>File</b> menu.
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>2.</b> Choose &ldquo;Add to Dock&hellip;&rdquo;
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>3.</b> Click &ldquo;Add.&rdquo;
+                </p>
+              </>
+            )}
+
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setInstallHelpOpen(false)}
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
