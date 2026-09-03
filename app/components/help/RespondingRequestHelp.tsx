@@ -23,7 +23,7 @@ export default function RespondingRequestHelp() {
           <rect x="0.5" y="20" width="399" height="10.5" fill="#2A5FC8" />
           <text x="200" y="20" fill="#fff" fontSize="12" fontWeight="700" textAnchor="middle" fontFamily="Arial, sans-serif">Request Response</text>
 
-          <text x="16" y="48" fill="#5A6675" fontSize="9" fontFamily="Arial, sans-serif">From: Jim Gillon &nbsp; Due: 09-12-26</text>
+          <text x="16" y="48" fill="#5A6675" fontSize="9" fontFamily="Arial, sans-serif">From: Jim Gillon &nbsp; Due: 09-18-26</text>
           <rect x="16" y="56" width="368" height="30" rx="6" fill="#F6F7F9" stroke="#E2E6EC" />
           <text x="24" y="75" fill="#1F2933" fontSize="10" fontFamily="Arial, sans-serif">Please send the updated slide deck by Friday.</text>
 
@@ -54,7 +54,8 @@ export default function RespondingRequestHelp() {
 
       <h2>The Fast Path: Quick Done</h2>
       <p>
-        If there&rsquo;s nothing more to say, tap <b>Done</b> — it fills in today&rsquo;s date and
+        If there&rsquo;s nothing more to say, tap <b>Done</b>{' '}
+        — it fills in today&rsquo;s date and
         you can Send right away. No need to type anything unless you want to.
       </p>
 
@@ -67,7 +68,8 @@ export default function RespondingRequestHelp() {
 
       <h2>Add to Calendar</h2>
       <p>
-        The <b>Add to Calendar</b> link downloads an event file for the Due Date, so it shows up
+        The <b>Add to Calendar</b>{' '}
+        link downloads an event file for the Due Date, so it shows up
         alongside everything else on your calendar without any manual re-entry.
       </p>
 

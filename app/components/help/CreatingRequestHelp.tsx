@@ -30,7 +30,7 @@ export default function CreatingRequestHelp() {
 
           <rect x="16" y="74" width="368" height="26" rx="6" fill="#fff" stroke="#2A5FC8" strokeWidth="1.5" />
           <text x="24" y="91" fill="#5A6675" fontSize="9" fontFamily="Arial, sans-serif">Due Date</text>
-          <text x="200" y="91" fill="#1F2933" fontSize="10.5" fontFamily="Arial, sans-serif">09-12-26</text>
+          <text x="120" y="91" fill="#1F2933" fontSize="10.5" fontFamily="Arial, sans-serif">09-18-26</text>
 
           <rect x="16" y="106" width="368" height="34" rx="6" fill="#fff" stroke="#2A5FC8" strokeWidth="1.5" />
           <text x="24" y="120" fill="#5A6675" fontSize="9" fontFamily="Arial, sans-serif">Description</text>
@@ -67,18 +67,20 @@ export default function CreatingRequestHelp() {
 
       <h2>Let Would You Please Do the Follow-Up</h2>
       <p>
-        The <b>Reminders until Done</b> checkboxes control up to three emails sent on your
+        The <b>Reminders until Done</b>{' '}
+        checkboxes control up to three emails sent on your
         behalf: the day before it&rsquo;s due, the day it&rsquo;s due, and the day after (if
         it&rsquo;s still open). Set your own defaults once in Account Options and every new
         Request starts pre-checked the way you like — no re-deciding each time. If a Request
-        does go overdue, its own Detail screen also has a one-tap <b>Send Reminder</b> button
-        for whenever you want to nudge the recipient yourself.
+        does go overdue, its own Detail screen also has a one-tap <b>Send Reminder</b>{' '}
+        button for whenever you want to nudge the recipient yourself.
       </p>
 
       <h2>Repeating Requests</h2>
       <p>
         For anything you send on a schedule — rent, a weekly status update — turn on{' '}
-        <b>Repeat</b> and Would You Please creates the next occurrence automatically once the
+        <b>Repeat</b>{' '}
+        and Would You Please creates the next occurrence automatically once the
         current one&rsquo;s Due Date arrives. Free accounts can repeat up to 5 times;
         subscribers can repeat without limit.
       </p>
@@ -87,9 +89,9 @@ export default function CreatingRequestHelp() {
       <p>
         Add files right on the Request — a PDF, a spreadsheet, a photo — so the recipient has
         everything in one place instead of a separate email. Every account gets some free
-        storage; subscribers get more. You can also stage a <b>Dialog</b> question or note
-        before you even send, so it&rsquo;s waiting for the recipient the moment they open the
-        link.
+        storage; subscribers get more. You can also stage a <b>Dialog</b>{' '}
+        question or note before you even send, so it&rsquo;s waiting for the recipient the
+        moment they open the link.
       </p>
 
       <HelpNext current="creating-a-request" />

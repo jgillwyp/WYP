@@ -41,7 +41,7 @@ export default function GettingStartedHelp() {
           <text x="349" y="56" fill="#5A6675" fontSize="8" textAnchor="middle" fontFamily="Arial, sans-serif">Open</text>
 
           <text x="18" y="76" fill="#1F2933" fontSize="10.5" fontFamily="Arial, sans-serif">Ask Dave for the deck</text>
-          <text x="335" y="76" fill="#1F2933" fontSize="10.5" fontWeight="700" textAnchor="end" fontFamily="Arial, sans-serif">09-12-26</text>
+          <text x="335" y="76" fill="#1F2933" fontSize="10.5" fontWeight="700" textAnchor="end" fontFamily="Arial, sans-serif">09-18-26</text>
 
           <text x="18" y="92" fill="#D32F2F" fontSize="10.5" fontFamily="Arial, sans-serif">Return the ladder</text>
           <text x="335" y="92" fill="#D32F2F" fontSize="10.5" fontWeight="700" textAnchor="end" fontFamily="Arial, sans-serif">09-01-26</text>
@@ -86,18 +86,19 @@ export default function GettingStartedHelp() {
       <h2>Make It Yours: Account Options</h2>
       <p>
         Would You Please starts simple on purpose — most optional fields are hidden until you
-        turn them on. Open Housekeeping&rsquo;s <b>Account Options</b> to turn on things like a
-        private Category label, Due/Done Time on Requests, or Due/Done Dates on ToDos, and to
+        turn them on. Open Housekeeping&rsquo;s <b>Account Options</b>{' '}
+        to turn on things like a private Category label, Due/Done Time on Requests, or
+        Due/Done Dates on ToDos, and to
         set your own default Reminder schedule so you don&rsquo;t have to re-check the same
         boxes on every new Request or ToDo.
       </p>
 
       <h2>A Few Efficiency Tips</h2>
       <ul>
-        <li><b>Add a Contact once.</b> After that, Create Request&rsquo;s Recipient field finds them by typing just a few letters.</li>
-        <li><b>Use Search for anything older.</b> Search also finds Archived items, so Archiving a finished Request or ToDo doesn&rsquo;t mean losing track of it.</li>
-        <li><b>Install the icon.</b> Housekeeping&rsquo;s Install row (when available) adds a Would You Please icon to your home screen, so it opens like any other app.</li>
-        <li><b>Let Reminders do the follow-up.</b> See the Creating a Request topic for how Day-before/Day-of/Day-after Reminders keep a Request moving without you checking back manually.</li>
+        <li><b>Add a Contact once.</b>{' '}After that, Create Request&rsquo;s Recipient field finds them by typing just a few letters.</li>
+        <li><b>Use Search for anything older.</b>{' '}Search also finds Archived items, so Archiving a finished Request or ToDo doesn&rsquo;t mean losing track of it.</li>
+        <li><b>Install the icon.</b>{' '}Housekeeping&rsquo;s Install row (when available) adds a Would You Please icon to your home screen, so it opens like any other app.</li>
+        <li><b>Let Reminders do the follow-up.</b>{' '}See the Creating a Request topic for how Day-before/Day-of/Day-after Reminders keep a Request moving without you checking back manually.</li>
       </ul>
 
       <HelpNext current="getting-started" />

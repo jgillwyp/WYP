@@ -7858,3 +7858,15 @@ New shared `HelpAccountLink.tsx`, appended as the last element of all four Help 
 The "come back to same Help screen" half needed no new plumbing: navigating to `/account` is an ordinary forward `router.push`, which pushes a new history entry, and `AccountForm.tsx`'s own Close button already calls `router.back()` — so ordinary browser history already returns to the exact Help topic the visitor came from.
 
 `npx tsc --noEmit`/`npm run lint` clean.
+
+---
+
+## 2026-09-03 — More Help topic spacing fixes, Attachments wording, sample date/alignment fixes
+
+Jim found five more missing-trailing-space instances after the earlier round's fix, all at `</b>` boundaries that render on a single source line yet still lose their following space in the browser — confirming this is a genuine rendering/copy issue at every bold-tag boundary, not limited to source-level line breaks. Hardened every remaining `<b>...</b>` boundary across all four Help topics with the `{' '}` JSX-expression idiom (Getting Started: "Account Options" heading paragraph plus all four Efficiency Tips list items; Creating a Request: "Reminders until Done", "Send Reminder", "Repeat", "Dialog"; Responding to a Request: "Done", "Add to Calendar").
+
+Also reworded `TodoFeaturesHelp.tsx`'s Attachments paragraph — "with the same free storage allowance as Requests" read as if ToDos got an *additional* allowance on top of a Request's own, rather than sharing one per-account pool. Now: "with a storage allowance based on free or subscription account status."
+
+Separately, Jim flagged the Create Request / Request Response sample images: the Due Date shown (09-12-26) is a Saturday, and 09-11 (visually adjacent, and what "by Friday" literally described) is a sensitive date for a business example. Changed every sample Due Date from 09-12-26 to 09-18-26 (a Friday) across `CreatingRequestHelp.tsx`, `RespondingRequestHelp.tsx`, and `GettingStartedHelp.tsx`'s Main Screen sample (same date reused there, fixed for consistency though not separately flagged) — verified 2026-09-18 is a Friday and 2026-09-12 a Saturday. Also fixed Creating a Request's sample: Due Date's value text was at x=200 while Recipient's own value sat at x=120 — misaligned. Moved to x=120 so Due Date's value starts at the same left edge as Recipient's.
+
+`npx tsc --noEmit`/`npm run lint` clean.

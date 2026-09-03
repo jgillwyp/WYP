@@ -91,8 +91,8 @@ export default function TodoFeaturesHelp() {
 
       <h2>Attachments</h2>
       <p>
-        ToDos can carry file attachments too — a photo, a document, a reference file — with the
-        same free storage allowance as Requests.
+        ToDos can carry file attachments too — a photo, a document, a reference file — with a
+        storage allowance based on free or subscription account status.
       </p>
 
       <h2>Turn a ToDo into a Request (and Back)</h2>
