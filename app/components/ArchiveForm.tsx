@@ -106,6 +106,33 @@ import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
  * recipientQuery/beforeDone/deselected above. ToDos here has only Priority
  * to sort by — this screen never shows Category at all, unlike Main
  * Screen's own ToDos list.
+ *
+ * Search Text, Starting/Ending Done Date range, fixed instructional text,
+ * and "From..." record-scope subtitle (2026-09-03) — Jim pasted a mockup
+ * asking for more search criteria after using the screen for real. A new
+ * `searchText` field sits beside Recipient/Requestor (own row when ToDos has
+ * no Recipient field to pair it with) and matches against each row's own
+ * Description, case-insensitive substring, the same convention Main
+ * Screen's own search already uses. The single "Before Done Date" field is
+ * gone, replaced by a `startingDone`/`endingDone` range pair (both ends
+ * optional, either alone is a valid one-sided range) — both keep the
+ * existing calendar-picker-only behavior (openPicker + the Tab-only keydown
+ * guard) unchanged. The old action-dependent archnote paragraph is now one
+ * fixed sentence covering all three Actions at once, per Jim's own exact
+ * wording — the old Delete-specific "permanent, cannot be recovered"
+ * sentence is dropped from here since the Delete confirmation modal
+ * already states that warning on its own. A new small subtitle under each
+ * Record Type's own title band explains why the list changes when Action
+ * changes: "From Active Records" for Archive, "From Archived Records" for
+ * UnArchive and Delete — resolved directly off the `rows` filter above
+ * (Archive shows Done-not-yet-archived "active" rows; UnArchive and Delete
+ * both show already-archived rows). Flagged, not silently assumed: Jim's
+ * own literal wording read "for Archive and Delete it would be 'From
+ * Archived Records'" — almost certainly a typo for "for UnArchive and
+ * Delete," since "From Active Records" and "From Archived Records" can't
+ * both be true of Archive mode at once. Implemented per the logically
+ * consistent, data-driven reading above; worth a quick confirmation from
+ * Jim rather than assumed final.
  */
 
 type RecordType = 'sent' | 'received' | 'todos'
@@ -200,8 +227,8 @@ function formatMDYFromTimestamp(value: string | null): string {
 // added as a fourth column. The printed header now also shows the Selection
 // Criteria line (added same day, once the owner's own three follow-up xlsx
 // mockups supplied its exact wording/format) — see criteriaText() below,
-// built from this component's own noun/query/beforeDone state, the same
-// values driving the on-screen filter.
+// built from this component's own noun/query/search/startingDone/endingDone
+// state (2026-09-03), the same values driving the on-screen filter.
 type PrintDialogEntry = { id: string; kind: string; body: string; who: string | null; replies_to_id: string | null }
 type PrintAttachmentEntry = {
   id: string
@@ -541,7 +568,9 @@ const DETAIL_LABEL: Record<RecordType, string> = {
 const ARCHIVE_TYPE_KEY = 'wyp.archiveType'
 const ARCHIVE_ACTION_KEY = 'wyp.archiveAction'
 const ARCHIVE_QUERY_KEY = 'wyp.archiveRecipientQuery'
-const ARCHIVE_BEFORE_KEY = 'wyp.archiveBeforeDone'
+const ARCHIVE_SEARCH_KEY = 'wyp.archiveSearchText'
+const ARCHIVE_STARTING_DONE_KEY = 'wyp.archiveStartingDone'
+const ARCHIVE_ENDING_DONE_KEY = 'wyp.archiveEndingDone'
 const ARCHIVE_DESELECTED_KEY = 'wyp.archiveDeselected'
 const ARCHIVE_ROUNDTRIP_KEY = 'wyp.archiveDetailRoundTrip'
 
@@ -665,7 +694,17 @@ export default function ArchiveForm() {
   )
   const [recipientBrowsing, setRecipientBrowsing] = useState(false)
   const [showRecipientResults, setShowRecipientResults] = useState(false)
-  const [beforeDone, setBeforeDone] = useState(() => (isArchiveRoundTrip() ? readStoredString(ARCHIVE_BEFORE_KEY) : ''))
+  // Search Text / Starting-Ending Done Date range (2026-09-03) — see file
+  // header comment. Same round-trip-only persistence as recipientQuery.
+  const [searchText, setSearchText] = useState(() =>
+    isArchiveRoundTrip() ? readStoredString(ARCHIVE_SEARCH_KEY) : ''
+  )
+  const [startingDone, setStartingDone] = useState(() =>
+    isArchiveRoundTrip() ? readStoredString(ARCHIVE_STARTING_DONE_KEY) : ''
+  )
+  const [endingDone, setEndingDone] = useState(() =>
+    isArchiveRoundTrip() ? readStoredString(ARCHIVE_ENDING_DONE_KEY) : ''
+  )
 
   const [deselected, setDeselected] = useState<Record<RecordType, Set<string>>>(() =>
     isArchiveRoundTrip()
@@ -686,8 +725,16 @@ export default function ArchiveForm() {
   }, [recipientQuery])
 
   useEffect(() => {
-    window.sessionStorage.setItem(ARCHIVE_BEFORE_KEY, beforeDone)
-  }, [beforeDone])
+    window.sessionStorage.setItem(ARCHIVE_SEARCH_KEY, searchText)
+  }, [searchText])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(ARCHIVE_STARTING_DONE_KEY, startingDone)
+  }, [startingDone])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(ARCHIVE_ENDING_DONE_KEY, endingDone)
+  }, [endingDone])
 
   useEffect(() => {
     window.sessionStorage.setItem(
@@ -899,29 +946,34 @@ export default function ArchiveForm() {
   // LIST_TITLE_UNARCHIVE (see those constants' own comment above).
   const listTitle = action === 'archive' ? LIST_TITLE_ARCHIVE[currentType] : LIST_TITLE_UNARCHIVE[currentType]
   const query = recipientQuery.trim()
-  const noFilters = currentType === 'todos' ? beforeDone === '' : query === '' && beforeDone === ''
+  const search = searchText.trim()
+  // noFilters (2026-09-03) — Search Text and the Starting/Ending Done Date
+  // range join Recipient/Requestor as candidate gates; ToDos still ignores
+  // `query` (no Recipient/Requestor field renders for it, see below) exactly
+  // as the old single-field version did.
+  const noFilters =
+    currentType === 'todos'
+      ? search === '' && startingDone === '' && endingDone === ''
+      : query === '' && search === '' && startingDone === '' && endingDone === ''
 
-  // Selection Criteria print line (2026-08-15) — exact wording/format from
-  // the owner's own "Archive - ..." xlsx mockups: "Recipient <value or
-  // (blank)>     Before Done Date <value or (blank)>" for Sent/Received
-  // ("Requestor" in place of "Recipient" for Received, via NOUN — the
-  // owner confirmed via AskUserQuestion that the two uploaded xlsx files
-  // being byte-identical was a mistaken duplicate, not an intent to use
-  // "Recipient" for both), "Before Done Date <value or (blank)>" alone for
-  // ToDos, which has no name field to filter by at all.
+  // Selection Criteria print line (2026-08-15, extended 2026-09-03 for
+  // Search Text and the Starting/Ending Done Date range) — same "<label>
+  // <value or (blank)>" format as the original, one clause per filter.
   const criteriaText =
     currentType === 'todos'
-      ? `Before Done Date ${beforeDone ? formatMDY(beforeDone) : '(blank)'}`
-      : `${noun} ${query || '(blank)'}     Before Done Date ${beforeDone ? formatMDY(beforeDone) : '(blank)'}`
+      ? `Search Text ${search || '(blank)'}     Starting Done Date ${startingDone ? formatMDY(startingDone) : '(blank)'}     Ending Done Date ${endingDone ? formatMDY(endingDone) : '(blank)'}`
+      : `${noun} ${query || '(blank)'}     Search Text ${search || '(blank)'}     Starting Done Date ${startingDone ? formatMDY(startingDone) : '(blank)'}     Ending Done Date ${endingDone ? formatMDY(endingDone) : '(blank)'}`
 
   const matches = useMemo(() => {
     if (noFilters) return []
     return rows.filter((r) => {
       const matchesName = !noun || query === '' || (r.name ?? '').toLowerCase().includes(query.toLowerCase())
-      const matchesDate = beforeDone === '' || r.doneISO < beforeDone
-      return matchesName && matchesDate
+      const matchesSearch = search === '' || r.desc.toLowerCase().includes(search.toLowerCase())
+      const matchesStartingDone = startingDone === '' || r.doneISO >= startingDone
+      const matchesEndingDone = endingDone === '' || r.doneISO <= endingDone
+      return matchesName && matchesSearch && matchesStartingDone && matchesEndingDone
     })
-  }, [rows, noFilters, noun, query, beforeDone])
+  }, [rows, noFilters, noun, query, search, startingDone, endingDone])
 
   // Applies the active Record Type's own sort state on top of the already-
   // filtered matches — a second pass, same reasoning as MainScreen.tsx's own
@@ -1368,20 +1420,17 @@ export default function ArchiveForm() {
             </div>
           </div>
 
+          {/* Fixed instructional wording (2026-09-03) — replaces the old
+              action-dependent text above with one sentence covering all
+              three Actions at once, per Jim's own exact wording. The old
+              Delete-specific "permanent, cannot be recovered" sentence is
+              dropped here — the Delete confirmation modal already states
+              that warning on its own. */}
           <p className="archnote">
-            <b>
-              {(() => {
-                const verb = action === 'archive' ? 'Archive' : action === 'unarchive' ? 'UnArchive' : 'Delete'
-                return currentType === 'todos'
-                  ? `Select records to ${verb} by the Before Done Date.`
-                  : `Select records to ${verb} by ${noun} and/or Before Done Date.`
-              })()}
-            </b>{' '}
-            {action === 'archive'
-              ? 'You can uncheck any you do not want to Archive. Although Archived records are no longer displayed, they are included when a Search is done.'
-              : action === 'unarchive'
-                ? 'You can uncheck any you do not want to UnArchive. UnArchived records are shown again here and on the Main Screen.'
-                : 'You can uncheck any you do not want to Delete. Deletion is permanent — the record, its Dialog, and its Attachments cannot be recovered.'}
+            <b>Select records to Archive, UnArchive, or Delete.</b>{' '}
+            Any combination of some or all of the search options below can be used to see a
+            list of qualifying records. Archive selects active records marked as Done.
+            UnArchive and Delete select Archived records.
           </p>
 
           {archiveError && (
@@ -1391,42 +1440,62 @@ export default function ArchiveForm() {
           )}
 
           <div className="form" style={{ paddingTop: 8 }}>
-            {noun && (
-              <div className="fgroup">
+            {/* Recipient/Requestor + Search Text (2026-09-03) — one row when
+                both apply (Sent/Received); Search Text alone for ToDos,
+                which has no name field. Search Text matches each row's own
+                Description, case-insensitive substring — same convention
+                Main Screen's own search already uses. */}
+            <div className="fgroup">
               <div className="frow" style={{ position: 'relative' }}>
+                {noun && (
+                  <span className="ffloat">
+                    <input
+                      className="finput"
+                      id="archRecipient"
+                      type="text"
+                      autoComplete="off"
+                      placeholder=" "
+                      value={recipientQuery}
+                      onChange={(e) => {
+                        setRecipientQuery(e.target.value)
+                        setRecipientBrowsing(false)
+                        setShowRecipientResults(true)
+                      }}
+                      onFocus={(e) => {
+                        e.target.select()
+                        setRecipientBrowsing(true)
+                        setShowRecipientResults(true)
+                      }}
+                      onBlur={() => setTimeout(() => setShowRecipientResults(false), 120)}
+                    />
+                    <label className="flabel" htmlFor="archRecipient">
+                      <span className="lglyph" aria-hidden="true">
+                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
+                          <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+                          <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
+                        </svg>
+                      </span>
+                      {noun}
+                    </label>
+                  </span>
+                )}
                 <span className="ffloat">
                   <input
                     className="finput"
-                    id="archRecipient"
+                    id="archSearchText"
                     type="text"
                     autoComplete="off"
                     placeholder=" "
-                    value={recipientQuery}
-                    onChange={(e) => {
-                      setRecipientQuery(e.target.value)
-                      setRecipientBrowsing(false)
-                      setShowRecipientResults(true)
-                    }}
-                    onFocus={(e) => {
-                      e.target.select()
-                      setRecipientBrowsing(true)
-                      setShowRecipientResults(true)
-                    }}
-                    onBlur={() => setTimeout(() => setShowRecipientResults(false), 120)}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
                   />
-                  <label className="flabel" htmlFor="archRecipient">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
-                        <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
-                        <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
-                      </svg>
-                    </span>
-                    {noun}
+                  <label className="flabel" htmlFor="archSearchText">
+                    Search Text
                   </label>
                 </span>
-                {showRecipientResults && (query !== '' || recipientBrowsing) && (
+                {noun && showRecipientResults && (query !== '' || recipientBrowsing) && (
                   <div className="lookup-results" role="listbox">
                     {filteredNameOptions.length === 0 ? (
                       <div className="lookup-empty">No matches</div>
@@ -1450,32 +1519,32 @@ export default function ArchiveForm() {
                   </div>
                 )}
               </div>
-              </div>
-            )}
+            </div>
 
-            {/* Before Done Date — real .ffloat.picker.native field (the
-                mockup's own .plaingroup/.finput.plain substitution was only
-                needed there for a Tailwind-preflight reason that doesn't
-                apply to this live component, see file header comment).
-                Calendar-picker-only: a keydown listener blocks every key but
-                Tab, so a value can only ever come from the native picker. */}
+            {/* Starting/Ending Done Date range (2026-09-03) — replaces the
+                old single Before Done Date field; either end alone is a
+                valid one-sided range. Both keep the existing real
+                .ffloat.picker.native pattern and calendar-picker-only
+                behavior (a keydown listener blocks every key but Tab, so a
+                value can only ever come from the native picker) — see file
+                header comment. */}
             <div className="fgroup">
               <div className="frow">
               <span className="ffloat picker native">
                 <input
                   className="finput"
-                  id="archBeforeDone"
+                  id="archStartingDone"
                   type="date"
                   inputMode="none"
                   autoComplete="off"
-                  value={beforeDone}
-                  onChange={(e) => setBeforeDone(e.target.value)}
+                  value={startingDone}
+                  onChange={(e) => setStartingDone(e.target.value)}
                   onClick={openPicker}
                   onKeyDown={(e) => {
                     if (e.key !== 'Tab') e.preventDefault()
                   }}
                 />
-                <label className="flabel" htmlFor="archBeforeDone">
+                <label className="flabel" htmlFor="archStartingDone">
                   <span className="lglyph" aria-hidden="true">
                     <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                       <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
@@ -1489,7 +1558,38 @@ export default function ArchiveForm() {
                       <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
                     </svg>
                   </span>
-                  Before Done Date
+                  Starting Done Date
+                </label>
+              </span>
+              <span className="ffloat picker native">
+                <input
+                  className="finput"
+                  id="archEndingDone"
+                  type="date"
+                  inputMode="none"
+                  autoComplete="off"
+                  value={endingDone}
+                  onChange={(e) => setEndingDone(e.target.value)}
+                  onClick={openPicker}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Tab') e.preventDefault()
+                  }}
+                />
+                <label className="flabel" htmlFor="archEndingDone">
+                  <span className="lglyph" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                    </svg>
+                  </span>
+                  Ending Done Date
                 </label>
               </span>
               </div>
@@ -1510,6 +1610,14 @@ export default function ArchiveForm() {
           <div className="band" style={{ marginTop: 0 }}>
             <span className="glabel" style={{ fontSize: 17 }}>{listTitle}</span>
           </div>
+          {/* "From..." subtitle (2026-09-03) — explains why the list changes
+              when Action changes, without requiring the visitor to already
+              know Archive shows active-Done records while UnArchive/Delete
+              show already-archived ones. See file header comment for the
+              flagged likely typo in Jim's own wording this resolves. */}
+          <p className="subnote" style={{ margin: '2px 0 8px' }}>
+            {action === 'archive' ? 'From Active Records' : 'From Archived Records'}
+          </p>
 
           <div className="archcolhead">
             <div className="archrow">
@@ -1625,8 +1733,11 @@ export default function ArchiveForm() {
           <div className="rows">
             {noFilters && (
               <p className="subempty">
-                Enter {currentType === 'todos' ? 'a Before Done Date' : `${noun} and/or a Before Done Date`} above to
-                see {action === 'archive' ? 'eligible' : 'archived'} records.
+                Enter{' '}
+                {currentType === 'todos'
+                  ? 'Search Text and/or a Done Date range'
+                  : `${noun}, Search Text, and/or a Done Date range`}{' '}
+                above to see {action === 'archive' ? 'eligible' : 'archived'} records.
               </p>
             )}
             {!noFilters && matches.length === 0 && (
