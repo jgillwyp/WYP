@@ -3741,8 +3741,8 @@ link is built only after the stack is proven on Add Contact.
   --noEmit`/`npm run lint` clean. See the decisions log's 2026-09-03 entry
   for the full write-up.
 
-- **Storage Management is now live — migration 051 DRAFTED, NOT YET
-  CONFIRMED RUN (2026-09-03, §6.49 PROPOSED).** Jim: "storage management
+- **Storage Management is now live — migration 051 confirmed run by the
+  owner, 2026-09-03 (§6.49 PROPOSED).** Jim: "storage management
   seems like a next step... And, create test data to allow testing (maybe
   set lower thresholds for test which get raised later?" Two design
   questions resolved via `AskUserQuestion` before building: a **testing-

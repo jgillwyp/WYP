@@ -3350,8 +3350,8 @@ grant execute on function public.add_dialog_as_recipient(uuid, text, text, bigin
 
 -- ============================================================================
 -- WYP migration 051 — profiles.storage_limit_override_bytes, a private-
--- testing-only per-account storage cap override. DRAFTED, NOT YET CONFIRMED
--- RUN.
+-- testing-only per-account storage cap override. CONFIRMED RUN by the
+-- owner, 2026-09-03.
 --
 -- Context: Jim, 2026-09-03 — "storage management seems like a next step...
 -- create test data to allow testing (maybe set lower thresholds for test
