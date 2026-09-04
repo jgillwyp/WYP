@@ -136,6 +136,42 @@ export async function getOwnerStorageStatus(
   return { usedBytes, limitBytes, tier }
 }
 
+/**
+ * A view URL and a download-forcing URL for the same Storage object
+ * (2026-09-04) — owner-reported, testing Storage Management: clicking
+ * "Download" opened a .jpg/.pdf/.html file directly in the browser tab
+ * instead of saving it, while .xlsx/.docx (which the browser can't render at
+ * all) correctly went to the Downloads folder. Both signed URLs point at the
+ * same object; the only difference is the `download` query param Supabase
+ * Storage's own signed-URL endpoint adds, which sets a real
+ * `Content-Disposition: attachment` response header — the one thing that
+ * reliably overrides a browser's own "render this content-type inline"
+ * default (an anchor's own `download` attribute is silently ignored for a
+ * cross-origin URL like Supabase Storage's, so that alone was never going to
+ * work here). `url` is unchanged from before (no `download` param) — used
+ * for "View" links (AttachmentsPanel.tsx's own name-click, and
+ * StorageManagementForm.tsx's new matching one), which should still open
+ * office documents through Microsoft's Office Online viewer and let a
+ * browser render whatever else it natively can. `downloadUrl` is used only
+ * by an explicit "Download" control.
+ */
+export async function createAttachmentUrls(
+  admin: ReturnType<typeof getServiceRoleClient>,
+  storagePath: string,
+  fileName: string
+): Promise<{ url: string | null; downloadUrl: string | null }> {
+  const [viewResult, downloadResult] = await Promise.all([
+    admin.storage.from('attachments').createSignedUrl(storagePath, ATTACHMENT_SIGNED_URL_TTL_SECONDS),
+    admin.storage
+      .from('attachments')
+      .createSignedUrl(storagePath, ATTACHMENT_SIGNED_URL_TTL_SECONDS, { download: fileName }),
+  ])
+  return {
+    url: viewResult.data?.signedUrl ?? null,
+    downloadUrl: downloadResult.data?.signedUrl ?? null,
+  }
+}
+
 export type Permission = {
   role: 'owner' | 'recipient' | 'anonymous'
   requestId: string

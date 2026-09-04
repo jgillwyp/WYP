@@ -1,4 +1,4 @@
-import { ATTACHMENT_SIGNED_URL_TTL_SECONDS, getServiceRoleClient, resolvePermission } from '../_shared'
+import { createAttachmentUrls, getServiceRoleClient, resolvePermission } from '../_shared'
 
 export const runtime = 'nodejs'
 
@@ -60,11 +60,11 @@ export async function POST(request: Request) {
   const attachments = await Promise.all(
     rows.map(async (row) => {
       let url: string | null = null
+      let downloadUrl: string | null = null
       if (row.kind === 'file' && row.storage_path) {
-        const { data: signed } = await admin.storage
-          .from('attachments')
-          .createSignedUrl(row.storage_path, ATTACHMENT_SIGNED_URL_TTL_SECONDS)
-        url = signed?.signedUrl ?? null
+        const urls = await createAttachmentUrls(admin, row.storage_path, row.file_name ?? 'attachment')
+        url = urls.url
+        downloadUrl = urls.downloadUrl
       }
       return {
         id: row.id,
@@ -78,6 +78,7 @@ export async function POST(request: Request) {
         uploaded_by_label: row.uploaded_by_label,
         created_at: row.created_at,
         url,
+        download_url: downloadUrl,
         carry_into_repeats: row.carry_into_repeats,
       }
     })

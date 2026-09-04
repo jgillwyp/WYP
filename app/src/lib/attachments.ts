@@ -253,9 +253,16 @@ export type AttachmentRow = {
   uploaded_by: string | null
   uploaded_by_label: string
   created_at: string
-  /** Signed Storage URL, present only on 'file' rows, only from
+  /** Signed Storage URL for VIEWING, present only on 'file' rows, only from
    * /api/attachments/list — never persisted, always generated on demand. */
   url?: string
+  /** A second signed Storage URL for the same object, with Supabase's own
+   * `download` option set (2026-09-04) — forces a real
+   * `Content-Disposition: attachment` response instead of letting the
+   * browser render the content-type inline. Present only on 'file' rows.
+   * `url` above is still what a "View" link (a name click, or an
+   * Office-viewable file routed through officeViewerUrl) should use. */
+  download_url?: string | null
   /** Repeat carry-forward selection (migration 038, 2026-08-21) — whether
    * this Attachment/Location should be duplicated onto each future
    * occurrence of a repeating Request/ToDo. Only ever shown/editable when

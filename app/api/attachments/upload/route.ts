@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 
 import {
-  ATTACHMENT_SIGNED_URL_TTL_SECONDS,
+  createAttachmentUrls,
   getOwnerStorageStatus,
   getServiceRoleClient,
   resolvePermission,
@@ -176,9 +176,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const { data: signed } = await admin.storage
-    .from('attachments')
-    .createSignedUrl(storagePath, ATTACHMENT_SIGNED_URL_TTL_SECONDS)
+  const { url, downloadUrl } = await createAttachmentUrls(admin, storagePath, finalName)
 
   return Response.json({
     attachment: {
@@ -186,7 +184,8 @@ export async function POST(request: Request) {
       kind: 'file' as const,
       reference_url: null,
       reference_note: null,
-      url: signed?.signedUrl ?? null,
+      url,
+      download_url: downloadUrl,
     },
   })
 }

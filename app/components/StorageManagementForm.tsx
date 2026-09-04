@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
-import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS_PER_ITEM, formatBytes } from '@/lib/attachments'
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_ITEM,
+  formatBytes,
+  isOfficeViewable,
+  officeViewerUrl,
+} from '@/lib/attachments'
 
 /**
  * Storage Management (2026-09-03, §6.49 PROPOSED) — converts
@@ -32,6 +38,21 @@ import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS_PER_ITEM, formatBytes } from '@/l
  * Account Options' own Test Storage Cap control. The two numbers can never
  * disagree, since both this screen and the upload route's own quota check
  * read the same function.
+ *
+ * View vs. Download (2026-09-04) — owner-reported: clicking "Download" on a
+ * .jpg/.pdf/.html attachment opened it directly in the browser instead of
+ * saving it, while .xlsx/.docx (unrenderable) correctly saved. Two separate
+ * affordances now: the file NAME is a "View" link (same officeViewerUrl()
+ * routing AttachmentsPanel.tsx's own name-click already uses for Office
+ * types, a plain link elsewhere — a browser renders jpg/pdf/html inline on
+ * its own, which is exactly what viewing wants); the "Download" link/api/
+ * attachments/owner-summary's own `download_url` (see
+ * app/api/attachments/_shared.ts's createAttachmentUrls) — a second signed
+ * URL for the same object with Supabase's own `download` option set, which
+ * adds a real `Content-Disposition: attachment` header, the one thing that
+ * reliably overrides a browser's own inline-render default regardless of
+ * file type or device (an anchor's own `download` attribute is silently
+ * ignored cross-origin, so that alone was never going to work here).
  */
 
 const MAX_ATTACHMENT_FOOTNOTE =
@@ -49,6 +70,7 @@ type AttachmentRow = {
   uploaded_by_label: string | null
   created_at: string
   url: string | null
+  download_url: string | null
   source: {
     kind: 'request' | 'todo'
     description: string
@@ -297,7 +319,19 @@ export default function StorageManagementForm() {
                 </svg>
               </span>
               <div className="ameta">
-                <div className="aname">{row.file_name}</div>
+                <div className="aname">
+                  {row.url ? (
+                    <a
+                      href={isOfficeViewable(row.file_name) ? officeViewerUrl(row.url) : row.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {row.file_name}
+                    </a>
+                  ) : (
+                    row.file_name
+                  )}
+                </div>
                 <div className="asub">
                   {formatBytes(row.size_bytes)} &#183; {friendlyFileType(row.mime_type, row.file_name)} &#183;{' '}
                   {formatCreatedDate(row.created_at)}
@@ -313,8 +347,8 @@ export default function StorageManagementForm() {
                 </div>
               </div>
               <div className="aacts">
-                {row.url && (
-                  <a className="dl" href={row.url} target="_blank" rel="noreferrer">
+                {(row.download_url || row.url) && (
+                  <a className="dl" href={row.download_url ?? row.url ?? undefined} rel="noreferrer">
                     Download
                   </a>
                 )}

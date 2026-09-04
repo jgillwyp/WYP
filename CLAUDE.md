@@ -3740,6 +3740,33 @@ link is built only after the stack is proven on Add Contact.
   `<ul>`, and it explicitly resets `list-style` itself). `npx tsc
   --noEmit`/`npm run lint` clean. See the decisions log's 2026-09-03 entry
   for the full write-up.
+- **Storage Management: view-by-name + a real forcing Download link
+  (2026-09-04).** Jim, testing Storage Management the day it shipped:
+  clicking "Download" opened .jpg/.pdf/.html attachments directly in the
+  browser instead of saving them (.xlsx/.docx, which a browser can't render
+  at all, correctly went to the Downloads folder either way), and separately
+  asked for the attachment name itself to be clickable, matching
+  AttachmentsPanel.tsx's own existing name-click "View" behavior elsewhere
+  in the app. New `createAttachmentUrls()` in `app/api/attachments/
+  _shared.ts` generates two signed Storage URLs per file from now on — the
+  existing plain `url` (used for viewing: routed through `officeViewerUrl()`
+  for Office-viewable types, a browser's own native rendering for everything
+  else) and a new `download_url`, the same object with Supabase's own
+  `download` option set, which sets a real `Content-Disposition: attachment`
+  response header — the one thing that reliably overrides a browser's
+  render-inline default regardless of file type or device (an anchor's own
+  `download` attribute is silently ignored cross-origin, so that alone was
+  never going to work against a Supabase Storage signed URL). Wired into
+  `list/route.ts`, `owner-summary/route.ts`, and `upload/route.ts` (all
+  three previously called `createSignedUrl` inline); `AttachmentRow`'s type
+  in `app/src/lib/attachments.ts` gained the new field.
+  `StorageManagementForm.tsx`'s `.aname` is now a real link (View, same
+  `isOfficeViewable()`/`officeViewerUrl()` routing) and its "Download" link
+  now points at `download_url` instead of the plain view URL. Not extended
+  to `AttachmentsPanel.tsx` itself — that screen's one existing link was
+  always meant as View, not Download, and Jim's report and question were
+  both specifically about Storage Management's own separate Download
+  control. `npx tsc --noEmit`/`npm run lint` clean.
 - **Same-day correction: Install row titles renamed "Add to Home Screen"/
   "Add to Desktop"; the "icon" detail moved into the note text
   (2026-09-03).** Jim, after his own follow-up research: his own naming
