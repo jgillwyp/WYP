@@ -1937,11 +1937,15 @@ export default function MainScreen() {
                       alternative — only rendered when canInstall is true, so
                       it's never a dead control on a browser that doesn't
                       support installation or a device that already has it
-                      installed. Jim's own 2026-09-03 naming request (via
-                      isMobileDevice()) — "Homepage" on a phone/tablet,
-                      "Desktop" on a laptop/desktop — applies to this
-                      Chromium row and the Apple-guidance row just below it
-                      alike. */}
+                      installed. Title reads "Add to Home Screen" or "Add to
+                      Desktop" (installLabel, sensed via isMobileDevice() —
+                      "Homepage" on a phone/tablet, "Desktop" on a laptop/
+                      desktop) — Jim's own 2026-09-03 follow-up correction:
+                      his first-round suggestion ("Homepage/Desktop Icon
+                      Installation") wasn't the platform-standard phrasing;
+                      the "icon" detail now lives in the .hknote text
+                      instead. Applies to this Chromium row and the
+                      Apple-guidance row just below it alike. */}
                   {canInstall && (
                     <div
                       className="hkrow"
@@ -1951,7 +1955,9 @@ export default function MainScreen() {
                       onKeyDown={(e) => { if (e.key === 'Enter') promptInstall() }}
                     >
                       <span className="hktext">
-                        <span className="hktitle">{installLabel} Icon Installation</span>
+                        <span className="hktitle">
+                          {installLabel === 'Homepage' ? 'Add to Home Screen' : 'Add to Desktop'}
+                        </span>
                         <span className="hknote">
                           {' '}— add a Would You Please icon to your{' '}
                           {installLabel === 'Homepage' ? 'home screen' : 'desktop'}
@@ -1981,7 +1987,9 @@ export default function MainScreen() {
                       onKeyDown={(e) => { if (e.key === 'Enter') setInstallHelpOpen(true) }}
                     >
                       <span className="hktext">
-                        <span className="hktitle">{installLabel} Icon Installation</span>
+                        <span className="hktitle">
+                          {installLabel === 'Homepage' ? 'Add to Home Screen' : 'Add to Desktop'}
+                        </span>
                         <span className="hknote">
                           {' '}— add a Would You Please icon to your{' '}
                           {installLabel === 'Homepage' ? 'home screen' : 'desktop'}
@@ -2382,7 +2390,7 @@ export default function MainScreen() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="install-help-title">
             <div className="modalhead">
               <p className="modal-title" id="install-help-title">
-                {installLabel} Icon Installation
+                {installLabel === 'Homepage' ? 'Add to Home Screen' : 'Add to Desktop'}
               </p>
             </div>
 

@@ -3740,6 +3740,22 @@ link is built only after the stack is proven on Add Contact.
   `<ul>`, and it explicitly resets `list-style` itself). `npx tsc
   --noEmit`/`npm run lint` clean. See the decisions log's 2026-09-03 entry
   for the full write-up.
+- **Same-day correction: Install row titles renamed "Add to Home Screen"/
+  "Add to Desktop"; the "icon" detail moved into the note text
+  (2026-09-03).** Jim, after his own follow-up research: his own naming
+  suggestion above ("Homepage/Desktop Icon Installation") wasn't the
+  platform-standard phrasing — "the explanatory wording you used was
+  correct, but my suggested titles were not. We should use 'Add to Home
+  Screen' or 'Add to Desktop' — and the descriptive text can add the
+  'icon' detail." Both Housekeeping rows (the Chromium `canInstall` row and
+  the Apple-guidance fallback row) and the Apple-guidance modal's own title
+  now read `installLabel === 'Homepage' ? 'Add to Home Screen' : 'Add to
+  Desktop'` instead of `{installLabel} Icon Installation`; the `.hknote`
+  text is unchanged — it already said "add a Would You Please icon to your
+  home screen/desktop," which is exactly where Jim wanted the icon detail
+  to live. `installLabel`/`installGuidance` and every platform-sensing
+  helper in `app/src/lib/platform.ts` are untouched — this was copy only.
+  `npx tsc --noEmit`/`npm run lint` clean.
 
 - **Storage Management is now live — migration 051 confirmed run by the
   owner, 2026-09-03 (§6.49 PROPOSED).** Jim: "storage management
