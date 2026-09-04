@@ -187,6 +187,11 @@ type ProfileRow = {
   // route already has its own ProfileRow/profile-fetching shape, per this
   // codebase's per-file-duplication convention).
   subscription_storage_gb: number | null
+  // storage_limit_override_bytes (migration 051, 2026-09-03) — the same
+  // private-testing-only override app/api/attachments/_shared.ts's
+  // getOwnerStorageStatus() reads; checked here too so a Repeat carry-
+  // forward run doesn't silently ignore a lowered test cap.
+  storage_limit_override_bytes: number | null
 }
 
 type ContactInfo = { email: string; display_name: string | null; time_zone: string | null } | null
@@ -344,7 +349,7 @@ async function handle(request: Request) {
     const { data: profileData } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb, storage_limit_override_bytes'
       )
       .in('id', ownerIds)
     for (const p of (profileData ?? []) as ProfileRow[]) profileMap.set(p.id, p)
@@ -811,7 +816,7 @@ async function handle(request: Request) {
     const { data: moreProfiles } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb, storage_limit_override_bytes'
       )
       .in('id', Array.from(new Set(repeatOwnerIds)))
     for (const p of (moreProfiles ?? []) as ProfileRow[]) profileMap.set(p.id, p)
@@ -890,7 +895,11 @@ async function handle(request: Request) {
     let remainingBytes = Infinity
     if (hasFileCarry) {
       const storageLimitBytes =
-        profile?.tier === 'subscriber' ? (profile?.subscription_storage_gb ?? 5) * 1024 * 1024 * 1024 : FREE_TIER_STORAGE_LIMIT_BYTES
+        profile?.storage_limit_override_bytes != null
+          ? Number(profile.storage_limit_override_bytes)
+          : profile?.tier === 'subscriber'
+            ? (profile?.subscription_storage_gb ?? 5) * 1024 * 1024 * 1024
+            : FREE_TIER_STORAGE_LIMIT_BYTES
       const { data: ownedForStorage } = await sb.from('requests').select('id').eq('owner_id', row.owner_id)
       const ownedIdsForStorage = (ownedForStorage ?? []).map((r) => r.id as string)
       let usedBytes = 0

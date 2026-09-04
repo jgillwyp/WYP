@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { formatBytes } from '@/lib/attachments'
 import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPanels'
 
 /**
@@ -218,6 +219,18 @@ export default function AccountForm() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Test Storage Cap (migration 051, 2026-09-03) — a private-testing-only
+  // override of the account's real Attachment storage allowance, gated by
+  // the same canToggleTier flag above rather than a second allowlist (see
+  // that migration's own header comment for why). storageOverrideBytes is
+  // what's actually saved (null = no override, using the real tier-based
+  // cap); storageOverrideInput is the free-typed MB text in the field,
+  // kept separate so a not-yet-saved edit doesn't fight the loaded value.
+  const [storageOverrideBytes, setStorageOverrideBytes] = useState<number | null>(null)
+  const [storageOverrideInput, setStorageOverrideInput] = useState('')
+  const [storageOverrideSaving, setStorageOverrideSaving] = useState(false)
+  const [storageOverrideError, setStorageOverrideError] = useState<string | null>(null)
+
   // Collapsible section state (2026-08-23) — General Options open, the
   // other three hidden, by default; persists per Jim's own "remain as
   // last-used" wording within a session (sessionStorage), resets on the
@@ -250,7 +263,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb'
+          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
         )
         .eq('id', userData.user.id)
         .single()
@@ -279,6 +292,11 @@ export default function AccountForm() {
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
+      const overrideBytes = data?.storage_limit_override_bytes ?? null
+      setStorageOverrideBytes(overrideBytes)
+      setStorageOverrideInput(
+        overrideBytes != null ? String(Math.round((overrideBytes / (1024 * 1024)) * 100) / 100) : ''
+      )
 
       // can_toggle_tier() (migration 035) — a failure here (RPC missing,
       // network hiccup) is treated as "not allowed" rather than surfaced
@@ -370,6 +388,46 @@ export default function AccountForm() {
     setRenewalDate(data?.subscription_renewal_date ?? null)
     setStorageGb(data?.subscription_storage_gb ?? 5)
     setSaving(false)
+  }
+
+  // Test Storage Cap (migration 051) — same shape as handleTierToggle
+  // above: goes through the gated set_storage_limit_override() RPC, never
+  // a raw table update (there is no direct grant to write this column).
+  async function handleSaveStorageOverride() {
+    if (!userId) return
+    const mb = parseFloat(storageOverrideInput)
+    if (!Number.isFinite(mb) || mb < 0) {
+      setStorageOverrideError('Enter a number of MB, 0 or greater.')
+      return
+    }
+    const bytes = Math.round(mb * 1024 * 1024)
+    setStorageOverrideSaving(true)
+    setStorageOverrideError(null)
+
+    const { error: rpcError } = await supabase.rpc('set_storage_limit_override', { p_bytes: bytes })
+
+    setStorageOverrideSaving(false)
+    if (rpcError) {
+      setStorageOverrideError(rpcError.message)
+      return
+    }
+    setStorageOverrideBytes(bytes)
+  }
+
+  async function handleClearStorageOverride() {
+    if (!userId) return
+    setStorageOverrideSaving(true)
+    setStorageOverrideError(null)
+
+    const { error: rpcError } = await supabase.rpc('set_storage_limit_override', { p_bytes: null })
+
+    setStorageOverrideSaving(false)
+    if (rpcError) {
+      setStorageOverrideError(rpcError.message)
+      return
+    }
+    setStorageOverrideBytes(null)
+    setStorageOverrideInput('')
   }
 
   function handleClose() {
@@ -786,24 +844,96 @@ export default function AccountForm() {
                   <BecomeSubscriberPitch variant="embedded" />
                 )}
 
+                {/* Storage Management (2026-09-03) — reachable regardless of
+                    tier, since Attachments are now free-with-a-cap, not
+                    subscriber-only (2026-08-27). Sits in this section because
+                    storage allowance is the one piece of it that IS tier-
+                    driven (100 MB free vs. the account's Subscriber
+                    allowance). */}
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  style={{ marginTop: 14 }}
+                  onClick={() => router.push('/account/storage')}
+                >
+                  Manage Storage
+                </button>
+
                 {canToggleTier && (
-                  <label className="checkrow" style={{ marginTop: tier === 'subscriber' ? 0 : 14 }}>
-                    <input
-                      type="checkbox"
-                      checked={tier === 'subscriber'}
-                      disabled={saving}
-                      onChange={(e) => handleTierToggle(e.target.checked)}
-                    />
-                    <span className="checktext">
-                      Subscribed? (testing only)
-                      <span className="checknote">
-                        Sets your account to the Subscriber tier so subscriber-only features
-                        like Attachments can be tested. This status only lasts for the
-                        testing period — once testing ends, this checkbox goes away and you
-                        would subscribe for real, through the button below. Off by default.
+                  <>
+                    <label className="checkrow" style={{ marginTop: tier === 'subscriber' ? 0 : 14 }}>
+                      <input
+                        type="checkbox"
+                        checked={tier === 'subscriber'}
+                        disabled={saving}
+                        onChange={(e) => handleTierToggle(e.target.checked)}
+                      />
+                      <span className="checktext">
+                        Subscribed? (testing only)
+                        <span className="checknote">
+                          Sets your account to the Subscriber tier so subscriber-only features
+                          like Attachments can be tested. This status only lasts for the
+                          testing period — once testing ends, this checkbox goes away and you
+                          would subscribe for real, through the button below. Off by default.
+                        </span>
                       </span>
-                    </span>
-                  </label>
+                    </label>
+
+                    {/* Test Storage Cap (migration 051, 2026-09-03) — same
+                        gate as the checkbox above. Replaces the account's
+                        real Attachment storage allowance outright while
+                        set, so the warning/blocked states can be reached
+                        with a couple of small test uploads instead of
+                        actually approaching 100 MB. */}
+                    <div className="fgroup" style={{ marginTop: 14 }}>
+                      <label className="flabel" htmlFor="storage-override-mb">
+                        Test Storage Cap (MB, testing only)
+                      </label>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          id="storage-override-mb"
+                          className="finput"
+                          style={{ maxWidth: 120 }}
+                          type="number"
+                          min={0}
+                          step="0.1"
+                          placeholder="e.g. 2"
+                          value={storageOverrideInput}
+                          disabled={storageOverrideSaving}
+                          onChange={(e) => setStorageOverrideInput(e.target.value)}
+                        />
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={storageOverrideSaving || storageOverrideInput === ''}
+                          onClick={handleSaveStorageOverride}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={storageOverrideSaving || storageOverrideBytes === null}
+                          onClick={handleClearStorageOverride}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <span className="checknote" style={{ display: 'block', marginTop: 6 }}>
+                        {storageOverrideBytes != null
+                          ? `Overriding your real storage cap with ${formatBytes(storageOverrideBytes)} for testing.`
+                          : 'Not overridden — using your real tier-based storage cap.'}{' '}
+                        Replaces the account&rsquo;s real Attachment storage allowance (100 MB
+                        free, or your Subscriber allowance) while set, on both Requests and
+                        ToDos. Clear it to go back to the real number.
+                      </span>
+                      {storageOverrideError && (
+                        <p className="ferror" role="alert" style={{ marginTop: 6 }}>
+                          {storageOverrideError}
+                        </p>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             )}

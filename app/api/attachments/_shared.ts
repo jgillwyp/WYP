@@ -89,6 +89,17 @@ export function getAnonClient() {
  * storage_gb (migration 047) — the account's real granted storage, not a
  * fixed number, since it's meant to grow via the (not yet built) storage
  * add-on purchase; defaults to 5 if somehow null.
+ *
+ * storage_limit_override_bytes (migration 051, 2026-09-03) — a private-
+ * testing-only per-account override, gated by can_toggle_tier() the same
+ * way the Subscribed? testing toggle already is (never writable directly
+ * from the browser, only through set_storage_limit_override()). When set
+ * (non-null), it REPLACES the tier-based limit outright, for either tier —
+ * lets Jim dial the cap down to a couple MB to see the warning/blocked
+ * states without uploading anywhere near the real 100 MB. Checked here, the
+ * one place every enforcement point (upload/route.ts, cron/tick's own
+ * Repeat carry-forward safety net, the Storage Management screen) already
+ * reads the limit from, so nothing else needs to know the override exists.
  */
 export async function getOwnerStorageStatus(
   admin: ReturnType<typeof getServiceRoleClient>,
@@ -96,15 +107,17 @@ export async function getOwnerStorageStatus(
 ): Promise<{ usedBytes: number; limitBytes: number; tier: string }> {
   const { data: profile } = await admin
     .from('profiles')
-    .select('tier, subscription_storage_gb')
+    .select('tier, subscription_storage_gb, storage_limit_override_bytes')
     .eq('id', ownerId)
     .single()
 
   const tier = profile?.tier === 'subscriber' ? 'subscriber' : 'free'
   const limitBytes =
-    tier === 'subscriber'
-      ? (profile?.subscription_storage_gb ?? 5) * 1024 * 1024 * 1024
-      : FREE_TIER_STORAGE_LIMIT_BYTES
+    profile?.storage_limit_override_bytes != null
+      ? Number(profile.storage_limit_override_bytes)
+      : tier === 'subscriber'
+        ? (profile?.subscription_storage_gb ?? 5) * 1024 * 1024 * 1024
+        : FREE_TIER_STORAGE_LIMIT_BYTES
 
   const { data: ownedRequests } = await admin.from('requests').select('id').eq('owner_id', ownerId)
   const requestIds = (ownedRequests ?? []).map((r) => r.id as string)

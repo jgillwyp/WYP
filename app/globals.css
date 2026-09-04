@@ -200,6 +200,180 @@ body {
   color: var(--ink-soft);
 }
 
+/* §6.49 PROPOSED — Storage Management (StorageManagementForm.tsx, /account/
+   storage, 2026-09-03), converting design/screens/
+   WYP_storage_maintenance_palette1.html to live. Ported from that mockup's
+   own component CSS (already token-clean) with three deliberate omissions:
+   .sortrow itself (reuses the app's existing .chiprow instead — same Strip
+   background/flex-row shape, no need for a near-duplicate rule); .pill for
+   the active sort chip (the app-wide .pill, --sort yellow, already means
+   exactly this — see the Main Screen column-sort header); and the mockup's
+   own .autonote ("Auto-deletion... removes oldest first") and .sumoffer
+   button, both dropped since no lapse-and-auto-delete job exists yet
+   (CLAUDE.md's own known-gaps section) and a fake "Subscribe" link would
+   overstate what's built — this screen instead ends in the same
+   .subbanner-row (Subscription Features and Options / Privacy) every other
+   screen already uses. */
+.sum {
+  padding: 13px var(--pad) 14px;
+  background: var(--row-tint);
+  border-bottom: 1px solid var(--rule);
+}
+
+.sumtop {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.sumbig {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -.015em;
+}
+
+.sumlab {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.bar {
+  margin: 9px 0 7px;
+  height: 10px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--brand-blue);
+}
+
+.bar.crit span {
+  background: var(--alert-red);
+}
+
+.sumnote {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.sortlab {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.arow {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px var(--pad) 11px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.arow:nth-child(even) {
+  background: var(--row-tint);
+}
+
+.clip {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.clip svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.ameta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.aname {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.asub {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.asrc {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.asrc b {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.aacts {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.dl {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-blue);
+  background: none;
+  border: none;
+  padding: 6px 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dl:active {
+  color: var(--blue-pressed);
+}
+
+.x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.x:hover {
+  background: rgba(211, 47, 47, .08);
+  color: var(--alert-red);
+}
+
+.x:active {
+  background: rgba(211, 47, 47, .16);
+  color: var(--alert-red);
+}
+
 /* ============================================================================
    BUTTONS (§6.1 primary, §6.11 secondary)
    ========================================================================= */

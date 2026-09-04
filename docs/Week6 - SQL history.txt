@@ -3347,3 +3347,98 @@ grant execute on function public.add_dialog_as_recipient(uuid, text, text, bigin
 --     -- the Request's own uuid, and detail should carry the new dialog
 --     -- entry's id.
 -- ============================================================================
+
+-- ============================================================================
+-- WYP migration 051 — profiles.storage_limit_override_bytes, a private-
+-- testing-only per-account storage cap override. DRAFTED, NOT YET CONFIRMED
+-- RUN.
+--
+-- Context: Jim, 2026-09-03 — "storage management seems like a next step...
+-- create test data to allow testing (maybe set lower thresholds for test
+-- which get raised later?" Wants to build out Storage Management (the
+-- existing WYP_storage_maintenance_palette1.html mockup) and actually test
+-- it, without needing to upload close to the real 100 MB free-tier cap
+-- (attachments.ts's own FREE_TIER_STORAGE_LIMIT_BYTES) just to see the
+-- warning/blocked states. Confirmed via AskUserQuestion: a testing-only
+-- per-account override, gated the same private-testing way migration 035
+-- already gates the Subscribed? toggle — deliberately reuses that exact
+-- gate (tier_toggle_allowlist / can_toggle_tier()) rather than standing up
+-- a third parallel allowlist table, since both are the same shape of
+-- concern: a self-service bypass of a real business rule, usable only by
+-- the sole account-holder testing this app before real users exist, and
+-- never meant to survive into a multi-user launch unexamined (same posture
+-- as migration 024's own tier grant, which migration 035 already had to
+-- revoke once).
+--
+-- storage_limit_override_bytes — nullable bigint. Null (the default, every
+-- existing account) means "use the normal tier-based cap" — free tier's
+-- FREE_TIER_STORAGE_LIMIT_BYTES or subscription_storage_gb, exactly as
+-- today. A non-null value REPLACES that cap outright, for either tier,
+-- while set — e.g. set it to 2 MB to reach the warning state after
+-- uploading just a couple of small test files, then clear it (set back to
+-- null) to return to the real number. Read by
+-- app/api/attachments/_shared.ts's getOwnerStorageStatus(), the one place
+-- that already computes the real cap for upload/route.ts, cron/tick's own
+-- Repeat carry-forward safety net, and the new Storage Management screen
+-- alike — so every enforcement point picks up the override automatically,
+-- with no separate code path to keep in sync.
+--
+-- set_storage_limit_override(p_bytes) — the only write path, mirroring
+-- set_tier_for_testing(p_tier)'s own shape exactly: re-checks
+-- can_toggle_tier() internally (never trusts that the client already
+-- checked — CLAUDE.md's own Entitlements section: "the SECURITY DEFINER
+-- function must refuse the write regardless; assume the control was
+-- bypassed"), accepts null to clear the override, and a non-negative
+-- bigint otherwise.
+-- ============================================================================
+
+begin;
+
+alter table public.profiles
+  add column if not exists storage_limit_override_bytes bigint;
+
+comment on column public.profiles.storage_limit_override_bytes is
+  'Private-testing-only override of the account''s Attachment storage cap (see getOwnerStorageStatus in app/api/attachments/_shared.ts). Null = use the normal tier-based cap. Gated the same way as tier (migration 035) -- only accounts on tier_toggle_allowlist may set this, via set_storage_limit_override(), never a direct client update.';
+
+create or replace function public.set_storage_limit_override(p_bytes bigint)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.can_toggle_tier() then
+    raise exception 'Not permitted.';
+  end if;
+
+  if p_bytes is not null and p_bytes < 0 then
+    raise exception 'Invalid storage limit.';
+  end if;
+
+  update public.profiles
+    set storage_limit_override_bytes = p_bytes
+    where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.set_storage_limit_override(bigint) from public;
+grant execute on function public.set_storage_limit_override(bigint) to authenticated;
+
+commit;
+
+-- Verify (superuser, proves creation only — see this file's recurring note
+-- that the SQL editor's own connection bypasses auth.uid(), so the actual
+-- gate/write only proves out from a real client session):
+--
+--   select column_name from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'storage_limit_override_bytes';
+--
+--   select routine_name from information_schema.routines
+--   where routine_name = 'set_storage_limit_override';
+--
+-- Then as a client (Jim's own account, already on tier_toggle_allowlist
+-- from migration 035):
+--
+--   select set_storage_limit_override(2097152);  -- 2 MB, for testing
+--   select set_storage_limit_override(null);      -- clear, back to the real cap
+-- ============================================================================

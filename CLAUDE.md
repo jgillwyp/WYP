@@ -3740,3 +3740,56 @@ link is built only after the stack is proven on Add Contact.
   `<ul>`, and it explicitly resets `list-style` itself). `npx tsc
   --noEmit`/`npm run lint` clean. See the decisions log's 2026-09-03 entry
   for the full write-up.
+
+- **Storage Management is now live — migration 051 DRAFTED, NOT YET
+  CONFIRMED RUN (2026-09-03, §6.49 PROPOSED).** Jim: "storage management
+  seems like a next step... And, create test data to allow testing (maybe
+  set lower thresholds for test which get raised later?" Two design
+  questions resolved via `AskUserQuestion` before building: a **testing-
+  only per-account storage-cap override** (rather than temporarily lowering
+  the real free-tier constant for everyone), and building the live screen
+  in the same batch rather than seeding data first. `app/components/
+  StorageManagementForm.tsx` (`/account/storage`) converts `design/screens/
+  WYP_storage_maintenance_palette1.html` to live — see `design/README.md`'s
+  own status-table row for the three deliberate departures from the mockup
+  (no `.sortrow`/`.pill`/`.autonote`, reusing the app's ordinary `.chips`/
+  `.chip.sel` toggle and dropping the auto-deletion note outright since no
+  lapse-and-auto-delete job exists yet; no `.sumoffer` button, replaced by
+  the same `.subbanner-row` every other screen already ends with; the
+  confirm-Remove modal drops the mockup's own aspirational "the Request
+  will show that an attachment was removed" sentence — no such audit trail
+  exists, this is a genuine hard delete). Backed by a new owner-only
+  `POST /api/attachments/owner-summary` route — the first attachments route
+  to read across every Request/ToDo an owner has, rather than being scoped
+  to one `requestId` like `list`/`upload`/`delete` — reusing
+  `getOwnerStorageStatus()` (the same function `upload/route.ts`'s quota
+  gate already calls) so the usage bar and the real enforcement can never
+  disagree. Reachable from a new "Manage Storage" button in Account
+  Options' Subscriber section and a new Main Screen Housekeeping row,
+  following the same also-reachable-two-ways precedent Archive and Install
+  already set. **Migration 051** adds `profiles.storage_limit_override_bytes`
+  (nullable — null means "use the real tier-based cap," a non-null value
+  replaces it outright for either tier) and `set_storage_limit_override
+  (p_bytes)`, gated by the *same* `can_toggle_tier()` migration 035 already
+  uses for the Subscribed? testing checkbox — reused rather than
+  duplicated into a third parallel allowlist table, since both are the
+  same shape of concern: a self-service bypass of a real business rule,
+  meant only for the sole account-holder testing this app before real
+  users exist, never meant to survive into a multi-user launch unexamined
+  (same posture as migration 024's own tier grant, which migration 035
+  already had to revoke once). `getOwnerStorageStatus()` and
+  `cron/tick/route.ts`'s own Phase E Repeat carry-forward safety net both
+  read the override the same way the upload route's quota check now does.
+  New "Test Storage Cap (MB, testing only)" control added to Account
+  Options, sharing the existing Subscribed? checkbox's `canToggleTier`
+  gate. `docs/seed-test-attachments.mjs` — a real, runnable Node script
+  (not a SQL history block, since Storage objects need actual bytes
+  uploaded through the Storage API, which plain SQL can't do) that uploads
+  a few small real files onto Jim's own existing Requests/ToDos via
+  service_role, sized to matter against a small Test Storage Cap. This
+  sandbox has no network route to Jim's live Supabase project, so — like
+  every other seed script in this project's history — it's written for Jim
+  to run himself (`node --env-file=.env.local docs/seed-test-attachments.mjs`
+  from the repo root), not executed here. `npx tsc --noEmit`/`npm run lint`
+  clean for every file this batch touched. No mockup was changed. See the
+  decisions log's 2026-09-03 entry for the full write-up.

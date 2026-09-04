@@ -1896,6 +1896,24 @@ export default function MainScreen() {
                       <span className="hknote"> — personalize Would You Please</span>
                     </span>
                   </div>
+                  {/* Storage Management (2026-09-03) — converts
+                      design/screens/WYP_storage_maintenance_palette1.html to
+                      live. Also reachable from Account Options' own
+                      Subscriber section ("Manage Storage" button); this row
+                      is the same shortcut precedent Archive/Install already
+                      set for a screen that's also reachable another way. */}
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/account/storage')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/account/storage') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Storage Management</span>
+                      <span className="hknote"> — view, download, or remove attachments</span>
+                    </span>
+                  </div>
                   <div
                     className="hkrow"
                     role="button"
