@@ -3767,6 +3767,28 @@ link is built only after the stack is proven on Add Contact.
   always meant as View, not Download, and Jim's report and question were
   both specifically about Storage Management's own separate Download
   control. `npx tsc --noEmit`/`npm run lint` clean.
+- **"Can't view this type" dialog for attachments — isViewableInBrowser(),
+  Storage Management + AttachmentsPanel.tsx (2026-09-04).** Jim, same-day
+  follow-up on the view/download fix above: a .ics attachment downloaded
+  instead of viewing (Outlook Web inconsistently intercepts it depending on
+  the browser), and a .html attachment "viewed" by literally rendering as a
+  page — neither is really "viewing an attachment," and both behaviors are
+  entirely up to whatever the browser feels like doing with that content-type,
+  not something WYP controls once a raw link is clicked. New
+  `isViewableInBrowser()` (`app/src/lib/attachments.ts`) is a deliberate
+  allowlist (images, PDF, `.txt`, plus every `isOfficeViewable()` type),
+  not a blocklist of "known bad" extensions — a similarly bad type
+  (`.json`, `.xml`, `.eml`, `.vcf`, etc.) is automatically caught the same
+  way, no separate exception needed per type. Both `StorageManagementForm.tsx`
+  and `AttachmentsPanel.tsx` now check it before turning a file name into a
+  real "View" link (`<a>`); when false, the name becomes a `.linkbtn` button
+  that opens a small `.scrim`/`.modal` (§6.12) dialog instead — "Can't view
+  '‹name›'... This file type can't be viewed here — download it instead."
+  — with Close and a real Download button pointing at `download_url` (the
+  2026-09-04 view/download fix's own field). Confirmed both screens now
+  behave identically, per Jim's own observation that "Both file types are
+  handled in the Request attachments the same way when viewed." `npx tsc
+  --noEmit`/`npm run lint` clean.
 - **Same-day correction: Install row titles renamed "Add to Home Screen"/
   "Add to Desktop"; the "icon" detail moved into the note text
   (2026-09-03).** Jim, after his own follow-up research: his own naming

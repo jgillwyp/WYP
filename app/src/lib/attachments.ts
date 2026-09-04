@@ -242,6 +242,41 @@ export function officeViewerUrl(signedUrl: string): string {
   return `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(signedUrl)}`
 }
 
+/**
+ * Extensions a browser renders sensibly as CONTENT when opened directly —
+ * images, PDF, plain text. Deliberately narrow, and deliberately an
+ * allowlist rather than a blocklist of "known bad" types (2026-09-04,
+ * owner-reported): a .ics file isn't rendered at all — most browsers either
+ * force a download or hand it to a calendar app/webmail client (Outlook Web,
+ * inconsistently) — and an .html file "renders" by literally becoming a
+ * page, indistinguishable from the app's own UI and a real risk if the file
+ * ever contained a script tag. Neither is "viewing an attachment" in any
+ * useful sense, and an allowlist means a similarly bad type (.json, .xml,
+ * .eml, .vcf, etc.) is automatically caught too, rather than requiring its
+ * own named exception the way a blocklist would.
+ */
+const BROWSER_RENDERABLE_EXTENSIONS = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.tif', '.tiff', '.ico',
+  '.pdf',
+  '.txt',
+])
+
+/**
+ * True when clicking straight through to the attachment's own signed URL (or,
+ * for an Office type, its officeViewerUrl() wrapper) actually shows the
+ * person their file — never true for the myriad other extensions a raw link
+ * would hand the browser to guess at (an .ics forced into Outlook Web, an
+ * .html file rendering as if it were part of the app, etc.). Both
+ * AttachmentsPanel.tsx (Request/ToDo screens) and StorageManagementForm.tsx
+ * check this before turning a file name into a "View" link; when false, they
+ * show a small dialog ("This file type can't be viewed here — download it
+ * instead.") with a real Download link (download_url) rather than letting
+ * the browser do something inconsistent and confusing.
+ */
+export function isViewableInBrowser(fileName: string): boolean {
+  return isOfficeViewable(fileName) || BROWSER_RENDERABLE_EXTENSIONS.has(fileExtension(fileName))
+}
+
 export type AttachmentRow = {
   id: string
   kind: 'file' | 'reference'

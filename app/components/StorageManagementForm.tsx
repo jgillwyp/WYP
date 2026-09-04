@@ -10,6 +10,7 @@ import {
   MAX_ATTACHMENTS_PER_ITEM,
   formatBytes,
   isOfficeViewable,
+  isViewableInBrowser,
   officeViewerUrl,
 } from '@/lib/attachments'
 
@@ -129,6 +130,10 @@ export default function StorageManagementForm() {
   const [removeTarget, setRemoveTarget] = useState<AttachmentRow | null>(null)
   const [removing, setRemoving] = useState(false)
   const [removeError, setRemoveError] = useState<string | null>(null)
+
+  // "Can't view this type" dialog (2026-09-04) — see isViewableInBrowser's
+  // own header comment in @/lib/attachments for why this exists at all.
+  const [viewBlockedTarget, setViewBlockedTarget] = useState<AttachmentRow | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -320,7 +325,7 @@ export default function StorageManagementForm() {
               </span>
               <div className="ameta">
                 <div className="aname">
-                  {row.url ? (
+                  {row.url && isViewableInBrowser(row.file_name) ? (
                     <a
                       href={isOfficeViewable(row.file_name) ? officeViewerUrl(row.url) : row.url}
                       target="_blank"
@@ -328,6 +333,15 @@ export default function StorageManagementForm() {
                     >
                       {row.file_name}
                     </a>
+                  ) : row.url ? (
+                    <button
+                      className="linkbtn"
+                      type="button"
+                      style={{ fontSize: 'inherit', fontWeight: 'inherit' }}
+                      onClick={() => setViewBlockedTarget(row)}
+                    >
+                      {row.file_name}
+                    </button>
                   ) : (
                     row.file_name
                   )}
@@ -395,6 +409,45 @@ export default function StorageManagementForm() {
                 <button className="btn-danger" type="button" onClick={handleRemoveConfirmed} disabled={removing}>
                   {removing ? 'Removing…' : 'Remove'}
                 </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* "Can't view this type" dialog (2026-09-04) — owner-reported: a
+            .ics attachment downloaded instead of viewing (Outlook Web
+            inconsistently intercepts it), and a .html attachment rendered as
+            if it were a page rather than showing anything recognizable as a
+            file. isViewableInBrowser() (@/lib/attachments) is the one place
+            that decides which file types get a real "View" link at all;
+            everything else lands here instead of guessing at browser
+            behavior. */}
+        {viewBlockedTarget && (
+          <>
+            <div className="scrim" onClick={() => setViewBlockedTarget(null)} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="view-blocked-title">
+              <div className="modalhead">
+                <p className="modal-title" id="view-blocked-title">
+                  Can&rsquo;t view &ldquo;{viewBlockedTarget.file_name}&rdquo;
+                </p>
+              </div>
+              <p className="subnote">
+                This file type can&rsquo;t be viewed here — download it instead.
+              </p>
+              <div className="modalacts" style={{ marginTop: 12 }}>
+                <button className="btn-secondary" type="button" onClick={() => setViewBlockedTarget(null)}>
+                  Close
+                </button>
+                {(viewBlockedTarget.download_url || viewBlockedTarget.url) && (
+                  <a
+                    className="btn"
+                    href={viewBlockedTarget.download_url ?? viewBlockedTarget.url ?? undefined}
+                    rel="noreferrer"
+                    onClick={() => setViewBlockedTarget(null)}
+                  >
+                    Download
+                  </a>
+                )}
               </div>
             </div>
           </>

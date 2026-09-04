@@ -9,6 +9,7 @@ import {
   formatBytes,
   isBlockedFileType,
   isOfficeViewable,
+  isViewableInBrowser,
   officeViewerUrl,
   urlLocationHref,
   type AttachmentRow,
@@ -165,6 +166,11 @@ export default function AttachmentsPanel({
   const [refError, setRefError] = useState<string | null>(null)
   const [refSaving, setRefSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // "Can't view this type" dialog (2026-09-04) — see isViewableInBrowser's
+  // own header comment in @/lib/attachments for why this exists. Mirrors
+  // StorageManagementForm.tsx's identical dialog, built the same day.
+  const [viewBlockedRow, setViewBlockedRow] = useState<AttachmentRow | null>(null)
 
   useEffect(() => {
     if (!requestId) return
@@ -475,18 +481,23 @@ export default function AttachmentsPanel({
                 return (
                   <div className="attitem" key={row.id}>
                     <span className="attname">
-                      {row.url ? (
+                      {row.url && row.file_name && isViewableInBrowser(row.file_name) ? (
                         <a
-                          href={
-                            row.file_name && isOfficeViewable(row.file_name)
-                              ? officeViewerUrl(row.url)
-                              : row.url
-                          }
+                          href={isOfficeViewable(row.file_name) ? officeViewerUrl(row.url) : row.url}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
                           {row.file_name}
                         </a>
+                      ) : row.url ? (
+                        <button
+                          className="linkbtn"
+                          type="button"
+                          style={{ fontSize: 'inherit', fontWeight: 'inherit' }}
+                          onClick={() => setViewBlockedRow(row)}
+                        >
+                          {row.file_name}
+                        </button>
                       ) : (
                         row.file_name
                       )}{' '}
@@ -622,6 +633,40 @@ export default function AttachmentsPanel({
               <label className="flabel">Location (path or URL)</label>
             </div>
             {refError && <p className="ferror" style={{ marginTop: -8 }}>{refError}</p>}
+          </div>
+        </>
+      )}
+
+      {/* "Can't view this type" dialog (2026-09-04) — see isViewableInBrowser's
+          own header comment in @/lib/attachments. mode='reference' never
+          reaches this (a Location's own link/Copy handling is unaffected). */}
+      {viewBlockedRow && (
+        <>
+          <div className="scrim" onClick={() => setViewBlockedRow(null)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="att-view-blocked-title">
+            <div className="modalhead">
+              <p className="modal-title" id="att-view-blocked-title">
+                Can&rsquo;t view &ldquo;{viewBlockedRow.file_name}&rdquo;
+              </p>
+            </div>
+            <p className="subnote">
+              This file type can&rsquo;t be viewed here — download it instead.
+            </p>
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn-secondary" type="button" onClick={() => setViewBlockedRow(null)}>
+                Close
+              </button>
+              {(viewBlockedRow.download_url || viewBlockedRow.url) && (
+                <a
+                  className="btn"
+                  href={viewBlockedRow.download_url ?? viewBlockedRow.url ?? undefined}
+                  rel="noreferrer"
+                  onClick={() => setViewBlockedRow(null)}
+                >
+                  Download
+                </a>
+              )}
+            </div>
           </div>
         </>
       )}
