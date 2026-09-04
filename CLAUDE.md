@@ -3897,3 +3897,31 @@ link is built only after the stack is proven on Add Contact.
   swaps. `npx tsc --noEmit`/`npm run lint` clean. No mockup changes — none
   of the four Help topics or the two Response screens have static-HTML
   counterparts with this logic to update.
+
+- **Migrations 034, 041, 044, and 048 all confirmed run — 2026-09-04, via a
+  direct `information_schema`/`pg_catalog` check, not the SQL Editor
+  History view.** All four had sat flagged "DRAFTED, NOT YET CONFIRMED
+  RUN" in their own entries above with no later "confirmed run" follow-up
+  ever recorded — a real documentation gap, not a known outage; Jim had
+  been testing the features built on top of all four without incident, but
+  asked to verify rather than assume, especially once Supabase's own SQL
+  Editor History view turned out to be silently truncating (reported
+  showing 1,600 lines, had previously shown over 3,000), making it
+  unusable as a source of truth here. New `docs/verify-migrations-034-041-
+  044-048.sql` — a real, runnable diagnostic script (same "written for Jim
+  to run himself" posture as `docs/seed-test-attachments.mjs`, since this
+  sandbox has no network route to his live Supabase project) checking: the
+  `contacts.phone_ext` column and its `authenticated` UPDATE grant (034);
+  `profiles.todo_reminders_enabled` and its grant (041); all 8 new
+  `profiles` columns from the Account Options restructure plus their
+  grants, confirmation the old shared `reminder_default_day_before/day_of/
+  day_after` trio was actually dropped (not just superseded), and that
+  `get_request_by_token`/`get_received_request` were updated to return
+  `owner_request_reminders_enabled` (044, checked via `pg_get_functiondef`
+  against each function's own source rather than guessed at); and a
+  data-level check that no `attachments` row still sits at the retired
+  `kind = 'reference'` (048 — flagged in the script's own comment as a
+  weaker signal, since it also reads OK if no ToDo Locations ever existed
+  to convert). **Jim ran it and every one of the 21 checks came back
+  OK.** All four migrations, including their full column/grant/function
+  surface, are confirmed live in production — nothing further to do here.
