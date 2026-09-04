@@ -3858,3 +3858,42 @@ link is built only after the stack is proven on Add Contact.
   from the repo root), not executed here. `npx tsc --noEmit`/`npm run lint`
   clean for every file this batch touched. No mockup was changed. See the
   decisions log's 2026-09-03 entry for the full write-up.
+
+- **Help topic wording tweaks; Send/Save label on the two recipient-facing
+  Response screens when only Reminders changed (2026-09-04).** Jim sent
+  exact revised wording for four paragraphs across the Help topics — see
+  `RespondingRequestHelp.tsx` ("Turning Reminders Off," "Already Have an
+  Account?"), `GettingStartedHelp.tsx` ("Your Main Screen at a Glance"'s
+  second paragraph, plus the "Add to Home Screen or Desktop" efficiency-tip
+  bullet, retitled from "Install the icon" to match the row names
+  themselves), `CreatingRequestHelp.tsx` ("Repeating Requests," which now
+  says "up to 5 of the Requests and ToDos" rather than "up to 5 times"),
+  and `TodoFeaturesHelp.tsx` ("Simple by Default," dropping a trailing
+  clause, and "Reminders and Repeat for ToDos," same "5 of the Requests and
+  ToDos" correction) — applied verbatim, no paraphrasing. Jim's message
+  also carried a bracketed implementation note, `[If only Reminders change,
+  Send button should read Save.]`, addressed to me rather than page copy —
+  confirmed afterward (Jim asked directly) that this bracket text was never
+  written into any file; it was correctly treated as an instruction, not
+  content. Built as a new `remindersOnlyChanged` derived value on both
+  recipient-facing Response screens: `ResponseDetailForm.tsx` (signed-in
+  recipient) computes it from the existing `hasChanges`/`contentChanged`
+  dirty-check pair, true when `hasChanges` is set but Done Date/Time are
+  unchanged and no Dialog/Attachment was touched — meaning the only edit
+  was one of the three Reminder checkboxes — and the band button's label
+  becomes `remindersOnlyChanged ? 'Save' : 'Send'` (kept inside the
+  existing `disabled` expression, which is unchanged). `RequestResponseForm.tsx`
+  (the anonymous `/r/[token]` path) had no such dirty-check at all before
+  this — its own `initialFormRef` previously snapshotted only
+  `{doneDate, doneTime}` for `computeChangedFieldLabels()`'s sake; extended
+  to also snapshot the three reminder booleans at load time, purely to
+  derive a local `remindersOnlyChanged` (using the existing
+  `dialogChanged`/`attachmentsChanged` one-way flags for the "nothing else
+  changed" check) — `computeChangedFieldLabels()` itself is untouched, so
+  the owner-facing change-notification email still never mentions Reminder
+  toggles, per its own 2026-09-02 scoping. This screen's Send button stays
+  always-enabled as before (2026-08-20's own removal of any
+  `disabled`-by-dirty-check precedent here is unchanged) — only the label
+  swaps. `npx tsc --noEmit`/`npm run lint` clean. No mockup changes — none
+  of the four Help topics or the two Response screens have static-HTML
+  counterparts with this logic to update.

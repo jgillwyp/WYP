@@ -29,3 +29,4 @@ Incoming server (POP3)Not recommended	pop.hostinger.com	995	Yes
 insert into beta_allowlist (email, note) values ('ngianni@tomikoinc.com', 'Nicholas Gianni');
 insert into beta_allowlist (email, note) values ('mgianni@tomikoinc.com', 'Michael Gianni');
 insert into beta_allowlist (email, note) values ('ericjgillon@msn.com', 'Eric Gillon');
+   

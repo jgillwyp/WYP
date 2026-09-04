@@ -78,9 +78,10 @@ export default function GettingStartedHelp() {
         Please remembers your chip and sort choices between visits.
       </p>
       <p>
-        A row in red is overdue. A row you tap opens its Detail screen, where you can edit it,
-        add Dialog or Attachments, mark it Done, or Archive it once you&rsquo;re finished with
-        it — Archived items disappear from the main list but stay searchable forever.
+        Rows in red are overdue. Rows in grey are completed (Done). A row you tap opens its
+        Detail screen, where you can edit it, add Dialog or Attachments, or mark it Done. You
+        can Archive Requests once you&rsquo;re finished with them. Archived items disappear
+        from the main list but stay searchable forever.
       </p>
 
       <h2>Make It Yours: Account Options</h2>
@@ -97,7 +98,7 @@ export default function GettingStartedHelp() {
       <ul>
         <li><b>Add a Contact once.</b>{' '}After that, Create Request&rsquo;s Recipient field finds them by typing just a few letters.</li>
         <li><b>Use Search for anything older.</b>{' '}Search also finds Archived items, so Archiving a finished Request or ToDo doesn&rsquo;t mean losing track of it.</li>
-        <li><b>Install the icon.</b>{' '}Housekeeping&rsquo;s Install row (when available) adds a Would You Please icon to your home screen, so it opens like any other app.</li>
+        <li><b>Add to Home Screen or Desktop.</b>{' '}Housekeeping&rsquo;s Add to&hellip; row (available until used) adds a Would You Please icon to your home screen, so it opens like any other app.</li>
         <li><b>Let Reminders do the follow-up.</b>{' '}See the Creating a Request topic for how Day-before/Day-of/Day-after Reminders keep a Request moving without you checking back manually.</li>
       </ul>
 

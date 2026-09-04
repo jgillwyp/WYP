@@ -262,7 +262,16 @@ export default function RequestResponseForm() {
   // outright 2026-08-20, having no purpose for an anonymous visitor with no
   // prior history entry to return to), so initialFormRef exists here purely
   // to feed computeChangedFieldLabels below, not any button-disabled state.
-  const initialFormRef = useRef<{ doneDate: string; doneTime: string } | null>(null)
+  // The three reminder booleans were added 2026-09-04 for a second, narrower
+  // purpose — remindersOnlyChanged below, which only swaps the Send button's
+  // label to "Save"; this screen still has no disabled-gating at all.
+  const initialFormRef = useRef<{
+    doneDate: string
+    doneTime: string
+    reminderEnabled: boolean
+    reminderDayOfEnabled: boolean
+    overdueReminderEnabled: boolean
+  } | null>(null)
   const [dialogChanged, setDialogChanged] = useState(false)
   const [attachmentsChanged, setAttachmentsChanged] = useState(false)
 
@@ -350,6 +359,23 @@ export default function RequestResponseForm() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendConfirmed, setSendConfirmed] = useState(false)
 
+  // remindersOnlyChanged (2026-09-04, Jim's own note on the Responding to a
+  // Request Help topic) — true when the visitor has touched one of the
+  // three Reminder checkboxes but nothing else (Done Date/Time unchanged,
+  // no new Dialog/Attachments). The band button reads "Save" instead of
+  // "Send" in that case, matching ResponseDetailForm.tsx's identical
+  // addition — this screen still has no disabled-gating of its own (see
+  // initialFormRef's own comment above), only the label changes.
+  const remindersOnlyChanged =
+    initialFormRef.current !== null &&
+    doneDate === initialFormRef.current.doneDate &&
+    doneTime === initialFormRef.current.doneTime &&
+    !dialogChanged &&
+    !attachmentsChanged &&
+    (reminderEnabled !== initialFormRef.current.reminderEnabled ||
+      reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
+      overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
+
   // Owner's ask, 2026-08-13 — see cameFromCalendarLink's own comment in
   // @/lib/ics: hide the Add to Calendar button when the visitor arrived by
   // clicking the event's own link from inside their calendar app, since
@@ -400,7 +426,13 @@ export default function RequestResponseForm() {
       setReminderSentAt(payload.reminder_sent_at)
       setReminderDayOfSentAt(payload.reminder_day_of_sent_at)
       setDialogList(payload.dialog ?? [])
-      initialFormRef.current = { doneDate: payload.done_date ?? '', doneTime: payload.done_time ?? '' }
+      initialFormRef.current = {
+        doneDate: payload.done_date ?? '',
+        doneTime: payload.done_time ?? '',
+        reminderEnabled: payload.reminder_enabled,
+        reminderDayOfEnabled: payload.reminder_day_of_enabled,
+        overdueReminderEnabled: payload.overdue_reminder_enabled,
+      }
       setLoading(false)
     }
 
@@ -748,7 +780,7 @@ export default function RequestResponseForm() {
           <span className="glabel">Request Response</span>
           <span className="bandcluster">
             <button className="btn" type="submit" form="request-response-form" disabled={sending}>
-              {sending ? 'Sending…' : 'Send'}
+              {sending ? 'Sending…' : remindersOnlyChanged ? 'Save' : 'Send'}
             </button>
           </span>
         </div>

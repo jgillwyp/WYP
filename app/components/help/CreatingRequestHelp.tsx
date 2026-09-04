@@ -81,8 +81,8 @@ export default function CreatingRequestHelp() {
         For anything you send on a schedule — rent, a weekly status update — turn on{' '}
         <b>Repeat</b>{' '}
         and Would You Please creates the next occurrence automatically once the
-        current one&rsquo;s Due Date arrives. Free accounts can repeat up to 5 times;
-        subscribers can repeat without limit.
+        current one&rsquo;s Due Date arrives. Free accounts can repeat up to 5 of the Requests
+        and ToDos; subscribers can repeat without limit.
       </p>
 
       <h2>Attach What They&rsquo;ll Need</h2>

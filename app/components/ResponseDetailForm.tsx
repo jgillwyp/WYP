@@ -380,6 +380,18 @@ export default function ResponseDetailForm() {
   // entry or Attachment (which save immediately, independently of
   // hasChanges by design) isn't left with a stuck-disabled Send button.
   const [contentChanged, setContentChanged] = useState(false)
+  // remindersOnlyChanged (2026-09-04, Jim's own note on the Responding to a
+  // Request Help topic) — true when hasChanges is true but Done Date/Time
+  // haven't moved, meaning the only edit was one of the three Reminder
+  // checkboxes. The band button reads "Save" instead of "Send" in that
+  // case — toggling a personal reminder preference isn't really "sending"
+  // anything to the sender, unlike an actual Done-Date response.
+  const remindersOnlyChanged =
+    hasChanges &&
+    !contentChanged &&
+    initialFormRef.current !== null &&
+    doneDate === initialFormRef.current.doneDate &&
+    doneTime === initialFormRef.current.doneTime
   // dialogChanged/attachmentsChanged (2026-09-02) — split out of
   // contentChanged, purely to describe *which* fields changed for the
   // "UPDATED:" change-notification email sent to the owner (see
@@ -923,7 +935,7 @@ export default function ResponseDetailForm() {
           <span className="glabel">Response Detail</span>
           <span className="bandcluster">
             <button className="btn" type="submit" form="response-detail-form" disabled={sending || (!hasChanges && !contentChanged)}>
-              {sending ? 'Sending…' : 'Send'}
+              {sending ? 'Sending…' : remindersOnlyChanged ? 'Save' : 'Send'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel} disabled={sending}>
               {/* Close once Send has succeeded (2026-08-23, owner-reported)

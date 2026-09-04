@@ -75,16 +75,16 @@ export default function RespondingRequestHelp() {
 
       <h2>Turning Reminders Off</h2>
       <p>
-        If the sender turned Reminders on for this Request, you&rsquo;ll see the same Day
-        before/Day of/Day after checkboxes here — you&rsquo;re free to turn any of them off for
-        yourself without affecting how the sender sees their own copy.
+        If the sender turned on showing Reminders for this Request, you&rsquo;ll see the same
+        Day before/Day of/Day after checkboxes here — you&rsquo;re free to turn any of them off
+        for yourself.
       </p>
 
       <h2>Already Have an Account?</h2>
       <p>
-        Responding works exactly the same way, and your response is saved to your own Received
-        list too — see the Getting Started topic for a look at that list and the rest of your
-        Main Screen.
+        Responding works exactly the same way. And the Request is shown in your own Received
+        list, where you can also respond. See the Getting Started topic for a look at that list
+        and the rest of your Main Screen.
       </p>
 
       <HelpNext current="responding-to-a-request" />

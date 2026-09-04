@@ -67,7 +67,7 @@ export default function TodoFeaturesHelp() {
         Every ToDo has a Priority — ASAP, SOON, or LATER — and an optional Description. Turn on{' '}
         <b>Show Private Category (ToDos)</b>{' '}
         in Account Options to add your own label (e.g. &ldquo;Personal Fin,&rdquo;
-        &ldquo;Future Dev&rdquo;), visible only to you.
+        &ldquo;Future Dev&rdquo;).
       </p>
 
       <h2>Status, or Due/Done Dates — Your Choice</h2>
@@ -84,9 +84,9 @@ export default function TodoFeaturesHelp() {
         Reminder emails a Request does, sent to you. Turn on{' '}
         <b>Add Reminders (ToDos)</b>{' '}
         in Account Options to use them, and set your own defaults there too. <b>Repeat</b>{' '}
-        works on ToDos exactly like it does on Requests — up to 5 occurrences free, unlimited
-        for subscribers — handy for anything you do on a recurring basis (watering plants, a
-        weekly check-in).
+        works on ToDos exactly like it does on Requests — up to 5 of the Requests and ToDos
+        free, unlimited for subscribers — handy for anything you do on a recurring basis
+        (watering plants, a weekly check-in).
       </p>
 
       <h2>Attachments</h2>
