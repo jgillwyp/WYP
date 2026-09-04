@@ -273,6 +273,7 @@ export default function StorageManagementForm() {
             <div className="sumnote">
               {formatBytes(availableBytes)} available &#8212; {tier === 'subscriber' ? 'your Subscriber' : 'free tier'}{' '}
               limit. Attachments count against the sender of the Request, including files added by the recipient.
+              Additional storage is available, see Subscription Features and Options below.
             </div>
           </div>
 

@@ -3925,3 +3925,17 @@ link is built only after the stack is proven on Add Contact.
   to convert). **Jim ran it and every one of the 21 checks came back
   OK.** All four migrations, including their full column/grant/function
   surface, are confirmed live in production — nothing further to do here.
+
+- **Storage-limit messages now point to Subscription Features and Options
+  (2026-09-04), no migration.** Jim, after testing the Test Storage Cap
+  override end to end: the upload route's over-cap error (`app/api/
+  attachments/upload/route.ts`, `error: 'storage_limit'`) now ends with "
+  Additional storage is available, see Subscription Features and Options
+  below." — shown verbatim by `AttachmentsPanel.tsx` wherever an upload is
+  refused for exceeding the account's storage allowance, on every screen
+  that panel appears on. The identical sentence was also appended to
+  Storage Management's own always-shown `.sumnote` (`StorageManagementForm.tsx`,
+  under the usage bar). Both references to "below" are accurate on every
+  screen involved: all of them already end with the `.subbanner-row`'s
+  "Subscription Features and Options" button (2026-09-02 batch). `npx tsc
+  --noEmit`/`npm run lint` clean.
