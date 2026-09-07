@@ -203,6 +203,13 @@ export default function AccountForm() {
   // Testing-only tier toggle (migration 024) — the DB column is text
   // ('free'/'subscriber'), not boolean, so it gets its own state and
   // handler rather than joining the shared boolean handleToggle below.
+  // Column default flipped 'free' -> 'subscriber', migration 052,
+  // 2026-09-06, per Jim's own request ("Please change the Subscribed
+  // (for testing) to be 'On' by default."). New signups now start
+  // Subscribed; existing rows are unaffected. This useState('free')
+  // initializer is just the pre-fetch placeholder and doesn't need to
+  // change — the real value always comes from the loaded profile row
+  // a few lines below.
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
   // profiles.subscription_renewal_date / subscription_storage_gb (migration
   // 047, 2026-08-26) — feed the "My Subscription" summary
@@ -874,7 +881,8 @@ export default function AccountForm() {
                           Sets your account to the Subscriber tier so subscriber-only features
                           like Attachments can be tested. This status only lasts for the
                           testing period — once testing ends, this checkbox goes away and you
-                          would subscribe for real, through the button below. Off by default.
+                          would subscribe for real, through the button below. New accounts start
+                          Subscribed (On by default); uncheck to test the free tier instead.
                         </span>
                       </span>
                     </label>

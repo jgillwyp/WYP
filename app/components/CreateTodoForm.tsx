@@ -832,6 +832,22 @@ export default function CreateTodoForm() {
       await applyConversionContentCopy(pendingConversion, newTodo.id)
     }
 
+    // Admin Statistics instrumentation (migration 054, 2026-09-07) —
+    // fire-and-forget; a ToDo created already Done (todoStatus === 'done'
+    // with no dates enabled, or an explicit Done Date typed in) logs both
+    // events, matching how Requests/ToDos "Done" is defined everywhere
+    // else in the plan: wherever done_date ends up set, not just later
+    // edits. See docs/WYP_Admin_Statistics_Plan.md.
+    void supabase.rpc('log_event', { p_subject_type: 'todo', p_subject_id: newTodo.id, p_action: 'created' })
+    if (effectiveDoneDate !== null) {
+      void supabase.rpc('log_event', {
+        p_subject_type: 'todo',
+        p_subject_id: newTodo.id,
+        p_action: 'done',
+        p_detail: { done_date: effectiveDoneDate },
+      })
+    }
+
     setSaving(false)
     // router.back(), not push('/') — matches Request/ToDo/Contact Detail's
     // own convention (2026-08-09) and, combined with MainScreen.tsx's new

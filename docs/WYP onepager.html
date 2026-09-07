@@ -63,6 +63,12 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
 .card .cb{font-size:11.5px;line-height:1.42;color:var(--ink);margin-top:3px;}
 .card.hi{background:var(--focus-tint);border-color:#BcCcEE;}
 .card.hi .ct{color:var(--brand-blue);}
+/* 2026-09-06 — Advanced Features wording simplified (drops the
+   subscription-upsell asides, now covered by the Free vs. Subscriber
+   table on page 2) and split onto two lines instead of one run-on
+   paragraph, per Jim's pasted wording; .cb-line adds the vertical
+   breathing room between them that the single paragraph lacked. */
+.card.hi .cb .cb-line + .cb-line{margin-top:6px;}
 
 /* Subscription + soon two-column — 2/3-1/3 ratio, 2026-08-28 (was
    1.15fr 1fr, ~53/47), Jim's own pasted mockup; also shared by the
@@ -158,7 +164,7 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
        LandingPage.tsx's identical comment for the full reasoning. Reuses
        .cols (now 2fr/1fr) with a single child. -->
   <div class="cols" style="margin-top:9px;">
-    <div class="card hi"><div class="ct">Advanced Features <span class="ct-note">(limited unless subscribed)</span></div><div class="cb"><b>File Attachments with 100&nbsp;MB of Storage</b> &#8212; send and receive documents, photos, and PDFs with your Requests and Responses &#8212; additional storage available with a subscription. <b>Automatic Repeating</b> &#8212; for all Requests and ToDos &#8212; up to 5 occurrences; a subscription is unlimited.</div></div>
+    <div class="card hi"><div class="ct">Advanced Features <span class="ct-note">(limited unless subscribed)</span></div><div class="cb"><div class="cb-line"><b>File Attachments</b> &#8212; with 100&nbsp;MB of storage to send and receive documents, photos, and PDFs with your Requests and Responses.</div><div class="cb-line"><b>Automatic Repeating</b> &#8212; for up to 5 of Requests and ToDos.</div></div></div>
   </div>
 
   <div class="slabel"><span class="t">Who benefits from Would You Please?</span><span class="rule"></span></div>

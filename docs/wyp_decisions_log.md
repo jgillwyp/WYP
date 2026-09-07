@@ -7912,3 +7912,15 @@ Jim: "A small left and right margin is needed for the help content, next up, and
 Root cause: `.help`'s own horizontal padding was `2px`, far short of the `14px` (`var(--pad)`) every band/title and every other in-app screen's content region uses. Changed `.help { padding: 4px 2px 24px; }` to `.help { padding: 4px var(--pad) 24px; }` (`app/globals.css`). Since every element in a Help topic — lead paragraph, headings, lists, the sample-image panel, `HelpNext`, and the new `HelpAccountLink` banner — is a plain child of `.help` with no outer margin of its own, this one change aligns all of them to the same left/right inset the images (and the band title above them) already had.
 
 `npx tsc --noEmit`/`npm run lint` clean.
+
+---
+
+## 2026-09-06 — Subscribed-for-testing now defaults On for new accounts (migration 052)
+
+Jim: "Please change the Subscribed (for testing) to be 'On' by default." Migration 002 set `profiles.tier text not null default 'free'`, and no signup path writes a `tier` value explicitly (`CreateFreeAccountForm.tsx` never touches it), so every new account started free and the Account Options "Subscribed? (testing only)" checkbox read unchecked until manually toggled via `set_tier_for_testing('subscriber')` — a re-check needed after every fresh test account during Private Testing.
+
+Migration 052: `alter table public.profiles alter column tier set default 'subscriber';`. Deliberately column-default-only, not a blanket `update` — existing rows (Jim's own account, and anyone else already on the `tier_toggle_allowlist` from migration 035, the point at which other people started testing) are untouched; only accounts created from now on start Subscribed. The checkbox's own help text in `AccountForm.tsx` ("Off by default.") is corrected to state new accounts start Subscribed, so the copy matches the real behavior; the `useState<'free'>('free')` local initializer is unchanged since it's only the pre-fetch placeholder, overwritten by the loaded profile row.
+
+**Owner action required**: this migration is written to `docs/Week6 - SQL history.txt` per the standing convention but not yet run — the SQL editor session has owner credentials this session doesn't. Run it in the Supabase SQL editor, then verify with `select column_default from information_schema.columns where table_name = 'profiles' and column_name = 'tier';`.
+
+`npx tsc --noEmit`/`npm run lint` clean.

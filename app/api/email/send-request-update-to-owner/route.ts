@@ -143,7 +143,7 @@ export async function POST(request: Request) {
 
   const { data: reqRes, error: reqError } = await sbc
     .from('requests')
-    .select('id, owner_id, description, due_date, due_time, contacts(display_name)')
+    .select('id, owner_id, description, due_date, due_time, done_date, contacts(display_name)')
     .eq('id', requestId)
     .single()
 
@@ -153,12 +153,58 @@ export async function POST(request: Request) {
     description: string
     due_date: string | null
     due_time: string | null
+    done_date: string | null
     contacts: { display_name: string | null } | null
   }
   const reqRow = reqRes as unknown as Row | null
 
   if (reqError || !reqRow || !reqRow.due_date) {
     return Response.json({ sent: false, reason: 'not_found' }, { status: 404 })
+  }
+
+  // Admin Statistics instrumentation (migration 054, 2026-09-07) — the
+  // Recipient-edits-owner-notified direction of the same "Changed"
+  // definition send-request-update/route.ts's own comment explains; see
+  // that file for the full reasoning (why here, not gated on email
+  // success). actor_user stays null and actor_label carries the Contact's
+  // name instead — same convention set_response_done_by_token/
+  // add_dialog_by_token already use for recipient-originated events,
+  // regardless of whether this particular recipient happens to be signed
+  // in (the anonymous /r/[token] path can reach this same route, so
+  // treating both callers identically avoids a two-tier convention).
+  // Reuses `sbc`, the service_role client already created above.
+  {
+    const events: Array<{
+      actor_user: null
+      actor_label: string | null
+      subject_type: 'request'
+      subject_id: string
+      request_id: string
+      action: string
+      detail: Record<string, unknown>
+    }> = [
+      {
+        actor_user: null,
+        actor_label: reqRow.contacts?.display_name ?? null,
+        subject_type: 'request',
+        subject_id: reqRow.id,
+        request_id: reqRow.id,
+        action: 'changed',
+        detail: { fields: changedFields },
+      },
+    ]
+    if (changedFields.includes('Done Date') && reqRow.done_date) {
+      events.push({
+        actor_user: null,
+        actor_label: reqRow.contacts?.display_name ?? null,
+        subject_type: 'request',
+        subject_id: reqRow.id,
+        request_id: reqRow.id,
+        action: 'done',
+        detail: { done_date: reqRow.done_date },
+      })
+    }
+    await sbc.from('events').insert(events)
   }
 
   const { data: ownerUser } = await sbc.auth.admin.getUserById(reqRow.owner_id)

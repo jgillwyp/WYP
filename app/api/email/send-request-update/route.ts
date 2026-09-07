@@ -43,6 +43,14 @@ export const runtime = 'nodejs'
  * `sent: false`.
  */
 
+function getServiceRoleClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
+  )
+}
+
 function getSmtpTransport() {
   const host = process.env.EMAIL_SMTP_HOST
   const port = Number(process.env.EMAIL_SMTP_PORT ?? '465')
@@ -96,7 +104,7 @@ export async function POST(request: Request) {
 
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
-    .select('id, description, due_date, due_time, contacts(email)')
+    .select('id, description, due_date, due_time, done_date, contacts(email)')
     .eq('id', requestId)
     .single()
 
@@ -105,12 +113,57 @@ export async function POST(request: Request) {
     description: string
     due_date: string | null
     due_time: string | null
+    done_date: string | null
     contacts: { email: string } | null
   }
   const reqRow = reqRes as unknown as Row | null
 
   if (reqError || !reqRow || !reqRow.due_date) {
     return Response.json({ sent: false, reason: 'not_found' }, { status: 404 })
+  }
+
+  // Admin Statistics instrumentation (migration 054, 2026-09-07) — one
+  // 'changed' event per change-notification, regardless of how many
+  // fields changed (see docs/WYP_Admin_Statistics_Plan.md's "Changed"
+  // definition), logged here rather than waiting on the email itself:
+  // this route only ever runs when RequestDetailForm.tsx's own Save just
+  // succeeded and found a non-empty changedFields list, so reaching this
+  // point already means a real, notify-worthy owner edit happened — an
+  // SMTP hiccup afterward shouldn't make that edit vanish from the stats.
+  // 'done' piggybacks on the same trip whenever Done Date is one of the
+  // changed fields and the Request is newly Done (not being un-marked).
+  // Uses a fresh service_role client — this route otherwise only ever
+  // touches rows via the forwarded/anon-key client `sb`.
+  {
+    const admin = getServiceRoleClient()
+    const events: Array<{
+      actor_user: string
+      subject_type: 'request'
+      subject_id: string
+      request_id: string
+      action: string
+      detail: Record<string, unknown>
+    }> = [
+      {
+        actor_user: userData.user.id,
+        subject_type: 'request',
+        subject_id: requestId,
+        request_id: requestId,
+        action: 'changed',
+        detail: { fields: changedFields },
+      },
+    ]
+    if (changedFields.includes('Done Date') && reqRow.done_date) {
+      events.push({
+        actor_user: userData.user.id,
+        subject_type: 'request',
+        subject_id: requestId,
+        request_id: requestId,
+        action: 'done',
+        detail: { done_date: reqRow.done_date },
+      })
+    }
+    await admin.from('events').insert(events)
   }
 
   const recipientEmail = reqRow.contacts?.email

@@ -79,12 +79,20 @@ export async function POST(request: Request) {
   // rows the caller actually owns — any id in the client's own list that
   // doesn't belong to them (or doesn't exist) simply drops out here rather
   // than being trusted blindly.
-  const { data: ownRows, error: ownError } = await sb.from('requests').select('id').in('id', requestIds)
+  // contact_id selected alongside id (2026-09-07, migration 054) purely for
+  // Admin Statistics instrumentation below — it's the same null/not-null
+  // distinction the rest of this app already uses everywhere to tell a
+  // ToDo from a Request (contact_id null = ToDo).
+  const { data: ownRows, error: ownError } = await sb
+    .from('requests')
+    .select('id, contact_id')
+    .in('id', requestIds)
   if (ownError) {
     return Response.json({ error: 'load_failed', detail: ownError.message }, { status: 500 })
   }
 
-  const ownedIds = (ownRows ?? []).map((r) => r.id as string)
+  const ownedRows = ownRows ?? []
+  const ownedIds = ownedRows.map((r) => r.id as string)
   if (ownedIds.length === 0) {
     return Response.json({ ok: true, deletedCount: 0 })
   }
@@ -109,6 +117,23 @@ export async function POST(request: Request) {
   if (deleteError) {
     return Response.json({ error: 'delete_failed', detail: deleteError.message }, { status: 500 })
   }
+
+  // Admin Statistics instrumentation (migration 054, 2026-09-07) — via the
+  // same service_role client already used for Storage cleanup above.
+  // Best-effort: never turns an already-completed delete into an error
+  // response. Backs the Archive screen's Delete action, so every row here
+  // was already Archived (subject_type still 'request'/'todo', same as
+  // everywhere else — Archive status isn't part of that distinction).
+  await admin.from('events').insert(
+    ownedRows.map((r) => ({
+      actor_user: userData.user!.id,
+      subject_type: (r.contact_id ? 'request' : 'todo') as 'request' | 'todo',
+      subject_id: r.id as string,
+      request_id: r.id as string,
+      action: 'deleted',
+      detail: {},
+    }))
+  )
 
   return Response.json({ ok: true, deletedCount: ownedIds.length })
 }

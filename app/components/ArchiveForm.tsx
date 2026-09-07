@@ -1189,10 +1189,16 @@ export default function ArchiveForm() {
         )
       )
     } else {
-      const { error: updateError } = await supabase
-        .from('requests')
-        .update({ archived_at: isArchive ? nowIso : null })
-        .in('id', ids)
+      // set_archived() (migration 055, 2026-09-07) replaces the plain
+      // client-side .update() this used to be — same RLS-equivalent
+      // ownership scoping (owner_id = auth.uid(), enforced inside the
+      // function instead of by the policy), now paired with the Admin
+      // Statistics 'archived'/'unarchived' events write in the same
+      // transaction. See docs/WYP_Admin_Statistics_Plan.md.
+      const { error: updateError } = await supabase.rpc('set_archived', {
+        p_request_ids: ids,
+        p_archived: isArchive,
+      })
 
       if (updateError) {
         setArchiving(false)

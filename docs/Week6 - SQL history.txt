@@ -3442,3 +3442,422 @@ commit;
 --   select set_storage_limit_override(2097152);  -- 2 MB, for testing
 --   select set_storage_limit_override(null);      -- clear, back to the real cap
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 052 (2026-09-06) — profiles.tier default flipped to 'subscriber'
+--
+-- Jim: "Please change the Subscribed (for testing) to be 'On' by default."
+-- Migration 002 set `tier text not null default 'free'`, so every new
+-- profile row (there is no explicit tier value written at signup — see
+-- CreateFreeAccountForm.tsx) started free, and the Account Options
+-- checkbox read unchecked until manually toggled via
+-- set_tier_for_testing('subscriber'). During Private Testing that means
+-- re-checking the box after every fresh test account.
+--
+-- This only changes the column default for accounts created FROM NOW ON.
+-- It does not touch any existing row's tier — an account already on the
+-- free tier (Jim's own included, or anyone else on the allowlist) stays
+-- exactly as it is; use the existing checkbox / set_tier_for_testing() to
+-- change any of those by hand. Deliberately not a blanket UPDATE here:
+-- once other people were invited to test (migration 035's own reason for
+-- locking the toggle down), flipping every row site-wide is a real-data
+-- change this migration shouldn't make unasked.
+--
+-- The checkbox's own "Off by default." help text (AccountForm.tsx) is
+-- updated to "On by default." in the same commit as this migration, so
+-- the copy and the actual behavior stay in sync.
+-- ============================================================================
+
+alter table public.profiles
+  alter column tier set default 'subscriber';
+
+-- Verify (superuser — proves the default changed, not that RLS/grants
+-- still behave; those are unaffected by this migration):
+--
+--   select column_default from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'tier';
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 053 (2026-09-07) — profiles.is_admin, gates the new Statistics
+-- section (Housekeeping's Statistics chip + the /admin/stats/* screens)
+--
+-- Jim: admin utilization-tracking screens, "initially only I have access
+-- to." Per the 2026-09-06 admin-statistics planning conversation (see
+-- docs/WYP_Admin_Statistics_Plan.md), this reuses the shape migration 051
+-- already chose over standing up a new allowlist table for a single-flag
+-- concern: one boolean column, set only by hand via SQL, no UI to manage
+-- it, no separate table. "One or more designated profiles" just means more
+-- than one row can have this true — a boolean column handles that with no
+-- extra structure.
+--
+-- Deliberately NOT gated through can_toggle_tier()/tier_toggle_allowlist —
+-- "may self-grant Subscriber for testing" and "may see cross-account admin
+-- aggregates" are different questions (same reasoning migration 024's own
+-- header comment already gives for keeping tier_toggle_allowlist separate
+-- from beta_allowlist).
+--
+-- This column only controls whether the Statistics chip renders — UI
+-- routing, not the real access control. Every admin aggregate RPC (added
+-- in later migrations, per the plan doc's screens) re-checks is_admin
+-- itself before returning any cross-account data, the same "assume the
+-- control was bypassed" posture can_toggle_tier() already established.
+-- ============================================================================
+
+alter table public.profiles
+  add column if not exists is_admin boolean not null default false;
+
+comment on column public.profiles.is_admin is
+  'Gates the Statistics section (Housekeeping chip + /admin/stats/* screens) and every admin aggregate RPC. Set only by hand via SQL -- no client write path exists or should ever be added. UI-routing convenience only; the real gate is each admin RPC re-checking this column server-side.';
+
+-- Set yourself as the first admin (replace the email):
+--
+--   update public.profiles set is_admin = true
+--   where id = (select id from auth.users where email = 'jimgillon@gmail.com');
+--
+-- Verify:
+--
+--   select id, is_admin from public.profiles where is_admin = true;
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 054 (2026-09-07) — log_event(): the client-callable half of
+-- Admin Statistics' events instrumentation
+--
+-- Per docs/WYP_Admin_Statistics_Plan.md's "Data foundation" section: public.
+-- events (migration 002) is extended to also cover owner-side activity, not
+-- just the recipient/secure-link flow it already logs. Several of the
+-- "cheap" sites the plan calls out are plain client-side .insert()/.update()
+-- calls under normal RLS (AddContactForm.tsx, CreateTodoForm.tsx,
+-- TodoDetailForm.tsx) with no existing server code path to hook a write
+-- into — unlike the delete/notification routes, which already run
+-- server-side and get a service_role events insert added directly in this
+-- same batch (see the application-code changes alongside this migration;
+-- no SQL needed for those).
+--
+-- log_event() is that missing server-side hook for the browser-originated
+-- sites: one narrow, ownership-checked RPC rather than granting
+-- authenticated any direct insert on events (which the table's own
+-- 2026-02 comment explicitly rules out — "Nothing writes here from the
+-- browser"). A forged action/detail here is cosmetic only, never a
+-- privilege escalation: the function insists the row being logged about
+-- (a Contact or a Request/ToDo) is actually owned by the caller before
+-- writing anything, exactly like every RLS policy already governing those
+-- tables, so the worst a malicious authenticated caller could do is log a
+-- misleading fact about their own data -- which nothing except the admin
+-- statistics screens (themselves re-checking is_admin, migration 053) will
+-- ever read.
+--
+-- p_subject_type is deliberately narrower than events.subject_type's own
+-- check constraint ('contact' or 'request' — 'todo' rows live in the same
+-- requests table and are told apart the same way the rest of the app
+-- already does, by contact_id being null) — dialog/attachment/profile/link
+-- events are all still written exclusively by their own existing
+-- SECURITY DEFINER functions, untouched by this migration.
+-- ============================================================================
+
+create or replace function public.log_event(
+  p_subject_type text,
+  p_subject_id uuid,
+  p_action text,
+  p_detail jsonb default '{}'::jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_request_id uuid;
+begin
+  if p_subject_type = 'contact' then
+    if not exists (
+      select 1 from public.contacts
+      where id = p_subject_id and owner_id = auth.uid()
+    ) then
+      raise exception 'Not found.';
+    end if;
+    v_request_id := null;
+  elsif p_subject_type in ('request', 'todo') then
+    if not exists (
+      select 1 from public.requests
+      where id = p_subject_id and owner_id = auth.uid()
+    ) then
+      raise exception 'Not found.';
+    end if;
+    v_request_id := p_subject_id;
+  else
+    raise exception 'Invalid subject_type for log_event.';
+  end if;
+
+  insert into public.events (actor_user, subject_type, subject_id, request_id, action, detail)
+    values (auth.uid(), p_subject_type, p_subject_id, v_request_id, p_action, coalesce(p_detail, '{}'::jsonb));
+end;
+$$;
+
+revoke all on function public.log_event(text, uuid, text, jsonb) from public;
+grant execute on function public.log_event(text, uuid, text, jsonb) to authenticated;
+
+-- Not granted to anon — every current call site (Contact created, ToDo
+-- created, ToDo changed, ToDo Done) is a signed-in owner action. The
+-- recipient/anonymous side keeps writing events through its own existing
+-- token-verified functions (set_response_done_by_token, add_dialog_by_token,
+-- etc.), which already run this exact ownership-equivalent check inline
+-- against the link token instead of auth.uid().
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 055 (2026-09-07) — set_archived(): owner-side Archive/UnArchive
+-- moves to a SECURITY DEFINER function, for Admin Statistics logging
+--
+-- Per docs/WYP_Admin_Statistics_Plan.md's Task 3: ArchiveForm.tsx's Sent/
+-- ToDo Archive and UnArchive actions (Received is untouched by this
+-- migration — archive_received_request()/unarchive_received_request(),
+-- migrations 028/046, already exist and stay exactly as they are; the plan
+-- explicitly scopes Archived/Unarchived tracking to Sent-only, since a
+-- Received item isn't owned by this account) have, until now, been a plain
+-- client-side `.update({ archived_at })` under normal RLS — the one site
+-- in the whole app with no server code path at all to hook an events write
+-- into. Every other "cheap" instrumentation site (migration 054) was one
+-- more line inside code that already ran server-side; this one genuinely
+-- needed new server code, flagged as such in the plan from the start.
+--
+-- Batched (uuid[]) rather than one-id-at-a-time, matching ArchiveForm.tsx's
+-- own existing "check several rows, act once" flow exactly (today it does
+-- one .update().in('id', ids) call for the whole selection) — one round
+-- trip and one events insert per batch, not N.
+--
+-- Ownership is enforced the same way "requests: owners update own" (RLS)
+-- already would have: `where owner_id = auth.uid()` silently drops any id
+-- in the batch the caller doesn't own, rather than raising — the same
+-- quiet no-op RLS itself already produced on this exact call before today.
+-- ============================================================================
+
+create or replace function public.set_archived(p_request_ids uuid[], p_archived boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_now timestamptz := now();
+begin
+  with updated as (
+    update public.requests
+      set archived_at = case when p_archived then v_now else null end
+      where id = any(p_request_ids) and owner_id = auth.uid()
+      returning id, contact_id
+  )
+  insert into public.events (actor_user, subject_type, subject_id, request_id, action, detail)
+    select
+      auth.uid(),
+      case when contact_id is not null then 'request' else 'todo' end,
+      id,
+      id,
+      case when p_archived then 'archived' else 'unarchived' end,
+      '{}'::jsonb
+    from updated;
+end;
+$$;
+
+revoke all on function public.set_archived(uuid[], boolean) from public;
+grant execute on function public.set_archived(uuid[], boolean) to authenticated;
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 056 (2026-09-07) — admin_stats_contacts(): the Contacts
+-- Activity screen's aggregation RPC
+--
+-- Per docs/WYP_Admin_Statistics_Plan.md's "Contacts — Activity" screen and
+-- shared filter row (From/To month range, Weekly Sun-Sat / Monthly
+-- granularity, cohort: All / Beta allowlist / one profile). is_admin is
+-- re-checked here (not just trusted from the Statistics chip being
+-- visible) — same "assume the UI gate was bypassed" posture migration
+-- 053's own comment already established for every admin RPC.
+--
+-- Added/Deleted come from events (migration 054/002) — the only way to
+-- count a Contact that has SINCE been hard-deleted; a live table scan of
+-- public.contacts can never see it. With Phone/With Notes are read off the
+-- SAME 'created' events' own detail jsonb (has_phone/has_notes, captured
+-- at creation time by AddContactForm.tsx as of this migration) rather than
+-- the current contacts row, so a later edit never rewrites what a past
+-- period showed, and a Contact added and deleted inside one period still
+-- counts correctly. All four blank out before 2026-09-07 (when this
+-- logging began), per the plan's own "no retroactive estimation" decision
+-- -- there is no historical detail to read for events that were never
+-- written.
+--
+-- Total is different from the other four: a cumulative running count, not
+-- a per-period flow, so it CAN be read straight from the live contacts
+-- table (created_at survives independently of events) -- but only for
+-- Contacts that still exist today. A Contact created and later deleted
+-- disappears from every period's Total from that point on, not just the
+-- period it was deleted in -- Total is best read as "how many of today's
+-- surviving Contacts existed by then," not "how many existed at that
+-- historical moment." This is the same permanent limitation the plan
+-- already calls out for Overdue, just on the Contacts screen instead.
+--
+-- Sunday-start week buckets: Postgres date_trunc('week', ...) is
+-- Monday-anchored; shifting the input forward one day before truncating,
+-- then subtracting a day back, is the standard trick to re-anchor it to
+-- Sunday. period_end is clipped to p_to so the final, possibly-partial
+-- bucket's Total never counts Contacts dated after the query's own To
+-- date.
+--
+-- The per-period Total subquery re-scans public.contacts once per row
+-- (N periods, not N^2 over the whole date range) -- entirely fine at
+-- Private Testing's current scale; worth revisiting only if the Contacts
+-- table or the selected date range both grow very large.
+-- ============================================================================
+
+create or replace function public.admin_stats_contacts(
+  p_from date,
+  p_to date,
+  p_granularity text,
+  p_cohort text,
+  p_profile_id uuid default null
+)
+returns table (
+  period_start date,
+  period_end date,
+  added bigint,
+  deleted bigint,
+  with_phone bigint,
+  with_notes bigint,
+  total bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_granularity not in ('week', 'month') then
+    raise exception 'Invalid granularity.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id
+    from auth.users u
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+  ),
+  periods as (
+    select
+      gs::date as period_start,
+      (case when p_granularity = 'week'
+         then (gs + interval '6 days')
+         else (date_trunc('month', gs) + interval '1 month' - interval '1 day')
+       end)::date as period_end_natural
+    from generate_series(
+      case when p_granularity = 'week'
+        then date_trunc('week', p_from::timestamp + interval '1 day') - interval '1 day'
+        else date_trunc('month', p_from::timestamp)
+      end,
+      p_to::timestamp,
+      case when p_granularity = 'week' then interval '7 days' else interval '1 month' end
+    ) as gs
+  ),
+  bucketed as (
+    select p.period_start, least(p.period_end_natural, p_to) as period_end
+    from periods p
+  ),
+  ev_created as (
+    select
+      (case when p_granularity = 'week'
+         then (date_trunc('week', e.at + interval '1 day') - interval '1 day')
+         else date_trunc('month', e.at)
+       end)::date as period_start,
+      count(*) as added,
+      count(*) filter (where (e.detail->>'has_phone')::boolean is true) as with_phone,
+      count(*) filter (where (e.detail->>'has_notes')::boolean is true) as with_notes
+    from public.events e
+    where e.subject_type = 'contact' and e.action = 'created'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  ev_deleted as (
+    select
+      (case when p_granularity = 'week'
+         then (date_trunc('week', e.at + interval '1 day') - interval '1 day')
+         else date_trunc('month', e.at)
+       end)::date as period_start,
+      count(*) as deleted
+    from public.events e
+    where e.subject_type = 'contact' and e.action = 'deleted'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  )
+  select
+    b.period_start,
+    b.period_end,
+    coalesce(c.added, 0) as added,
+    coalesce(dl.deleted, 0) as deleted,
+    coalesce(c.with_phone, 0) as with_phone,
+    coalesce(c.with_notes, 0) as with_notes,
+    (
+      select count(*) from public.contacts ct
+      where ct.owner_id in (select id from cohort)
+        and ct.created_at::date <= b.period_end
+    ) as total
+  from bucketed b
+  left join ev_created c on c.period_start = b.period_start
+  left join ev_deleted dl on dl.period_start = b.period_start
+  order by b.period_start;
+end;
+$$;
+
+revoke all on function public.admin_stats_contacts(date, date, text, text, uuid) from public;
+grant execute on function public.admin_stats_contacts(date, date, text, text, uuid) to authenticated;
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 057 (2026-09-07) — admin_list_profiles(): the account picker
+-- behind every Admin Statistics screen's "Specific account…" cohort option
+--
+-- Shared across all four /admin/stats/* screens (docs/
+-- WYP_Admin_Statistics_Plan.md's cohort filter: All accounts / Beta
+-- allowlist / one specific profile) — one small RPC rather than fetching
+-- the account list four separate ways. is_admin re-checked here too, same
+-- posture as every other admin RPC — this returns every account's email,
+-- which is exactly the kind of cross-account data the plan's "hidden chip
+-- is not the real security boundary" comment (migration 053) exists for.
+-- ============================================================================
+
+create or replace function public.admin_list_profiles()
+returns table (id uuid, email text, display_name text)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  return query
+  select u.id, u.email::text, p.display_name
+  from auth.users u
+  left join public.profiles p on p.id = u.id
+  order by u.email;
+end;
+$$;
+
+revoke all on function public.admin_list_profiles() from public;
+grant execute on function public.admin_list_profiles() to authenticated;
+-- ============================================================================

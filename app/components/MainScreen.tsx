@@ -688,7 +688,7 @@ type MainChipPrefs = {
   sentFilter?: FilterValue
   receivedFilter?: FilterValue
   todoFilter?: FilterValue
-  hkTab?: 'tasks' | 'videos'
+  hkTab?: 'tasks' | 'videos' | 'statistics'
 }
 
 function readStoredChip<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -864,8 +864,8 @@ export default function MainScreen() {
   // see the main load() effect's own header comment for why a manual retry
   // needed to exist at all.
   const [reloadTick, setReloadTick] = useState(0)
-  const [hkTab, setHkTab] = useState<'tasks' | 'videos'>(() =>
-    readStoredChip(HK_TAB_KEY, ['tasks', 'videos'] as const, 'tasks')
+  const [hkTab, setHkTab] = useState<'tasks' | 'videos' | 'statistics'>(() =>
+    readStoredChip(HK_TAB_KEY, ['tasks', 'videos', 'statistics'] as const, 'tasks')
   )
   const [signingOut, setSigningOut] = useState(false)
 
@@ -1042,6 +1042,13 @@ export default function MainScreen() {
   const [userId, setUserId] = useState<string | null>(null)
   const [prefsLoaded, setPrefsLoaded] = useState(false)
 
+  // profiles.is_admin (migration 053, 2026-09-07) — gates the Housekeeping
+  // Statistics chip below. Read on the same profiles round trip as
+  // main_chip_prefs/tier/etc. Chip visibility is UX only; every admin
+  // aggregate-query RPC re-checks is_admin server-side on its own (see
+  // docs/WYP_Admin_Statistics_Plan.md).
+  const [isAdmin, setIsAdmin] = useState(false)
+
   // Private Category is now an opt-in account preference (migration 018,
   // 2026-08-13), off by default — see AccountForm.tsx. Read on the same
   // profiles round trip as main_chip_prefs above, rather than a separate
@@ -1124,7 +1131,7 @@ export default function MainScreen() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('main_chip_prefs, private_category_enabled, request_time_enabled, todo_dates_enabled, tier')
+        .select('main_chip_prefs, private_category_enabled, request_time_enabled, todo_dates_enabled, tier, is_admin')
         .eq('id', uid)
         .single()
       if (cancelled) return
@@ -1132,6 +1139,7 @@ export default function MainScreen() {
       setCategoriesEnabled(data?.private_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? true)
       setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
+      setIsAdmin(data?.is_admin === true)
       const datesEnabled = data?.todo_dates_enabled ?? false
       setTodoDatesEnabled(datesEnabled)
       // A stale sessionStorage/main_chip_prefs value of 'overdue' from
@@ -1153,6 +1161,8 @@ export default function MainScreen() {
         setTodoFilter(prefs.todoFilter)
       }
       if (prefs.hkTab === 'tasks' || prefs.hkTab === 'videos') {
+        setHkTab(prefs.hkTab)
+      } else if (prefs.hkTab === 'statistics' && data?.is_admin === true) {
         setHkTab(prefs.hkTab)
       }
       setPrefsLoaded(true)
@@ -1866,6 +1876,17 @@ export default function MainScreen() {
                         change. */}
                     Help
                   </button>
+                  {isAdmin && (
+                    <button
+                      className={`chip${hkTab === 'statistics' ? ' sel' : ''}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={hkTab === 'statistics'}
+                      onClick={() => setHkTab('statistics')}
+                    >
+                      Statistics
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1999,7 +2020,7 @@ export default function MainScreen() {
                   )}
                 </div>
               </div>
-            ) : (
+            ) : hkTab === 'videos' ? (
               <div className="subbody">
                 <div className="hkrows">
                   {/* Help topics (2026-09-03) — replaces the three inert
@@ -2054,6 +2075,64 @@ export default function MainScreen() {
                     <span className="hktext">
                       <span className="hktitle">ToDo Features</span>
                       <span className="hknote"> — Status, Reminders, Repeat, and Attachments</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // Statistics tab (2026-09-07) — admin-only utilization
+              // screens. Chip visibility above is already gated on isAdmin;
+              // this body only ever renders once that chip has been
+              // clicked, so no separate isAdmin check is needed here. See
+              // docs/WYP_Admin_Statistics_Plan.md for the four screens.
+              <div className="subbody">
+                <div className="hkrows">
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/stats/contacts')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stats/contacts') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Contacts</span>
+                      <span className="hknote"> — added, deleted, and current totals</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/stats/requests')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stats/requests') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Requests</span>
+                      <span className="hknote"> — created, changed, done, archived, deleted</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/stats/todos')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stats/todos') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">ToDos</span>
+                      <span className="hknote"> — created, changed, done, archived, deleted</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/stats/summary')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stats/summary') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Sum and Averages</span>
+                      <span className="hknote"> — grand totals and per-user roster</span>
                     </span>
                   </div>
                 </div>

@@ -886,11 +886,34 @@ export default function TodoDetailForm() {
     return hasDesc
   }
 
+  // Admin Statistics instrumentation (migration 054, 2026-09-07) — mirrors
+  // RequestDetailForm.tsx's own computeChangedFieldLabels(), narrowed to
+  // the fields a ToDo actually has (no Due Time/Done Time; Priority added,
+  // since ToDos have no recipient to gate it from). Dialog/Attachments are
+  // not split here the way Requests' own CHANGED_FIELD_LABELS are — this
+  // screen's own contentChanged flag (just below) doesn't distinguish
+  // which one changed, so both collapse into a single 'Content' label
+  // rather than overclaiming both changed when only one did.
+  function computeChangedFieldLabels(): string[] {
+    if (!initialFormRef.current) return []
+    const snap = initialFormRef.current
+    const labels: string[] = []
+    if (form.priority !== snap.priority) labels.push('Priority')
+    if (form.dueDate !== snap.dueDate) labels.push('Due Date')
+    if (form.description !== snap.description) labels.push('Description')
+    if ((selectedCategory?.id ?? null) !== snap.categoryId) labels.push('Category')
+    if (form.doneDate !== snap.doneDate || todoStatus !== snap.todoStatus) labels.push('Done Date')
+    if (contentChanged) labels.push('Content')
+    return labels
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     if (!validate()) return
 
+    const changedFieldLabels = computeChangedFieldLabels()
+    const wasAlreadyDone = (initialFormRef.current?.doneDate ?? '') !== ''
     setSaving(true)
 
     // §6.35 Status (migration 022) — when todoDatesEnabled is off, done_date
@@ -933,6 +956,28 @@ export default function TodoDetailForm() {
     if (updateError) {
       setError(updateError.message)
       return
+    }
+
+    // Admin Statistics instrumentation (migration 054, 2026-09-07) —
+    // fire-and-forget, after the real save already succeeded, same
+    // "never let this block or fail Save" posture as RequestDetailForm.
+    // tsx's own sendChangeNotification. 'Done' logs only on the actual
+    // open-to-done transition, not on every save of an already-Done ToDo.
+    if (changedFieldLabels.length > 0) {
+      void supabase.rpc('log_event', {
+        p_subject_type: 'todo',
+        p_subject_id: todoId,
+        p_action: 'changed',
+        p_detail: { fields: changedFieldLabels },
+      })
+    }
+    if (effectiveDoneDate !== null && !wasAlreadyDone) {
+      void supabase.rpc('log_event', {
+        p_subject_type: 'todo',
+        p_subject_id: todoId,
+        p_action: 'done',
+        p_detail: { done_date: effectiveDoneDate },
+      })
     }
 
     // router.back(), not push('/') — see RequestDetailForm.tsx's identical

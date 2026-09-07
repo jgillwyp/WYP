@@ -117,8 +117,14 @@ export async function POST(request: Request) {
 
   const requestIds = (reqRows ?? []).map((r) => r.id as string)
 
+  // Service-role client, created unconditionally — Admin Statistics
+  // instrumentation (migration 054, 2026-09-07) needs it below even when
+  // requestIds is empty (a Contact with no Requests still logs its own
+  // 'deleted' event), not just for the file-cleanup path that previously
+  // was the only reason this client existed.
+  const admin = getServiceRoleClient()
+
   if (requestIds.length > 0) {
-    const admin = getServiceRoleClient()
     const { data: fileRows } = await admin
       .from('attachments')
       .select('storage_path')
@@ -144,6 +150,34 @@ export async function POST(request: Request) {
   if (deleteContactError) {
     return Response.json({ error: 'delete_contact_failed', detail: deleteContactError.message }, { status: 500 })
   }
+
+  // Admin Statistics instrumentation (migration 054, 2026-09-07) — logged
+  // after both deletes have actually succeeded, via the same service_role
+  // client already used for Storage cleanup above (events has no
+  // client-writable RLS policy at all, migration 002). Best-effort: a
+  // logging failure here must never turn an already-completed delete into
+  // an error response. Cascaded Requests are always subject_type 'request'
+  // (never 'todo') — a ToDo has no contact_id, so it can never appear in
+  // requestIds, which is scoped to `contact_id = contactId` above.
+  const eventRows = [
+    ...requestIds.map((id) => ({
+      actor_user: userData.user!.id,
+      subject_type: 'request' as const,
+      subject_id: id,
+      request_id: id,
+      action: 'deleted',
+      detail: { cause: 'contact_deleted' },
+    })),
+    {
+      actor_user: userData.user!.id,
+      subject_type: 'contact' as const,
+      subject_id: contactId,
+      request_id: null,
+      action: 'deleted',
+      detail: {},
+    },
+  ]
+  await admin.from('events').insert(eventRows)
 
   return Response.json({ ok: true, deletedRequestCount: requestIds.length })
 }

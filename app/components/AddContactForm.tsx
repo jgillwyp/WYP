@@ -223,6 +223,27 @@ export default function AddContactForm() {
       return
     }
 
+    // Admin Statistics instrumentation (migration 054, 2026-09-07) —
+    // fire-and-forget, mirrors CreateRequestForm.tsx/CreateTodoForm.tsx's
+    // own "never let this block the real save" posture for their own
+    // notification calls. has_phone/has_notes captured here, at creation
+    // time, rather than read back from the contacts table later — the
+    // Contacts Activity screen's own "With Phone"/"With Notes" per-period
+    // counts (docs/WYP_Admin_Statistics_Plan.md) read these straight off
+    // the event, so a later edit to the Contact never rewrites history,
+    // and a Contact added and deleted within the same period still counts
+    // correctly without needing to join back to a row that may no longer
+    // exist.
+    void supabase.rpc('log_event', {
+      p_subject_type: 'contact',
+      p_subject_id: inserted.id,
+      p_action: 'created',
+      p_detail: {
+        has_phone: form.phone.trim() !== '',
+        has_notes: form.notes.trim() !== '',
+      },
+    })
+
     // Return destination depends on where this screen was opened from
     // (2026-08-11) — this file's own comment used to flag Create Request's
     // no-contact interception (§6.24, still not built) as the next entry
