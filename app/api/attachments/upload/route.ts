@@ -92,9 +92,13 @@ export async function POST(request: Request) {
   // owner_id on the row, not permission.ownerTier alone, since that field
   // only ever carried the tier string, not enough to also compute the
   // real running total.
+  // contact_id selected alongside owner_id (2026-09-07, migration 058) —
+  // Admin Statistics instrumentation below needs it to tell a Request
+  // apart from a ToDo (contact_id null = ToDo), the same test the rest of
+  // this app already uses everywhere else.
   const { data: ownerRow } = await admin
     .from('requests')
-    .select('owner_id')
+    .select('owner_id, contact_id')
     .eq('id', permission.requestId)
     .single()
 
@@ -167,6 +171,30 @@ export async function POST(request: Request) {
     })
     .select('id, file_name, size_bytes, mime_type, uploaded_by, uploaded_by_label, created_at')
     .single()
+
+  if (!insertError && newRow) {
+    // Admin Statistics instrumentation (migration 058, 2026-09-07) —
+    // fire-and-forget (not awaited, but errors are swallowed rather than
+    // failing an upload that already succeeded). Logs the ADD only, never
+    // the delete: attachments can be individually hard-deleted (unlike
+    // Dialog, which is append-only and safe to count straight off the live
+    // table), so a permanent events record is what keeps a past period's
+    // "Attachments" count from silently shrinking if one is deleted later
+    // — exactly the same reasoning migration 054 already established for
+    // Contacts Added. 'side' is only meaningful for a Request (Sent when
+    // the owner uploaded, Received when the recipient did); omitted for a
+    // ToDo, which has no Sent/Received split at all.
+    void admin.from('events').insert({
+      actor_user: permission.uploaderId,
+      subject_type: 'attachment',
+      subject_id: newRow.id,
+      request_id: permission.requestId,
+      action: 'created',
+      detail: ownerRow.contact_id
+        ? { side: permission.role === 'owner' ? 'sent' : 'received' }
+        : {},
+    })
+  }
 
   if (insertError || !newRow) {
     // Clean up the orphaned Storage object rather than leave bytes with no

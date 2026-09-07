@@ -418,9 +418,98 @@ export function StatTable({
 // factoring out a one-line JSX snippet into a new shared icon component.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Sum and Averages screen only — a point-in-time snapshot ("as of" a
+// single date), not a per-period range, so it gets its own lighter filter
+// bar rather than AdminStatsFilterBar's From/To/granularity trio. Defaults
+// to today, a real date picker (not a month picker) since the exact day
+// matters here — see docs/WYP_Admin_Statistics_Plan.md and migration 060's
+// own comment on why Overdue is only ever computed when this equals today.
+// ---------------------------------------------------------------------------
+
+export function todayISODate(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function AdminAsOfFilterBar(props: {
+  asOf: string
+  onAsOf: (v: string) => void
+  cohort: Cohort
+  onCohort: (v: Cohort) => void
+  profileId: string
+  onProfileId: (v: string) => void
+  profiles: ProfileOption[]
+  profilesLoading: boolean
+}) {
+  const { asOf, onAsOf, cohort, onCohort, profileId, onProfileId, profiles, profilesLoading } = props
+
+  return (
+    <div className="statfilters no-print">
+      <div className="statfiltergroup">
+        <label className="statfilterlabel" htmlFor="stat-asof">As of</label>
+        <input
+          id="stat-asof"
+          type="date"
+          className="statfilterinput"
+          value={asOf}
+          max={todayISODate()}
+          onChange={(e) => onAsOf(e.target.value)}
+        />
+      </div>
+
+      <div className="statfiltergroup">
+        <label className="statfilterlabel" htmlFor="stat-cohort-asof">Accounts</label>
+        <select
+          id="stat-cohort-asof"
+          className="statfilterinput"
+          value={cohort}
+          onChange={(e) => onCohort(e.target.value as Cohort)}
+        >
+          <option value="all">All accounts</option>
+          <option value="beta">Beta allowlist</option>
+          <option value="profile">Specific account…</option>
+        </select>
+        {cohort === 'profile' && (
+          <select
+            className="statfilterinput"
+            value={profileId}
+            onChange={(e) => onProfileId(e.target.value)}
+            disabled={profilesLoading}
+          >
+            <option value="">{profilesLoading ? 'Loading…' : 'Choose an account'}</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.display_name ? `${p.display_name} — ${p.email}` : p.email}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// KPI stat tile — Sum and Averages' Grand Totals row. A cumulative
+// snapshot isn't a "this many happened in week X" figure, so it renders as
+// a tile, not a bar (plan: "Sum and Averages' grand totals render as stat
+// tiles, not bars").
+// ---------------------------------------------------------------------------
+
+export function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="stattile">
+      <div className="stattilevalue">{value}</div>
+      <div className="stattilelabel">{label}</div>
+      {sub && <div className="stattilesub">{sub}</div>}
+    </div>
+  )
+}
+
 export function PrintIconButton({ onClick }: { onClick: () => void }) {
   return (
-    <button className="iconbtn no-print" type="button" aria-label="Print" onClick={onClick}>
+    <button className="iconbtn no-print" type="button" aria-label="Print" onClick={onClick} style={{ marginLeft: 'auto' }}>
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M7 8V3h10v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         <rect x="4" y="8" width="16" height="9" rx="2" stroke="currentColor" strokeWidth="2" />

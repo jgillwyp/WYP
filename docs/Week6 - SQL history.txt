@@ -3861,3 +3861,777 @@ $$;
 revoke all on function public.admin_list_profiles() from public;
 grant execute on function public.admin_list_profiles() to authenticated;
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 058 (2026-09-07) — admin_stats_requests(): the Requests
+-- Activity screen's aggregation RPC, plus the two instrumentation gaps
+-- this screen's own metrics exposed
+--
+-- Two gaps in the original "cheap sites" pass (migration 054) surfaced
+-- while building this screen, fixed alongside it in the application code
+-- accompanying this migration (no SQL needed for either):
+--   - Request creation (CreateRequestForm.tsx) had no events write at all
+--     -- the one create path that was missed. Now logs 'created' via the
+--     existing log_event() RPC, same as Contact/ToDo creation.
+--   - Attachment upload (api/attachments/upload/route.ts) likewise never
+--     logged anything. Now logs a 'created' event (ADD only, never the
+--     delete — see that route's own comment for why) directly via its
+--     existing service_role client, carrying detail.side ('sent'/
+--     'received') for a Request, omitted for a ToDo.
+--
+-- Sent vs. Received (plan: "Received matched by the same recipient-
+-- matching logic get_received_requests() already uses, since 'Received'
+-- isn't a stored column") — get_received_requests() itself matches by
+-- comparing auth.jwt()'s OWN email against a Contact's email, which only
+-- works for "am I the recipient" from inside that one caller's own
+-- session. This function instead needs "is ANY account in this cohort the
+-- recipient," across a whole cohort, evaluated from outside every
+-- individual session — so it re-derives the same match (lower(email)
+-- equality between auth.users and contacts) directly, joined per event's
+-- own request_id, rather than calling that function.
+--
+-- Created/Attachments: 'created' events are always logged with actor_user
+-- = the owner (there is no "recipient creates a Request" concept), so
+-- Sent is a plain actor_user-in-cohort filter; Received requires the
+-- contact-email join regardless of actor_user. Attachments carry an
+-- explicit detail.side (set at upload time, from resolvePermission()'s
+-- own owner/recipient/anonymous role) rather than inferring it, since a
+-- signed-in recipient's own uploads are NOT actor_user-null the way
+-- Changed/Done recipient events always are.
+--
+-- Changed/Done: migration 054's own instrumentation always logs the
+-- recipient direction (send-request-update-to-owner) with actor_user
+-- null, regardless of whether that recipient happens to be signed in —
+-- so Received is actor_user IS NULL + the same contact-email join; Sent
+-- is the ordinary actor_user-in-cohort case, since the owner direction
+-- (send-request-update) always logs the real owner id.
+--
+-- Deliberately excludes the pre-existing 'response_done_updated' action
+-- (set_response_done_by_token, migration 003) — that fires on every
+-- token-based response save regardless of whether Done Date actually
+-- changed, which would double-count against this migration's own 'done'
+-- events (send-request-update-to-owner logs 'done' only when Done Date is
+-- genuinely a changed field and newly non-null). This RPC only ever reads
+-- the specific action vocabulary migration 054/055 introduced.
+--
+-- Dialog is read straight from public.dialog, not events at all — Dialog
+-- has no delete path anywhere in this app (append-only by design), so
+-- there is no hard-delete undercount risk the way Contacts/Attachments
+-- have. author_user_id = the request's own owner_id identifies a Sent
+-- (owner-authored) entry directly; anything else (a signed-in recipient's
+-- own id, or null for an anonymous entry) is Received, matched to cohort
+-- via the same contact-email join.
+-- ============================================================================
+
+create or replace function public.admin_stats_requests(
+  p_from date,
+  p_to date,
+  p_granularity text,
+  p_cohort text,
+  p_profile_id uuid default null
+)
+returns table (
+  period_start date,
+  period_end date,
+  sent_created bigint,
+  received_created bigint,
+  sent_changed bigint,
+  received_changed bigint,
+  sent_done bigint,
+  received_done bigint,
+  deleted bigint,
+  archived bigint,
+  unarchived bigint,
+  sent_attachments bigint,
+  received_attachments bigint,
+  sent_dialog bigint,
+  received_dialog bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_granularity not in ('week', 'month') then
+    raise exception 'Invalid granularity.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id
+    from auth.users u
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+  ),
+  periods as (
+    select
+      gs::date as period_start,
+      (case when p_granularity = 'week'
+         then (gs + interval '6 days')
+         else (date_trunc('month', gs) + interval '1 month' - interval '1 day')
+       end)::date as period_end_natural
+    from generate_series(
+      case when p_granularity = 'week'
+        then date_trunc('week', p_from::timestamp + interval '1 day') - interval '1 day'
+        else date_trunc('month', p_from::timestamp)
+      end,
+      p_to::timestamp,
+      case when p_granularity = 'week' then interval '7 days' else interval '1 month' end
+    ) as gs
+  ),
+  bucketed as (
+    select p.period_start, least(p.period_end_natural, p_to) as period_end
+    from periods p
+  ),
+  -- Sent Created: 'created' events, subject_type 'request', by an owner in cohort.
+  sent_created_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'request' and e.action = 'created'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  -- Received Created: any 'created' event whose Request's Contact email matches a cohort account.
+  received_created_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    join public.requests r on r.id = e.request_id
+    join public.contacts c on c.id = r.contact_id
+    join auth.users u on lower(u.email) = lower(trim(c.email))
+    where e.subject_type = 'request' and e.action = 'created'
+      and u.id in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  sent_changed_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'request' and e.action = 'changed'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  received_changed_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    join public.requests r on r.id = e.request_id
+    join public.contacts c on c.id = r.contact_id
+    join auth.users u on lower(u.email) = lower(trim(c.email))
+    where e.subject_type = 'request' and e.action = 'changed' and e.actor_user is null
+      and u.id in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  sent_done_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'request' and e.action = 'done'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  received_done_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    join public.requests r on r.id = e.request_id
+    join public.contacts c on c.id = r.contact_id
+    join auth.users u on lower(u.email) = lower(trim(c.email))
+    where e.subject_type = 'request' and e.action = 'done' and e.actor_user is null
+      and u.id in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  deleted_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'request' and e.action = 'deleted'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  archived_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'request' and e.action = 'archived'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  unarchived_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'request' and e.action = 'unarchived'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  sent_attachments_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'attachment' and e.action = 'created'
+      and (e.detail->>'side') = 'sent'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  received_attachments_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    join public.requests r on r.id = e.request_id
+    join public.contacts c on c.id = r.contact_id
+    join auth.users u on lower(u.email) = lower(trim(c.email))
+    where e.subject_type = 'attachment' and e.action = 'created'
+      and (e.detail->>'side') = 'received'
+      and u.id in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  sent_dialog_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', d.created_at + interval '1 day') - interval '1 day') else date_trunc('month', d.created_at) end)::date as period_start,
+      count(*) as n
+    from public.dialog d
+    join public.requests r on r.id = d.request_id
+    where r.contact_id is not null
+      and d.author_user_id = r.owner_id
+      and r.owner_id in (select id from cohort)
+      and d.created_at::date between p_from and p_to
+    group by 1
+  ),
+  received_dialog_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', d.created_at + interval '1 day') - interval '1 day') else date_trunc('month', d.created_at) end)::date as period_start,
+      count(*) as n
+    from public.dialog d
+    join public.requests r on r.id = d.request_id
+    join public.contacts c on c.id = r.contact_id
+    join auth.users u on lower(u.email) = lower(trim(c.email))
+    where r.contact_id is not null
+      and d.author_user_id is distinct from r.owner_id
+      and u.id in (select id from cohort)
+      and d.created_at::date between p_from and p_to
+    group by 1
+  )
+  select
+    b.period_start,
+    b.period_end,
+    coalesce(sc.n, 0), coalesce(rc.n, 0),
+    coalesce(sch.n, 0), coalesce(rch.n, 0),
+    coalesce(sd.n, 0), coalesce(rd.n, 0),
+    coalesce(del.n, 0),
+    coalesce(arc.n, 0),
+    coalesce(unarc.n, 0),
+    coalesce(sa.n, 0), coalesce(ra.n, 0),
+    coalesce(sdlg.n, 0), coalesce(rdlg.n, 0)
+  from bucketed b
+  left join sent_created_t sc on sc.period_start = b.period_start
+  left join received_created_t rc on rc.period_start = b.period_start
+  left join sent_changed_t sch on sch.period_start = b.period_start
+  left join received_changed_t rch on rch.period_start = b.period_start
+  left join sent_done_t sd on sd.period_start = b.period_start
+  left join received_done_t rd on rd.period_start = b.period_start
+  left join deleted_t del on del.period_start = b.period_start
+  left join archived_t arc on arc.period_start = b.period_start
+  left join unarchived_t unarc on unarc.period_start = b.period_start
+  left join sent_attachments_t sa on sa.period_start = b.period_start
+  left join received_attachments_t ra on ra.period_start = b.period_start
+  left join sent_dialog_t sdlg on sdlg.period_start = b.period_start
+  left join received_dialog_t rdlg on rdlg.period_start = b.period_start
+  order by b.period_start;
+end;
+$$;
+
+revoke all on function public.admin_stats_requests(date, date, text, text, uuid) from public;
+grant execute on function public.admin_stats_requests(date, date, text, text, uuid) to authenticated;
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 059 (2026-09-07) — admin_stats_todos(): the ToDos Activity
+-- screen's aggregation RPC
+--
+-- Same shape as admin_stats_requests() (migration 058), minus every
+-- Sent/Received split — a ToDo has no recipient, so every metric is a
+-- plain actor_user (or owner_id, for Dialog) in-cohort filter, no
+-- contact-email join anywhere in this function. Attachments/Dialog are
+-- told apart from a Request's own by joining to requests and filtering
+-- contact_id is null, the same test used everywhere else in this app.
+-- ============================================================================
+
+create or replace function public.admin_stats_todos(
+  p_from date,
+  p_to date,
+  p_granularity text,
+  p_cohort text,
+  p_profile_id uuid default null
+)
+returns table (
+  period_start date,
+  period_end date,
+  created bigint,
+  changed bigint,
+  done bigint,
+  deleted bigint,
+  archived bigint,
+  unarchived bigint,
+  attachments bigint,
+  dialog bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_granularity not in ('week', 'month') then
+    raise exception 'Invalid granularity.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id
+    from auth.users u
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+  ),
+  periods as (
+    select
+      gs::date as period_start,
+      (case when p_granularity = 'week'
+         then (gs + interval '6 days')
+         else (date_trunc('month', gs) + interval '1 month' - interval '1 day')
+       end)::date as period_end_natural
+    from generate_series(
+      case when p_granularity = 'week'
+        then date_trunc('week', p_from::timestamp + interval '1 day') - interval '1 day'
+        else date_trunc('month', p_from::timestamp)
+      end,
+      p_to::timestamp,
+      case when p_granularity = 'week' then interval '7 days' else interval '1 month' end
+    ) as gs
+  ),
+  bucketed as (
+    select p.period_start, least(p.period_end_natural, p_to) as period_end
+    from periods p
+  ),
+  created_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'todo' and e.action = 'created'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  changed_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'todo' and e.action = 'changed'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  done_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'todo' and e.action = 'done'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  deleted_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'todo' and e.action = 'deleted'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  archived_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'todo' and e.action = 'archived'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  unarchived_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    where e.subject_type = 'todo' and e.action = 'unarchived'
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  attachments_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', e.at + interval '1 day') - interval '1 day') else date_trunc('month', e.at) end)::date as period_start,
+      count(*) as n
+    from public.events e
+    join public.requests r on r.id = e.request_id
+    where e.subject_type = 'attachment' and e.action = 'created'
+      and r.contact_id is null
+      and e.actor_user in (select id from cohort)
+      and e.at::date between p_from and p_to
+    group by 1
+  ),
+  dialog_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', d.created_at + interval '1 day') - interval '1 day') else date_trunc('month', d.created_at) end)::date as period_start,
+      count(*) as n
+    from public.dialog d
+    join public.requests r on r.id = d.request_id
+    where r.contact_id is null
+      and r.owner_id in (select id from cohort)
+      and d.created_at::date between p_from and p_to
+    group by 1
+  )
+  select
+    b.period_start,
+    b.period_end,
+    coalesce(c.n, 0),
+    coalesce(ch.n, 0),
+    coalesce(dn.n, 0),
+    coalesce(del.n, 0),
+    coalesce(arc.n, 0),
+    coalesce(unarc.n, 0),
+    coalesce(att.n, 0),
+    coalesce(dlg.n, 0)
+  from bucketed b
+  left join created_t c on c.period_start = b.period_start
+  left join changed_t ch on ch.period_start = b.period_start
+  left join done_t dn on dn.period_start = b.period_start
+  left join deleted_t del on del.period_start = b.period_start
+  left join archived_t arc on arc.period_start = b.period_start
+  left join unarchived_t unarc on unarc.period_start = b.period_start
+  left join attachments_t att on att.period_start = b.period_start
+  left join dialog_t dlg on dlg.period_start = b.period_start
+  order by b.period_start;
+end;
+$$;
+
+revoke all on function public.admin_stats_todos(date, date, text, text, uuid) from public;
+grant execute on function public.admin_stats_todos(date, date, text, text, uuid) to authenticated;
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 060 (2026-09-07) — admin_stats_summary_totals() and
+-- admin_stats_summary_roster(): the Sum and Averages screen's two
+-- aggregation RPCs
+--
+-- Two functions, not one — this screen's own two layers (plan: "Grand
+-- totals" and "Per-user roster") return genuinely different shapes (one
+-- row cohort-wide vs. one row per account), which `returns table(...)`
+-- can't mix into a single call cleanly.
+--
+-- Unlike the three Activity screens, this is a POINT-IN-TIME snapshot, not
+-- a per-period flow — the plan's own wording is "cohort-wide, as of the
+-- selected To-date." p_asof replaces the from/granularity pair the other
+-- three screens take; there is no week/month bucketing here at all.
+--
+-- Grand totals read straight off the live requests/contacts/dialog/
+-- attachments tables (created_at <= p_asof), not events -- a "how many
+-- exist right now (or existed by this date, among survivors)" snapshot is
+-- exactly what a live table scan gives correctly, unlike the Activity
+-- screens' own per-period flow counts. The same permanent limitation
+-- migration 056's own comment already gives for Contacts' Total applies
+-- here too: anything hard-deleted before p_asof is invisible to a live
+-- scan, so this reads as "of what survives today, how much existed by
+-- then" -- not a true historical total.
+--
+-- Status splits (Open/Overdue/Done/Archived) in the roster reconstruct
+-- Done/Archived from done_date/archived_at compared against p_asof (both
+-- survive independently of anything else, so this is a real, accurate
+-- reconstruction for any past date) -- but Overdue is only ever computed
+-- when p_asof is today: it depends on comparing due_date/due_time against
+-- the clock, and due dates can be edited after the fact, so "Overdue as
+-- of last month" would silently mean "today's due dates, evaluated as if
+-- it were last month," not what was actually true then. This is the exact
+-- permanent limitation the plan's own "Known limitation -- Overdue"
+-- section already calls out for the Activity screens; asking for a past
+-- p_asof here folds would-be-Overdue rows into Open instead of guessing.
+-- ============================================================================
+
+create or replace function public.admin_stats_summary_totals(
+  p_asof date,
+  p_cohort text,
+  p_profile_id uuid default null
+)
+returns table (
+  user_count bigint,
+  requests_total bigint,
+  dialog_total bigint,
+  avg_dialog_per_request numeric,
+  avg_dialog_per_todo numeric,
+  attachments_total_count bigint,
+  attachments_total_size_kb numeric,
+  avg_request_description_size numeric,
+  todos_total bigint,
+  avg_todo_description_size numeric
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id
+    from auth.users u
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+  ),
+  req as (
+    select * from public.requests r
+    where r.owner_id in (select id from cohort)
+      and r.contact_id is not null
+      and r.created_at::date <= p_asof
+  ),
+  td as (
+    select * from public.requests r
+    where r.owner_id in (select id from cohort)
+      and r.contact_id is null
+      and r.created_at::date <= p_asof
+  ),
+  dlg_req as (
+    select count(*) as n from public.dialog d join req on req.id = d.request_id
+      where d.created_at::date <= p_asof
+  ),
+  dlg_td as (
+    select count(*) as n from public.dialog d join td on td.id = d.request_id
+      where d.created_at::date <= p_asof
+  ),
+  att as (
+    select count(*) as n, coalesce(sum(a.size_bytes), 0) as bytes
+    from public.attachments a
+    where a.request_id in (select id from req union select id from td)
+      and a.created_at::date <= p_asof
+  )
+  select
+    (select count(*) from cohort),
+    (select count(*) from req),
+    (select n from dlg_req) + (select n from dlg_td),
+    case when (select count(*) from req) = 0 then null
+      else round((select n from dlg_req)::numeric / (select count(*) from req), 2) end,
+    case when (select count(*) from td) = 0 then null
+      else round((select n from dlg_td)::numeric / (select count(*) from td), 2) end,
+    (select n from att),
+    round((select bytes from att)::numeric / 1024, 1),
+    (select round(avg(length(description)), 1) from req),
+    (select count(*) from td),
+    (select round(avg(length(description)), 1) from td);
+end;
+$$;
+
+revoke all on function public.admin_stats_summary_totals(date, text, uuid) from public;
+grant execute on function public.admin_stats_summary_totals(date, text, uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- admin_stats_summary_roster — one row per cohort account. See this
+-- migration's own header comment for the Overdue/point-in-time reasoning.
+-- ----------------------------------------------------------------------------
+
+create or replace function public.admin_stats_summary_roster(
+  p_asof date,
+  p_cohort text,
+  p_profile_id uuid default null
+)
+returns table (
+  account_id uuid,
+  email text,
+  display_name text,
+  contact_count bigint,
+  requests_sent_total bigint,
+  requests_sent_open bigint,
+  requests_sent_overdue bigint,
+  requests_sent_done bigint,
+  requests_sent_archived bigint,
+  requests_received_total bigint,
+  requests_received_open bigint,
+  requests_received_overdue bigint,
+  requests_received_done bigint,
+  requests_received_archived bigint,
+  dialog_count bigint,
+  attachments_count bigint,
+  attachments_avg_size_kb numeric,
+  todos_total bigint,
+  todos_open bigint,
+  todos_done bigint,
+  todos_archived bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+  v_overdue_computable boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  v_overdue_computable := (p_asof = current_date);
+
+  return query
+  with cohort as (
+    select u.id, u.email
+    from auth.users u
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+  )
+  select
+    u.id as account_id,
+    u.email::text,
+    p.display_name,
+
+    (select count(*) from public.contacts c
+      where c.owner_id = u.id and c.created_at::date <= p_asof),
+
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and not (v_overdue_computable and r.due_date < current_date)),
+    (select case when not v_overdue_computable then 0 else count(*) end from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and v_overdue_computable and r.due_date < current_date),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and r.done_date is not null and r.done_date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and r.archived_at is not null and r.archived_at::date <= p_asof),
+
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof),
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and not (v_overdue_computable and r.due_date < current_date)),
+    (select case when not v_overdue_computable then 0 else count(*) end from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and v_overdue_computable and r.due_date < current_date),
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and r.done_date is not null and r.done_date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)),
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and r.archived_at is not null and r.archived_at::date <= p_asof),
+
+    (select count(*) from public.dialog d
+      join public.requests r on r.id = d.request_id
+      where r.owner_id = u.id and d.created_at::date <= p_asof),
+
+    (select count(*) from public.attachments a
+      join public.requests r on r.id = a.request_id
+      where r.owner_id = u.id and a.created_at::date <= p_asof),
+    (select case when count(*) = 0 then null else round(sum(a.size_bytes)::numeric / count(*) / 1024, 1) end
+      from public.attachments a join public.requests r on r.id = a.request_id
+      where r.owner_id = u.id and a.created_at::date <= p_asof),
+
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof
+        and r.done_date is not null and r.done_date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof
+        and r.archived_at is not null and r.archived_at::date <= p_asof)
+
+  from cohort u
+  left join public.profiles p on p.id = u.id
+  order by u.email;
+end;
+$$;
+
+revoke all on function public.admin_stats_summary_roster(date, text, uuid) from public;
+grant execute on function public.admin_stats_summary_roster(date, text, uuid) to authenticated;
+-- ============================================================================

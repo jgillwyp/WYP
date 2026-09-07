@@ -1037,6 +1037,15 @@ export default function CreateRequestForm() {
       return
     }
 
+    // Admin Statistics instrumentation (migration 054, 2026-09-07) —
+    // fire-and-forget, mirrors AddContactForm.tsx/CreateTodoForm.tsx's own
+    // notification calls. A gap in the original "cheap sites" pass
+    // (2026-09-07): Request creation was the one create path that hadn't
+    // been wired up yet, spotted while building the Requests Activity
+    // screen's own 'Created' metric. See
+    // docs/WYP_Admin_Statistics_Plan.md.
+    void supabase.rpc('log_event', { p_subject_type: 'request', p_subject_id: newRequest.id, p_action: 'created' })
+
     // Dialog entries write second, against the id the insert above just
     // returned — see migration 004 and the file-level comment on why these
     // were held as draft state until now instead of written as they were
