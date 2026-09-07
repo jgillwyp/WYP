@@ -2144,7 +2144,7 @@ export default function MainScreen() {
                   >
                     <span className="hktext">
                       <span className="hktitle">Sum and Averages</span>
-                      <span className="hknote"> — grand totals and per-user roster</span>
+                      <span className="hknote"> — grand totals and per-account roster</span>
                     </span>
                   </div>
                 </div>

@@ -502,21 +502,11 @@ export function AdminAsOfFilterBar(props: {
 }
 
 // ---------------------------------------------------------------------------
-// KPI stat tile — Sum and Averages' Grand Totals row. A cumulative
-// snapshot isn't a "this many happened in week X" figure, so it renders as
-// a tile, not a bar (plan: "Sum and Averages' grand totals render as stat
-// tiles, not bars").
+// StatTile (KPI tile) was removed 2026-09-07 (migration 065) — Sum and
+// Averages' Grand Totals stat-tile block was replaced by the Entities/
+// Volume tables per docs/WYP_Admin_Statistics_Specification_v1_0.docx, and
+// nothing else in the app used this component. See wyp_decisions_log.md.
 // ---------------------------------------------------------------------------
-
-export function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="stattile">
-      <div className="stattilevalue">{value}</div>
-      <div className="stattilelabel">{label}</div>
-      {sub && <div className="stattilesub">{sub}</div>}
-    </div>
-  )
-}
 
 export function PrintIconButton({ onClick }: { onClick: () => void }) {
   return (

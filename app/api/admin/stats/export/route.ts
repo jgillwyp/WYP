@@ -24,9 +24,10 @@ export const runtime = 'nodejs'
  * (one RPC, one sheet, from/to/granularity/cohort params) — entity=summary
  * is handled as its own special case further down instead: Sum and
  * Averages is a point-in-time snapshot (asOf/cohort only, no from/
- * granularity) built from TWO RPCs (grand totals + per-account roster),
- * exported as two sheets in one workbook rather than forced into the
- * single-RPC/single-sheet shape every other screen uses.
+ * granularity) built from TWO RPCs (totals + per-account roster),
+ * exported as three sheets — Entities, Volume, Per-Account Roster — in
+ * one workbook rather than forced into the single-RPC/single-sheet shape
+ * every other screen uses.
  */
 
 function must(name: string): string {
@@ -183,10 +184,15 @@ export async function GET(request: Request) {
 
 /**
  * Sum and Averages export — see this file's own header comment for why
- * this is separate from ENTITY_CONFIG. Two sheets: Grand Totals (one row)
- * and Per-Account Roster (one row per cohort account), from
+ * this is separate from ENTITY_CONFIG. Three sheets: Entities, Volume
+ * (both one row per row-label — Accounts/Contacts/Req's Sent/Req's
+ * Received/ToDos, and Dialogs/Attachments, respectively), and Per-Account
+ * Roster (one row per cohort account), from
  * admin_stats_summary_totals()/admin_stats_summary_roster() (migration
- * 060) — the exact same two calls AdminSummaryStatsForm.tsx itself makes.
+ * 065) — the exact same two calls AdminSummaryStatsForm.tsx itself makes.
+ * Percentages and "per X" ratios are computed here with the same
+ * pct()/ratio() rules the component uses, so the exported figures match
+ * the screen exactly.
  */
 async function exportSummary(request: Request, url: URL): Promise<Response> {
   const asOf = url.searchParams.get('asOf')
@@ -225,53 +231,95 @@ async function exportSummary(request: Request, url: URL): Promise<Response> {
   workbook.creator = 'Would You Please — Admin Statistics'
   workbook.created = new Date()
 
-  const totalsSheet = workbook.addWorksheet('Grand Totals')
+  // Percent/ratio helpers mirror AdminSummaryStatsForm.tsx's pct()/ratio()
+  // exactly (migration 065) — the .xlsx must show the same numbers the
+  // screen and its print view show, not a re-derivation of its own.
+  const row = totalsRow as Record<string, number | null>
+  const pct = (count: number | null | undefined, total: number | null | undefined) =>
+    !total ? null : Math.round(((count ?? 0) / total) * 100) / 100 // fraction; format as % in Excel
+  const ratio = (count: number | null | undefined, total: number | null | undefined) =>
+    !total ? null : Math.round(((count ?? 0) / total) * 10) / 10
+
+  const totalsSheet = workbook.addWorksheet('Entities')
   totalsSheet.columns = [
-    { header: 'Metric', key: 'metric', width: 26 },
-    { header: 'Value', key: 'value', width: 16 },
+    { header: '', key: 'label', width: 16 },
+    { header: 'Count Total', key: 'count', width: 12 },
+    { header: "Avg Descr char's", key: 'avg_descr', width: 16 },
+    { header: 'Open', key: 'open', width: 10 },
+    { header: 'Overdue', key: 'overdue', width: 10 },
+    { header: 'Done', key: 'done', width: 10 },
+    { header: 'Archived', key: 'archived', width: 10 },
   ]
   totalsSheet.getRow(1).font = { bold: true }
-  const totalsLabels: Record<string, string> = {
-    user_count: 'Accounts',
-    requests_total: 'Requests total',
-    dialog_total: 'Dialog total',
-    avg_dialog_per_request: 'Avg Dialog / Request',
-    avg_dialog_per_todo: 'Avg Dialog / ToDo',
-    attachments_total_count: 'Attachments total count',
-    attachments_total_size_kb: 'Attachments total size (KB)',
-    avg_request_description_size: 'Avg Request Description (chars)',
-    todos_total: 'ToDos total',
-    avg_todo_description_size: 'Avg ToDo Description (chars)',
+  totalsSheet.addRow({ label: 'Accounts', count: row.accounts_count })
+  totalsSheet.addRow({ label: 'Contacts', count: row.contacts_count })
+  totalsSheet.addRow({
+    label: "Req's Sent", count: row.requests_sent_total, avg_descr: row.requests_sent_avg_description,
+    open: pct(row.requests_sent_open, row.requests_sent_total),
+    overdue: pct(row.requests_sent_overdue, row.requests_sent_total),
+    done: pct(row.requests_sent_done, row.requests_sent_total),
+    archived: pct(row.requests_sent_archived, row.requests_sent_total),
+  })
+  totalsSheet.addRow({
+    label: "Req's Received", count: row.requests_received_total, avg_descr: row.requests_received_avg_description,
+    open: pct(row.requests_received_open, row.requests_received_total),
+    overdue: pct(row.requests_received_overdue, row.requests_received_total),
+    done: pct(row.requests_received_done, row.requests_received_total),
+    archived: pct(row.requests_received_archived, row.requests_received_total),
+  })
+  totalsSheet.addRow({
+    label: 'ToDos', count: row.todos_total, avg_descr: row.todos_avg_description,
+    open: pct(row.todos_open, row.todos_total),
+    overdue: pct(row.todos_overdue, row.todos_total),
+    done: pct(row.todos_done, row.todos_total),
+    archived: pct(row.todos_archived, row.todos_total),
+  })
+  for (let r = 3; r <= 6; r++) {
+    ;['open', 'overdue', 'done', 'archived'].forEach((key) => {
+      const cell = totalsSheet.getRow(r).getCell(key)
+      if (cell.value !== null && cell.value !== undefined) cell.numFmt = '0%'
+    })
   }
-  Object.entries(totalsLabels).forEach(([key, label]) => {
-    totalsSheet.addRow({ metric: label, value: (totalsRow as Record<string, unknown>)[key] ?? null })
+
+  const volumeSheet = workbook.addWorksheet('Volume')
+  volumeSheet.columns = [
+    { header: '', key: 'label', width: 14 },
+    { header: 'Count Total', key: 'count', width: 12 },
+    { header: 'Avg Descr, Size', key: 'avg', width: 16 },
+    { header: 'per Account', key: 'per_account', width: 12 },
+    { header: 'per Sent Req', key: 'per_sent', width: 12 },
+    { header: "per Rec'd Req", key: 'per_received', width: 12 },
+    { header: 'per ToDo', key: 'per_todo', width: 12 },
+  ]
+  volumeSheet.getRow(1).font = { bold: true }
+  volumeSheet.addRow({
+    label: 'Dialogs', count: row.dialog_total, avg: row.dialog_avg_description,
+    per_account: ratio(row.dialog_total, row.accounts_count),
+    per_sent: ratio(row.dialog_total, row.requests_sent_total),
+    per_received: ratio(row.dialog_total, row.requests_received_total),
+    per_todo: ratio(row.dialog_total, row.todos_total),
+  })
+  volumeSheet.addRow({
+    label: 'Attachments', count: row.attachments_total, avg: row.attachments_avg_size_kb,
+    per_account: ratio(row.attachments_total, row.accounts_count),
+    per_sent: ratio(row.attachments_total, row.requests_sent_total),
+    per_received: ratio(row.attachments_total, row.requests_received_total),
+    per_todo: ratio(row.attachments_total, row.todos_total),
   })
 
   const rosterSheet = workbook.addWorksheet('Per-Account Roster')
   rosterSheet.columns = [
     { header: 'Account', key: 'email', width: 26 },
-    { header: 'Display Name', key: 'display_name', width: 20 },
     { header: 'Contacts', key: 'contact_count', width: 10 },
-    { header: 'Sent Total', key: 'requests_sent_total', width: 10 },
-    { header: 'Sent Open', key: 'requests_sent_open', width: 10 },
-    { header: 'Sent Overdue', key: 'requests_sent_overdue', width: 12 },
-    { header: 'Sent Done', key: 'requests_sent_done', width: 10 },
-    { header: 'Sent Archived', key: 'requests_sent_archived', width: 12 },
-    { header: 'Received Total', key: 'requests_received_total', width: 12 },
-    { header: 'Received Open', key: 'requests_received_open', width: 12 },
-    { header: 'Received Overdue', key: 'requests_received_overdue', width: 14 },
-    { header: 'Received Done', key: 'requests_received_done', width: 12 },
-    { header: 'Received Archived', key: 'requests_received_archived', width: 14 },
-    { header: 'Dialog', key: 'dialog_count', width: 10 },
-    { header: 'Attachments', key: 'attachments_count', width: 12 },
-    { header: 'Avg Size (KB)', key: 'attachments_avg_size_kb', width: 12 },
-    { header: 'ToDos Total', key: 'todos_total', width: 10 },
-    { header: 'ToDos Open', key: 'todos_open', width: 10 },
-    { header: 'ToDos Done', key: 'todos_done', width: 10 },
-    { header: 'ToDos Archived', key: 'todos_archived', width: 12 },
+    { header: 'Req Sent', key: 'requests_sent_total', width: 10 },
+    { header: "Req Rec'd", key: 'requests_received_total', width: 10 },
+    { header: 'ToDos', key: 'todos_total', width: 10 },
+    { header: 'Dialogs', key: 'dialog_count', width: 10 },
+    { header: "Atch's", key: 'attachments_count', width: 10 },
+    { header: 'Avg Atch Size (KB)', key: 'attachments_avg_size_kb', width: 16 },
   ]
   rosterSheet.getRow(1).font = { bold: true }
-  rosterRows.forEach((row) => rosterSheet.addRow(row))
+  rosterRows.forEach((r) => rosterSheet.addRow(r))
 
   const buffer = await workbook.xlsx.writeBuffer()
   return new Response(buffer, {

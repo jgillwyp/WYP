@@ -4339,40 +4339,24 @@ body {
 /* Roster table (Sum and Averages screen, Task 7) reuses .stattable as-is —
    many accounts x many columns is exactly what it's already built for. */
 
-/* Sum and Averages — KPI stat tiles (2026-09-07). */
-.stattilerow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 14px 16px;
-}
-
-.stattile {
-  flex: 1 1 140px;
-  min-width: 140px;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 10px 12px;
+/* Sum and Averages — locked first column (2026-09-07, migration 065).
+   Replaces the old KPI stat-tile block (.stattilerow/.stattile/etc.,
+   removed) with three .stattable-locked tables (Entities, Volume,
+   Roster): the row-label/Account column stays put while everything else
+   scrolls within .stattablewrap's existing overflow-x: auto, per
+   docs/WYP_Admin_Statistics_Specification_v1_0.docx §2.2. Background is
+   opaque so the locked cell doesn't show scrolled content through it. */
+.stattable-locked th:first-child,
+.stattable-locked td:first-child {
+  position: sticky;
+  left: 0;
   background: #fff;
+  z-index: 1;
 }
 
-.stattilevalue {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--brand-blue);
-}
-
-.stattilelabel {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--ink-soft);
-  margin-top: 2px;
-}
-
-.stattilesub {
-  font-size: 10.5px;
-  color: var(--ink-soft);
-  margin-top: 2px;
+.stattable-locked thead th:first-child {
+  background: var(--row-tint, #F6F7F9);
+  z-index: 2;
 }
 
 .statsectionlabel {
