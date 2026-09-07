@@ -27,7 +27,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
 export type Granularity = 'week' | 'month'
-export type Cohort = 'all' | 'beta' | 'profile'
+export type Cohort = 'all' | 'beta' | 'profile' | 'free' | 'subscriber'
 
 export type ProfileOption = {
   id: string
@@ -173,6 +173,8 @@ export function AdminStatsFilterBar(props: {
         >
           <option value="all">All accounts</option>
           <option value="beta">Beta allowlist</option>
+          <option value="free">Free accounts</option>
+          <option value="subscriber">Subscribed accounts</option>
           <option value="profile">Specific account…</option>
         </select>
         {cohort === 'profile' && (
@@ -468,6 +470,8 @@ export function AdminAsOfFilterBar(props: {
         >
           <option value="all">All accounts</option>
           <option value="beta">Beta allowlist</option>
+          <option value="free">Free accounts</option>
+          <option value="subscriber">Subscribed accounts</option>
           <option value="profile">Specific account…</option>
         </select>
         {cohort === 'profile' && (

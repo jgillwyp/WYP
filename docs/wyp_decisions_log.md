@@ -7956,3 +7956,17 @@ Live testing surfaced two runtime-only Postgres errors in the Admin Statistics b
 **Migration 062** — `admin_list_profiles()` (the "Specific account…" picker shared by all four screens) declares an `id` output column; its own `is_admin` gate, `select is_admin into v_is_admin from public.profiles where id = auth.uid()`, left `id` unqualified. Fixed the same way: `public.profiles pr` / `pr.id`. This is the one every screen's Accounts picker calls the moment it's switched away from "All accounts" — invisible until now because testing so far had only exercised the "All accounts" cohort default. The identical `where id = auth.uid()` gate opens every other admin RPC in this build too, but none of the others declare an `id` output column (the Activity screens return `period_start`/`period_end`; the roster returns `account_id`, not `id`), so this exact line is harmless everywhere else — worth remembering if a future RPC's RETURNS TABLE is ever given a column literally named `id` or `email`.
 
 **Owner action required**: run migrations 061 and 062 in the Supabase SQL editor (`docs/Week6 - SQL history.txt`). Both are `create or replace function` — no drop needed, no application code changes, no redeploy required for either to take effect once run.
+
+---
+
+## 2026-09-07 — Admin Statistics: Free / Subscribed cohort filter (migration 063)
+
+Jim: "Eventually a subscriptions vs free account activity and summary will be needed." Built the same session as a straight extension of the existing cohort filter (All accounts / Beta allowlist / Specific account) rather than as new screens — two more Accounts-picker values, **Free accounts** and **Subscribed accounts**, on all four screens, keyed on the existing `profiles.tier` column (migration 002, default flipped to `'subscriber'` in migration 052). Every admin RPC's cohort CTE and `p_cohort` validation list already had the shape to take two more branches; no new screen, no new control type.
+
+Known limitation, same class as the Overdue and hard-delete limitations already documented elsewhere in this build: `profiles.tier` has no history, only a current value. "Subscribed accounts' activity in July" means "accounts that are subscribers *today*, filtered to July's events" — not "who was subscribed in July." An account that's since upgraded or downgraded is attributed to its present-day tier retroactively. Not fixable without a tier-history table this app doesn't have; documented rather than silently wrong.
+
+Cohort values stay mutually exclusive, as before (no combining "Beta allowlist" + "Free" in one query) — revisit only if compound filtering is actually requested.
+
+**Owner action required**: run migration 063 in the Supabase SQL editor (`docs/Week6 - SQL history.txt`) — replaces all five cohort-taking functions (`admin_stats_contacts`, `admin_stats_requests`, `admin_stats_todos`, `admin_stats_summary_totals`, `admin_stats_summary_roster`) with the two new branches added; otherwise byte-identical to their current versions. No app code needed beyond the two new `<option>`s already in this commit.
+
+`npx tsc --noEmit`/`npm run lint` clean.
