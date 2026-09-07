@@ -4635,3 +4635,171 @@ $$;
 revoke all on function public.admin_stats_summary_roster(date, text, uuid) from public;
 grant execute on function public.admin_stats_summary_roster(date, text, uuid) to authenticated;
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 061 (2026-09-07) — fix: admin_stats_summary_roster() raised
+-- "column reference \"email\" is ambiguous" on every call
+--
+-- Root cause: this function's own `returns table(..., email text, ...)`
+-- gives PL/pgSQL an implicit OUT-parameter variable named `email`, visible
+-- everywhere in the function body. The cohort CTE's beta-allowlist check
+-- — `select lower(email) from public.beta_allowlist` — leaves that one
+-- `email` unqualified, so Postgres can't tell whether it means the OUT
+-- variable or beta_allowlist.email, and raises the ambiguity error the
+-- moment the function actually runs (CREATE FUNCTION itself doesn't catch
+-- it — PL/pgSQL only binds the embedded SQL lazily, on first execution).
+--
+-- The identical `lower(email)` snippet appears verbatim in migrations
+-- 056/058/059/060's admin_stats_summary_totals — none of those break,
+-- because none of them declare an `email` output column, so there's no
+-- OUT variable for the bare reference to collide with. Only
+-- admin_stats_summary_roster both returns an `email` column AND uses this
+-- snippet, which is what makes it the sole function needing this fix.
+--
+-- Fix: qualify the subquery so it can never mean the OUT variable —
+-- `public.beta_allowlist ba` / `ba.email`, instead of the bare table name
+-- and column. Everything else in the function is byte-identical to
+-- migration 060's version; only this one line changes.
+-- ============================================================================
+
+create or replace function public.admin_stats_summary_roster(
+  p_asof date,
+  p_cohort text,
+  p_profile_id uuid default null
+)
+returns table (
+  account_id uuid,
+  email text,
+  display_name text,
+  contact_count bigint,
+  requests_sent_total bigint,
+  requests_sent_open bigint,
+  requests_sent_overdue bigint,
+  requests_sent_done bigint,
+  requests_sent_archived bigint,
+  requests_received_total bigint,
+  requests_received_open bigint,
+  requests_received_overdue bigint,
+  requests_received_done bigint,
+  requests_received_archived bigint,
+  dialog_count bigint,
+  attachments_count bigint,
+  attachments_avg_size_kb numeric,
+  todos_total bigint,
+  todos_open bigint,
+  todos_done bigint,
+  todos_archived bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+  v_overdue_computable boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  v_overdue_computable := (p_asof = current_date);
+
+  return query
+  with cohort as (
+    select u.id, u.email
+    from auth.users u
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(ba.email) from public.beta_allowlist ba))
+  )
+  select
+    u.id as account_id,
+    u.email::text,
+    p.display_name,
+
+    (select count(*) from public.contacts c
+      where c.owner_id = u.id and c.created_at::date <= p_asof),
+
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and not (v_overdue_computable and r.due_date < current_date)),
+    (select case when not v_overdue_computable then 0 else count(*) end from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and v_overdue_computable and r.due_date < current_date),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and r.done_date is not null and r.done_date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is not null and r.created_at::date <= p_asof
+        and r.archived_at is not null and r.archived_at::date <= p_asof),
+
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof),
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and not (v_overdue_computable and r.due_date < current_date)),
+    (select case when not v_overdue_computable then 0 else count(*) end from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)
+        and v_overdue_computable and r.due_date < current_date),
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and r.done_date is not null and r.done_date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)),
+    (select count(*) from public.requests r
+      join public.contacts c on c.id = r.contact_id
+      where lower(trim(c.email)) = lower(u.email) and r.created_at::date <= p_asof
+        and r.archived_at is not null and r.archived_at::date <= p_asof),
+
+    (select count(*) from public.dialog d
+      join public.requests r on r.id = d.request_id
+      where r.owner_id = u.id and d.created_at::date <= p_asof),
+
+    (select count(*) from public.attachments a
+      join public.requests r on r.id = a.request_id
+      where r.owner_id = u.id and a.created_at::date <= p_asof),
+    (select case when count(*) = 0 then null else round(sum(a.size_bytes)::numeric / count(*) / 1024, 1) end
+      from public.attachments a join public.requests r on r.id = a.request_id
+      where r.owner_id = u.id and a.created_at::date <= p_asof),
+
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)
+        and (r.done_date is null or r.done_date > p_asof)),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof
+        and r.done_date is not null and r.done_date <= p_asof
+        and (r.archived_at is null or r.archived_at::date > p_asof)),
+    (select count(*) from public.requests r
+      where r.owner_id = u.id and r.contact_id is null and r.created_at::date <= p_asof
+        and r.archived_at is not null and r.archived_at::date <= p_asof)
+
+  from cohort u
+  left join public.profiles p on p.id = u.id
+  order by u.email;
+end;
+$$;
+
+revoke all on function public.admin_stats_summary_roster(date, text, uuid) from public;
+grant execute on function public.admin_stats_summary_roster(date, text, uuid) to authenticated;
+-- ============================================================================
