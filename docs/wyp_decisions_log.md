@@ -7970,3 +7970,21 @@ Cohort values stay mutually exclusive, as before (no combining "Beta allowlist" 
 **Owner action required**: run migration 063 in the Supabase SQL editor (`docs/Week6 - SQL history.txt`) — replaces all five cohort-taking functions (`admin_stats_contacts`, `admin_stats_requests`, `admin_stats_todos`, `admin_stats_summary_totals`, `admin_stats_summary_roster`) with the two new branches added; otherwise byte-identical to their current versions. No app code needed beyond the two new `<option>`s already in this commit.
 
 `npx tsc --noEmit`/`npm run lint` clean.
+
+---
+
+## 2026-09-07 — Admin Statistics: fifth screen, Accounts — Activity (migration 064)
+
+Jim: "It occurred to me that there should be another activity screen 'Accounts' to show by-period new free and new subscribed accounts and a total new accounts." Proposed as a fifth screen (New Free / New Subscribed / Total per period, Total as a bar not a line since it's a per-period sum here, not a cumulative running stock like Contacts' Total) rather than folding into an existing screen — confirmed: "All of the suggestions work."
+
+Cohort narrowed to **All accounts / Beta allowlist** only, via a new `cohortOptions` prop on the shared `AdminStatsFilterBar` (`AdminStatsShared.tsx`) that lets a screen restrict which of the five cohort values it offers without duplicating the component; the other four screens pass no `cohortOptions` and keep the full five-value list. Free/Subscribed as a cohort filter would be redundant with the screen's own New Free/New Subscribed columns, and "Specific account…" is degenerate for a screen whose entire subject is the rate of new accounts being created, so both are omitted here.
+
+`admin_stats_accounts()` (migration 064) reads straight from `auth.users.created_at` left-joined to `profiles.tier`, with **no `events` dependency** — unlike Contacts/Requests/ToDos, accounts have no delete path in this app, so there's no hard-delete undercount risk to guard against. Same tier-history limitation as the Free/Subscribed cohort filter (migration 063): `profiles.tier` has no history, so "New Subscribed" reflects tier at read time, not tier at signup time, for any period but the most recent. All column references were written pre-qualified from the start (`pr.is_admin`, `pr.id`, `ba.email`) to avoid the OUT-parameter shadowing pitfall migrations 061/062 fixed reactively.
+
+**Caught before commit**: the export route (`app/api/admin/stats/export/route.ts`) always forwards `p_profile_id` generically to whichever RPC it calls. `admin_stats_accounts` was initially written without that parameter, which would have broken the screen's Export .xlsx button with an unrecognized-parameter error from PostgREST. Fixed by adding an accepted-but-ignored `p_profile_id uuid default null` to the function signature before migration 064 was committed (never shipped broken, no follow-up migration needed).
+
+New files: `app/components/AdminAccountsStatsForm.tsx` (modeled on `AdminContactsStatsForm.tsx`), `app/admin/stats/accounts/page.tsx`. Main Screen gained a new "Accounts" Housekeeping row, first in the Statistics section, above Contacts. Export route gained an `accounts` entry in `ENTITY_CONFIG`.
+
+**Owner action required**: run migration 064 in the Supabase SQL editor (`docs/Week6 - SQL history.txt`).
+
+`npx tsc --noEmit`/`npm run lint` clean. `docs/WYP_Admin_Statistics_Plan.md` updated with a new `### Accounts — Activity` subsection and a revised `## Screens` intro (four Activity screens, not three; cohort-filter sharing now scoped to four of the five screens).

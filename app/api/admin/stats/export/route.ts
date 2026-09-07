@@ -48,6 +48,17 @@ const ENTITY_CONFIG: Record<
   string,
   { rpc: string; sheetName: string; columns: ColumnDef[] }
 > = {
+  accounts: {
+    rpc: 'admin_stats_accounts',
+    sheetName: 'Accounts Activity',
+    columns: [
+      { header: 'Period Start', key: 'period_start', width: 14 },
+      { header: 'Period End', key: 'period_end', width: 14 },
+      { header: 'New Free', key: 'new_free', width: 12 },
+      { header: 'New Subscribed', key: 'new_subscribed', width: 14 },
+      { header: 'Total', key: 'total', width: 10 },
+    ],
+  },
   contacts: {
     rpc: 'admin_stats_contacts',
     sheetName: 'Contacts Activity',

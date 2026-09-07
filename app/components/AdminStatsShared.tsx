@@ -111,12 +111,19 @@ export function AdminStatsFilterBar(props: {
   onProfileId: (v: string) => void
   profiles: ProfileOption[]
   profilesLoading: boolean
+  // Restricts which <option>s render in the Accounts select. Defaults to
+  // the full five-value set every screen but Accounts uses; Accounts
+  // passes ['all', 'beta'] -- 'profile' is degenerate for a "new accounts
+  // per period" metric (always 1-or-0), and 'free'/'subscriber' would be
+  // redundant with that screen's own New Free / New Subscribed columns.
+  cohortOptions?: Cohort[]
 }) {
   const {
     fromMonth, toMonth, onFromMonth, onToMonth,
     granularity, onGranularity,
     cohort, onCohort,
     profileId, onProfileId, profiles, profilesLoading,
+    cohortOptions = ['all', 'beta', 'free', 'subscriber', 'profile'],
   } = props
 
   return (
@@ -171,13 +178,13 @@ export function AdminStatsFilterBar(props: {
           value={cohort}
           onChange={(e) => onCohort(e.target.value as Cohort)}
         >
-          <option value="all">All accounts</option>
-          <option value="beta">Beta allowlist</option>
-          <option value="free">Free accounts</option>
-          <option value="subscriber">Subscribed accounts</option>
-          <option value="profile">Specific account…</option>
+          {cohortOptions.includes('all') && <option value="all">All accounts</option>}
+          {cohortOptions.includes('beta') && <option value="beta">Beta allowlist</option>}
+          {cohortOptions.includes('free') && <option value="free">Free accounts</option>}
+          {cohortOptions.includes('subscriber') && <option value="subscriber">Subscribed accounts</option>}
+          {cohortOptions.includes('profile') && <option value="profile">Specific account…</option>}
         </select>
-        {cohort === 'profile' && (
+        {cohort === 'profile' && cohortOptions.includes('profile') && (
           <select
             className="statfilterinput"
             value={profileId}

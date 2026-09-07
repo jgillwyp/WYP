@@ -91,17 +91,22 @@ other three statuses could be.
 
 ## Screens
 
-Three per-entity **Activity** screens (Contacts, Requests, ToDos) plus one
-cross-entity **Sum and Averages** screen. Every screen shares: a From/To
-month range, a Weekly (Sun–Sat) vs. Monthly granularity toggle, and a cohort
-filter (All accounts / Beta allowlist / one specific profile) — one filter
+Four per-entity **Activity** screens (Contacts, Requests, ToDos, Accounts)
+plus one cross-entity **Sum and Averages** screen. Every screen shares a
+From/To month range and a Weekly (Sun–Sat) vs. Monthly granularity toggle.
+Four of the five screens (Contacts, Requests, ToDos, Sum and Averages) also
+share the same five-value cohort filter (All accounts / Beta allowlist /
+Free accounts / Subscribed accounts / one specific profile) — one filter
 dimension applied consistently, not a separate drill-down mode per screen.
 When the cohort narrows to one profile, any "average per user" figure
 collapses to a no-op (average of one) and is suppressed in favor of just the
 total. Everywhere else, "average per user" divides by **every account in
 the selected cohort**, including ones with zero activity in scope — not
 just accounts with at least one item — so a growing, mostly-inactive test
-base pulls the average down rather than being silently excluded.
+base pulls the average down rather than being silently excluded. The
+Accounts screen narrows this to just All accounts / Beta allowlist (see
+below) since the other three values are either redundant with or
+meaningless for a "new accounts per period" metric.
 
 ### Contacts — Activity
 
@@ -131,6 +136,26 @@ Same shape as Requests, minus the Sent/Received split (no recipient exists):
 **Created**, **Changed**, **Done**, **Deleted**, **Created − Deleted**
 (diverging net), **Archived**, **Unarchived**, **Archived − Unarchived**
 (diverging net), **Attachments**, **Dialog**.
+
+### Accounts — Activity
+
+Per period (week or month): **New Free**, **New Subscribed**, **Total**
+(New Free + New Subscribed for the period — rendered as a bar, not a line,
+since unlike Contacts' Total this is a per-period count, not a cumulative
+running stock). Cohort is narrowed to **All accounts / Beta allowlist**
+only — Free/Subscribed as a cohort filter would be redundant with the
+screen's own New Free/New Subscribed columns, and "one specific profile" is
+degenerate for a screen whose entire subject is the rate of new accounts
+being created. Reads directly from `auth.users.created_at` (joined to
+`profiles.tier` for the Free/Subscribed split) with **no dependency on
+`events`**, unlike the other three Activity screens — accounts have no
+delete path in this app, so there's no undercount risk from a live table
+scan. Same tier-history limitation as the Free/Subscribed cohort filter
+elsewhere (`profiles.tier` has no history, only a current value): an
+account counted as "New Subscribed" in the period it was created stays
+counted there even if it later changes tier — the metric reflects tier at
+the time of read, not tier at the time of signup, for periods other than
+the very latest.
 
 ### Sum and Averages
 

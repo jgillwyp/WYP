@@ -5683,3 +5683,130 @@ revoke all on function public.admin_stats_summary_roster(date, text, uuid) from 
 grant execute on function public.admin_stats_summary_roster(date, text, uuid) to authenticated;
 
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 064 (2026-09-07) -- admin_stats_accounts(): new "Accounts --
+-- Activity" screen, a 5th admin stats screen added same-session
+-- (Jim: "there should be another activity screen 'Accounts' to show
+-- by-period new free and new subscribed accounts and a total new
+-- accounts")
+--
+-- Unlike Contacts/Requests/ToDos, this reads straight off auth.users --
+-- no events dependency at all. Those three screens read from events
+-- specifically because Contacts/Requests/ToDos/Attachments are hard-
+-- deleted, so a live table scan silently undercounts anything removed
+-- since. Accounts have no delete path anywhere in this app, so there is
+-- no undercount risk to guard against -- a live scan of auth.users,
+-- bucketed by created_at, is fully accurate on its own.
+--
+-- Cohort is deliberately narrower than the other four admin RPCs: only
+-- 'all' and 'beta' -- 'profile' is degenerate here (a single account's
+-- own "new accounts per period" is always one row of 1, everywhere else
+-- 0) and 'free'/'subscriber' would be redundant, since New Free vs. New
+-- Subscribed is exactly the split this screen's own two columns already
+-- show. p_profile_id is kept as an accepted-but-ignored parameter purely
+-- so /api/admin/stats/export's generic ENTITY_CONFIG path (which always
+-- forwards p_profile_id to whichever RPC it's calling) doesn't need a
+-- special case for this one screen the way entity=summary already has.
+--
+-- Same known limitation as the Free/Subscribed cohort filter (migration
+-- 063): profiles.tier has no history, so "New Subscribed in July" means
+-- "accounts created in July that are subscribers TODAY," not tier-at-
+-- signup. Documented, not fixable without a tier-history table this app
+-- doesn't have.
+-- ============================================================================
+
+create or replace function public.admin_stats_accounts(
+  p_from date,
+  p_to date,
+  p_granularity text,
+  p_cohort text default 'all',
+  p_profile_id uuid default null
+)
+returns table (
+  period_start date,
+  period_end date,
+  new_free bigint,
+  new_subscribed bigint,
+  total bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select pr.is_admin into v_is_admin from public.profiles pr where pr.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_granularity not in ('week', 'month') then
+    raise exception 'Invalid granularity.';
+  end if;
+  if p_cohort not in ('all', 'beta') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id, u.created_at, coalesce(pr.tier, 'free') as tier
+    from auth.users u
+    left join public.profiles pr on pr.id = u.id
+    where p_cohort = 'all'
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(ba.email) from public.beta_allowlist ba))
+  ),
+  periods as (
+    select
+      gs::date as period_start,
+      (case when p_granularity = 'week'
+         then (gs + interval '6 days')
+         else (date_trunc('month', gs) + interval '1 month' - interval '1 day')
+       end)::date as period_end_natural
+    from generate_series(
+      case when p_granularity = 'week'
+        then date_trunc('week', p_from::timestamp + interval '1 day') - interval '1 day'
+        else date_trunc('month', p_from::timestamp)
+      end,
+      p_to::timestamp,
+      case when p_granularity = 'week' then interval '7 days' else interval '1 month' end
+    ) as gs
+  ),
+  bucketed as (
+    select p.period_start, least(p.period_end_natural, p_to) as period_end
+    from periods p
+  ),
+  new_free_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', c.created_at + interval '1 day') - interval '1 day') else date_trunc('month', c.created_at) end)::date as period_start,
+      count(*) as n
+    from cohort c
+    where c.tier = 'free'
+      and c.created_at::date between p_from and p_to
+    group by 1
+  ),
+  new_subscribed_t as (
+    select
+      (case when p_granularity = 'week' then (date_trunc('week', c.created_at + interval '1 day') - interval '1 day') else date_trunc('month', c.created_at) end)::date as period_start,
+      count(*) as n
+    from cohort c
+    where c.tier = 'subscriber'
+      and c.created_at::date between p_from and p_to
+    group by 1
+  )
+  select
+    b.period_start,
+    b.period_end,
+    coalesce(nf.n, 0),
+    coalesce(ns.n, 0),
+    coalesce(nf.n, 0) + coalesce(ns.n, 0)
+  from bucketed b
+  left join new_free_t nf on nf.period_start = b.period_start
+  left join new_subscribed_t ns on ns.period_start = b.period_start
+  order by b.period_start;
+end;
+$$;
+
+revoke all on function public.admin_stats_accounts(date, date, text, text, uuid) from public;
+grant execute on function public.admin_stats_accounts(date, date, text, text, uuid) to authenticated;
+-- ============================================================================

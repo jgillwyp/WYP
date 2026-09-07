@@ -2091,6 +2091,18 @@ export default function MainScreen() {
                     className="hkrow"
                     role="button"
                     tabIndex={0}
+                    onClick={() => router.push('/admin/stats/accounts')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stats/accounts') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Accounts</span>
+                      <span className="hknote"> — new free and subscribed accounts by period</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => router.push('/admin/stats/contacts')}
                     onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stats/contacts') }}
                   >
