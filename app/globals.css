@@ -1980,6 +1980,10 @@ body {
   border-top: 1px solid var(--rule);
 }
 
+.app-footer {
+  flex: 0 0 auto;
+}
+
 .subbanner-row .btn-secondary {
   font-size: 11px;
   padding: 6px 12px;
@@ -2013,6 +2017,11 @@ body {
 
 .subbanner-row .btn-secondary:active {
   background: var(--row-tint);
+}
+
+.subbanner-row .btn-secondary:disabled {
+  cursor: default;
+  opacity: .55;
 }
 
 .adslot {
@@ -3566,21 +3575,6 @@ body {
   padding: 13px 14px;
   border-radius: 12px;
   margin: 13px 0 0;
-}
-
-.about-footer-links {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 16px var(--pad) 8px;
-}
-
-.about-copyright {
-  text-align: center;
-  font-size: 11.5px;
-  color: var(--ink-soft);
-  padding: 2px var(--pad) 18px;
 }
 
 /* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — Request Response's

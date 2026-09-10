@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
 import { formatBytes } from '@/lib/attachments'
 import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPanels'
@@ -953,6 +954,7 @@ export default function AccountForm() {
             </p>
           )}
         </div>
+        <AppFooter tier={tier} subscriptionDisabled={subscriberOpen} />
       </div>
     </div>
   )

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 
 import WypHeader from '../WypHeader'
+import AppFooter from '../AppFooter'
 
 /**
  * HelpTopicShell (2026-09-03) — shared frame for the four Help-chip topic
@@ -53,6 +54,7 @@ export default function HelpTopicShell({
         <div className="scroll">
           <div className="help">{children}</div>
         </div>
+        <AppFooter />
       </div>
     </div>
   )

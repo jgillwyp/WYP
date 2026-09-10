@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import {
   PlanSummaryPanel,
   SubscriberComparisonTable,
@@ -68,16 +69,8 @@ export default function AboutForm() {
             <SubscriptionCheckoutButton className="about-cta btn" />
           </section>
 
-          <div className="about-footer-links">
-            <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
-              Subscription Features and Options
-            </button>
-            <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
-              Privacy
-            </button>
-          </div>
-          <div className="about-copyright">© 2026 Would You Please, Inc. All rights reserved.</div>
         </div>
+        <AppFooter />
       </div>
     </div>
   )

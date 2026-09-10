@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
 import {
@@ -237,14 +238,6 @@ function todayIso(): string {
 // due_date/done_date/created_at all arrive as 'YYYY-MM-DD' (dates) or a full
 // ISO timestamp (created_at) — slicing to the first 10 characters handles
 // both before splitting, matching the app-wide MM-DD-YY display convention.
-// Copyright-line year (2026-09-02, owner request) — computed live in
-// America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
-// never goes stale. Duplicated per file that renders the .subbanner-row
-// footer, matching this codebase's own small-helper convention.
-function losAngelesYear(): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
-}
-
 function formatMDY(value: string | null): string {
   if (!value) return ''
   const [y, m, d] = value.slice(0, 10).split('-')
@@ -2272,20 +2265,7 @@ export default function MainScreen() {
           <div className="scroll-pad" />
         </div>
 
-        <div className="subbanner-row">
-          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
-            Subscription Features and Options
-          </button>
-          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
-            Privacy
-          </button>
-        </div>
-        <p className="subcopyright">
-          {`© ${losAngelesYear()} Would You Please, Inc. All rights reserved.`}
-        </p>
-        {tier !== 'subscriber' && (
-          <div className="adslot" aria-hidden="true"><span className="adbox">AD — 320×50 RESERVED</span></div>
-        )}
+        <AppFooter tier={tier} />
       </div>
 
       {/* Print Reports (2026-08-13) — a dedicated, print-only layout per

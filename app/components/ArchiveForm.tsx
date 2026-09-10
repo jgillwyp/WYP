@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 
@@ -1300,6 +1301,7 @@ export default function ArchiveForm() {
         <div className="app">
           <WypHeader />
           <div className="subempty">Loading…</div>
+          <AppFooter subscriptionDisabled={false} />
         </div>
       </div>
     )
@@ -1311,6 +1313,7 @@ export default function ArchiveForm() {
         <div className="app">
           <WypHeader />
           <div className="subempty">{loadError}</div>
+          <AppFooter subscriptionDisabled={false} />
         </div>
       </div>
     )
@@ -1854,6 +1857,8 @@ export default function ArchiveForm() {
 
           {confirmMessage && <div className="archconfirm">{confirmMessage}</div>}
         </div>
+
+        <AppFooter subscriptionDisabled={false} />
 
         {deleteConfirmOpen && (
           <>

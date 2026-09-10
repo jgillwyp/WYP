@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
 
 /**
@@ -178,6 +179,7 @@ export default function ContactsList() {
             </div>
           )}
         </div>
+        <AppFooter />
       </div>
 
       {/* Print (2026-08-15) — from the owner's own "Contacts list.xlsx"
