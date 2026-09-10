@@ -2,7 +2,6 @@
 
 import HelpTopicShell from './HelpTopicShell'
 import HelpNext from './HelpNext'
-import HelpAccountLink from './HelpAccountLink'
 
 /** Responding to a Request (2026-09-03) — third Help-chip topic. See
  * GettingStartedHelp.tsx's own header comment for the sample-image
@@ -88,7 +87,6 @@ export default function RespondingRequestHelp() {
       </p>
 
       <HelpNext current="responding-to-a-request" />
-      <HelpAccountLink section="general" label="See Account Options to Personalize Would You Please" />
     </HelpTopicShell>
   )
 }
