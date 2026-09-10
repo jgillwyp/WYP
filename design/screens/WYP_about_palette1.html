@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palette 1 — Would You Please — About</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+/* ============================================================================
+   About — screen-specific styles only. Shell, header (§6.8), band (§6.7),
+   primary button (§6.1) and secondary button (§6.11) come from components.css.
+   ============================================================================ */
+
+/* Identity block — Version and Date. Both are build-time constants in the app
+   (see the note in the body); the values here are representative placeholders. */
+.idblock{padding:13px var(--pad) 12px;border-bottom:1px solid var(--rule);}
+.idrow{display:flex;align-items:baseline;gap:12px;}
+.idrow + .idrow{margin-top:6px;}
+.idlab{flex:0 0 60px;font-size:15px;font-weight:700;color:var(--brand-blue);}
+.idval{font-size:15px;font-weight:600;color:var(--ink);}
+
+/* Prose sections */
+.sect{padding:2px var(--pad);}
+.sec-h{font-size:16px;font-weight:700;color:var(--brand-blue);letter-spacing:-.005em;
+  margin:15px 0 6px;}
+.sec-p{font-size:13.5px;line-height:1.55;color:var(--ink);margin:0;}
+
+/* Promo card — comparison + cost + CTA grouped on a Focus-Tint wash (§6.14) */
+.promo{margin:14px var(--pad) 4px;background:var(--focus-tint);border:1px solid var(--rule);
+  border-radius:12px;padding:14px 14px 16px;}
+.promo .sec-h:first-child{margin-top:0;}
+
+/* Comparison table. In the React build this is the EXISTING shared component,
+   not a re-typed table — see the note below. Header cells are white per the
+   2026-08-27 decision; Free values muted (Ink Soft), Subscriber values Brand
+   Blue to carry the contrast within the palette (no new color introduced). */
+.cmpwrap{border:1px solid var(--rule);border-radius:9px;overflow:hidden;background:#fff;}
+table.cmp{width:100%;border-collapse:collapse;}
+.cmp th,.cmp td{padding:8px 10px;text-align:left;font-size:12.5px;line-height:1.25;
+  border-bottom:1px solid var(--rule);}
+.cmp thead th{background:#fff;font-weight:700;color:var(--ink);border-bottom:2px solid var(--rule);}
+.cmp tbody tr:nth-child(even){background:var(--row-tint);}
+.cmp tbody tr:last-child td{border-bottom:none;}
+.cmp td.feat{font-weight:600;color:var(--ink);}
+.cmp td.free{color:var(--ink-soft);font-weight:600;}
+.cmp td.sub{color:var(--brand-blue);font-weight:700;}
+
+/* Subscription cost */
+.cost{margin:6px 0 2px;}
+.costline{font-size:13px;line-height:1.55;color:var(--ink);}
+.costline b{font-weight:800;}
+
+/* Wide primary CTA (§6.1, full-width variant) + cancel note */
+.cta{display:block;width:100%;font-size:15px;padding:13px 14px;border-radius:12px;margin:13px 0 9px;}
+.cancel{font-size:12px;line-height:1.45;color:var(--ink-soft);margin:0;}
+
+/* Footer link buttons + copyright */
+.ftlinks{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding:16px var(--pad) 8px;}
+.copyr{text-align:center;font-size:11.5px;color:var(--ink-soft);padding:2px var(--pad) 18px;}
+</style></head>
+<body>
+<div class="frame-none"><div class="app">
+
+  <div class="hdr">
+    <span class="logo" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200"><g><path d="M 52,22 H 156 A 24 24 0 0 1 180,46 V 138 A 24 24 0 0 1 156,162 H 86 L 44,198 L 52,162 A 24 24 0 0 1 28,138 V 46 A 24 24 0 0 1 52,22 Z" fill="#FFFFFF" stroke="#2A5FC8" stroke-width="11" stroke-linejoin="round"/><rect x="52" y="46" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="70" width="104" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="94" width="76" height="11" rx="5.5" fill="#A7BCE8"/><rect x="52" y="118" width="58" height="11" rx="5.5" fill="#A7BCE8"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><polyline points="104,122 140,158 210,52" fill="none" stroke="#1A3A75" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+    </span>
+    <span class="brand">
+      <span class="word">Would You Please</span>
+      <span class="tag">Tracking Requests and ToDos</span>
+    </span>
+  </div>
+
+  <!-- Band title is "About" (not "About - Would You Please"): the wordmark sits
+       directly above it, matching how Storage Maintenance titles its band with a
+       short label. Close is the filled primary button (§6.1), matching the live
+       app's Close across every Housekeeping screen. It returns to the Housekeeping
+       Tasks list on the main screen (where About is launched from) — a single
+       fixed destination. (Close is NOT a universal "back to prior screen": the
+       Help family returns to the Housekeeping Help list so a user walking several
+       Help pages escapes in one Close.) -->
+  <div class="band">
+    <span class="glabel">About</span>
+    <span class="bandcluster">
+      <button class="btn" type="button">Close</button>
+    </span>
+  </div>
+
+  <div class="scroll">
+
+    <!-- Version and Date are BUILD-TIME CONSTANTS in the app, not hand-edited.
+         "1.03.2" and "September 9, 2026" are placeholders. In the Next.js build
+         both are injected at compile so this screen always shows the running
+         build. MAJOR.MINOR ("1.03") is owner-set; the trailing build number is
+         derived from the git commit count, and the date is the build date. -->
+    <div class="idblock">
+      <div class="idrow"><span class="idlab">Version</span><span class="idval">1.03.2</span></div>
+      <div class="idrow"><span class="idlab">Date</span><span class="idval">September 9, 2026</span></div>
+    </div>
+
+    <div class="sect">
+      <h2 class="sec-h">Private Testing</h2>
+      <p class="sec-p">Would You Please is currently in Private Testing, ahead of the launch of
+        the live application. During Private Testing there are no subscription costs &#8212; every
+        available feature is open to you. When the live application becomes available, Private
+        Testers will be given 30 days&#8217; notice to decide whether to continue as a Free account
+        or a Subscribed account.</p>
+    </div>
+
+    <!-- COMPARISON + PRICING: in the React conversion, render the EXISTING shared
+         components (SubscriberComparisonTable + PlanSummaryPanel,
+         app/components/SubscriptionPanels.tsx) here. Do NOT re-type these rows or
+         prices into an About-only copy — reusing the shared components keeps this
+         screen in lockstep with Account Options so the two can never drift. The
+         values below match the current app and stand in for the rendered
+         components in this static figure. -->
+    <div class="promo">
+      <h2 class="sec-h">Free vs. Subscriber Comparison</h2>
+      <div class="cmpwrap">
+        <table class="cmp">
+          <thead>
+            <tr><th>Feature</th><th>Free</th><th>Subscribed</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="feat">Voice Dictation</td><td class="free">Not available</td><td class="sub">Available</td></tr>
+            <tr><td class="feat">File Attachments</td><td class="free">100 MB</td><td class="sub">5 GB</td></tr>
+            <tr><td class="feat">Automatic Repeating</td><td class="free">up to 5</td><td class="sub">Unlimited</td></tr>
+            <tr><td class="feat">Request Texting</td><td class="free">Not available</td><td class="sub">Available</td></tr>
+            <tr><td class="feat">Ads</td><td class="free">Shown</td><td class="sub">Not shown</td></tr>
+            <tr><td class="feat">Support</td><td class="free">Help files</td><td class="sub">Email</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 class="sec-h">Subscription Cost</h2>
+      <div class="cost">
+        <div class="costline">1st year &#8212; 25% discount, only <b>$17.95</b></div>
+        <div class="costline">Per year &#8212; <b>$23.95</b>, renews each year until canceled</div>
+        <div class="costline">Monthly &#8212; <b>$2.95/mo</b>, renews each month until canceled</div>
+      </div>
+
+      <button class="btn cta" type="button">Sign up for a 1st year discount</button>
+      <p class="cancel">Cancel anytime &#8212; your Subscriber features stay active through the end
+        of the period you&#8217;ve already paid for.</p>
+    </div>
+
+    <div class="ftlinks">
+      <button class="btn-secondary" type="button">Subscription Features and Options</button>
+      <button class="btn-secondary" type="button">Privacy</button>
+    </div>
+    <div class="copyr">&#169; 2026 Would You Please, Inc. All rights reserved.</div>
+
+  </div>
+
+</div></div>
+</body></html>

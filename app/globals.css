@@ -3495,6 +3495,94 @@ body {
   background: var(--row-tint);
 }
 
+/* About screen identity, prose, and footer treatment, ported from the
+   approved About mockup while reusing the shared promo/table components. */
+.about-idblock {
+  padding: 13px var(--pad) 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.about-idrow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.about-idrow + .about-idrow {
+  margin-top: 6px;
+}
+
+.about-idlab {
+  flex: 0 0 60px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--brand-blue);
+}
+
+.about-idval {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.about-section {
+  padding: 2px var(--pad);
+}
+
+.about-section-heading {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-blue);
+  margin: 15px 0 6px;
+}
+
+.about-section-copy {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  margin: 0;
+}
+
+.about-promo {
+  margin: 14px var(--pad) 4px;
+  background: var(--focus-tint);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 14px 14px 16px;
+}
+
+.about-promo .about-section-heading {
+  margin-top: 0;
+}
+
+.about-promo .comparetable {
+  margin-top: 8px;
+}
+
+.about-cta {
+  display: block;
+  width: 100%;
+  font-size: 15px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  margin: 13px 0 0;
+}
+
+.about-footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 16px var(--pad) 8px;
+}
+
+.about-copyright {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  padding: 2px var(--pad) 18px;
+}
+
 /* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — Request Response's
    one-click "mark as Done" shortcut, sitting between the grabber divider
    and the editable Done Date/Done Time row. Strip band + inline .btn,

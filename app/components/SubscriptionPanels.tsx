@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 
 /**
  * Shared Subscriber content (2026-08-26) — one source for the "Subscriber
@@ -139,6 +139,34 @@ export function SubscriberComparisonTable() {
   )
 }
 
+export function SubscriptionCheckoutButton({
+  className = 'btn',
+  style,
+}: {
+  className?: string
+  style?: CSSProperties
+}) {
+  const [clicked, setClicked] = useState(false)
+
+  return (
+    <>
+      <button
+        type="button"
+        className={className}
+        style={style}
+        onClick={() => setClicked(true)}
+      >
+        Sign up for a 1st year discount
+      </button>
+      {clicked && (
+        <p className="promo-p" style={{ margin: '8px 0 0' }}>
+          Subscription checkout isn&rsquo;t available yet — check back soon.
+        </p>
+      )}
+    </>
+  )
+}
+
 // heading is now optional (2026-08-27) — BecomeSubscriberPitch's new
 // Subscriber Features/Comparison toggle buttons serve as the visible
 // heading for that context, so passing no heading there avoids a
@@ -175,7 +203,6 @@ function SubscriberFeatureList({ heading }: { heading?: string }) {
 // so the sign-up button and cancel-anytime note don't jump position when
 // the person switches views.
 export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
-  const [clicked, setClicked] = useState(false)
   const [view, setView] = useState<'features' | 'comparison'>('features')
 
   return (
@@ -226,20 +253,7 @@ export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
         Monthly — <strong>$2.95/mo</strong>, renews each month until canceled
       </p>
 
-      <button
-        type="button"
-        className="btn"
-        style={{ width: '100%', marginTop: 12 }}
-        onClick={() => setClicked(true)}
-      >
-        Sign up for a 1st year discount
-      </button>
-
-      {clicked && (
-        <p className="promo-p" style={{ margin: '8px 0 0' }}>
-          Subscription checkout isn&rsquo;t available yet — check back soon.
-        </p>
-      )}
+      <SubscriptionCheckoutButton style={{ width: '100%', marginTop: 12 }} />
 
       <p className="promo-p" style={{ margin: '8px 0 0' }}>
         Cancel anytime — your Subscriber features stay active through the end of the
@@ -366,11 +380,11 @@ function AttachmentStoragePanel({
   )
 }
 
-function PlanSummaryPanel() {
+export function PlanSummaryPanel({ heading = 'Plan Summary' }: { heading?: string }) {
   return (
     <>
       <div className="promo-sub" style={{ marginTop: 12 }}>
-        Plan Summary
+        {heading}
       </div>
       <div className="planrow">
         <span className="plan-name">

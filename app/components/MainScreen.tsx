@@ -1897,12 +1897,12 @@ export default function MainScreen() {
                     className="hkrow"
                     role="button"
                     tabIndex={0}
-                    onClick={() => router.push('/contacts')}
-                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/contacts') }}
+                    onClick={() => router.push('/about')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/about') }}
                   >
                     <span className="hktext">
-                      <span className="hktitle">Contacts</span>
-                      <span className="hknote"> — add, view, edit, or delete</span>
+                      <span className="hktitle">About</span>
+                      <span className="hknote"> — application information and subscription details</span>
                     </span>
                   </div>
                   <div
@@ -1915,6 +1915,30 @@ export default function MainScreen() {
                     <span className="hktext">
                       <span className="hktitle">Account Options</span>
                       <span className="hknote"> — personalize Would You Please</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/archive')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/archive') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Archive</span>
+                      <span className="hknote"> — view, edit, or delete archived items</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/contacts')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/contacts') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Contacts</span>
+                      <span className="hknote"> — add, view, edit, or delete</span>
                     </span>
                   </div>
                   {/* Storage Management (2026-09-03) — converts
@@ -1933,18 +1957,6 @@ export default function MainScreen() {
                     <span className="hktext">
                       <span className="hktitle">Storage Management</span>
                       <span className="hknote"> — view, download, or remove attachments</span>
-                    </span>
-                  </div>
-                  <div
-                    className="hkrow"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => router.push('/archive')}
-                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/archive') }}
-                  >
-                    <span className="hktext">
-                      <span className="hktitle">Archive</span>
-                      <span className="hknote"> — view, edit, or delete archived items</span>
                     </span>
                   </div>
                   {/* Owner-reported, 2026-08-18: accepted the browser's own
