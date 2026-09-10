@@ -1432,19 +1432,6 @@ export default function ArchiveForm() {
             </div>
           </div>
 
-          {/* Fixed instructional wording (2026-09-03) — replaces the old
-              action-dependent text above with one sentence covering all
-              three Actions at once, per Jim's own exact wording. The old
-              Delete-specific "permanent, cannot be recovered" sentence is
-              dropped here — the Delete confirmation modal already states
-              that warning on its own. */}
-          <p className="archnote">
-            <b>Select records to Archive, UnArchive, or Delete.</b>{' '}
-            Any combination of some or all of the search options below can be used to see a
-            list of qualifying records. Archive selects active records marked as Done.
-            UnArchive and Delete select Archived records.
-          </p>
-
           {archiveError && (
             <p className="ferror" role="alert">
               {archiveError}
@@ -1570,7 +1557,7 @@ export default function ArchiveForm() {
                       <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
                     </svg>
                   </span>
-                  Starting Done Date
+                  From
                 </label>
               </span>
               <span className="ffloat picker native">
@@ -1601,7 +1588,7 @@ export default function ArchiveForm() {
                       <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
                     </svg>
                   </span>
-                  Ending Done Date
+                  To
                 </label>
               </span>
               </div>

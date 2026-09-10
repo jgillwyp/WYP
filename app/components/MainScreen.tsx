@@ -2233,7 +2233,22 @@ export default function MainScreen() {
             ) : (
               <div className="daterange-fields">
                 <label className="drfield">
-                  <span className="drlabel">From</span>
+                  <span className="drlabel">
+                    <span className="lglyph" aria-hidden="true">
+                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                        <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                        <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                        <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                        <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                        <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                        <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                        <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                        <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                      </svg>
+                    </span>
+                    From
+                  </span>
                   <input
                     type="date"
                     value={fromDate}
@@ -2242,7 +2257,22 @@ export default function MainScreen() {
                   />
                 </label>
                 <label className="drfield">
-                  <span className="drlabel">To</span>
+                  <span className="drlabel">
+                    <span className="lglyph" aria-hidden="true">
+                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                        <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                        <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                        <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                        <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                        <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                        <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                        <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                        <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                      </svg>
+                    </span>
+                    To
+                  </span>
                   <input
                     type="date"
                     value={toDate}
