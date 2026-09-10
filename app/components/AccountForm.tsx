@@ -546,7 +546,7 @@ export default function AccountForm() {
                   <span className="checktext">
                     Show Private Category
                     <span className="checknote">
-                      Adds an optional Category field to Requests and ToDos, for your own
+                      Adds an optional Category field to Requests Sent and ToDos, for your own
                       private labeling (e.g. &ldquo;Personal Fin,&rdquo; &ldquo;Future Dev&rdquo;). Turn it
                       on any time. Off by default.
                     </span>
@@ -577,7 +577,7 @@ export default function AccountForm() {
 
           {/* ---------------------------------------------------- Request */}
           <div className="subcard">
-            {sectionHead('Request', requestOpen, setRequestOpenAndStore)}
+            {sectionHead('Create Request', requestOpen, setRequestOpenAndStore)}
             {requestOpen && (
               <div className="subbody">
                 <label className="checkrow">
