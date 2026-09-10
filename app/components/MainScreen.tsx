@@ -1895,7 +1895,7 @@ export default function MainScreen() {
                   >
                     <span className="hktext">
                       <span className="hktitle">About</span>
-                      <span className="hknote"> — application information and subscription details</span>
+                      <span className="hknote"> — Would You Please application information</span>
                     </span>
                   </div>
                   <div

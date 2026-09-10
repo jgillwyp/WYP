@@ -3552,29 +3552,18 @@ body {
   margin: 0;
 }
 
-.about-promo {
-  margin: 14px var(--pad) 4px;
-  background: var(--focus-tint);
-  border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: 14px 14px 16px;
+.about-feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
 }
 
-.about-promo .about-section-heading {
-  margin-top: 0;
-}
-
-.about-promo .comparetable {
-  margin-top: 8px;
-}
-
-.about-cta {
-  display: block;
-  width: 100%;
-  font-size: 15px;
-  padding: 13px 14px;
-  border-radius: 12px;
-  margin: 13px 0 0;
+.about-feedback-row a:not(.btn) {
+  color: var(--brand-blue);
 }
 
 /* Quick-Done band (§6.31, PROPOSED, 2026-08-10) — Request Response's

@@ -4,11 +4,6 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
-import {
-  PlanSummaryPanel,
-  SubscriberComparisonTable,
-  SubscriptionCheckoutButton,
-} from './SubscriptionPanels'
 import { APP_VERSION, BUILD_DATE } from '@/version'
 
 function formatBuildDate(value: string): string {
@@ -62,15 +57,28 @@ export default function AboutForm() {
             </p>
           </section>
 
-          <section className="about-promo">
-            <h2 className="about-section-heading">Free vs. Subscriber Comparison</h2>
-            <SubscriberComparisonTable />
-            <PlanSummaryPanel heading="Subscription Cost" />
-            <SubscriptionCheckoutButton className="about-cta btn" />
+          <section className="about-section">
+            <h2 className="about-section-heading">Suggestions &amp; Feedback</h2>
+            <p className="about-section-copy">
+              You&apos;re a Private Tester — if you have a suggestion, question, or hit a problem,
+              we&apos;d like to hear it.
+            </p>
+            <div className="about-feedback-row">
+              <a
+                className="btn"
+                href={`mailto:feedback@wouldyouplease.com?subject=${encodeURIComponent(`WYP Feedback — v${APP_VERSION}`)}`}
+              >
+                Send Feedback
+              </a>
+              <span>
+                or email{' '}
+                <a href="mailto:feedback@wouldyouplease.com">feedback@wouldyouplease.com</a>
+              </span>
+            </div>
           </section>
 
         </div>
-        <AppFooter />
+        <AppFooter subscriptionDisabled={false} />
       </div>
     </div>
   )
