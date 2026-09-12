@@ -18,7 +18,7 @@
  * convention.
  */
 
-import { buildReminderScheduleSentence, type ReminderSchedule } from './email'
+import { buildReminderScheduleSentence, SIGNUP_CTA_TEXT, type ReminderSchedule } from './email'
 
 export const ICS_DEFAULT_DUE_TIME = '09:00'
 export const ICS_DURATION_MINUTES = 30
@@ -155,7 +155,7 @@ export function buildIcsDescription(
 
   parts.push(
     'You can also see any attachments and add questions or comments to this Request with the above link.',
-    `New to Would You Please? click to set up a free account: ${siteUrl}`
+    `New to Would You Please? ${SIGNUP_CTA_TEXT.replace(':', '')}: ${siteUrl}`
   )
 
   return parts.join(' ')

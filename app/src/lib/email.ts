@@ -266,12 +266,27 @@ function emailDescriptionBox(html: string): string {
 
 // Closing "New to Would You Please?" signup CTA — a standalone question in
 // Blue Pressed, larger than body text, followed by its own button (not an
-// inline text link) below it.
+// inline text link) below it. Button text (2026-09-12, Jim's own wording,
+// matching the capitalization style of the "Click to respond..." button
+// above it — lowercase verbs, capitalized Request/ToDo entity nouns) states
+// the concrete value prop directly ("send Requests & manage your ToDos")
+// rather than the previous generic "Learn more or set up a free account,"
+// for a quicker read of what's actually being offered.
+export const SIGNUP_CTA_TEXT = 'Get a Free Account to: send Requests & manage your ToDos'
+
 function emailSignupFooter(siteUrl: string): string {
   return [
     `<p style="margin:18px 0 8px; font-size:17px; font-weight:700; color:${EMAIL_BLUE_PRESSED};">New to Would You Please?</p>`,
-    `<p style="margin:0;">${emailButton(siteUrl, 'Learn more or set up a free account')}</p>`,
+    `<p style="margin:0;">${emailButton(siteUrl, SIGNUP_CTA_TEXT)}</p>`,
   ].join('\n')
+}
+
+// Plain-text mirror of emailSignupFooter above — same two call sites
+// (buildRequestEmailText, buildOverdueRecipientEmailText), same wording,
+// minus SIGNUP_CTA_TEXT's own internal colon (a button's line break, not a
+// sentence), so the trailing colon before the URL reads as the only one.
+function textSignupFooterLines(siteUrl: string): string[] {
+  return [`New to Would You Please? ${SIGNUP_CTA_TEXT.replace(':', '')}:`, siteUrl]
 }
 
 // ----------------------------------------------------------------------------
@@ -601,8 +616,7 @@ export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
     '',
     'You can also see any attachments and add questions or comments to this Request with the above link.',
     '',
-    'New to Would You Please? click to set up a free account:',
-    fields.siteUrl
+    ...textSignupFooterLines(fields.siteUrl)
   )
 
   return lines.join('\n')
@@ -694,8 +708,7 @@ export function buildOverdueRecipientEmailText(fields: OverdueRecipientEmailFiel
     '',
     fields.description,
     '',
-    'New to Would You Please? click to set up a free account:',
-    fields.siteUrl,
+    ...textSignupFooterLines(fields.siteUrl),
   ].join('\n')
 }
 
