@@ -12,7 +12,6 @@ import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import {
   AdminStatsFilterBar,
-  PeriodChartStack,
   PrintIconButton,
   StatTable,
   defaultFromMonth,
@@ -20,6 +19,7 @@ import {
   formatPeriodLabel,
   monthToFromDate,
   monthToToDate,
+  reverseForDisplay,
   useAdminProfiles,
   type ChartRow,
   type Cohort,
@@ -41,7 +41,7 @@ export default function AdminContactsStatsForm() {
 
   const [fromMonth, setFromMonth] = useState(defaultFromMonth())
   const [toMonth, setToMonth] = useState(defaultToMonth())
-  const [granularity, setGranularity] = useState<Granularity>('week')
+  const [granularity, setGranularity] = useState<Granularity>('month')
   const [cohort, setCohort] = useState<Cohort>('all')
   const [profileId, setProfileId] = useState('')
   const { profiles, loading: profilesLoading } = useAdminProfiles()
@@ -81,22 +81,18 @@ export default function AdminContactsStatsForm() {
     }
   }, [fromMonth, toMonth, granularity, cohort, profileId, needsProfile])
 
+  // Chronologically ascending — kept this way for rangeLabel's own "earliest
+  // – latest" phrasing below; reverseForDisplay() produces the newest-to-
+  // oldest copy StatTable actually renders (2026-09-12).
   const periods = rows.map((r) => r.period_start)
   const chartRows: ChartRow[] = [
     { key: 'added', label: 'Added', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.added) },
     { key: 'deleted', label: 'Deleted', color: 'var(--alert-red)', kind: 'bar', values: rows.map((r) => r.deleted) },
-    {
-      key: 'net',
-      label: 'Added − Deleted',
-      plusColor: 'var(--brand-blue)',
-      minusColor: 'var(--alert-red)',
-      kind: 'diverging',
-      values: rows.map((r) => r.added - r.deleted),
-    },
     { key: 'phone', label: 'With Phone', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.with_phone) },
     { key: 'notes', label: 'With Notes', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.with_notes) },
     { key: 'total', label: 'Total', color: 'var(--brand-blue)', kind: 'line', values: rows.map((r) => r.total) },
   ]
+  const display = reverseForDisplay(periods, chartRows)
 
   function handlePrint() {
     window.print()
@@ -179,27 +175,20 @@ export default function AdminContactsStatsForm() {
             <div className="subempty">No data in this range.</div>
           )}
           {!needsProfile && !showLoading && !loadError && rows.length > 0 && (
-            <>
-              <PeriodChartStack periods={periods} granularity={granularity} rows={chartRows} />
-              <StatTable periods={periods} granularity={granularity} rows={chartRows} />
-            </>
+            <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
           )}
         </div>
       </div>
 
       {/* Print rendering (2026-09-07) — same .no-print/.print-report split
           every other detail screen already uses (RequestDetailForm.tsx,
-          TodoDetailForm.tsx, MainScreen.tsx), not a "print what's already
-          on screen" shortcut: the on-screen chart lives inside an
-          overflow-x:auto scroller, which a browser's print engine only
-          rasterizes within its currently-scrolled viewport, silently
-          cutting off every period scrolled out of view. The table alone
-          — the same rows the chart renders, per the plan's own "not a
-          separate build" note — is what prints. */}
+          TodoDetailForm.tsx, MainScreen.tsx). StatTable is now the only
+          rendering of these rows anywhere (the on-screen chart was removed
+          2026-09-12), so this was already unaffected by that change. */}
       {rows.length > 0 && (
         <div className="print-report">
           <div className="ptitle">Contacts — Activity ({rangeLabel})</div>
-          <StatTable periods={periods} granularity={granularity} rows={chartRows} />
+          <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
         </div>
       )}
     </div>

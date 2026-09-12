@@ -4346,37 +4346,9 @@ body {
   color: var(--ink);
 }
 
-.statchartwrap {
-  display: flex;
-  align-items: flex-start;
-  margin: 14px 16px;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-}
-
-.statlabels {
-  flex: 0 0 auto;
-  border-right: 1px solid var(--rule);
-  background: var(--row-tint, #F6F7F9);
-}
-
-.statlabelcell {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink);
-  box-sizing: border-box;
-  border-bottom: 1px solid var(--rule);
-}
-
-.statchartscroll {
-  flex: 1 1 auto;
-  overflow-x: auto;
-}
+/* .statchartwrap/.statlabels/.statlabelcell/.statchartscroll (the
+   PeriodChartStack small-multiples chart) removed 2026-09-12 along with the
+   component itself — see AdminStatsShared.tsx's own comment. */
 
 .stattablewrap {
   margin: 14px 16px 20px;

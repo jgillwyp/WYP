@@ -206,14 +206,17 @@ export function AdminStatsFilterBar(props: {
 
 // ---------------------------------------------------------------------------
 // Chart primitives
+//
+// PeriodChartStack (the small-multiples bar/line SVG stack) and DivergingRow
+// (the +/-/net bars) were removed 2026-09-12 — Jim, after reviewing the four
+// live screens: "the bar charts and line graphs do not help understand the
+// values" and the +/-/net columns (Contacts' Added-Deleted; Requests' and
+// ToDos' Created-Deleted/Archived-UnArchived) should go too. StatTable below
+// is now the only rendering of a screen's rows, on-screen and in print alike
+// — it already was the print source of truth (the plan's own "not a separate
+// build" note), so print is unaffected. See docs/WYP_Admin_Statistics_Plan.md
+// for the original chart-treatment design this superseded.
 // ---------------------------------------------------------------------------
-
-const BAR_W = 34
-const BAR_GAP = 10
-const COL_W = BAR_W + BAR_GAP
-const ROW_H = 64
-const AXIS_H = 28
-const LABEL_W = 128
 
 export type BarRow = {
   key: string
@@ -222,16 +225,6 @@ export type BarRow = {
   kind: 'bar'
   values: (number | null)[]
   unit?: string
-}
-
-export type DivergingRow = {
-  key: string
-  label: string
-  plusColor: string
-  minusColor: string
-  kind: 'diverging'
-  // signed net values: positive rendered up, negative rendered down
-  values: (number | null)[]
 }
 
 export type LineRow = {
@@ -243,7 +236,7 @@ export type LineRow = {
   unit?: string
 }
 
-export type ChartRow = BarRow | DivergingRow | LineRow
+export type ChartRow = BarRow | LineRow
 
 function formatCellValue(v: number | null, unit?: string): string {
   if (v === null) return '—'
@@ -251,130 +244,20 @@ function formatCellValue(v: number | null, unit?: string): string {
   return unit ? `${n} ${unit}` : n
 }
 
-/**
- * One shared scrolling SVG for every row on a screen — see the file header
- * comment for why this, rather than one <svg> per row, is what keeps every
- * metric on the same x-axis and scrolling together.
- */
-export function PeriodChartStack({
-  periods,
-  granularity,
-  rows,
-}: {
-  periods: string[]
-  granularity: Granularity
+// Newest-to-oldest display order (2026-09-12) — the admin_stats_* RPCs
+// return periods chronologically ascending (oldest first), which rangeLabel
+// below still relies on for a natural "earliest – latest" range string.
+// Every screen calls this once to get a separate, reversed copy for what
+// StatTable actually renders (on-screen and in print alike), rather than
+// reversing `periods`/`rows` in place and complicating rangeLabel.
+export function reverseForDisplay(
+  periods: string[],
   rows: ChartRow[]
-}) {
-  const width = periods.length * COL_W + BAR_GAP
-  const height = rows.length * ROW_H + AXIS_H
-
-  return (
-    <div className="statchartwrap">
-      <div className="statlabels" style={{ width: LABEL_W }}>
-        <div className="statlabelcell" style={{ height: AXIS_H }} />
-        {rows.map((r) => (
-          <div key={r.key} className="statlabelcell" style={{ height: ROW_H }}>
-            {r.label}
-          </div>
-        ))}
-      </div>
-      <div className="statchartscroll">
-        <svg width={width} height={height} role="img" aria-label="Period statistics chart">
-          {/* Period axis labels along the top, one per column */}
-          {periods.map((p, i) => (
-            <text
-              key={p}
-              x={i * COL_W + BAR_GAP + BAR_W / 2}
-              y={AXIS_H - 10}
-              textAnchor="middle"
-              fontSize="10"
-              fill="var(--ink-soft, #5A6675)"
-            >
-              {formatPeriodLabel(p, granularity)}
-            </text>
-          ))}
-
-          {rows.map((row, ri) => {
-            const rowTop = AXIS_H + ri * ROW_H
-            const rowBottom = rowTop + ROW_H
-
-            if (row.kind === 'bar') {
-              const max = Math.max(1, ...row.values.map((v) => v ?? 0))
-              const trackH = ROW_H - 16
-              return (
-                <g key={row.key}>
-                  <line x1={0} y1={rowBottom} x2={width} y2={rowBottom} stroke="var(--rule, #E2E6EC)" strokeWidth={1} />
-                  {row.values.map((v, i) => {
-                    const h = v === null ? 0 : Math.round((v / max) * trackH)
-                    const x = i * COL_W + BAR_GAP
-                    const y = rowBottom - 8 - h
-                    return (
-                      <rect key={i} x={x} y={y} width={BAR_W} height={Math.max(h, v ? 2 : 0)} rx={2} fill={row.color}>
-                        <title>
-                          {formatPeriodLabel(periods[i], granularity)}: {formatCellValue(v, row.unit)}
-                        </title>
-                      </rect>
-                    )
-                  })}
-                </g>
-              )
-            }
-
-            if (row.kind === 'diverging') {
-              const maxAbs = Math.max(1, ...row.values.map((v) => Math.abs(v ?? 0)))
-              const half = (ROW_H - 16) / 2
-              const mid = rowTop + ROW_H / 2
-              return (
-                <g key={row.key}>
-                  <line x1={0} y1={rowBottom} x2={width} y2={rowBottom} stroke="var(--rule, #E2E6EC)" strokeWidth={1} />
-                  <line x1={0} y1={mid} x2={width} y2={mid} stroke="var(--rule, #E2E6EC)" strokeWidth={1} strokeDasharray="2,3" />
-                  {row.values.map((v, i) => {
-                    const val = v ?? 0
-                    const h = Math.round((Math.abs(val) / maxAbs) * half)
-                    const x = i * COL_W + BAR_GAP
-                    const y = val >= 0 ? mid - h : mid
-                    const fill = val >= 0 ? row.plusColor : row.minusColor
-                    return (
-                      <rect key={i} x={x} y={y} width={BAR_W} height={Math.max(h, v ? 2 : 0)} rx={2} fill={fill}>
-                        <title>
-                          {formatPeriodLabel(periods[i], granularity)}: {v === null ? '—' : (val >= 0 ? '+' : '') + val}
-                        </title>
-                      </rect>
-                    )
-                  })}
-                </g>
-              )
-            }
-
-            // line
-            const max = Math.max(1, ...row.values.map((v) => v ?? 0))
-            const trackH = ROW_H - 16
-            const points = row.values.map((v, i) => {
-              const x = i * COL_W + BAR_GAP + BAR_W / 2
-              const y = v === null ? null : rowBottom - 8 - Math.round((v / max) * trackH)
-              return { x, y, v }
-            })
-            const linePoints = points.filter((p) => p.y !== null).map((p) => `${p.x},${p.y}`).join(' ')
-            return (
-              <g key={row.key}>
-                <line x1={0} y1={rowBottom} x2={width} y2={rowBottom} stroke="var(--rule, #E2E6EC)" strokeWidth={1} />
-                <polyline points={linePoints} fill="none" stroke={row.color} strokeWidth={2} />
-                {points.map((p, i) =>
-                  p.y === null ? null : (
-                    <circle key={i} cx={p.x} cy={p.y} r={3.5} fill={row.color}>
-                      <title>
-                        {formatPeriodLabel(periods[i], granularity)}: {formatCellValue(p.v, row.unit)}
-                      </title>
-                    </circle>
-                  )
-                )}
-              </g>
-            )
-          })}
-        </svg>
-      </div>
-    </div>
-  )
+): { periods: string[]; rows: ChartRow[] } {
+  return {
+    periods: [...periods].reverse(),
+    rows: rows.map((r) => ({ ...r, values: [...r.values].reverse() })),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -408,9 +291,7 @@ export function StatTable({
             <tr key={p}>
               <td>{formatPeriodLabel(p, granularity)}</td>
               {rows.map((r) => (
-                <td key={r.key}>
-                  {formatCellValue(r.values[i], r.kind !== 'diverging' ? r.unit : undefined)}
-                </td>
+                <td key={r.key}>{formatCellValue(r.values[i], r.unit)}</td>
               ))}
             </tr>
           ))}

@@ -10,7 +10,6 @@ import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import {
   AdminStatsFilterBar,
-  PeriodChartStack,
   PrintIconButton,
   StatTable,
   defaultFromMonth,
@@ -18,6 +17,7 @@ import {
   formatPeriodLabel,
   monthToFromDate,
   monthToToDate,
+  reverseForDisplay,
   useAdminProfiles,
   type ChartRow,
   type Cohort,
@@ -42,7 +42,7 @@ export default function AdminTodosStatsForm() {
 
   const [fromMonth, setFromMonth] = useState(defaultFromMonth())
   const [toMonth, setToMonth] = useState(defaultToMonth())
-  const [granularity, setGranularity] = useState<Granularity>('week')
+  const [granularity, setGranularity] = useState<Granularity>('month')
   const [cohort, setCohort] = useState<Cohort>('all')
   const [profileId, setProfileId] = useState('')
   const { profiles, loading: profilesLoading } = useAdminProfiles()
@@ -82,6 +82,9 @@ export default function AdminTodosStatsForm() {
     }
   }, [fromMonth, toMonth, granularity, cohort, profileId, needsProfile])
 
+  // Chronologically ascending — kept this way for rangeLabel's own "earliest
+  // – latest" phrasing below; reverseForDisplay() produces the newest-to-
+  // oldest copy StatTable actually renders (2026-09-12).
   const periods = rows.map((r) => r.period_start)
   const showLoading = loading && !needsProfile
 
@@ -90,27 +93,12 @@ export default function AdminTodosStatsForm() {
     { key: 'changed', label: 'Changed', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.changed) },
     { key: 'done', label: 'Done', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.done) },
     { key: 'deleted', label: 'Deleted', color: 'var(--alert-red)', kind: 'bar', values: rows.map((r) => r.deleted) },
-    {
-      key: 'created_net',
-      label: 'Created − Deleted',
-      plusColor: 'var(--brand-blue)',
-      minusColor: 'var(--alert-red)',
-      kind: 'diverging',
-      values: rows.map((r) => r.created - r.deleted),
-    },
     { key: 'archived', label: 'Archived', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.archived) },
     { key: 'unarchived', label: 'Unarchived', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.unarchived) },
-    {
-      key: 'archived_net',
-      label: 'Archived − Unarchived',
-      plusColor: 'var(--brand-blue)',
-      minusColor: 'var(--alert-red)',
-      kind: 'diverging',
-      values: rows.map((r) => r.archived - r.unarchived),
-    },
     { key: 'attachments', label: 'Attachments', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.attachments) },
     { key: 'dialog', label: 'Dialog', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.dialog) },
   ]
+  const display = reverseForDisplay(periods, chartRows)
 
   function handlePrint() {
     window.print()
@@ -191,10 +179,7 @@ export default function AdminTodosStatsForm() {
             <div className="subempty">No data in this range.</div>
           )}
           {!needsProfile && !showLoading && !loadError && rows.length > 0 && (
-            <>
-              <PeriodChartStack periods={periods} granularity={granularity} rows={chartRows} />
-              <StatTable periods={periods} granularity={granularity} rows={chartRows} />
-            </>
+            <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
           )}
         </div>
       </div>
@@ -202,7 +187,7 @@ export default function AdminTodosStatsForm() {
       {rows.length > 0 && (
         <div className="print-report">
           <div className="ptitle">ToDos — Activity ({rangeLabel})</div>
-          <StatTable periods={periods} granularity={granularity} rows={chartRows} />
+          <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
         </div>
       )}
     </div>

@@ -175,6 +175,19 @@ Overdue, per the app's own terminology rule).
 
 ## Chart treatment
 
+**Superseded 2026-09-12** — after reviewing the four live screens, Jim asked
+to drop the charts entirely ("the bar charts and line graphs do not help
+understand the values") and the diverging +/-/net columns described below
+along with them (Contacts' Added−Deleted; Requests' and ToDos' own
+Created−Deleted/Archived−Unarchived pairs). `PeriodChartStack` and
+`DivergingRow` were removed from `AdminStatsShared.tsx`; `StatTable` (the
+same per-period numbers table this section already calls "not a separate
+build") is now the only rendering of a screen's rows, on-screen and in
+print alike — print was already table-only, so unaffected. Each screen also
+now defaults to Monthly rather than Weekly granularity, and sorts periods
+newest-to-oldest (on screen, in print, and in the `.xlsx` export). The
+design reasoning below is kept for history, not as the current spec.
+
 Per period-bucketed metric: a single-hue bar chart (sequential color job —
 one hue, more-is-darker is not needed here since it's one series, just one
 accent color), one metric per row, stacked vertically, all sharing one

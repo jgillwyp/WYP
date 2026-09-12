@@ -19,7 +19,6 @@ import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import {
   AdminStatsFilterBar,
-  PeriodChartStack,
   PrintIconButton,
   StatTable,
   defaultFromMonth,
@@ -27,6 +26,7 @@ import {
   formatPeriodLabel,
   monthToFromDate,
   monthToToDate,
+  reverseForDisplay,
   type ChartRow,
   type Cohort,
   type Granularity,
@@ -47,7 +47,7 @@ export default function AdminAccountsStatsForm() {
 
   const [fromMonth, setFromMonth] = useState(defaultFromMonth())
   const [toMonth, setToMonth] = useState(defaultToMonth())
-  const [granularity, setGranularity] = useState<Granularity>('week')
+  const [granularity, setGranularity] = useState<Granularity>('month')
   const [cohort, setCohort] = useState<Cohort>('all')
 
   const [rows, setRows] = useState<Row[]>([])
@@ -81,12 +81,16 @@ export default function AdminAccountsStatsForm() {
     }
   }, [fromMonth, toMonth, granularity, cohort])
 
+  // Chronologically ascending — kept this way for rangeLabel's own "earliest
+  // – latest" phrasing below; reverseForDisplay() produces the newest-to-
+  // oldest copy StatTable actually renders (2026-09-12).
   const periods = rows.map((r) => r.period_start)
   const chartRows: ChartRow[] = [
     { key: 'new_free', label: 'New Free', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.new_free) },
     { key: 'new_subscribed', label: 'New Subscribed', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.new_subscribed) },
     { key: 'total', label: 'Total', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.total) },
   ]
+  const display = reverseForDisplay(periods, chartRows)
 
   function handlePrint() {
     window.print()
@@ -166,21 +170,17 @@ export default function AdminAccountsStatsForm() {
             <div className="subempty">No data in this range.</div>
           )}
           {!loading && !loadError && rows.length > 0 && (
-            <>
-              <PeriodChartStack periods={periods} granularity={granularity} rows={chartRows} />
-              <StatTable periods={periods} granularity={granularity} rows={chartRows} />
-            </>
+            <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
           )}
         </div>
       </div>
 
       {/* Print rendering -- same .no-print/.print-report split as every
-          other admin stats screen; see AdminContactsStatsForm.tsx's own
-          comment for why the chart itself never prints. */}
+          other admin stats screen. */}
       {rows.length > 0 && (
         <div className="print-report">
           <div className="ptitle">Accounts — Activity ({rangeLabel})</div>
-          <StatTable periods={periods} granularity={granularity} rows={chartRows} />
+          <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
         </div>
       )}
     </div>

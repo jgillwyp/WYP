@@ -168,7 +168,9 @@ export async function GET(request: Request) {
   const sheet = workbook.addWorksheet(config.sheetName)
   sheet.columns = config.columns
   sheet.getRow(1).font = { bold: true }
-  rows.forEach((row) => sheet.addRow(row))
+  // Newest-to-oldest (2026-09-12), matching the on-screen table this export
+  // mirrors — the RPC itself still returns periods chronologically ascending.
+  rows.slice().reverse().forEach((row) => sheet.addRow(row))
 
   const buffer = await workbook.xlsx.writeBuffer()
 

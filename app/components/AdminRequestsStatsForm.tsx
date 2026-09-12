@@ -5,17 +5,17 @@
 // the four admin screens, reusing AdminStatsShared.tsx's primitives built
 // against Contacts Activity. Adds the Sent/Received toggle Contacts didn't
 // need: Created/Changed/Done/Attachments/Dialog each have both sides;
-// Deleted/Archived/Unarchived (and the Created-Deleted/Archived-Unarchived
-// diverging pairs) are Sent-only, per the plan — a Received item isn't
-// owned by this account, so there's nothing to archive or delete from
-// that side.
+// Deleted/Archived/Unarchived are Sent-only, per the plan — a Received item
+// isn't owned by this account, so there's nothing to archive or delete from
+// that side. The Created-Deleted/Archived-Unarchived diverging (+/-/net)
+// columns this comment used to also mention were dropped 2026-09-12 — see
+// AdminStatsShared.tsx's own chart-primitives comment.
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import {
   AdminStatsFilterBar,
-  PeriodChartStack,
   PrintIconButton,
   StatTable,
   defaultFromMonth,
@@ -23,6 +23,7 @@ import {
   formatPeriodLabel,
   monthToFromDate,
   monthToToDate,
+  reverseForDisplay,
   useAdminProfiles,
   type ChartRow,
   type Cohort,
@@ -54,7 +55,7 @@ export default function AdminRequestsStatsForm() {
 
   const [fromMonth, setFromMonth] = useState(defaultFromMonth())
   const [toMonth, setToMonth] = useState(defaultToMonth())
-  const [granularity, setGranularity] = useState<Granularity>('week')
+  const [granularity, setGranularity] = useState<Granularity>('month')
   const [cohort, setCohort] = useState<Cohort>('all')
   const [profileId, setProfileId] = useState('')
   const { profiles, loading: profilesLoading } = useAdminProfiles()
@@ -95,6 +96,9 @@ export default function AdminRequestsStatsForm() {
     }
   }, [fromMonth, toMonth, granularity, cohort, profileId, needsProfile])
 
+  // Chronologically ascending — kept this way for rangeLabel's own "earliest
+  // – latest" phrasing below; reverseForDisplay() produces the newest-to-
+  // oldest copy StatTable actually renders (2026-09-12).
   const periods = rows.map((r) => r.period_start)
   const showLoading = loading && !needsProfile
 
@@ -121,24 +125,8 @@ export default function AdminRequestsStatsForm() {
       values: rows.map((r) => (side === 'sent' ? r.sent_done : r.received_done)),
     },
     { key: 'deleted', label: 'Deleted', color: 'var(--alert-red)', kind: 'bar', values: rows.map((r) => r.deleted) },
-    {
-      key: 'created_net',
-      label: 'Created − Deleted',
-      plusColor: 'var(--brand-blue)',
-      minusColor: 'var(--alert-red)',
-      kind: 'diverging',
-      values: rows.map((r) => r.sent_created - r.deleted),
-    },
     { key: 'archived', label: 'Archived', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.archived) },
     { key: 'unarchived', label: 'Unarchived', color: 'var(--brand-blue)', kind: 'bar', values: rows.map((r) => r.unarchived) },
-    {
-      key: 'archived_net',
-      label: 'Archived − Unarchived',
-      plusColor: 'var(--brand-blue)',
-      minusColor: 'var(--alert-red)',
-      kind: 'diverging',
-      values: rows.map((r) => r.archived - r.unarchived),
-    },
     {
       key: 'attachments',
       label: 'Attachments',
@@ -154,6 +142,7 @@ export default function AdminRequestsStatsForm() {
       values: rows.map((r) => (side === 'sent' ? r.sent_dialog : r.received_dialog)),
     },
   ]
+  const display = reverseForDisplay(periods, chartRows)
 
   function handlePrint() {
     window.print()
@@ -227,9 +216,8 @@ export default function AdminRequestsStatsForm() {
         />
 
         {/* Sent/Received toggle — only Created/Changed/Done/Attachments/
-            Dialog actually move with it; Deleted/Archived/Unarchived and
-            their diverging pairs are Sent-only and stay put either way
-            (see file header comment). */}
+            Dialog actually move with it; Deleted/Archived/Unarchived are
+            Sent-only and stay put either way (see file header comment). */}
         <div className="statfilters no-print" style={{ borderTop: 0 }}>
           <div className="chips" role="tablist" aria-label="Sent or Received">
             <button
@@ -262,23 +250,18 @@ export default function AdminRequestsStatsForm() {
             <div className="subempty">No data in this range.</div>
           )}
           {!needsProfile && !showLoading && !loadError && rows.length > 0 && (
-            <>
-              <PeriodChartStack periods={periods} granularity={granularity} rows={chartRows} />
-              <StatTable periods={periods} granularity={granularity} rows={chartRows} />
-            </>
+            <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
           )}
         </div>
       </div>
 
       {/* Print rendering — table only, same reasoning as
-          AdminContactsStatsForm.tsx's own comment (the on-screen chart's
-          overflow-x:auto scroller would silently clip to whatever's
-          currently scrolled into view). Reflects whichever Sent/Received
-          side is currently selected, same as everything else on screen. */}
+          AdminContactsStatsForm.tsx's own comment. Reflects whichever
+          Sent/Received side is currently selected, same as on screen. */}
       {rows.length > 0 && (
         <div className="print-report">
           <div className="ptitle">Requests — Activity ({side === 'sent' ? 'Sent' : 'Received'}, {rangeLabel})</div>
-          <StatTable periods={periods} granularity={granularity} rows={chartRows} />
+          <StatTable periods={display.periods} granularity={granularity} rows={display.rows} />
         </div>
       )}
     </div>
