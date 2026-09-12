@@ -647,6 +647,10 @@ export default function ArchiveForm() {
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Bumped by the loadError block's own "Try Again" button (2026-09-11,
+  // porting MainScreen.tsx's 2026-08-18 retry-with-backoff fix here) —
+  // re-triggers the load effect below.
+  const [reloadTick, setReloadTick] = useState(0)
 
   const [sentData, setSentData] = useState<SentCandidate[]>([])
   const [receivedData, setReceivedData] = useState<ReceivedCandidate[]>([])
@@ -803,14 +807,19 @@ export default function ArchiveForm() {
   const [printTick, setPrintTick] = useState(0)
   const [printDetail, setPrintDetail] = useState<PrintDetailMap>({})
 
+  // Retry-with-backoff (2026-09-11, ported from MainScreen.tsx's 2026-08-18
+  // fix) — a transient Supabase edge clock-skew error ("JWT issued at
+  // future," self-corrects within a second or two) was rendering as the
+  // literal, permanent content of this screen, with no way to recover short
+  // of navigating away and back. Two retries (600ms, then 1600ms) before
+  // giving up silently absorb the transient case; if every attempt still
+  // fails (a real outage, not clock skew), a generic message plus a manual
+  // Try Again control replaces the raw error text.
   useEffect(() => {
     let cancelled = false
 
-    async function load() {
-      setLoading(true)
-      setLoadError(null)
-
-      const [sentRes, receivedRes, todoRes] = await Promise.all([
+    async function attempt() {
+      return Promise.all([
         supabase
           .from('requests')
           .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count), categories(name), repeat_rule')
@@ -828,24 +837,42 @@ export default function ArchiveForm() {
           .is('contact_id', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
       ])
+    }
 
-      if (cancelled) return
+    async function load() {
+      setLoading(true)
+      setLoadError(null)
 
-      if (sentRes.error || receivedRes.error || todoRes.error) {
-        setLoadError((sentRes.error ?? receivedRes.error ?? todoRes.error)?.message ?? 'Could not load records.')
-      } else {
-        setSentData((sentRes.data as unknown as SentCandidate[]) ?? [])
-        setReceivedData((receivedRes.data as unknown as ReceivedCandidate[]) ?? [])
-        setTodoData((todoRes.data as unknown as TodoCandidate[]) ?? [])
+      const delaysMs = [0, 600, 1600]
+      for (let i = 0; i < delaysMs.length; i++) {
+        if (delaysMs[i] > 0) await new Promise((r) => setTimeout(r, delaysMs[i]))
+        if (cancelled) return
+
+        const [sentRes, receivedRes, todoRes] = await attempt()
+        if (cancelled) return
+
+        const firstError = sentRes.error ?? receivedRes.error ?? todoRes.error
+        if (!firstError) {
+          setSentData((sentRes.data as unknown as SentCandidate[]) ?? [])
+          setReceivedData((receivedRes.data as unknown as ReceivedCandidate[]) ?? [])
+          setTodoData((todoRes.data as unknown as TodoCandidate[]) ?? [])
+          setLoading(false)
+          return
+        }
+
+        console.error(`Archive load attempt ${i + 1} failed:`, firstError.message)
+        if (i === delaysMs.length - 1) {
+          setLoadError('Could not load Archive records. Check your connection and try again.')
+          setLoading(false)
+        }
       }
-      setLoading(false)
     }
 
     load()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadTick])
 
   // Normalized shape shared by all three record types below — name is null
   // for ToDos (no recipient), due/date are null for ToDos (never shown).
@@ -1312,7 +1339,13 @@ export default function ArchiveForm() {
       <div className="frame-none">
         <div className="app">
           <WypHeader />
-          <div className="subempty">{loadError}</div>
+          <div className="subempty">
+            {loadError}
+            <br />
+            <button className="btn-secondary" type="button" onClick={() => setReloadTick((t) => t + 1)} style={{ marginTop: 8 }}>
+              Try Again
+            </button>
+          </div>
           <AppFooter subscriptionDisabled={false} />
         </div>
       </div>

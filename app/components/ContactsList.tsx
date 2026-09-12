@@ -66,25 +66,57 @@ export default function ContactsList() {
   const [counts, setCounts] = useState<Record<string, ContactCounts>>({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Bumped by the loadError block's own "Try Again" button (2026-09-11,
+  // porting MainScreen.tsx's 2026-08-18 retry-with-backoff fix here) —
+  // re-triggers the load effect below.
+  const [reloadTick, setReloadTick] = useState(0)
   const [showPrint, setShowPrint] = useState(false)
   const [printTick, setPrintTick] = useState(0)
 
+  // Retry-with-backoff (2026-09-11, ported from MainScreen.tsx's 2026-08-18
+  // fix) — a transient Supabase edge clock-skew error ("JWT issued at
+  // future," self-corrects within a second or two) was rendering as the
+  // literal, permanent content of this list, with no way to recover short
+  // of navigating away and back. Two retries (600ms, then 1600ms) before
+  // giving up silently absorb the transient case; if every attempt still
+  // fails (a real outage, not clock skew), a generic message plus a manual
+  // Try Again control replaces the raw error text. Scoped to the contacts
+  // query only — get_contact_request_counts()'s own failure was already
+  // silently ignored (Sent/Rec'd counts just don't show) and isn't worth
+  // retrying for the same reason.
   useEffect(() => {
     let cancelled = false
 
-    supabase
-      .from('contacts')
-      .select('id, display_name, email, phone, phone_ext, send_by, time_zone, notes')
-      .order('display_name')
-      .then(({ data, error }) => {
+    async function load() {
+      setLoading(true)
+      setLoadError(null)
+
+      const delaysMs = [0, 600, 1600]
+      for (let i = 0; i < delaysMs.length; i++) {
+        if (delaysMs[i] > 0) await new Promise((r) => setTimeout(r, delaysMs[i]))
         if (cancelled) return
-        if (error) {
-          setLoadError(error.message)
-        } else {
+
+        const { data, error } = await supabase
+          .from('contacts')
+          .select('id, display_name, email, phone, phone_ext, send_by, time_zone, notes')
+          .order('display_name')
+        if (cancelled) return
+
+        if (!error) {
           setContacts(data ?? [])
+          setLoading(false)
+          break
         }
-        setLoading(false)
-      })
+
+        console.error(`Contacts load attempt ${i + 1} failed:`, error.message)
+        if (i === delaysMs.length - 1) {
+          setLoadError('Could not load Contacts. Check your connection and try again.')
+          setLoading(false)
+        }
+      }
+    }
+
+    load()
 
     supabase
       .rpc('get_contact_request_counts')
@@ -100,7 +132,7 @@ export default function ContactsList() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadTick])
 
   function startPrint() {
     setShowPrint(true)
@@ -150,7 +182,15 @@ export default function ContactsList() {
 
         <div className="scroll">
           {loading && <div className="subempty">Loading…</div>}
-          {!loading && loadError && <div className="subempty">{loadError}</div>}
+          {!loading && loadError && (
+            <div className="subempty">
+              {loadError}
+              <br />
+              <button className="btn-secondary" type="button" onClick={() => setReloadTick((t) => t + 1)} style={{ marginTop: 8 }}>
+                Try Again
+              </button>
+            </div>
+          )}
           {!loading && !loadError && contacts.length === 0 && (
             <div className="subempty">No Contacts yet — use Add Contact.</div>
           )}
