@@ -9,6 +9,7 @@ import Linkified from './Linkified'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
+import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
@@ -293,33 +294,6 @@ function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: 
 // "available if your browser supports it (and most do)" rather than
 // assumed present. Duplicated per component (CreateTodoForm.tsx has its
 // own copy) — same convention as openPicker/formatMDYSlash above.
-type SpeechRecognitionEventLike = {
-  resultIndex: number
-  results: { length: number; [index: number]: { [index: number]: { transcript: string } } }
-}
-
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: (() => void) | null
-  onend: (() => void) | null
-  start: () => void
-  stop: () => void
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
-
-function getSpeechRecognition(): SpeechRecognitionConstructor | null {
-  if (typeof window === 'undefined') return null
-  const w = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionConstructor
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
-}
-
 function MicIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -429,17 +403,14 @@ export default function CreateRequestForm() {
   // voiceSupported is set once, client-side only, in a mount effect below —
   // never read directly during render, to keep server/first-client render
   // in agreement (no hydration mismatch).
-  const [dictating, setDictating] = useState(false)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
-  const [voiceSupported, setVoiceSupported] = useState(false)
+  const descriptionDictation = useSpeechDictation(form.description, (value) => set('description', value))
 
   // Dialog Text gets its own independent dictating/recognitionRef pair
   // (2026-08-20) — extended from Description-only per the owner's request.
   // Shares voiceSupported above (one browser-capability check covers both
   // fields) but needs a separate live-recognition instance since the two
   // textareas are never the same input.
-  const [dlgDictating, setDlgDictating] = useState(false)
-  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const dialogDictation = useSpeechDictation(dialogModalBody, setDialogModalBody)
 
   const [contactInvalid, setContactInvalid] = useState(false)
   const [dueDateInvalid, setDueDateInvalid] = useState(false)
@@ -477,54 +448,6 @@ export default function CreateRequestForm() {
     window.addEventListener('afterprint', handleAfterPrint)
     return () => window.removeEventListener('afterprint', handleAfterPrint)
   }, [printTick])
-
-  // Voice dictation support check (2026-08-19) — runs once, client-only, so
-  // voiceSupported starts false on both the server render and the first
-  // client render (no hydration mismatch), then flips true a tick later if
-  // the browser actually has the API. Stop any live recognition on unmount
-  // (navigating away mid-dictation shouldn't leave the mic listening).
-  useEffect(() => {
-    // Deferred a tick (not called synchronously in the effect body) — same
-    // shape PWAProvider.tsx's own beforeinstallprompt listener already
-    // satisfies react-hooks/set-state-in-effect with, just via a microtask
-    // instead of a browser event, since there's no event to listen for
-    // here.
-    let cancelled = false
-    queueMicrotask(() => {
-      if (!cancelled) setVoiceSupported(getSpeechRecognition() !== null)
-    })
-    return () => {
-      cancelled = true
-      recognitionRef.current?.stop()
-      dlgRecognitionRef.current?.stop()
-    }
-  }, [])
-
-  function toggleDialogDictation() {
-    if (dlgDictating) {
-      dlgRecognitionRef.current?.stop()
-      return
-    }
-    const Recognition = getSpeechRecognition()
-    if (!Recognition) return
-    const recognition = new Recognition()
-    recognition.continuous = true
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognition.onresult = (event) => {
-      let addition = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        addition += event.results[i][0].transcript
-      }
-      if (addition.trim() === '') return
-      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
-    }
-    recognition.onerror = () => setDlgDictating(false)
-    recognition.onend = () => setDlgDictating(false)
-    dlgRecognitionRef.current = recognition
-    recognition.start()
-    setDlgDictating(true)
-  }
 
   // Request<->ToDo conversion pre-fill (2026-08-26) — Description and Due
   // Date carry straight over; Category is matched by name once the
@@ -749,41 +672,6 @@ export default function CreateRequestForm() {
   // duplicate text already appended. onerror/onend both reset dictating —
   // a real error and a natural stop (e.g. silence timeout) look the same
   // from this button's point of view.
-  function toggleDictation() {
-    if (dictating) {
-      recognitionRef.current?.stop()
-      return
-    }
-    const Recognition = getSpeechRecognition()
-    if (!Recognition) return
-    const recognition = new Recognition()
-    recognition.continuous = true
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognition.onresult = (event) => {
-      let addition = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        addition += event.results[i][0].transcript
-      }
-      if (addition.trim() === '') return
-      setForm((f) => ({
-        ...f,
-        description: f.description
-          ? `${f.description} ${addition.trim()}`
-          : addition.trim(),
-      }))
-    }
-    recognition.onerror = () => {
-      setDictating(false)
-    }
-    recognition.onend = () => {
-      setDictating(false)
-    }
-    recognitionRef.current = recognition
-    recognition.start()
-    setDictating(true)
-  }
-
   // Reminder checkbox availability (PRD §7.3, revised 2026-08-15; relaxed
   // 2026-08-22) — three states: (1) no Due Date yet (or a Due Date close
   // enough that knowing the Contact's time zone actually matters), so
@@ -1468,12 +1356,12 @@ export default function CreateRequestForm() {
                     if (descInvalid) setDescInvalid(false)
                   }}
                 />
-                {tier === 'subscriber' && voiceSupported && (
+                {tier === 'subscriber' && descriptionDictation.supported && (
                   <button
                     type="button"
-                    className={`micbtn${dictating ? ' listening' : ''}`}
-                    aria-label={dictating ? 'Stop voice dictation' : 'Start voice dictation'}
-                    onClick={toggleDictation}
+                    className={`micbtn${descriptionDictation.dictating ? ' listening' : ''}`}
+                    aria-label={descriptionDictation.dictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                    onClick={descriptionDictation.toggle}
                   >
                     <MicIcon />
                   </button>
@@ -1749,12 +1637,12 @@ export default function CreateRequestForm() {
                     }}
                     autoFocus
                   />
-                  {tier === 'subscriber' && voiceSupported && (
+                  {tier === 'subscriber' && dialogDictation.supported && (
                     <button
                       type="button"
-                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
-                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
-                      onClick={toggleDialogDictation}
+                      className={`micbtn${dialogDictation.dictating ? ' listening' : ''}`}
+                      aria-label={dialogDictation.dictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={dialogDictation.toggle}
                     >
                       <MicIcon />
                     </button>

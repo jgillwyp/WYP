@@ -17,6 +17,7 @@ import {
 } from '@/lib/attachments'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule } from '@/lib/repeatRule'
+import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
@@ -175,33 +176,6 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
 // supports it (and most do)" rather than assumed present. Duplicated per
 // component (CreateRequestForm.tsx has its own copy) — same convention as
 // openPicker/todayISODate above.
-type SpeechRecognitionEventLike = {
-  resultIndex: number
-  results: { length: number; [index: number]: { [index: number]: { transcript: string } } }
-}
-
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: (() => void) | null
-  onend: (() => void) | null
-  start: () => void
-  stop: () => void
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
-
-function getSpeechRecognition(): SpeechRecognitionConstructor | null {
-  if (typeof window === 'undefined') return null
-  const w = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionConstructor
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
-}
-
 function MicIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -296,15 +270,12 @@ export default function CreateTodoForm() {
   // Voice dictation for Description (2026-08-19) — same feature and
   // reasoning as CreateRequestForm.tsx's own copy; see the module-level
   // comment on getSpeechRecognition() above for the full write-up.
-  const [dictating, setDictating] = useState(false)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
-  const [voiceSupported, setVoiceSupported] = useState(false)
+  const descriptionDictation = useSpeechDictation(form.description, (value) => set('description', value))
 
   // Dialog Text gets its own independent dictating/recognitionRef pair
   // (2026-08-20) — see CreateRequestForm.tsx's identical addition for the
   // full reasoning.
-  const [dlgDictating, setDlgDictating] = useState(false)
-  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const dialogDictation = useSpeechDictation(dialogModalBody, setDialogModalBody)
 
   const doneDateRef = useRef<HTMLInputElement>(null)
 
@@ -371,50 +342,6 @@ export default function CreateTodoForm() {
     // uses for the same reason.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Voice dictation support check (2026-08-19) — see CreateRequestForm.tsx's
-  // identical effect for the SSR/hydration reasoning. Stops any live
-  // recognition on unmount.
-  useEffect(() => {
-    // Deferred a tick — see CreateRequestForm.tsx's identical effect for
-    // why (react-hooks/set-state-in-effect, same fix PWAProvider.tsx's own
-    // beforeinstallprompt listener satisfies via a real browser event).
-    let cancelled = false
-    queueMicrotask(() => {
-      if (!cancelled) setVoiceSupported(getSpeechRecognition() !== null)
-    })
-    return () => {
-      cancelled = true
-      recognitionRef.current?.stop()
-      dlgRecognitionRef.current?.stop()
-    }
-  }, [])
-
-  function toggleDialogDictation() {
-    if (dlgDictating) {
-      dlgRecognitionRef.current?.stop()
-      return
-    }
-    const Recognition = getSpeechRecognition()
-    if (!Recognition) return
-    const recognition = new Recognition()
-    recognition.continuous = true
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognition.onresult = (event) => {
-      let addition = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        addition += event.results[i][0].transcript
-      }
-      if (addition.trim() === '') return
-      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
-    }
-    recognition.onerror = () => setDlgDictating(false)
-    recognition.onend = () => setDlgDictating(false)
-    dlgRecognitionRef.current = recognition
-    recognition.start()
-    setDlgDictating(true)
-  }
 
   function openDialogModal() {
     setDialogModalKind('question')
@@ -528,41 +455,6 @@ export default function CreateTodoForm() {
 
   // Voice dictation toggle (2026-08-19) — see CreateRequestForm.tsx's
   // identical handler for the full reasoning.
-  function toggleDictation() {
-    if (dictating) {
-      recognitionRef.current?.stop()
-      return
-    }
-    const Recognition = getSpeechRecognition()
-    if (!Recognition) return
-    const recognition = new Recognition()
-    recognition.continuous = true
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognition.onresult = (event) => {
-      let addition = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        addition += event.results[i][0].transcript
-      }
-      if (addition.trim() === '') return
-      setForm((f) => ({
-        ...f,
-        description: f.description
-          ? `${f.description} ${addition.trim()}`
-          : addition.trim(),
-      }))
-    }
-    recognition.onerror = () => {
-      setDictating(false)
-    }
-    recognition.onend = () => {
-      setDictating(false)
-    }
-    recognitionRef.current = recognition
-    recognition.start()
-    setDictating(true)
-  }
-
   // Quick-Done band (2026-08-10) — same pattern as Request Response's
   // handleQuickDone: fills Done Date with today only, purely a local field
   // fill (Save is still the actual write). No Done Time to leave untouched
@@ -1178,12 +1070,12 @@ export default function CreateTodoForm() {
                     if (descInvalid) setDescInvalid(false)
                   }}
                 />
-                {tier === 'subscriber' && voiceSupported && (
+                {tier === 'subscriber' && descriptionDictation.supported && (
                   <button
                     type="button"
-                    className={`micbtn${dictating ? ' listening' : ''}`}
-                    aria-label={dictating ? 'Stop voice dictation' : 'Start voice dictation'}
-                    onClick={toggleDictation}
+                    className={`micbtn${descriptionDictation.dictating ? ' listening' : ''}`}
+                    aria-label={descriptionDictation.dictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                    onClick={descriptionDictation.toggle}
                   >
                     <MicIcon />
                   </button>
@@ -1434,12 +1326,12 @@ export default function CreateTodoForm() {
                     }}
                     autoFocus
                   />
-                  {tier === 'subscriber' && voiceSupported && (
+                  {tier === 'subscriber' && dialogDictation.supported && (
                     <button
                       type="button"
-                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
-                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
-                      onClick={toggleDialogDictation}
+                      className={`micbtn${dialogDictation.dictating ? ' listening' : ''}`}
+                      aria-label={dialogDictation.dictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={dialogDictation.toggle}
                     >
                       <MicIcon />
                     </button>

@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
+import { useSpeechDictation } from '@/lib/useSpeechDictation'
 
 /**
  * Response Detail (§6.28) — converted from
@@ -90,29 +91,6 @@ const DIALOG_MAX = 500
 // signed-in recipient's own tier — see CLAUDE.md's Entitlements section:
 // rights on a Request come from its issuer, never from whoever is reading
 // it. Duplicated per this codebase's established per-file convention.
-type SpeechRecognitionEventLike = {
-  resultIndex: number
-  results: { length: number; [index: number]: { [index: number]: { transcript: string } } }
-}
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: (() => void) | null
-  onend: (() => void) | null
-  start: () => void
-  stop: () => void
-}
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
-function getSpeechRecognition(): SpeechRecognitionConstructor | null {
-  if (typeof window === 'undefined') return null
-  const w = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionConstructor
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
-}
 function MicIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -426,45 +404,7 @@ export default function ResponseDetailForm() {
 
   // Voice dictation for Dialog Text (2026-08-20) — see the module-level
   // comment above getSpeechRecognition() for the full reasoning.
-  const [dlgDictating, setDlgDictating] = useState(false)
-  const dlgRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
-  const [voiceSupported, setVoiceSupported] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    queueMicrotask(() => {
-      if (!cancelled) setVoiceSupported(getSpeechRecognition() !== null)
-    })
-    return () => {
-      cancelled = true
-      dlgRecognitionRef.current?.stop()
-    }
-  }, [])
-
-  function toggleDialogDictation() {
-    if (dlgDictating) {
-      dlgRecognitionRef.current?.stop()
-      return
-    }
-    const Recognition = getSpeechRecognition()
-    if (!Recognition) return
-    const recognition = new Recognition()
-    recognition.continuous = true
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognition.onresult = (event) => {
-      let addition = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        addition += event.results[i][0].transcript
-      }
-      if (addition.trim() === '') return
-      setDialogModalBody((b) => (b ? `${b} ${addition.trim()}` : addition.trim()))
-    }
-    recognition.onerror = () => setDlgDictating(false)
-    recognition.onend = () => setDlgDictating(false)
-    dlgRecognitionRef.current = recognition
-    recognition.start()
-    setDlgDictating(true)
-  }
+  const dialogDictation = useSpeechDictation(dialogModalBody, setDialogModalBody)
 
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
@@ -1346,12 +1286,12 @@ export default function ResponseDetailForm() {
                     }}
                     autoFocus
                   />
-                  {data.owner_tier === 'subscriber' && voiceSupported && (
+                  {data.owner_tier === 'subscriber' && dialogDictation.supported && (
                     <button
                       type="button"
-                      className={`micbtn${dlgDictating ? ' listening' : ''}`}
-                      aria-label={dlgDictating ? 'Stop voice dictation' : 'Start voice dictation'}
-                      onClick={toggleDialogDictation}
+                      className={`micbtn${dialogDictation.dictating ? ' listening' : ''}`}
+                      aria-label={dialogDictation.dictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                      onClick={dialogDictation.toggle}
                     >
                       <MicIcon />
                     </button>
