@@ -534,25 +534,29 @@ export default function ContactDetailForm() {
             <b>Minimum required</b>&nbsp; A Name and an Email. Phone is optional and can be used for Text delivery with a subscription.
           </div>
 
-          {activity && (
-            <div className="actsummary" role="group" aria-label="Request Activity Summary">
-              <p className="actsummary-title">Request Activity Summary</p>
-              <div className="actstat">
-                <span className="actstat-num">{activity.open}</span>
-                <span className="actstat-label">Open</span>
-              </div>
-              <div className="actstat">
-                <span className="actstat-num">{activity.done}</span>
-                <span className="actstat-label">Done</span>
-              </div>
-              <div className="actstat">
-                <span className="actstat-num">{activity.total}</span>
-                <span className="actstat-label">Total</span>
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginTop: 14, textAlign: 'right' }}>
+          {/* Requests recap + Delete Contact, redesigned 2026-09-11 per Jim's
+              own mockup — supersedes the bordered 3-column grid of large
+              (22px) blue numbers under a separate "Request Activity
+              Summary" title: too large/prominent for what's meant to be a
+              quick recap. Now one plain inline row ("Requests  Open: N
+              Done: N Total: N"), sharing the same .actsummary box as the
+              Delete Contact button rather than that button sitting alone
+              in its own div flush against the outer edge — the box's own
+              padding is what gives Delete Contact real breathing room from
+              the screen edge. .actsummary-label and .actsummary-stats are
+              separate flex children (not one text run) specifically so a
+              too-narrow width wraps "Requests" onto its own line rather
+              than mid-phrase, per Jim's own instruction; .actsummary-stats
+              itself is nowrap so Open/Done/Total always stay together as
+              one unit. Delete Contact renders unconditionally (matches the
+              old behavior) — only the stats span waits on `activity`. */}
+          <div className="actsummary" role="group" aria-label="Request Activity Summary">
+            <span className="actsummary-label">Requests</span>
+            {activity && (
+              <span className="actsummary-stats">
+                Open: {activity.open}&nbsp;&nbsp;Done: {activity.done}&nbsp;&nbsp;Total: {activity.total}
+              </span>
+            )}
             <button className="btn-danger" type="button" onClick={() => setDeleteOpen(true)}>
               Delete Contact
             </button>
@@ -571,19 +575,10 @@ export default function ContactDetailForm() {
 
               {activity && (
                 <div className="actsummary" role="group" aria-label="Request Activity Summary">
-                  <p className="actsummary-title">Request Activity Summary</p>
-                  <div className="actstat">
-                    <span className="actstat-num">{activity.open}</span>
-                    <span className="actstat-label">Open</span>
-                  </div>
-                  <div className="actstat">
-                    <span className="actstat-num">{activity.done}</span>
-                    <span className="actstat-label">Done</span>
-                  </div>
-                  <div className="actstat">
-                    <span className="actstat-num">{activity.total}</span>
-                    <span className="actstat-label">Total</span>
-                  </div>
+                  <span className="actsummary-label">Requests</span>
+                  <span className="actsummary-stats">
+                    Open: {activity.open}&nbsp;&nbsp;Done: {activity.done}&nbsp;&nbsp;Total: {activity.total}
+                  </span>
                 </div>
               )}
 

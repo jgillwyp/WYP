@@ -4098,46 +4098,48 @@ body {
    reference screenshot (Open/Done/Total three-column recap).
    ========================================================================= */
 
-/* Request Activity Summary — three stat columns in a bordered box, mirrors
-   the visual weight of .panel (Dialog/Attachments) without reusing its
-   class, since this has no header row or Add action. */
+/* Requests recap — redesigned 2026-09-11 per Jim's own mockup, replacing
+   the original 3-column grid of large (22px) blue numbers under a separate
+   "Request Activity Summary" title: too large/prominent for a quick recap.
+   Now one plain inline row, .strip-tinted like .donerow so it reads as a
+   quiet aside rather than a card. On the live Contact Detail page (not the
+   delete-confirmation modal) this same box also holds the Delete Contact
+   button — flex-wrap lets it drop to its own line first on a narrow width,
+   ahead of .actsummary-label/.actsummary-stats ever needing to. */
 .actsummary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  border: 1px solid var(--rule);
-  border-radius: 11px;
-  padding: 12px 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  background: var(--strip);
+  border-radius: 12px;
+  padding: 11px 14px;
   margin-top: 4px;
 }
 
-.actsummary-title {
-  grid-column: 1 / -1;
-  font-size: 12.5px;
+/* Pushes Delete Contact to the box's own right edge (which is itself
+   already inset from the screen edge by .actsummary's own padding) —
+   a no-op in the delete-confirmation modal's copy of this box, which has
+   no button child. */
+.actsummary .btn-danger {
+  margin-left: auto;
+}
+
+/* A separate flex child from .actsummary-stats (not one text run) so a
+   too-narrow width wraps before "Open," never mid-phrase. */
+.actsummary-label {
+  font-size: 13px;
   font-weight: 700;
-  color: var(--ink-soft);
-  text-align: center;
-  margin: 0 0 8px;
+  color: var(--ink);
+  white-space: nowrap;
 }
 
-.actstat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.actstat-num {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--brand-blue);
-  line-height: 1;
-}
-
-.actstat-label {
-  font-size: 11.5px;
+/* nowrap keeps Open/Done/Total together as one unit once wrapping starts. */
+.actsummary-stats {
+  font-size: 13px;
   font-weight: 600;
-  color: var(--ink-soft);
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 /* Destructive action — one visual step below .btn-secondary's own outline
