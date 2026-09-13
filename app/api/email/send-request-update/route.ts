@@ -186,6 +186,7 @@ export async function POST(request: Request) {
     dueDate: reqRow.due_date,
     dueTime: reqRow.due_time,
     ownerName,
+    doneDate: reqRow.done_date,
   }
   const html = buildRequestEmailHtml(emailBodyFields)
   const text = buildRequestEmailText(emailBodyFields)

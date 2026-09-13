@@ -467,6 +467,15 @@ type RequestEmailBodyFields = {
   dueDate: string
   dueTime: string | null
   ownerName: string | null
+  // Added 2026-09-13 — when set, the CTA button switches to
+  // REQUEST_DONE_LINK_TEXT below instead of the usual "click to respond"
+  // phrasing, since there's nothing left to respond to. Always sent
+  // regardless of Done state (this direction, owner edits notifying the
+  // Recipient, is never gated) — only the wording changes. Optional/
+  // undefined (the Initial Request email and the day-before/day-of Reminder
+  // emails, none of which are ever sent for an already-Done Request) is
+  // equivalent to null — same "not done" phrasing.
+  doneDate?: string | null
 }
 
 // Minimal HTML-escaping for the one piece of this email that's real user
@@ -560,10 +569,21 @@ export function buildReminderScheduleSentence(
   return `${prefix}Reminders: the day before, the day of, and the day after.`
 }
 
+// Shown instead of the usual "click to respond"/"view or modify" phrasing
+// whenever a Request already has a Done Date at send time (2026-09-13,
+// Jim's own wording) — shared by both directions of the change-notification
+// feature below (buildRequestEmailHtml/Text, owner→Recipient; and
+// buildOwnerUpdateEmailHtml/Text, Recipient→owner), since neither's usual
+// phrasing makes sense once there's nothing left to respond to or modify
+// toward completion.
+export const REQUEST_DONE_LINK_TEXT = 'This Request is Done, click to see or edit it'
+
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
-  const buttonInner = fields.ownerName
-    ? `Click to respond or mark this Request from ${escapeHtml(fields.ownerName)} as completed`
-    : 'Click to respond or mark this Request as completed'
+  const buttonInner = fields.doneDate
+    ? REQUEST_DONE_LINK_TEXT
+    : fields.ownerName
+      ? `Click to respond or mark this Request from ${escapeHtml(fields.ownerName)} as completed`
+      : 'Click to respond or mark this Request as completed'
 
   const buttonHtml = emailButtonRaw(fields.link, buttonInner)
   const parts =
@@ -593,9 +613,11 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
 // Same content and order as buildRequestEmailHtml, bare URLs instead of
 // anchors.
 export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
-  const buttonLine = fields.ownerName
-    ? `Click to respond or mark this Request from ${fields.ownerName} as completed:`
-    : 'Click to respond or mark this Request as completed:'
+  const buttonLine = fields.doneDate
+    ? `${REQUEST_DONE_LINK_TEXT}:`
+    : fields.ownerName
+      ? `Click to respond or mark this Request from ${fields.ownerName} as completed:`
+      : 'Click to respond or mark this Request as completed:'
   const lines =
     fields.changedFields && fields.changedFields.length > 0
       ? [
@@ -946,6 +968,12 @@ type OwnerUpdateEmailFields = {
   changedFields: string[]
   link: string
   siteUrl: string
+  // Added 2026-09-13 — see REQUEST_DONE_LINK_TEXT above. Whether this email
+  // is sent at all (when Done Date is the change being reported) is decided
+  // by the caller (send-request-update-to-owner/route.ts, per
+  // profiles.notify_owner_on_done and the self-actor exception); this field
+  // only ever affects wording.
+  doneDate: string | null
 }
 
 export function buildOwnerUpdateEmailSubject(
@@ -961,7 +989,7 @@ export function buildOwnerUpdateEmailSubject(
 const OWNER_UPDATE_LINK_TEXT = 'Open Request to view or modify'
 
 export function buildOwnerUpdateEmailHtml(fields: OwnerUpdateEmailFields): string {
-  const buttonHtml = emailButtonRaw(fields.link, OWNER_UPDATE_LINK_TEXT)
+  const buttonHtml = emailButtonRaw(fields.link, fields.doneDate ? REQUEST_DONE_LINK_TEXT : OWNER_UPDATE_LINK_TEXT)
   const body = [
     emailChangedFieldsBox(fields.changedFields, buttonHtml),
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
@@ -970,10 +998,11 @@ export function buildOwnerUpdateEmailHtml(fields: OwnerUpdateEmailFields): strin
 }
 
 export function buildOwnerUpdateEmailText(fields: OwnerUpdateEmailFields): string {
+  const linkText = fields.doneDate ? REQUEST_DONE_LINK_TEXT : OWNER_UPDATE_LINK_TEXT
   return [
     changedFieldsSentence(fields.changedFields, fields.changedFields.join(', ')),
     '',
-    `${OWNER_UPDATE_LINK_TEXT}:`,
+    `${linkText}:`,
     fields.link,
     '',
     fields.description,

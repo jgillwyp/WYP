@@ -54,6 +54,18 @@ export const runtime = 'nodejs'
  * The email links to the owner's own /requests/[id] Request Detail screen,
  * not a minted /r/[token] link — only the owner can open that route (RLS
  * owner-only), so no token needs minting for this direction at all.
+ *
+ * notify_owner_on_done gating (migration 066, 2026-09-13) — when this save
+ * is reporting a genuine mark-as-Done transition (Done Date newly set, not
+ * just present already), the send is skipped if either: the owner's own
+ * profiles.notify_owner_on_done is off (default on), or the actor marking
+ * it Done IS the owner's own account (a self-sent Request, marked Done via
+ * this same signed-in-recipient screen on their own Request — notifying
+ * someone about their own action is never useful, regardless of the
+ * setting). Any other combination of changedFields is never gated by this
+ * setting and always notifies, unchanged from the original 2026-09-02
+ * behavior — this option is specifically about the "marked Done"
+ * notification, not a blanket owner-notification toggle.
  */
 
 function getSmtpTransport() {
@@ -104,6 +116,11 @@ export async function POST(request: Request) {
   // caller's own forwarded JWT for the signed-in-recipient path) — never
   // service_role for this step. Resolves to a single verified requestId.
   let requestId: string | null = null
+  // Set only on the signed-in-recipient path below — the anonymous
+  // /r/[token] path has no session to identify an actor with, by
+  // construction. Used to detect a self-sent Request marked Done by its own
+  // owner (see the notify_owner_on_done gating further down).
+  let actorUserId: string | null = null
 
   if (body.token) {
     const anon = createClient(supabaseUrl, supabaseAnonKey, {
@@ -128,6 +145,8 @@ export async function POST(request: Request) {
       return Response.json({ sent: false, reason: 'not_found' }, { status: 404 })
     }
     requestId = body.requestId
+    const { data: actorData } = await forwarded.auth.getUser()
+    actorUserId = actorData.user?.id ?? null
   } else {
     return Response.json({ sent: false, reason: 'bad_request' }, { status: 400 })
   }
@@ -207,6 +226,37 @@ export async function POST(request: Request) {
     await sbc.from('events').insert(events)
   }
 
+  // notify_owner_on_done gating (migration 066, 2026-09-13) — only applies
+  // when this specific save is reporting a genuine mark-as-Done transition
+  // (Done Date newly set, same condition the 'done' event above already
+  // checks); a save that changed other fields without touching Done Date is
+  // never gated by this setting and always notifies, as before. Two ways
+  // the send gets suppressed even though changedFields.length > 0:
+  //   1. The owner's own notify_owner_on_done is off (default true).
+  //   2. The actor marking it Done IS the owner's own account — a self-sent
+  //      Request, marked Done via this signed-in-recipient screen on their
+  //      own Request. Notifying someone about their own action is never
+  //      useful, regardless of the setting above (Jim's own correction,
+  //      2026-09-13) — the anonymous /r/[token] path has no actorUserId to
+  //      compare, so this specific exception can only apply to the
+  //      signed-in-recipient path.
+  const markedDoneNow = changedFields.includes('Done Date') && !!reqRow.done_date
+  if (markedDoneNow) {
+    const selfMarkedDone = actorUserId !== null && actorUserId === reqRow.owner_id
+    let notifyOwnerOnDone = true
+    if (!selfMarkedDone) {
+      const { data: ownerProfile } = await sbc
+        .from('profiles')
+        .select('notify_owner_on_done')
+        .eq('id', reqRow.owner_id)
+        .single()
+      notifyOwnerOnDone = ownerProfile?.notify_owner_on_done ?? true
+    }
+    if (selfMarkedDone || !notifyOwnerOnDone) {
+      return Response.json({ sent: false, reason: 'opted_out' }, { status: 200 })
+    }
+  }
+
   const { data: ownerUser } = await sbc.auth.admin.getUserById(reqRow.owner_id)
   const ownerEmail = ownerUser.user?.email ?? null
   if (!ownerEmail) {
@@ -225,6 +275,7 @@ export async function POST(request: Request) {
     changedFields,
     link,
     siteUrl: siteUrl(),
+    doneDate: reqRow.done_date,
   }
   const html = buildOwnerUpdateEmailHtml(emailBodyFields)
   const text = buildOwnerUpdateEmailText(emailBodyFields)
