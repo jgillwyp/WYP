@@ -195,6 +195,16 @@ function formatTime12h(value: string | null): string {
   return `${h}:${mStr} ${ampm}`
 }
 
+// The current wall-clock time as a type="time" input value (HH:MM,
+// 24-hour) — 2026-09-14, owner-reported: quick-Done filled Done Date but
+// left Done Time blank on a Request whose owner has Due/Done Time enabled,
+// which read as broken rather than deliberate. Duplicated per component,
+// same short-helper convention as todayISODate/formatMDY.
+function currentTimeHHMM(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 // todayISODate, truncate, and the full .ics builder (buildIcsContent et al.,
 // including ICS_DEFAULT_DUE_TIME/ICS_DURATION_MINUTES) moved to
 // app/src/lib/ics.ts, 2026-08-11 — see that file's own header comment for
@@ -543,16 +553,32 @@ export default function RequestResponseForm() {
 
   // Owner's ask (2026-08-10): mark a Request Done in as few keystrokes as
   // possible, without forcing Done/Add Dialog/Add Attachment into a
-  // mutually-exclusive choice (a recipient may want more than one). Sets
-  // Done Date only — Done Time stays untouched, same "optional refinement,
-  // not required" role it has everywhere else in the app. Purely a local
-  // field fill; Send is still the actual write (set_response_done_by_token).
-  // Owner's own flagged concern, 2026-08-10, resolved as he suggested: moving
-  // Add to Calendar above the Date/From/Due block (below) pushes Done
-  // Date/Done Time further down the screen, so scroll the just-filled Done
-  // Date field into view rather than leaving it stranded below the fold.
+  // mutually-exclusive choice (a recipient may want more than one). Purely a
+  // local field fill; Send is still the actual write
+  // (set_response_done_by_token). Owner's own flagged concern, 2026-08-10,
+  // resolved as he suggested: moving Add to Calendar above the Date/From/Due
+  // block (below) pushes Done Date/Done Time further down the screen, so
+  // scroll the just-filled Done Date field into view rather than leaving it
+  // stranded below the fold.
+  //
+  // Also fills Done Time with the current time, 2026-09-14 (owner-reported:
+  // a Request whose owner tracks Due/Done Time left Done Time blank after
+  // clicking Done, which read as broken) — gated on
+  // data.owner_request_time_enabled since that field doesn't even render
+  // otherwise, and further narrowed to only when today (the Done Date this
+  // click just set) equals the Due Date (owner's own follow-up correction):
+  // "now" is only a meaningful Done Time when completion is actually
+  // happening on the Due Date itself, not when marking an old or
+  // early-relative-to-Due Request done later. Originally left untouched
+  // entirely ("optional refinement, not required" — Done Time is still
+  // freely editable/clearable afterward); this only changes the one-click
+  // default.
   function handleQuickDone() {
-    setDoneDate(todayISODate())
+    const today = todayISODate()
+    setDoneDate(today)
+    if (data?.owner_request_time_enabled && today === data.due_date) {
+      setDoneTime(currentTimeHHMM())
+    }
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 

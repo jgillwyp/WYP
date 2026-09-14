@@ -219,6 +219,15 @@ function formatTime12h(value: string | null): string {
   return `${h}:${mStr} ${ampm}`
 }
 
+// The current wall-clock time as a type="time" input value (HH:MM,
+// 24-hour) — 2026-09-14, see handleQuickDone's own comment below. Same
+// helper as RequestResponseForm.tsx's copy, per this file's own established
+// per-component duplication convention.
+function currentTimeHHMM(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 // Desktop browsers only open a date/time input's native picker when the
 // calendar/clock icon itself is clicked — unlike mobile, where tapping
 // anywhere in the field does. Hand-typing a value isn't a supported way to
@@ -793,11 +802,19 @@ export default function ResponseDetailForm() {
   }
 
   // Same quick-Done band as Request Response (§6.31, built 2026-08-10) —
-  // fills Done Date with today only, Done Time stays untouched, purely a
-  // local field fill (Send/set_response_done_as_recipient is still the
-  // actual write).
+  // purely a local field fill (Send/set_response_done_as_recipient is still
+  // the actual write). Also fills Done Time with the current time,
+  // 2026-09-14 (see RequestResponseForm.tsx's own handleQuickDone comment
+  // for the full report/reasoning) — gated on owner_request_time_enabled
+  // and further narrowed to only when today (the Done Date this click just
+  // set) equals the Due Date. Originally left untouched entirely ("optional
+  // refinement, not required" — still freely editable/clearable afterward).
   function handleQuickDone() {
-    setDoneDate(todayISODate())
+    const today = todayISODate()
+    setDoneDate(today)
+    if (data?.owner_request_time_enabled && today === data.due_date) {
+      setDoneTime(currentTimeHHMM())
+    }
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 

@@ -8,13 +8,17 @@
 -- and seed-test-attachments.mjs: written for Jim to run himself in the
 -- Supabase SQL editor, re-runnable any time a new participant needs checking.
 --
--- Three separate, deliberately-independent permissions this script touches:
+-- Three separate, deliberately-independent permissions this script touches,
+-- plus one data-population step (Step 4b) that isn't a permission at all:
 --   1. beta_allowlist        — may this NEW email sign up at all (migration 015)
 --   2. tier_toggle_allowlist — may this signed-in account self-grant Subscriber
 --                              for testing, i.e. see the "Subscribed?" checkbox
 --                              (migration 035)
 --   3. profiles.is_admin     — may this account see cross-account Statistics
 --                              aggregates (migration 053)
+--   4b. profiles.display_name — populated in bulk from beta_allowlist.note,
+--                              where Jim has been entering each participant's
+--                              actual name (2026-09-14)
 --
 -- None of these imply each other. beta_allowlist membership does not create a
 -- profiles row (that happens automatically, via the on_auth_user_created
@@ -78,12 +82,53 @@ update public.profiles set is_admin = true
 where id = (select id from auth.users where lower(email) = lower('someone@example.com'));  -- EDIT
 
 -- ----------------------------------------------------------------------------
+-- STEP 4b (2026-09-14) — Bulk-populate profiles.display_name from
+-- beta_allowlist.note, where that's where Jim has been entering each
+-- participant's actual name. Requires a real profiles row to exist first
+-- (Step 2 backfills any that are missing) — a person who hasn't signed in
+-- yet has no auth.users row to join against, so they're simply skipped
+-- here and will need this step re-run once they do sign in.
+--
+-- Non-destructive by design: only ever fills a display_name that is
+-- currently NULL. Never overwrites a name someone already set for
+-- themselves via Create Free Account, or a name you already set by hand —
+-- if you want this batch to override an existing value too, drop the
+-- `where public.profiles.display_name is null` line from the UPDATE below.
+--
+-- Preview first — review this before running the write below. Any row
+-- whose note isn't actually a name (a stray comment, blank, etc.) will
+-- otherwise get written verbatim as that account's display_name.
+-- ----------------------------------------------------------------------------
+select
+  ba.email,
+  ba.note                            as proposed_display_name,
+  p.display_name                     as current_display_name,
+  (p.display_name is null)           as would_change
+from beta_allowlist ba
+join auth.users u on lower(u.email) = lower(ba.email)
+left join public.profiles p on p.id = u.id
+where ba.note is not null and trim(ba.note) <> ''
+order by ba.email;
+
+-- The actual write — matches the preview above exactly (same join, same
+-- non-empty-note filter, same "only when currently null" condition).
+insert into public.profiles (id, display_name)
+select u.id, ba.note
+from beta_allowlist ba
+join auth.users u on lower(u.email) = lower(ba.email)
+where ba.note is not null and trim(ba.note) <> ''
+on conflict (id) do update
+  set display_name = excluded.display_name
+  where public.profiles.display_name is null;
+
+-- ----------------------------------------------------------------------------
 -- STEP 5 — Verify everything landed:
 -- ----------------------------------------------------------------------------
 select
   ba.email,
   u.id is not null                 as has_signed_in,
   p.id is not null                 as has_profile,
+  p.display_name,
   coalesce(p.is_admin, false)      as is_admin,
   exists(
     select 1 from tier_toggle_allowlist tta where lower(tta.email) = lower(ba.email)
