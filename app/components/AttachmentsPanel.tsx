@@ -256,35 +256,16 @@ export default function AttachmentsPanel({
 
       setUploading(true)
       setError(null)
-      const body = new FormData()
-      body.append('file', f)
-      body.append('requestId', requestId)
-      if (recipientToken) body.append('token', recipientToken)
 
-      try {
-        const res = await fetch('/api/attachments/upload', {
-          method: 'POST',
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          body,
-        })
-        const resBody = await res.json()
-        if (!res.ok) {
-          setError(
-            resBody.error === 'limit_reached'
-              ? `Attachment limit reached (${MAX_ATTACHMENTS_PER_ITEM}).`
-              : resBody.error === 'storage_limit'
-                ? (resBody.detail ?? 'This would exceed the storage allowance.')
-                : `Could not upload ${f.name}.`
-          )
-        } else {
-          setRows((current) => [resBody.attachment, ...current])
-          onContentChange?.()
-        }
-      } catch {
-        setError(`Could not upload ${f.name}.`)
-      } finally {
-        setUploading(false)
+      const { uploadAttachmentWithRetry } = await import('@/lib/attachmentsClient')
+      const result = await uploadAttachmentWithRetry(f, requestId, { authToken, recipientToken })
+      if (result.ok) {
+        setRows((current) => [result.attachment, ...current])
+        onContentChange?.()
+      } else {
+        setError(result.message)
       }
+      setUploading(false)
     }
   }
 

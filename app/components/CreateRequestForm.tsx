@@ -633,30 +633,18 @@ export default function CreateRequestForm() {
     const accessToken = sessionData.session?.access_token
     if (!accessToken) throw new Error('Your session has expired.')
 
+    const { uploadAttachmentWithRetry } = await import('@/lib/attachmentsClient')
+
     for (let i = 0; i < stagedFiles.length; i++) {
       const file = stagedFiles[i]
-      const body = new FormData()
-      body.append('file', file)
-      body.append('requestId', requestId)
-      // Repeat carry-forward selection (Jim's own design, 2026-08-21) — only
-      // meaningful when repeatRule is set, but harmless to send either way;
-      // the upload route just writes it straight onto the new row.
-      body.append('carryIntoRepeats', carryIndexes.has(i) ? 'true' : 'false')
-      const res = await fetch('/api/attachments/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body,
+      // Retry-with-backoff (2026-09-15) — see uploadAttachmentWithRetry's
+      // own doc comment for the full reasoning (owner-reported: a staged
+      // attachment failed on a weak cellular connection).
+      const result = await uploadAttachmentWithRetry(file, requestId, {
+        authToken: accessToken,
+        carryIntoRepeats: carryIndexes.has(i),
       })
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}))
-        throw new Error(
-          detail.error === 'limit_reached'
-            ? `Attachment limit reached (${MAX_ATTACHMENTS_PER_ITEM}).`
-            : detail.error === 'storage_limit'
-              ? (detail.detail ?? 'This would exceed the storage allowance.')
-              : `Could not upload ${file.name}.`
-        )
-      }
+      if (!result.ok) throw new Error(result.message)
     }
   }
 
