@@ -1217,7 +1217,7 @@ export default function ResponseDetailForm() {
               canCopyAttachments={viewerTier === 'subscriber'}
               archiveAction={
                 receivedArchivedAt === null
-                  ? { label: 'Archive this Request', busy: archiving, onArchive: handleArchiveThis, error: archiveError }
+                  ? { label: 'Archive', busy: archiving, onArchive: handleArchiveThis, error: archiveError }
                   : undefined
               }
             />

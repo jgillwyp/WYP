@@ -1663,7 +1663,7 @@ export default function RequestDetailForm() {
               canCopyAttachments={tier === 'subscriber'}
               archiveAction={
                 archivedAt === null
-                  ? { label: 'Archive this Request', busy: archiving, onArchive: handleArchiveThis }
+                  ? { label: 'Archive', busy: archiving, onArchive: handleArchiveThis }
                   : undefined
               }
             />

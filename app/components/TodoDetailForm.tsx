@@ -1611,7 +1611,7 @@ export default function TodoDetailForm() {
               canCopyAttachments={tier === 'subscriber'}
               archiveAction={
                 archivedAt === null
-                  ? { label: 'Archive this ToDo', busy: archiving, onArchive: handleArchiveThis }
+                  ? { label: 'Archive', busy: archiving, onArchive: handleArchiveThis }
                   : undefined
               }
             />

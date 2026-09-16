@@ -87,9 +87,13 @@ type Props = {
   }
 }
 
+// Shortened 2026-09-16 (owner-reported: the old "Archive this Request/ToDo"
+// button truncated on a narrow Android width) — "Copy to..." still conveys
+// that this creates a new item from the current one's own content, without
+// the longer "...from this Request/ToDo" clause.
 const BANNER_LABEL: Record<Direction, string> = {
-  'request-to-todo': 'Create a ToDo from this Request',
-  'todo-to-request': 'Create a Request from this ToDo',
+  'request-to-todo': 'Copy to Create ToDo',
+  'todo-to-request': 'Copy to Create Request',
 }
 
 const TARGET_ROUTE: Record<Direction, string> = {
