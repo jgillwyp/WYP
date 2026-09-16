@@ -12,7 +12,13 @@ export type ItemStatus = 'open' | 'overdue' | 'done'
 export type CalendarItem = {
   id: string
   type: RecordType
+  // label — truncated to 30 chars of Description, for the on-calendar event
+  // chip (a month/week/day grid cell has no room for a long description).
   label: string
+  // fullLabel — same "To:/From:/ToDo" prefix, but the complete, untruncated
+  // Description — Jim's own explicit ask: "For the printing, all of the
+  // description should print." Print is the only consumer of this field.
+  fullLabel: string
   dueDate: string
   dueTime: string | null
   status: ItemStatus
@@ -93,6 +99,7 @@ export async function fetchSentItems(): Promise<CalendarItem[]> {
       id: r.id,
       type: 'sent' as const,
       label: `To: ${r.contacts?.display_name ?? '—'}, ${truncate(r.description)}`,
+      fullLabel: `To: ${r.contacts?.display_name ?? '—'}, ${r.description}`,
       dueDate: r.due_date as string,
       dueTime: r.due_time,
       status: statusFor(r.due_date, r.done_date),
@@ -113,6 +120,7 @@ export async function fetchReceivedItems(): Promise<CalendarItem[]> {
       id: r.id,
       type: 'received' as const,
       label: `From: ${r.owner_name ?? '—'}, ${truncate(r.description)}`,
+      fullLabel: `From: ${r.owner_name ?? '—'}, ${r.description}`,
       dueDate: r.due_date as string,
       dueTime: r.owner_request_time_enabled ? r.due_time : null,
       status: statusFor(r.due_date, r.done_date),
@@ -138,6 +146,7 @@ export async function fetchTodoItems(todoTimeEnabled: boolean): Promise<Calendar
       id: r.id,
       type: 'todo' as const,
       label: `ToDo ${truncate(r.description)}`,
+      fullLabel: `ToDo ${r.description}`,
       dueDate: r.due_date as string,
       dueTime: todoTimeEnabled ? r.due_time : null,
       status: statusFor(r.due_date, r.done_date),

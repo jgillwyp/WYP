@@ -274,7 +274,9 @@ export default function CalendarView() {
         <WypHeader />
         <div className="band">
           <span className="glabel">Calendar</span>
-          <button className="btn-secondary" type="button" onClick={() => router.back()}>Close</button>
+          <span className="bandcluster">
+            <button className="btn-secondary" type="button" onClick={() => router.back()}>Close</button>
+          </span>
         </div>
 
         <div className="scroll">
@@ -402,7 +404,7 @@ export default function CalendarView() {
             printRows.map((item) => (
               <div className="prow" key={`${item.type}-${item.id}`}>
                 <div className="pr1 detail2">
-                  <span>{item.label}</span>
+                  <span>{item.fullLabel}</span>
                   <span className="c-due">{formatMDYSlash(item.dueDate, item.dueTime)}</span>
                 </div>
               </div>
