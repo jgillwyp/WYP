@@ -395,6 +395,8 @@ export default function ResponseDetailForm() {
   // server-side whenever p_done_date is null, so this state exists only
   // to drive the advisory note below, not to build the Save payload.
   const [receivedArchivedAt, setReceivedArchivedAt] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState(false)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
 
   // Owner-reported, 2026-08-15 — see RequestResponseForm.tsx's identical
   // comment; this screen mirrors that fix verbatim.
@@ -848,6 +850,28 @@ export default function ResponseDetailForm() {
     router.back()
   }
 
+  // "Archive this Request" (owner, 2026-09-16) — a standalone one-click
+  // archive from the Detail screen itself, shown only once the Request is
+  // Done (rendered inside ConversionBanner.tsx, to the left of its own
+  // "Create a ToDo from this Request" button). Uses archive_received_request
+  // (migration 028), the same RPC Archive's own Archive action already calls
+  // for a signed-in recipient's own copy — RLS is owner-only on requests, so
+  // this can never be a plain client .update() from this side. Navigates
+  // back on success, same as Close/Cancel.
+  async function handleArchiveThis() {
+    setArchiving(true)
+    setArchiveError(null)
+    const { error: archiveRpcError } = await supabase.rpc('archive_received_request', {
+      p_request_id: requestId,
+    })
+    setArchiving(false)
+    if (archiveRpcError) {
+      setArchiveError(archiveRpcError.message)
+      return
+    }
+    router.back()
+  }
+
   if (loading) {
     return (
       <div className="frame-none">
@@ -1191,6 +1215,11 @@ export default function ResponseDetailForm() {
               }))}
               attachmentCount={printAttachments.length}
               canCopyAttachments={viewerTier === 'subscriber'}
+              archiveAction={
+                receivedArchivedAt === null
+                  ? { label: 'Archive this Request', busy: archiving, onArchive: handleArchiveThis, error: archiveError }
+                  : undefined
+              }
             />
           </form>
         </div>

@@ -361,6 +361,7 @@ export default function RequestDetailForm() {
   const [descInvalid, setDescInvalid] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState(false)
 
   // Manual "Send Reminder" (owner, 2026-08-22): "The reminder would go out
   // either immediately or in the next cron cycle. This would accommodate a
@@ -978,6 +979,29 @@ export default function RequestDetailForm() {
       setSendingReminder(false)
       setReminderResult({ ok: false, text: 'The Reminder could not be sent. Please try again.' })
     }
+  }
+
+  // "Archive this Request" (owner, 2026-09-16) — a standalone one-click
+  // archive from the Detail screen itself, shown only once the Request is
+  // Done (rendered inside ConversionBanner.tsx, to the left of its own
+  // "Create a ToDo from this Request" button). Uses set_archived() (migration
+  // 055), the same RPC Archive's own Archive action already calls for
+  // owned Sent Requests — not a plain client .update(), since that RPC also
+  // logs the Admin Statistics 'archived' event in the same transaction.
+  // Navigates back on success, same as Close/Cancel — an archived Request no
+  // longer belongs in the live list this screen was opened from.
+  async function handleArchiveThis() {
+    setArchiving(true)
+    const { error: archiveRpcError } = await supabase.rpc('set_archived', {
+      p_request_ids: [requestId],
+      p_archived: true,
+    })
+    setArchiving(false)
+    if (archiveRpcError) {
+      setError(archiveRpcError.message)
+      return
+    }
+    router.back()
   }
 
   // §6.44 PROPOSED — reuses .donerow/.donenote (the same "Strip-tint box,
@@ -1637,6 +1661,11 @@ export default function RequestDetailForm() {
               }))}
               attachmentCount={printAttachments.length}
               canCopyAttachments={tier === 'subscriber'}
+              archiveAction={
+                archivedAt === null
+                  ? { label: 'Archive this Request', busy: archiving, onArchive: handleArchiveThis }
+                  : undefined
+              }
             />
 
             {error && (

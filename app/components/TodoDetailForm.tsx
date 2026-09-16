@@ -321,6 +321,7 @@ export default function TodoDetailForm() {
   const [descInvalid, setDescInvalid] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState(false)
 
   const doneDateRef = useRef<HTMLInputElement>(null)
 
@@ -983,6 +984,29 @@ export default function TodoDetailForm() {
     router.back()
   }
 
+  // "Archive this ToDo" (owner, 2026-09-16) — a standalone one-click archive
+  // from the Detail screen itself, shown only once the ToDo is Done
+  // (rendered inside ConversionBanner.tsx, to the left of its own "Create a
+  // Request from this ToDo" button). Uses set_archived() (migration 055),
+  // the same RPC Archive's own Archive action already calls — not a plain
+  // client .update(), since that RPC also logs the Admin Statistics
+  // 'archived' event in the same transaction. Navigates back on success,
+  // same as Close/Cancel — an archived ToDo no longer belongs in the live
+  // list this screen was opened from.
+  async function handleArchiveThis() {
+    setArchiving(true)
+    const { error: archiveRpcError } = await supabase.rpc('set_archived', {
+      p_request_ids: [todoId],
+      p_archived: true,
+    })
+    setArchiving(false)
+    if (archiveRpcError) {
+      setError(archiveRpcError.message)
+      return
+    }
+    router.back()
+  }
+
   if (loading) {
     return (
       <div className="frame-none">
@@ -1585,6 +1609,11 @@ export default function TodoDetailForm() {
               }))}
               attachmentCount={printAttachments.length}
               canCopyAttachments={tier === 'subscriber'}
+              archiveAction={
+                archivedAt === null
+                  ? { label: 'Archive this ToDo', busy: archiving, onArchive: handleArchiveThis }
+                  : undefined
+              }
             />
 
             {error && (

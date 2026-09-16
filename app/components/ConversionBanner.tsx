@@ -72,6 +72,19 @@ type Props = {
    * its issuer, but copying onto a brand-new item is "adding" there, which
    * is gated on whoever will own that new item). */
   canCopyAttachments: boolean
+  /** Standalone "Archive this Request/ToDo" button (2026-09-16, owner's own
+   * request), rendered to the left of this banner's own Create button in
+   * the same .fieldact row — a plain one-click archive of the source item
+   * itself, unrelated to the conversion flow below. Parent passes undefined
+   * once the source is already archived (nothing left to do); only ever
+   * shown while isDone is also true, same gate the parent already applies
+   * to its own un-archive-on-clear advisory. */
+  archiveAction?: {
+    label: string
+    busy: boolean
+    onArchive: () => void
+    error?: string | null
+  }
 }
 
 const BANNER_LABEL: Record<Direction, string> = {
@@ -106,6 +119,7 @@ export default function ConversionBanner({
   dialogEntries,
   attachmentCount,
   canCopyAttachments,
+  archiveAction,
 }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -165,10 +179,25 @@ export default function ConversionBanner({
   return (
     <>
       <div className="fieldact">
+        {isDone && archiveAction && (
+          <button
+            className="btn-secondary"
+            type="button"
+            disabled={archiveAction.busy}
+            onClick={archiveAction.onArchive}
+          >
+            {archiveAction.busy ? 'Archiving…' : archiveAction.label}
+          </button>
+        )}
         <button className="btn-secondary" type="button" onClick={openModal}>
           {BANNER_LABEL[direction]}
         </button>
       </div>
+      {isDone && archiveAction?.error && (
+        <p className="ferror" role="alert" style={{ marginTop: -2, marginBottom: 6, textAlign: 'right' }}>
+          {archiveAction.error}
+        </p>
+      )}
 
       {open && (
         <>

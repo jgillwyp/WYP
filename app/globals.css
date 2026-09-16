@@ -945,6 +945,7 @@ body {
 .fieldact {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
