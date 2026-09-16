@@ -630,6 +630,12 @@ const TODO_SORT_KEY = 'wyp.mainTodoSort'
 // stray offset once real content changes the page's height.
 const MAIN_SCROLL_KEY = 'wyp.mainScrollTop'
 
+// Refetch-on-focus debounce (2026-09-16) — see the effect's own comment
+// further below. Only guards against 'visibilitychange' and 'focus' both
+// firing for the same tab-switch; not a rate limit meant to matter beyond
+// that.
+const REFOCUS_REFRESH_MIN_INTERVAL_MS = 5000
+
 // Search round-trip persistence (2026-08-26) — owner-reported: clicking a
 // Search Results row (Sent/Received/ToDos) to open its Request/ToDo/
 // Response Detail, then Close/Cancel back, dropped straight into a normal,
@@ -1238,30 +1244,41 @@ export default function MainScreen() {
   // real outage, not clock skew), a generic message plus a manual Try Again
   // control replaces the raw error text, which should never have been
   // user-facing regardless of what caused it.
+  // Extracted out of the load effect below (2026-09-16) so the new
+  // refetch-on-focus effect can issue the same three queries without
+  // duplicating them. No reactive deps of its own — a plain closure over
+  // the stable `supabase` import — so it doesn't need useCallback.
+  async function fetchMainScreenData() {
+    return Promise.all([
+      supabase
+        .from('requests')
+        .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule')
+        .not('contact_id', 'is', null)
+        .order('due_date', { ascending: false, nullsFirst: false }),
+      // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
+      // select can't do this: there's no column linking a requests row to
+      // its recipient's own account, only to the sender's Contact record
+      // for them. The function matches on that Contact's email against
+      // the signed-in caller's own session email instead. Already sorted
+      // server-side (due_date desc nulls last), matching Sent's own order.
+      supabase.rpc('get_received_requests'),
+      supabase
+        .from('requests')
+        .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at, repeat_rule')
+        .is('contact_id', null)
+        .order('priority', { ascending: true, nullsFirst: false }),
+    ])
+  }
+
+  // Last time sent/received/todos were successfully refreshed, from either
+  // the load effect below or the refetch-on-focus effect — guards the
+  // latter from firing again within REFRESH_MIN_INTERVAL_MS of a fetch that
+  // already just happened (e.g. a 'visibilitychange' and a 'focus' event
+  // both firing for the same tab switch).
+  const lastLoadedAtRef = useRef(0)
+
   useEffect(() => {
     let cancelled = false
-
-    async function attempt() {
-      return Promise.all([
-        supabase
-          .from('requests')
-          .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule')
-          .not('contact_id', 'is', null)
-          .order('due_date', { ascending: false, nullsFirst: false }),
-        // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
-        // select can't do this: there's no column linking a requests row to
-        // its recipient's own account, only to the sender's Contact record
-        // for them. The function matches on that Contact's email against
-        // the signed-in caller's own session email instead. Already sorted
-        // server-side (due_date desc nulls last), matching Sent's own order.
-        supabase.rpc('get_received_requests'),
-        supabase
-          .from('requests')
-          .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at, repeat_rule')
-          .is('contact_id', null)
-          .order('priority', { ascending: true, nullsFirst: false }),
-      ])
-    }
 
     async function load() {
       setLoading(true)
@@ -1272,7 +1289,7 @@ export default function MainScreen() {
         if (delaysMs[i] > 0) await new Promise((r) => setTimeout(r, delaysMs[i]))
         if (cancelled) return
 
-        const [sentRes, receivedRes, todoRes] = await attempt()
+        const [sentRes, receivedRes, todoRes] = await fetchMainScreenData()
         if (cancelled) return
 
         const firstError = sentRes.error ?? receivedRes.error ?? todoRes.error
@@ -1281,6 +1298,7 @@ export default function MainScreen() {
           setReceived((receivedRes.data as unknown as ReceivedRow[]) ?? [])
           setTodos((todoRes.data as unknown as TodoRow[]) ?? [])
           setLoading(false)
+          lastLoadedAtRef.current = Date.now()
           return
         }
 
@@ -1297,6 +1315,47 @@ export default function MainScreen() {
       cancelled = true
     }
   }, [reloadTick])
+
+  // Refetch-on-focus (2026-09-16) — a test user expected a Request added on
+  // his phone to show up on his already-open desktop tab without a manual
+  // reload; as a web app (not native, no push), the only signal available
+  // is "the person came back to this tab/window." Deliberately silent — no
+  // setLoading(true), so returning to the tab doesn't flash "Loading…" over
+  // rows that are probably still correct; a failed background refetch just
+  // leaves whatever's already on screen in place rather than surfacing
+  // loadError (same posture as AttachmentsPanel.tsx's own silent-refresh
+  // precedent, 2026-08-27). Both 'visibilitychange' and 'focus' are
+  // listened for — some browsers only reliably fire one or the other
+  // depending on whether it's a tab switch or an alt-tab to another
+  // application — with lastLoadedAtRef as a shared debounce so a tab switch
+  // that fires both doesn't fetch twice.
+  useEffect(() => {
+    let cancelled = false
+
+    async function silentRefresh() {
+      const [sentRes, receivedRes, todoRes] = await fetchMainScreenData()
+      if (cancelled) return
+      if (sentRes.error || receivedRes.error || todoRes.error) return
+      setSent((sentRes.data as unknown as SentRow[]) ?? [])
+      setReceived((receivedRes.data as unknown as ReceivedRow[]) ?? [])
+      setTodos((todoRes.data as unknown as TodoRow[]) ?? [])
+      lastLoadedAtRef.current = Date.now()
+    }
+
+    function handleWake() {
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastLoadedAtRef.current < REFOCUS_REFRESH_MIN_INTERVAL_MS) return
+      silentRefresh()
+    }
+
+    document.addEventListener('visibilitychange', handleWake)
+    window.addEventListener('focus', handleWake)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', handleWake)
+      window.removeEventListener('focus', handleWake)
+    }
+  }, [])
 
   async function handleLogOut() {
     setSigningOut(true)
