@@ -825,7 +825,11 @@ export default function ResponseDetailForm() {
   function handleAddToCalendar() {
     if (!data) return
     const link = window.location.href
-    const content = buildIcsContent(data, link)
+    // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's own
+    // header comment in ics.ts: METHOD:PUBLISH (needed for the *emailed*
+    // .ics) silently fails to add on Android when opened from a local
+    // download instead.
+    const content = buildIcsContent(data, link, { omitMethod: true })
     const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

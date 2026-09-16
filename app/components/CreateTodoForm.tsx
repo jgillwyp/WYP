@@ -772,7 +772,10 @@ export default function CreateTodoForm() {
             owner_name: null,
           },
           link,
-          { kind: 'todo' }
+          // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's
+          // own header comment in ics.ts: METHOD:PUBLISH silently fails to
+          // add on Android when opened from a local download.
+          { kind: 'todo', omitMethod: true }
         )
         const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
         const url = URL.createObjectURL(blob)

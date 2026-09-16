@@ -267,10 +267,35 @@ export function cameFromCalendarLink(search: string): boolean {
 // comment already gives for existing here at all. payload.owner_name is
 // unused on the 'todo' path (a ToDo's own calendar entry has no "from
 // <name>" framing — it's the owner's own reminder to themselves).
+//
+// options.omitMethod (2026-09-16, owner-reported) — 'METHOD:PUBLISH' was
+// added 2026-08-13 to fix a real Outlook bug on the *emailed* .ics: Outlook
+// checks the MIME attachment's own `Content-Type: text/calendar;
+// method=...` parameter against the VCALENDAR body's own METHOD property
+// and rejects a mismatch, so the body has to declare something once the
+// attachment's content-type does. That constraint is specific to the
+// email-attachment delivery path (app/api/email/send-request/route.ts,
+// app/api/cron/tick/route.ts's two Reminder sends) — none of those pass
+// this option, so they keep METHOD:PUBLISH exactly as before. The
+// client-side "Add to Calendar" button/checkbox (RequestResponseForm.tsx,
+// ResponseDetailForm.tsx, CreateTodoForm.tsx, TodoDetailForm.tsx) is a
+// different delivery path entirely — a plain Blob download with no
+// method= content-type parameter at all, so there's nothing for a METHOD
+// line to stay consistent with there. Owner-reported, 2026-09-16: opening
+// that downloaded file on Android and tapping its "Add" link silently did
+// nothing — a documented limitation of METHOD:PUBLISH specifically in
+// Android's local-file-open flow. Omitting METHOD entirely for that one
+// path (rather than switching to REQUEST, which implies a real meeting
+// with an ORGANIZER/ATTENDEE and would reopen the original "Invite
+// Others" problem this file already fixed once) matches how most
+// standalone "add this one event to your calendar" tools generate a
+// plain VEVENT with no iTIP method at all — METHOD only has meaning for
+// scheduling messages exchanged between calendar systems, which a local
+// single-file download never is.
 export function buildIcsContent(
   payload: IcsRequestFields,
   link: string,
-  options?: { reminderSchedule?: ReminderSchedule | null; kind?: 'request' | 'todo' }
+  options?: { reminderSchedule?: ReminderSchedule | null; kind?: 'request' | 'todo'; omitMethod?: boolean }
 ): string {
   const kind = options?.kind ?? 'request'
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
@@ -317,8 +342,10 @@ export function buildIcsContent(
     // event has — a WYP Request's due date was never a meeting. PUBLISH is
     // the correct iTIP method for a one-way informational calendar entry
     // like this one; the email route's attachment content-type now declares
-    // method=PUBLISH to match.
-    'METHOD:PUBLISH',
+    // method=PUBLISH to match. Omitted entirely (options.omitMethod) for the
+    // client-side "Add to Calendar" download path — see this function's own
+    // header comment for why that path needs no METHOD line at all.
+    ...(options?.omitMethod ? [] : ['METHOD:PUBLISH']),
     'BEGIN:VEVENT',
     `UID:${kind}-${payload.id}@wouldyouplease.com`,
     `DTSTAMP:${formatIcsUtc(new Date())}`,
