@@ -26,17 +26,12 @@ point. Clicking one:
 
 1. Pre-checks that section's Record Type in the new screen.
 2. Carries that section's **currently active status chip** (All / Open /
-   Overdue / Done) into the new screen as a fixed, read-only **Status**
-   label shown at the top ("Status: Open") — not a re-clickable chip row
-   inside Calendar itself. To see a different status, close Calendar,
-   change the chip on Main Screen, and reopen it. Jim's own wording,
-   twice: "shown in text at the top (that way the events are
-   'consistent' in the view)" — the whole point is that every Record Type
-   checked while in Calendar reads against the *same* status, so an "Open
-   Sent + All ToDos" mismatch can't happen.
+   Overdue / Done) into the new screen as the starting selection of a
+   real, clickable chip row — see Header controls below for the full
+   design. (Supersedes an earlier fixed-text-label version of this same
+   idea, 2026-09-16 — see that section's own note.)
 3. The user can then check additional Record Types (Sent/Received/ToDo)
-   from inside Calendar — each newly-checked type is filtered by that
-   same fixed Status, per the point above.
+   and change the Status chip freely from inside Calendar.
 
 Route: new `/calendar`, a new `RequireAuth`-wrapped screen
 (`app/components/CalendarView.tsx` / `app/calendar/page.tsx`), matching
@@ -46,25 +41,35 @@ not query params, matching this app's established round-trip pattern
 (Archive's `ARCHIVE_ROUNDTRIP_KEY`, Main Screen's search round-trip)
 rather than introducing URL-state for the first time.
 
-## Record Type selection & Status
+## Header controls — Record Type, Status, Print
 
-- Three checkboxes at the top: **Requests: ☐ Sent ☐ Received  ToDos ☐**
-  (Jim's own literal layout). Exactly one pre-checked on entry, per above.
-- **Status** label directly below/beside it, read-only, echoing the
-  launch chip.
-- A separate **"Exclude Done"** checkbox, checked by default (Jim's own
-  ask) — narrows whatever Status already selected by additionally hiding
-  `done` items. Meaningful only when Status is `all` or `done` (Open/
-  Overdue already exclude Done by construction, per `statusFor()`'s
-  existing three-way exclusive model) — a no-op the rest of the time,
-  which is fine to leave visible either way.
-  - **Flagged open question**: if the launch chip itself is *Done* ("Exclude
-    Done" defaulting checked would show an empty calendar). Proposed
-    resolution: default this checkbox to **unchecked** specifically when
-    Status = Done, checked by default in every other case. Needs Jim's
-    sign-off before building, not assumed.
+**Redesigned 2026-09-16** from Jim's own reference screenshot — a
+two-row Strip-tinted header band sitting directly above the calendar
+grid, replacing the original fixed-text-label design entirely:
+
+- **Row 1** — Record Type checkboxes: **Received, Sent, ToDos** (the
+  screenshot's own order and wording), plus a **Print icon** at the
+  right end of this same row (see Printing below). A checked type's
+  label renders bold, in brand-blue; an unchecked type renders as plain
+  text — the screenshot's own visual distinction. Exactly one is
+  pre-checked on entry, matching whichever section's calendar icon was
+  clicked (see Entry points); the user may check additional types
+  afterward.
+- **Row 2** — the **exact same All / Open / Overdue / Done chip row**
+  Main Screen and Archive already use, reused as-is, not a new control.
+  Initialized to whichever chip was active in the launching section, and
+  freely clickable/changeable from inside Calendar afterward (Jim's own
+  correction, 2026-09-16 — a real filter now, not a read-only echo).
+  There is still only one such filter, shared across every currently-
+  checked Record Type, so an "Open Sent + All ToDos" mismatch still
+  can't happen — the original consistency goal, now met by reusing a
+  familiar control instead of a read-only label plus a separate
+  checkbox. **Retires the earlier flagged edge case** (a separate
+  "Exclude Done" checkbox defaulting off only when launched from the
+  Done chip) — there's nothing left for it to apply to.
 - **Archived items never appear** — no toggle, unconditional exclusion,
-  matching Jim's own answer ("Archived do not need to appear").
+  unchanged from the original decision ("Archived do not need to
+  appear").
 - ToDos checkbox is disabled/hidden when the account's own
   `todo_dates_enabled` is off — a ToDo without that setting on has no
   `due_date` to plot at all, so there's nothing calendar-worthy about it.
@@ -144,8 +149,8 @@ Uses the same round-trip `sessionStorage` marker convention already
 established twice in this app (Archive's `ARCHIVE_ROUNDTRIP_KEY`, Main
 Screen's search round-trip): a new `CALENDAR_ROUNDTRIP_KEY`, set right
 before navigating to the Detail screen, preserving the current date/view
-type, checked Record Types, and Status/Exclude-Done state — so Close/
-Cancel returns to the exact same Calendar view rather than a reset one.
+type, checked Record Types, and Status chip selection — so Close/Cancel
+returns to the exact same Calendar view rather than a reset one.
 
 ## Calendar grid: hand-built vs. a library — the one real architecture call
 
@@ -169,6 +174,31 @@ sign-off before work starts** — this is the single biggest deviation from
 how the rest of the app has been built, and deserves an explicit decision
 rather than a default.
 
+## Printing
+
+**Added 2026-09-16** (supersedes the original "no print output for v1"
+deferral). A Print icon sits in the header band's own Row 1 (see Header
+controls above) — same `.no-print`/`.print-report` split and strictly-
+incrementing `printTick`-counter pattern every other print button in
+this app already uses (`MainScreen.tsx`/`ArchiveForm.tsx`/
+`RequestDetailForm.tsx`/`TodoDetailForm.tsx` all hit and fixed the same
+"a boolean re-trigger doesn't reliably fire `window.print()` on a
+second click" bug once already — no reason to reintroduce it here).
+
+Output is an **agenda-style list**, not the visual grid itself (Jim's
+own confirmed choice, 2026-09-16) — the same convention every other
+print report in this app already follows: Admin Statistics dropped its
+own charts for print outright, and Main Screen/Archive/the detail
+screens all print a plain table rather than reproducing the live
+widget. Avoids the real risk of a CSS grid — especially Week/Day's own
+hourly time-grid — breaking awkwardly across printed page boundaries.
+Reflects whichever Record Types and Status chip are currently selected
+and whichever date range is currently visible (the visible month, the
+visible week, or the single visible day, matching the current view
+type) — one row per item, sorted by date, reusing this app's own
+established print-table look (`.pcolbar`/`.pr1` conventions) rather than
+inventing a new print layout.
+
 ## Gating / entitlements
 
 - **Free feature, no tier check anywhere** — Jim's explicit answer.
@@ -187,7 +217,6 @@ rather than a default.
 
 Named explicitly so nothing here reads as a silently-dropped ask:
 
-- No print output for Calendar.
 - No inline editing, drag-to-reschedule, or quick-Done from the calendar
   grid itself — every item click goes to its real Detail screen for any
   change, same as today.
@@ -205,13 +234,15 @@ Named explicitly so nothing here reads as a silently-dropped ask:
    queries (reusing Main Screen's existing Sent/Received/ToDos queries
    verbatim), and a shared status/color helper reused from
    `MainScreen.tsx` rather than re-derived.
-2. Month view end to end: Record Type checkboxes, Status label, Exclude
-   Done, item rendering, click-through-with-return. The simplest view,
-   proves the whole data/interaction model before the harder grid work.
+2. Month view end to end: Record Type checkboxes, Status chip row, item
+   rendering, click-through-with-return. The simplest view, proves the
+   whole data/interaction model before the harder grid work.
 3. Week/Day views: the hourly time-grid and all-day row.
 4. Wire up the three entry-point icons on Main Screen (Sent/Received/
    ToDos sections).
-5. Polish: Today button, empty states, loading/error states — matching
+5. Printing: the agenda-style print output, once Month view and the
+   header controls are solid.
+6. Polish: Today button, empty states, loading/error states — matching
    this app's existing conventions (retry-with-backoff on load errors,
    per the 2026-09-11 Main Screen/Archive/Contacts fix, rather than a
    fourth, differently-behaved loading pattern).
@@ -219,16 +250,18 @@ Named explicitly so nothing here reads as a silently-dropped ask:
 ## Open questions carried forward
 
 Each of these has a proposed default in this doc, flagged rather than
-silently assumed — confirm or correct before or during build:
+silently assumed — confirm or correct before or during build. Two
+earlier open items are now resolved and dropped from this list: the
+"Exclude Done" default-unchecked edge case (the whole control is
+retired, per the 2026-09-16 header redesign above), and the print
+output format (agenda-style list, confirmed directly).
 
-1. "Exclude Done" defaulting unchecked specifically when Status = Done
-   (else the initial view is empty).
-2. Default view type on first entry (proposed: Month).
-3. ToDo label's comma — read as list notation, not literal punctuation
+1. Default view type on first entry (proposed: Month).
+2. ToDo label's comma — read as list notation, not literal punctuation
    (proposed: "ToDo `<descr>`", no comma).
-4. **Calendar grid: library vs. hand-built** — proposed: use a
+3. **Calendar grid: library vs. hand-built** — proposed: use a
    maintained library, the one deliberate exception to this app's
    zero-dependency convention. The biggest single decision in this plan.
-5. Week/Day time-grid granularity (proposed: hourly rows).
-6. Showing Due Time in the Month-view label only, since Week/Day's own
+4. Week/Day time-grid granularity (proposed: hourly rows).
+5. Showing Due Time in the Month-view label only, since Week/Day's own
    grid position already conveys it (proposed, not explicitly asked).

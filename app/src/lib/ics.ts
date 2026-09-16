@@ -161,6 +161,39 @@ export function buildIcsDescription(
   return parts.join(' ')
 }
 
+// ToDo Add to Calendar (2026-09-16, owner's own request — "e.g. taking
+// certain pills"). Same overall shape as buildIcsDescription above (the
+// call-to-action link first, then the Description, then the conditional
+// Reminder sentence, then a closing attachments/Dialog note), but written
+// for the owner's own calendar entry, not a recipient's:
+//   - No "click to respond or mark as completed" framing — a ToDo has no
+//     recipient to respond, and the owner can just open the app.
+//   - No "New to Would You Please?" signup pitch — the owner already has
+//     an account; that pitch is written for someone who might not.
+// link points at the ToDo's own /todos/[id] Detail screen (owner-only,
+// RLS-scoped — there's no separate response screen for a ToDo the way a
+// Request has one).
+export function buildTodoIcsDescription(
+  description: string,
+  link: string,
+  options: {
+    reminderSchedule?: ReminderSchedule | null
+    dueDate?: string | null
+    dueTime?: string | null
+  } = {}
+): string {
+  const { reminderSchedule = null, dueDate, dueTime } = options
+  const parts = [`Open ToDo to view or mark Done: ${link}`, description]
+
+  if (reminderSchedule && dueDate) {
+    parts.push(buildReminderScheduleSentence(dueDate, dueTime ?? null, reminderSchedule))
+  }
+
+  parts.push('You can also see any attachments and add questions or comments to this ToDo with the above link.')
+
+  return parts.join(' ')
+}
+
 // Minimal shape either ResponsePayload (RequestResponseForm.tsx) or
 // ReceivedDetailPayload (ResponseDetailForm.tsx) already satisfies — no
 // import cycle between the two components needed.
@@ -223,11 +256,23 @@ export function cameFromCalendarLink(search: string): boolean {
 // derived from the response link's own origin rather than threaded through
 // as a required parameter, since every caller already has a full link and
 // none currently has a separate site-root value handy.
+//
+// options.kind (2026-09-16) — 'request' (default) or 'todo'. Everything
+// about VEVENT construction (DTSTAMP, the timed-vs-all-day DTSTART/DTEND
+// logic, line folding) is identical between the two; only the UID prefix,
+// SUMMARY label, and which DESCRIPTION builder gets called differ, so this
+// stays one function with a small branch rather than a second near-
+// duplicate of ~40 lines of shared VEVENT logic — the same "worth an
+// exception to duplicate-per-caller" reasoning this file's own header
+// comment already gives for existing here at all. payload.owner_name is
+// unused on the 'todo' path (a ToDo's own calendar entry has no "from
+// <name>" framing — it's the owner's own reminder to themselves).
 export function buildIcsContent(
   payload: IcsRequestFields,
   link: string,
-  options?: { reminderSchedule?: ReminderSchedule | null }
+  options?: { reminderSchedule?: ReminderSchedule | null; kind?: 'request' | 'todo' }
 ): string {
+  const kind = options?.kind ?? 'request'
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
   const hasTime = payload.due_time != null && payload.due_time.trim() !== ''
 
@@ -275,18 +320,26 @@ export function buildIcsContent(
     // method=PUBLISH to match.
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
-    `UID:request-${payload.id}@wouldyouplease.com`,
+    `UID:${kind}-${payload.id}@wouldyouplease.com`,
     `DTSTAMP:${formatIcsUtc(new Date())}`,
     dtstartLine,
     dtendLine,
-    `SUMMARY:${icsEscapeText(`Would You Please: ${truncate(payload.description, 60)}`)}`,
+    `SUMMARY:${icsEscapeText(
+      `${kind === 'todo' ? 'Would You Please ToDo' : 'Would You Please'}: ${truncate(payload.description, 60)}`
+    )}`,
     `DESCRIPTION:${icsEscapeText(
-      buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, {
-        reminderSchedule: options?.reminderSchedule,
-        dueDate: payload.due_date,
-        dueTime: payload.due_time,
-        ownerName: payload.owner_name,
-      })
+      kind === 'todo'
+        ? buildTodoIcsDescription(payload.description, calendarLinkFor(link), {
+            reminderSchedule: options?.reminderSchedule,
+            dueDate: payload.due_date,
+            dueTime: payload.due_time,
+          })
+        : buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, {
+            reminderSchedule: options?.reminderSchedule,
+            dueDate: payload.due_date,
+            dueTime: payload.due_time,
+            ownerName: payload.owner_name,
+          })
     )}`,
     `URL:${calendarLinkFor(link)}`,
     'END:VEVENT',

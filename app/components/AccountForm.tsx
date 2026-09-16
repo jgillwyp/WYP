@@ -162,6 +162,12 @@ export default function AccountForm() {
   // Default flipped to false, migration 023 — see the file-level comment.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(false)
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  // profiles.todo_time_enabled (migration 067, 2026-09-16) — owner's own
+  // request, mirroring request_time_enabled's identical role for Requests:
+  // only meaningful, and only shown enabled, once todoDatesEnabled is also
+  // on (there's no Due/Done Date row to attach a Time field to otherwise).
+  // Off by default — ToDos have never had Due/Done Time before this.
+  const [todoTimeEnabled, setTodoTimeEnabled] = useState(false)
   // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — owner's
   // own itemized request: only meaningful, and only shown enabled, once
   // todoDatesEnabled is also on (a ToDo has no Due Date to remind about
@@ -278,7 +284,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
+          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
         )
         .eq('id', userData.user.id)
         .single()
@@ -294,6 +300,7 @@ export default function AccountForm() {
       setCategoriesEnabled(data?.private_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? false)
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
+      setTodoTimeEnabled(data?.todo_time_enabled ?? false)
       setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
       setReminderDigestEnabled(data?.reminder_digest_enabled ?? false)
       setNotifyOwnerOnDone(data?.notify_owner_on_done ?? true)
@@ -335,6 +342,7 @@ export default function AccountForm() {
       | 'private_category_enabled'
       | 'request_time_enabled'
       | 'todo_dates_enabled'
+      | 'todo_time_enabled'
       | 'todo_reminders_enabled'
       | 'reminder_digest_enabled'
       | 'notify_owner_on_done'
@@ -759,6 +767,29 @@ export default function AccountForm() {
                       just a Status of Open and Done. Turn it on for more precise ToDo
                       tracking. Date created and Date Done are always captured and shown in
                       the ToDos list view. Off by default.
+                    </span>
+                  </span>
+                </label>
+
+                <label
+                  className={`checkrow${!todoDatesEnabled ? ' checkrow-disabled' : ''}`}
+                  title={!todoDatesEnabled ? 'Please turn on Show Due/Done Dates first.' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={todoTimeEnabled}
+                    disabled={saving || !todoDatesEnabled}
+                    onChange={(e) =>
+                      handleToggle('todo_time_enabled', e.target.checked, setTodoTimeEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Show Due/Done Time
+                    <span className="checknote">
+                      If &quot;Show Due/Done Dates&quot; above is checked, add a Due Time and
+                      Done Time next to a ToDo&apos;s Due Date and Done Date. Turn it on if
+                      you want to optionally set the Due/Done Times for a ToDo. Off by
+                      default.
                     </span>
                   </span>
                 </label>

@@ -10,6 +10,7 @@ import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
+import { buildIcsContent } from '@/lib/ics'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 
@@ -61,7 +62,9 @@ type DialogEntry = {
 type TodoFormState = {
   priority: 1 | 2 | 3
   dueDate: string
+  dueTime: string
   doneDate: string
+  doneTime: string
   categoryName: string
   description: string
   reminderEnabled: boolean
@@ -106,6 +109,21 @@ function formatMDY(value: string | null): string {
   if (!value) return ''
   const [y, m, d] = value.slice(0, 10).split('-')
   return `${m}-${d}-${y.slice(2)}`
+}
+
+// Due/Done Time (migration 067, 2026-09-16) — same helper as
+// RequestDetailForm.tsx's identical one, duplicated per this codebase's
+// established per-file convention. This file's own print date format
+// stays formatMDY (dash, above) rather than adopting RequestDetailForm's
+// slash format — only the time suffix is new here.
+function formatTime12h(value: string | null): string {
+  if (!value) return ''
+  const [hStr, mStr] = value.split(':')
+  let h = parseInt(hStr, 10)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h}:${mStr} ${ampm}`
 }
 
 // formatMDYFromTimestamp (2026-09-02, owner-reported: Dialog entries showing
@@ -239,7 +257,9 @@ export default function TodoDetailForm() {
   const [form, setForm] = useState<TodoFormState>({
     priority: 1,
     dueDate: '',
+    dueTime: '',
     doneDate: '',
+    doneTime: '',
     categoryName: '',
     description: '',
     reminderEnabled: true,
@@ -257,6 +277,9 @@ export default function TodoDetailForm() {
   // form.doneDate afterward, since when this is off the Due/Done Date
   // fields it would otherwise sync with aren't rendered at all.
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
+  // profiles.todo_time_enabled (migration 067, 2026-09-16) — see
+  // AccountForm.tsx's identical gate.
+  const [todoTimeEnabled, setTodoTimeEnabled] = useState(false)
   // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — see
   // AccountForm.tsx's identical gate.
   const [todoRemindersEnabled, setTodoRemindersEnabled] = useState(false)
@@ -363,7 +386,9 @@ export default function TodoDetailForm() {
   const initialFormRef = useRef<{
     priority: 1 | 2 | 3
     dueDate: string
+    dueTime: string
     doneDate: string
+    doneTime: string
     categoryId: string | null
     description: string
     todoStatus: 'open' | 'done'
@@ -376,7 +401,9 @@ export default function TodoDetailForm() {
     initialFormRef.current !== null &&
     (form.priority !== initialFormRef.current.priority ||
       form.dueDate !== initialFormRef.current.dueDate ||
+      (todoTimeEnabled && form.dueTime !== initialFormRef.current.dueTime) ||
       form.doneDate !== initialFormRef.current.doneDate ||
+      (todoTimeEnabled && form.doneTime !== initialFormRef.current.doneTime) ||
       form.description !== initialFormRef.current.description ||
       todoStatus !== initialFormRef.current.todoStatus ||
       (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId ||
@@ -399,6 +426,38 @@ export default function TodoDetailForm() {
   function handleQuickDone() {
     set('doneDate', todayISODate())
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  // Add to Calendar (2026-09-16, owner's own request — "e.g. taking
+  // certain pills") — a real button here, unlike Create ToDo's checkbox,
+  // since this screen already has a real id/link to build the .ics's UID
+  // and URL from. Same Blob-download mechanics as
+  // RequestResponseForm.tsx's/ResponseDetailForm.tsx's own
+  // handleAddToCalendar; buildIcsContent's { kind: 'todo' } option picks
+  // the owner-facing DESCRIPTION wording (no "click to respond" framing,
+  // no signup pitch — see ics.ts's own buildTodoIcsDescription comment).
+  function handleAddToCalendar() {
+    const link = window.location.href
+    const content = buildIcsContent(
+      {
+        id: todoId,
+        description: form.description,
+        due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+        due_time: todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
+        owner_name: null,
+      },
+      link,
+      { kind: 'todo' }
+    )
+    const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'would-you-please-todo.ics'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   // ToDo Reminders (migration 041, 2026-08-22) — same shape as
@@ -531,14 +590,14 @@ export default function TodoDetailForm() {
         supabase
           .from('requests')
           .select(
-            'id, description, priority, due_date, done_date, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, categories(name)'
+            'id, description, priority, due_date, due_time, done_date, done_time, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, categories(name)'
           )
           .eq('id', todoId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
         supabase
           .from('profiles')
-          .select('display_name, private_category_enabled, todo_dates_enabled, todo_reminders_enabled, tier')
+          .select('display_name, private_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier')
           .single(),
         // Print (2026-08-15) — same reasoning as RequestDetailForm.tsx's
         // identical addition.
@@ -569,7 +628,9 @@ export default function TodoDetailForm() {
         description: string
         priority: number | null
         due_date: string | null
+        due_time: string | null
         done_date: string | null
+        done_time: string | null
         created_at: string
         category_id: string | null
         archived_at: string | null
@@ -587,7 +648,9 @@ export default function TodoDetailForm() {
       setForm({
         priority: (row.priority as 1 | 2 | 3) ?? 1,
         dueDate: row.due_date ?? '',
+        dueTime: row.due_time ?? '',
         doneDate: row.done_date ?? '',
+        doneTime: row.done_time ?? '',
         categoryName: row.categories?.name ?? '',
         description: row.description ?? '',
         reminderEnabled: row.reminder_enabled,
@@ -602,6 +665,7 @@ export default function TodoDetailForm() {
       setOwnerName(ownerRes.data?.display_name ?? null)
       setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
       setTodoDatesEnabled(ownerRes.data?.todo_dates_enabled ?? false)
+      setTodoTimeEnabled(ownerRes.data?.todo_time_enabled ?? false)
       setTodoRemindersEnabled(ownerRes.data?.todo_reminders_enabled ?? false)
       setReminderSentAt(row.reminder_sent_at)
       setReminderDayOfSentAt(row.reminder_day_of_sent_at)
@@ -614,7 +678,9 @@ export default function TodoDetailForm() {
       initialFormRef.current = {
         priority: (row.priority as 1 | 2 | 3) ?? 1,
         dueDate: row.due_date ?? '',
+        dueTime: row.due_time ?? '',
         doneDate: row.done_date ?? '',
+        doneTime: row.done_time ?? '',
         categoryId: row.category_id ?? null,
         description: row.description ?? '',
         todoStatus: initialTodoStatus,
@@ -844,6 +910,17 @@ export default function TodoDetailForm() {
       .update({
         priority: form.priority,
         due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+        // Due/Done Time (migration 067) — only ever written when the
+        // account has both Due/Done Dates and Time on; same "hidden, not
+        // cleared" convention as Category/Due Time elsewhere in this app
+        // when a gate is off (RequestDetailForm.tsx's own request_time_enabled
+        // handling) — an existing value already on the row is left alone.
+        ...(todoDatesEnabled && todoTimeEnabled
+          ? {
+              due_time: form.dueTime.trim() === '' ? null : form.dueTime,
+              done_time: form.doneTime.trim() === '' ? null : form.doneTime,
+            }
+          : {}),
         done_date: effectiveDoneDate,
         category_id: selectedCategory?.id ?? null,
         description: form.description.trim(),
@@ -964,31 +1041,45 @@ export default function TodoDetailForm() {
 
             <div className="fgroup">
               <span className="flabel" id="pri-label">Priority</span>
-              <div className="chippair" role="radiogroup" aria-labelledby="pri-label">
-                <button
-                  className={`chip${form.priority === 1 ? ' selected' : ''}`}
-                  type="button"
-                  aria-pressed={form.priority === 1}
-                  onClick={() => set('priority', 1)}
-                >
-                  ASAP
-                </button>
-                <button
-                  className={`chip${form.priority === 2 ? ' selected' : ''}`}
-                  type="button"
-                  aria-pressed={form.priority === 2}
-                  onClick={() => set('priority', 2)}
-                >
-                  SOON
-                </button>
-                <button
-                  className={`chip${form.priority === 3 ? ' selected' : ''}`}
-                  type="button"
-                  aria-pressed={form.priority === 3}
-                  onClick={() => set('priority', 3)}
-                >
-                  LATER
-                </button>
+              <div className="frow" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="chippair" role="radiogroup" aria-labelledby="pri-label">
+                  <button
+                    className={`chip${form.priority === 1 ? ' selected' : ''}`}
+                    type="button"
+                    aria-pressed={form.priority === 1}
+                    onClick={() => set('priority', 1)}
+                  >
+                    ASAP
+                  </button>
+                  <button
+                    className={`chip${form.priority === 2 ? ' selected' : ''}`}
+                    type="button"
+                    aria-pressed={form.priority === 2}
+                    onClick={() => set('priority', 2)}
+                  >
+                    SOON
+                  </button>
+                  <button
+                    className={`chip${form.priority === 3 ? ' selected' : ''}`}
+                    type="button"
+                    aria-pressed={form.priority === 3}
+                    onClick={() => set('priority', 3)}
+                  >
+                    LATER
+                  </button>
+                </div>
+                {/* Add to Calendar (2026-09-16) — see handleAddToCalendar's
+                    own comment above. Placed here, beside Priority, for
+                    visual consistency with Create ToDo's own checkbox in
+                    the same spot — the two screens differ only in control
+                    type (button vs. checkbox), not layout. Gated on
+                    todoDatesEnabled: with Due/Done Dates off there's no Due
+                    Date to calendar at all. */}
+                {todoDatesEnabled && (
+                  <button className="btn-secondary" type="button" onClick={handleAddToCalendar}>
+                    Add to Calendar
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1024,67 +1115,203 @@ export default function TodoDetailForm() {
                     on. */}
                 {todoRemindersEnabled && todoReminderBanner()}
 
-                {/* Due Date + Done Date, combined into one row 2026-08-10 (owner's
-                    own rough draft) — both optional (.opt, grey while empty,
-                    white once filled, same §6.25 rule as every other optional
-                    field), side by side rather than each on its own row. No
-                    Done Time — "the ToDos do not need Done Time," unlike a
-                    Request's Done Date/Time pair, which keeps its Time field. */}
-                <div className="fgroup frow">
-                  <span className="ffloat picker native">
-                    <input
-                      className={`finput${form.dueDate.trim() === '' ? ' opt' : ''}`}
-                      id="dd"
-                      type="date"
-                      value={form.dueDate}
-                      onChange={(e) => set('dueDate', e.target.value)}
-                      onClick={openPicker}
-                    />
-                    <label className="flabel" htmlFor="dd">
-                      <span className="lglyph" aria-hidden="true">
-                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                          <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                        </svg>
+                {todoTimeEnabled ? (
+                  /* Due/Done Time (migration 067, 2026-09-16, owner's own
+                     request) — same expanded four-value/two-row shape as
+                     RequestDetailForm.tsx's own requestTimeEnabled-on
+                     branch, mirrored verbatim per this codebase's per-file
+                     convention. Supersedes the combined single row below
+                     only while this account has both Show Due/Done Dates
+                     and Show Due/Done Time on. */
+                  <>
+                    <div className="fgroup frow">
+                      <span className="ffloat picker native">
+                        <input
+                          className={`finput${form.dueDate.trim() === '' ? ' opt' : ''}`}
+                          id="dd"
+                          type="date"
+                          value={form.dueDate}
+                          onChange={(e) => set('dueDate', e.target.value)}
+                          onClick={openPicker}
+                        />
+                        <label className="flabel" htmlFor="dd">
+                          <span className="lglyph" aria-hidden="true">
+                            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                              <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                              <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                              <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                              <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                              <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                              <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                              <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                              <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                              <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                            </svg>
+                          </span>
+                          Due Date <span className="subnote">(optional)</span>
+                        </label>
                       </span>
-                      Due Date <span className="subnote">(optional)</span>
-                    </label>
-                  </span>
-                  <span className="ffloat picker native">
-                    <input
-                      ref={doneDateRef}
-                      className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
-                      id="dnd"
-                      type="date"
-                      value={form.doneDate}
-                      onChange={(e) => set('doneDate', e.target.value)}
-                      onClick={openPicker}
-                    />
-                    <label className="flabel" htmlFor="dnd">
-                      <span className="lglyph" aria-hidden="true">
-                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                          <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                        </svg>
+                      <span className="ffloat picker native">
+                        <input
+                          className={`finput${form.dueTime.trim() === '' ? ' opt' : ''}`}
+                          id="dt"
+                          type="time"
+                          value={form.dueTime}
+                          onChange={(e) => set('dueTime', e.target.value)}
+                          onClick={openPicker}
+                        />
+                        <label className="flabel" htmlFor="dt">
+                          <span className="lglyph" aria-hidden="true">
+                            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                              <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                              <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                              <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                            </svg>
+                          </span>
+                          Due Time <span className="subnote">(optional)</span>
+                        </label>
+                        {form.dueTime.trim() !== '' && (
+                          <button
+                            type="button"
+                            className="fclear"
+                            aria-label="Clear Due Time"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              set('dueTime', '')
+                            }}
+                          >
+                            &times;
+                          </button>
+                        )}
                       </span>
-                      Done Date <span className="subnote">(optional)</span>
-                    </label>
-                  </span>
-                </div>
+                    </div>
+
+                    <div className="fgroup frow">
+                      <span className="ffloat picker native">
+                        <input
+                          ref={doneDateRef}
+                          className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
+                          id="dnd"
+                          type="date"
+                          value={form.doneDate}
+                          onChange={(e) => set('doneDate', e.target.value)}
+                          onClick={openPicker}
+                        />
+                        <label className="flabel" htmlFor="dnd">
+                          <span className="lglyph" aria-hidden="true">
+                            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                              <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                              <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                              <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                              <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                              <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                              <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                              <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                              <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                              <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                            </svg>
+                          </span>
+                          Done Date <span className="subnote">(optional)</span>
+                        </label>
+                      </span>
+                      <span className="ffloat picker native">
+                        <input
+                          className={`finput${form.doneTime.trim() === '' ? ' opt' : ''}`}
+                          id="dnt"
+                          type="time"
+                          value={form.doneTime}
+                          onChange={(e) => set('doneTime', e.target.value)}
+                          onClick={openPicker}
+                        />
+                        <label className="flabel" htmlFor="dnt">
+                          <span className="lglyph" aria-hidden="true">
+                            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                              <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                              <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                              <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                            </svg>
+                          </span>
+                          Done Time <span className="subnote">(optional)</span>
+                        </label>
+                        {form.doneTime.trim() !== '' && (
+                          <button
+                            type="button"
+                            className="fclear"
+                            aria-label="Clear Done Time"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              set('doneTime', '')
+                            }}
+                          >
+                            &times;
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  /* Due Date + Done Date, combined into one row 2026-08-10 (owner's
+                      own rough draft) — both optional (.opt, grey while empty,
+                      white once filled, same §6.25 rule as every other optional
+                      field), side by side rather than each on its own row. This
+                      is now specifically the todo_time_enabled-off shape — see
+                      the expanded branch above for when it's on. */
+                  <div className="fgroup frow">
+                    <span className="ffloat picker native">
+                      <input
+                        className={`finput${form.dueDate.trim() === '' ? ' opt' : ''}`}
+                        id="dd"
+                        type="date"
+                        value={form.dueDate}
+                        onChange={(e) => set('dueDate', e.target.value)}
+                        onClick={openPicker}
+                      />
+                      <label className="flabel" htmlFor="dd">
+                        <span className="lglyph" aria-hidden="true">
+                          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                            <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                            <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                            <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                            <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                            <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                            <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                            <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                            <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                          </svg>
+                        </span>
+                        Due Date <span className="subnote">(optional)</span>
+                      </label>
+                    </span>
+                    <span className="ffloat picker native">
+                      <input
+                        ref={doneDateRef}
+                        className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
+                        id="dnd"
+                        type="date"
+                        value={form.doneDate}
+                        onChange={(e) => set('doneDate', e.target.value)}
+                        onClick={openPicker}
+                      />
+                      <label className="flabel" htmlFor="dnd">
+                        <span className="lglyph" aria-hidden="true">
+                          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
+                            <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
+                            <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                            <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
+                            <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
+                            <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
+                            <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
+                            <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
+                            <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
+                          </svg>
+                        </span>
+                        Done Date <span className="subnote">(optional)</span>
+                      </label>
+                    </span>
+                  </div>
+                )}
               </>
             ) : (
               /* §6.35 PROPOSED Status row (migration 022, 2026-08-14) — matches
@@ -1597,8 +1824,18 @@ export default function TodoDetailForm() {
                   <div className={`pr1 pdcols${todoDatesEnabled ? ' wide' : ''}`}>
                     <span className="ppri">{PRIORITY_LABEL[form.priority] ?? ''}</span>
                     <span className="pdt">{formatMDY(createdAt)}</span>
-                    {todoDatesEnabled && <span className="pdue">{formatMDY(form.dueDate || null)}</span>}
-                    <span className="pdn">{formatMDY(form.doneDate || null)}</span>
+                    {todoDatesEnabled && (
+                      <span className="pdue">
+                        {formatMDY(form.dueDate || null)}
+                        {todoTimeEnabled && form.dueTime && <span className="ptime">{'  '}{formatTime12h(form.dueTime)}</span>}
+                      </span>
+                    )}
+                    <span className="pdn">
+                      {formatMDY(form.doneDate || null)}
+                      {todoDatesEnabled && todoTimeEnabled && form.doneTime && (
+                        <span className="ptime">{'  '}{formatTime12h(form.doneTime)}</span>
+                      )}
+                    </span>
                   </div>
                   <div className="pr2">
                     <span className="pdesc">
