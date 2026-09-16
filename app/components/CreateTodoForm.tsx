@@ -165,6 +165,16 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
   }
 }
 
+// iPhone keyboard-covers-field fix (2026-09-16) — see CreateRequestForm.tsx's
+// identical copy for the full write-up. Duplicated per component per this
+// codebase's own small-helper convention.
+function handleFieldFocusScroll(e: React.FocusEvent<HTMLTextAreaElement>) {
+  const el = e.currentTarget
+  setTimeout(() => {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, 300)
+}
+
 // Voice dictation for Description (2026-08-19) — owner: "I see it as a good
 // option for entry of the Description during a Create... it could be a
 // subscription option." Browser-native (Web Speech API — Chrome/Edge/Safari
@@ -1290,6 +1300,7 @@ export default function CreateTodoForm() {
                     set('description', e.target.value)
                     if (descInvalid) setDescInvalid(false)
                   }}
+                  onFocus={handleFieldFocusScroll}
                 />
                 {tier === 'subscriber' && descriptionDictation.supported && (
                   <button

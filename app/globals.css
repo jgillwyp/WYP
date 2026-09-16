@@ -612,6 +612,7 @@ body {
   border: 1px solid var(--input-border);
   border-radius: 9px;
   width: 100%;
+  min-width: 0;
   min-height: 50px;
   padding: 20px 10px 6px;
 }
@@ -744,6 +745,23 @@ body {
   transform: translateY(-9px) scale(.79);
   font-weight: 600;
   color: var(--ink);
+}
+
+/* iPhone Safari overlap fix (2026-09-16, owner-reported from a tester's
+   video) — two paired native date/time fields (.frow .ffloat, flex:1 1 0%
+   each) compute to an equal, narrower box on a phone; WebKit's own
+   type="date"/type="time" widget has a wider minimum rendering width than
+   Chrome's equivalent and, when the CSS box is narrower than that, paints
+   its content past the box's right edge instead of compressing further —
+   with overflow's CSS default of visible, that spills straight into the
+   neighboring field, reading as one field "overlaying" the other. Chrome
+   (desktop and Android) wasn't affected because its own widget happens to
+   fit the same computed width. overflow:hidden here clips any such
+   overflow at the box edge instead of letting it bleed sideways — .flabel
+   and .fclear both already position fully within this box in the normal
+   case, so neither is affected. */
+.ffloat.picker.native {
+  overflow: hidden;
 }
 
 /* Clear button (§6.33 PROPOSED), 2026-08-11 — owner-reported: Due/Done Time

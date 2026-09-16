@@ -246,6 +246,16 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
   }
 }
 
+// iPhone keyboard-covers-field fix (2026-09-16) — see CreateRequestForm.tsx's
+// identical copy for the full write-up. Duplicated per component per this
+// codebase's own small-helper convention.
+function handleFieldFocusScroll(e: React.FocusEvent<HTMLTextAreaElement>) {
+  const el = e.currentTarget
+  setTimeout(() => {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, 300)
+}
+
 export default function TodoDetailForm() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
@@ -1499,6 +1509,7 @@ export default function TodoDetailForm() {
                     set('description', e.target.value)
                     if (descInvalid) setDescInvalid(false)
                   }}
+                  onFocus={handleFieldFocusScroll}
                 />
                 {tier === 'subscriber' && descriptionDictation.supported && (
                   <button

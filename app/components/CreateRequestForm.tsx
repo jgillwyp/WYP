@@ -196,6 +196,25 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
   }
 }
 
+// iPhone keyboard-covers-field fix (2026-09-16, owner-reported from a
+// tester's video) — on Android, the on-screen keyboard shrinks the visual
+// viewport and the browser auto-scrolls the focused field above it; on
+// iOS Safari the keyboard instead overlays the bottom of the page without
+// triggering that same auto-scroll until the person starts typing, so
+// they briefly lose track of where the Description field actually is. The
+// delay lets the keyboard's own show animation finish before scrolling —
+// calling scrollIntoView immediately on focus fights that animation and
+// tends to undershoot. Harmless on Android/desktop, where the browser
+// already handles this on its own. Duplicated per component (short
+// helper, same convention as openPicker/formatMDY) rather than extracted
+// to a shared lib file.
+function handleFieldFocusScroll(e: React.FocusEvent<HTMLTextAreaElement>) {
+  const el = e.currentTarget
+  setTimeout(() => {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, 300)
+}
+
 // Print-only Due date format (2026-08-18) — see RequestDetailForm.tsx's own
 // copy of this helper for the full write-up. "7/15/26", the owner's own
 // xlsx example, vs. the plain "YYYY-MM-DD" form.dueDate value used
@@ -1343,6 +1362,7 @@ export default function CreateRequestForm() {
                     set('description', e.target.value)
                     if (descInvalid) setDescInvalid(false)
                   }}
+                  onFocus={handleFieldFocusScroll}
                 />
                 {tier === 'subscriber' && descriptionDictation.supported && (
                   <button
