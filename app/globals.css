@@ -4412,3 +4412,49 @@ body {
   letter-spacing: 0.02em;
   color: var(--ink-soft);
 }
+
+/* ============================================================================
+   CALENDAR VIEW (2026-09-16, docs/WYP_Calendar_View_Plan.md) — FullCalendar
+   (@fullcalendar/* 6.1.21) renders its own internal styles at runtime; these
+   rules only color/size the event chips to match this app's existing
+   overdue-red/done-grey row conventions (MainScreen.tsx's .row.overdue/
+   .row.done) and keep the grid comfortably readable inside the 480px
+   .frame-none shell.
+   ========================================================================= */
+.wypcal {
+  margin-top: 10px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.wypcal .fc {
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.wypcal .fc-toolbar-title {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.wypcal-event {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.wypcal .fc-event.wypcal-overdue {
+  background: var(--alert-red);
+  border-color: var(--alert-red);
+}
+
+.wypcal .fc-event.wypcal-done {
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+
+.wypcal .fc-event.wypcal-open {
+  background: var(--brand-blue);
+  border-color: var(--brand-blue);
+}

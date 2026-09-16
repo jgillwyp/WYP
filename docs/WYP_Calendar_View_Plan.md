@@ -228,6 +228,31 @@ Named explicitly so nothing here reads as a silently-dropped ask:
 - Un-archiving or otherwise surfacing Archived items from within
   Calendar — they simply never appear here, full stop.
 
+## Status: built, 2026-09-16
+
+Built end to end in one pass per this doc's own defaults (FullCalendar
+6.1.21, Month default, no comma in the ToDo label, hourly time-grid via
+FullCalendar's own `timeGridWeek`/`timeGridDay`, Due Time shown in
+FullCalendar's default Month-view event-time prefix only) — Jim asked to
+proceed without intermediate approval and review only at commit/push.
+`app/src/lib/calendarData.ts` (fetch/status/label helpers), `app/components/
+CalendarView.tsx` (the screen), `app/calendar/page.tsx` (route), and three
+new Calendar-icon entry points on `MainScreen.tsx` next to each section's
+own Print icon. Record Type is three checkboxes (Sent/Received/ToDos —
+ToDos hidden when `todo_dates_enabled` is off), bold+blue when checked;
+Status is the same real `.chip`/`.chip.sel` All/Open/Overdue/Done row Main
+Screen/Archive already use, initialized from the launching section's own
+current chip via a `?section=&status=` query string on first visit, freely
+changeable afterward. View switching (Month/Week/Day) is a third `.chip`
+row wired to `FullCalendar`'s `changeView()`. A `CALENDAR_ROUNDTRIP_KEY`
+sessionStorage marker (mirrors `ArchiveForm.tsx`'s own pattern) restores
+Record Type/Status/View across a click-through-and-back round trip to a
+Detail screen. Printing reuses the existing `.print-report`/`.pcolbar.
+detail2`/`.pr1.detail2` (1fr 150px, Item/Due) two-column shape rather than
+new CSS, listing the currently-filtered items sorted by Due Date/Time.
+`npx tsc --noEmit`/`npm run lint`/`npm run build` all clean. No mockup —
+this feature has none, per the plan's own scope.
+
 ## Build order (proposed, not yet started)
 
 1. Shared primitives: month/week/day date-grid math, the item-fetch

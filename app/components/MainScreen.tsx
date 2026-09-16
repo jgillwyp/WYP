@@ -809,6 +809,16 @@ function PrintIcon() {
   )
 }
 
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M3 9h18" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function SearchIcon() {
   return (
     <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1499,6 +1509,7 @@ export default function MainScreen() {
                 <span className="subname">Sent</span>
                 <span className="subicons">
                   <button className="iconbtn" type="button" aria-label="Print Sent" onClick={() => startPrint('sent')}><PrintIcon /></button>
+                  <button className="iconbtn" type="button" aria-label="Calendar View: Sent" onClick={() => router.push(`/calendar?section=sent&status=${sentFilter}`)}><CalendarIcon /></button>
                 </span>
               </div>
               {isSearching ? (
@@ -1620,6 +1631,7 @@ export default function MainScreen() {
                 <span className="subname">Received</span>
                 <span className="subicons">
                   <button className="iconbtn" type="button" aria-label="Print Received" onClick={() => startPrint('received')}><PrintIcon /></button>
+                  <button className="iconbtn" type="button" aria-label="Calendar View: Received" onClick={() => router.push(`/calendar?section=received&status=${receivedFilter}`)}><CalendarIcon /></button>
                 </span>
               </div>
               {isSearching ? (
@@ -1738,6 +1750,7 @@ export default function MainScreen() {
               )}
               <span className="subicons">
                 <button className="iconbtn" type="button" aria-label="Print ToDos" onClick={() => startPrint('todos')}><PrintIcon /></button>
+                <button className="iconbtn" type="button" aria-label="Calendar View: ToDos" onClick={() => router.push(`/calendar?section=todo&status=${todoFilter}`)}><CalendarIcon /></button>
               </span>
             </div>
             <div className="subbody">
