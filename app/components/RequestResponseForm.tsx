@@ -7,8 +7,9 @@ import Link from 'next/link'
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
 import Linkified from './Linkified'
+import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
 import { supabase } from '@/lib/supabaseClient'
-import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@/lib/ics'
+import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate, type IcsAlarmOffset } from '@/lib/ics'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
@@ -583,18 +584,29 @@ export default function RequestResponseForm() {
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  // Calendar-reminder dialog (2026-09-17) — Add to Calendar now opens
+  // AddToCalendarAlarmsDialog first, rather than downloading immediately;
+  // the actual .ics build/download moved into performAddToCalendarDownload
+  // below, called from the dialog's own onConfirm.
+  const [calendarDialogOpen, setCalendarDialogOpen] = useState(false)
+
+  function handleAddToCalendar() {
+    if (!data) return
+    setCalendarDialogOpen(true)
+  }
+
   // Owner's ask, 2026-08-10 — see buildIcsContent above for the field
   // mapping and the boilerplate-text flag. The link is just this page's own
   // URL (the /r/[token] the recipient is already looking at), so there's
   // nothing to fetch — the whole file is built and downloaded locally.
-  function handleAddToCalendar() {
+  function performAddToCalendarDownload(alarms: IcsAlarmOffset[]) {
     if (!data) return
     const link = window.location.href
     // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's own
     // header comment in ics.ts: METHOD:PUBLISH (needed for the *emailed*
     // .ics) silently fails to add on Android when opened from a local
     // download instead.
-    const content = buildIcsContent(data, link, { omitMethod: true })
+    const content = buildIcsContent(data, link, { omitMethod: true, alarms })
     const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1233,6 +1245,15 @@ export default function RequestResponseForm() {
             </div>
           </>
         )}
+
+        <AddToCalendarAlarmsDialog
+          open={calendarDialogOpen}
+          onCancel={() => setCalendarDialogOpen(false)}
+          onConfirm={(alarms) => {
+            setCalendarDialogOpen(false)
+            performAddToCalendarDownload(alarms)
+          }}
+        />
       </div>
     </div>
   )

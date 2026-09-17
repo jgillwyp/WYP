@@ -23,6 +23,25 @@ import { buildReminderScheduleSentence, SIGNUP_CTA_TEXT, type ReminderSchedule }
 export const ICS_DEFAULT_DUE_TIME = '09:00'
 export const ICS_DURATION_MINUTES = 30
 
+// Calendar-app-native reminders (2026-09-17, owner's own idea) — RFC 5545
+// VALARM components embedded directly in the VEVENT, so the reminder
+// becomes the *calendar app's* own responsibility (Outlook/Apple Calendar/
+// Google Calendar's own OS-integrated alarm system) once the event is
+// added, rather than depending on WYP's own server, cron, or a browser tab
+// being open. Opt-in per add (owner: "The default would be none checked"),
+// offered via a small dialog at the moment of Add to Calendar
+// (AddToCalendarAlarmsDialog.tsx) — buildIcsContent below just renders
+// whichever offsets were chosen. Values are RFC 5545 §3.8.6.3 duration
+// TRIGGERs relative to DTSTART; 'attime' is a legal zero-length duration
+// (fires exactly at the event's own start).
+export type IcsAlarmOffset = '1day' | '1hour' | 'attime'
+
+const ICS_ALARM_TRIGGER: Record<IcsAlarmOffset, string> = {
+  '1day': '-P1D',
+  '1hour': '-PT1H',
+  attime: 'PT0M',
+}
+
 export function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
@@ -295,7 +314,12 @@ export function cameFromCalendarLink(search: string): boolean {
 export function buildIcsContent(
   payload: IcsRequestFields,
   link: string,
-  options?: { reminderSchedule?: ReminderSchedule | null; kind?: 'request' | 'todo'; omitMethod?: boolean }
+  options?: {
+    reminderSchedule?: ReminderSchedule | null
+    kind?: 'request' | 'todo'
+    omitMethod?: boolean
+    alarms?: IcsAlarmOffset[]
+  }
 ): string {
   const kind = options?.kind ?? 'request'
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
@@ -324,6 +348,21 @@ export function buildIcsContent(
     dtendLine = `DTEND;VALUE=DATE:${formatIcsDateOnly(new Date(y, m - 1, d + 1))}`
   }
 
+  const summaryText = `${kind === 'todo' ? 'Would You Please ToDo' : 'Would You Please'}: ${truncate(payload.description, 60)}`
+
+  // VALARM (2026-09-17) — see IcsAlarmOffset's own header comment above.
+  // ACTION:DISPLAY's DESCRIPTION property is required per RFC 5545
+  // §3.8.6.3; reusing the same summaryText the event's own SUMMARY uses
+  // keeps whatever the OS notification shows consistent with the event
+  // itself, with no separate text to maintain.
+  const alarmLines = (options?.alarms ?? []).flatMap((offset) => [
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${icsEscapeText(summaryText)}`,
+    `TRIGGER:${ICS_ALARM_TRIGGER[offset]}`,
+    'END:VALARM',
+  ])
+
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -351,9 +390,7 @@ export function buildIcsContent(
     `DTSTAMP:${formatIcsUtc(new Date())}`,
     dtstartLine,
     dtendLine,
-    `SUMMARY:${icsEscapeText(
-      `${kind === 'todo' ? 'Would You Please ToDo' : 'Would You Please'}: ${truncate(payload.description, 60)}`
-    )}`,
+    `SUMMARY:${icsEscapeText(summaryText)}`,
     `DESCRIPTION:${icsEscapeText(
       kind === 'todo'
         ? buildTodoIcsDescription(payload.description, calendarLinkFor(link), {
@@ -369,6 +406,7 @@ export function buildIcsContent(
           })
     )}`,
     `URL:${calendarLinkFor(link)}`,
+    ...alarmLines,
     'END:VEVENT',
     'END:VCALENDAR',
   ]

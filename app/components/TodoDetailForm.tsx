@@ -8,9 +8,10 @@ import AttachmentsPanel from './AttachmentsPanel'
 import RepeatControl from './RepeatControl'
 import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
+import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
-import { buildIcsContent } from '@/lib/ics'
+import { buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
@@ -440,6 +441,16 @@ export default function TodoDetailForm() {
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  // Calendar-reminder dialog (2026-09-17) — Add to Calendar now opens
+  // AddToCalendarAlarmsDialog first, rather than downloading immediately;
+  // the actual .ics build/download moved into performAddToCalendarDownload
+  // below, called from the dialog's own onConfirm.
+  const [calendarDialogOpen, setCalendarDialogOpen] = useState(false)
+
+  function handleAddToCalendar() {
+    setCalendarDialogOpen(true)
+  }
+
   // Add to Calendar (2026-09-16, owner's own request — "e.g. taking
   // certain pills") — a real button here, unlike Create ToDo's checkbox,
   // since this screen already has a real id/link to build the .ics's UID
@@ -448,7 +459,7 @@ export default function TodoDetailForm() {
   // handleAddToCalendar; buildIcsContent's { kind: 'todo' } option picks
   // the owner-facing DESCRIPTION wording (no "click to respond" framing,
   // no signup pitch — see ics.ts's own buildTodoIcsDescription comment).
-  function handleAddToCalendar() {
+  function performAddToCalendarDownload(alarms: IcsAlarmOffset[]) {
     const link = window.location.href
     const content = buildIcsContent(
       {
@@ -462,7 +473,7 @@ export default function TodoDetailForm() {
       // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's own
       // header comment in ics.ts: METHOD:PUBLISH silently fails to add on
       // Android when opened from a local download.
-      { kind: 'todo', omitMethod: true }
+      { kind: 'todo', omitMethod: true, alarms }
     )
     const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -1828,6 +1839,15 @@ export default function TodoDetailForm() {
             </div>
           </>
         )}
+
+        <AddToCalendarAlarmsDialog
+          open={calendarDialogOpen}
+          onCancel={() => setCalendarDialogOpen(false)}
+          onConfirm={(alarms) => {
+            setCalendarDialogOpen(false)
+            performAddToCalendarDownload(alarms)
+          }}
+        />
       </div>
 
       {/* Single-item print, redesigned 2026-08-17 for consistency with Main

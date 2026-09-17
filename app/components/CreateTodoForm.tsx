@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import RepeatControl from './RepeatControl'
 import Linkified from './Linkified'
+import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
 import { supabase } from '@/lib/supabaseClient'
 import {
   MAX_ATTACHMENT_BYTES,
@@ -16,7 +17,7 @@ import {
   isBlockedFileType,
 } from '@/lib/attachments'
 import { isReminderEligible } from '@/lib/email'
-import { buildIcsContent } from '@/lib/ics'
+import { buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
 import { type RepeatRule } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
@@ -234,6 +235,14 @@ export default function CreateTodoForm() {
   // gets: no real id exists yet to build a link/UID from until Save
   // succeeds.
   const [addToCalendar, setAddToCalendar] = useState(false)
+  // Calendar-reminder dialog (2026-09-17) — checking the box above pops
+  // AddToCalendarAlarmsDialog immediately (before Save, since that's the
+  // moment of "adding to calendar" intent) rather than waiting until the
+  // deferred download actually happens; the chosen offsets are remembered
+  // here and passed to buildIcsContent once handleSubmit's own deferred
+  // block runs. Canceling the dialog leaves addToCalendar unchecked.
+  const [calendarDialogOpen, setCalendarDialogOpen] = useState(false)
+  const [calendarAlarms, setCalendarAlarms] = useState<IcsAlarmOffset[]>([])
   // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — see
   // AccountForm.tsx's identical gate. Only meaningful alongside
   // todoDatesEnabled — a brand-new ToDo with dates off has no Due Date for
@@ -785,8 +794,11 @@ export default function CreateTodoForm() {
           link,
           // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's
           // own header comment in ics.ts: METHOD:PUBLISH silently fails to
-          // add on Android when opened from a local download.
-          { kind: 'todo', omitMethod: true }
+          // add on Android when opened from a local download. alarms —
+          // chosen in AddToCalendarAlarmsDialog at the moment the checkbox
+          // above was checked, remembered in calendarAlarms until this
+          // deferred download actually runs.
+          { kind: 'todo', omitMethod: true, alarms: calendarAlarms }
         )
         const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
         const url = URL.createObjectURL(blob)
@@ -912,7 +924,14 @@ export default function CreateTodoForm() {
                     <input
                       type="checkbox"
                       checked={addToCalendar}
-                      onChange={(e) => setAddToCalendar(e.target.checked)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setCalendarDialogOpen(true)
+                        } else {
+                          setAddToCalendar(false)
+                          setCalendarAlarms([])
+                        }
+                      }}
                       style={{ accentColor: 'var(--brand-blue)' }}
                     />
                     Add to Calendar
@@ -1636,6 +1655,16 @@ export default function CreateTodoForm() {
             </div>
           </>
         )}
+
+        <AddToCalendarAlarmsDialog
+          open={calendarDialogOpen}
+          onCancel={() => setCalendarDialogOpen(false)}
+          onConfirm={(alarms) => {
+            setCalendarAlarms(alarms)
+            setAddToCalendar(true)
+            setCalendarDialogOpen(false)
+          }}
+        />
       </div>
     </div>
   )
