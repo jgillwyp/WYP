@@ -235,14 +235,16 @@ export default function CreateTodoForm() {
   // gets: no real id exists yet to build a link/UID from until Save
   // succeeds.
   const [addToCalendar, setAddToCalendar] = useState(false)
-  // Calendar-reminder dialog (2026-09-17) — checking the box above pops
-  // AddToCalendarAlarmsDialog immediately (before Save, since that's the
-  // moment of "adding to calendar" intent) rather than waiting until the
-  // deferred download actually happens; the chosen offsets are remembered
-  // here and passed to buildIcsContent once handleSubmit's own deferred
-  // block runs. Canceling the dialog leaves addToCalendar unchecked.
+  // Calendar-reminder dialog (2026-09-18, revised — owner: "should not
+  // initiate the Alarm dialog [on check]... only come up when the ToDo is
+  // saved") — checking the box above is now just a plain intent flag again;
+  // AddToCalendarAlarmsDialog instead opens once handleSubmit's own Save has
+  // actually succeeded, holding pendingCalendarTodoId (the real id Save just
+  // produced) until the dialog resolves. Navigating away (router.back()) is
+  // deferred to the dialog's own Cancel/Confirm handlers in that case, since
+  // the whole point is showing this after Save, not before it.
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false)
-  const [calendarAlarms, setCalendarAlarms] = useState<IcsAlarmOffset[]>([])
+  const [pendingCalendarTodoId, setPendingCalendarTodoId] = useState<string | null>(null)
   // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — see
   // AccountForm.tsx's identical gate. Only meaningful alongside
   // todoDatesEnabled — a brand-new ToDo with dates off has no Due Date for
@@ -783,46 +785,18 @@ export default function CreateTodoForm() {
         })
     }
 
-    // Add to Calendar (2026-09-16) — the deferred action the checkbox above
-    // just remembered the intent for; only reachable now that Save produced
-    // a real id/link to build the .ics's UID and URL from. Same Blob-
-    // download mechanics as RequestResponseForm.tsx's/ResponseDetailForm.tsx's
-    // own handleAddToCalendar, just triggered here instead of by a button
-    // click — a failure here shouldn't undo or block the save that already
-    // succeeded, so it's wrapped and swallowed rather than surfaced as an
-    // error.
+    // Add to Calendar (2026-09-16, revised 2026-09-18 — see
+    // pendingCalendarTodoId's own comment above) — the deferred action the
+    // checkbox above just remembered the intent for; only reachable now
+    // that Save produced a real id/link to build the .ics's UID and URL
+    // from. Rather than download immediately, this opens
+    // AddToCalendarAlarmsDialog and holds navigation until it resolves —
+    // the actual download happens in that dialog's own onConfirm below.
     if (addToCalendar) {
-      try {
-        const link = `${window.location.origin}/todos/${newTodo.id}`
-        const content = buildIcsContent(
-          {
-            id: newTodo.id,
-            description: form.description.trim(),
-            due_date: form.dueDate.trim() === '' ? null : form.dueDate,
-            due_time: todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
-            owner_name: null,
-          },
-          link,
-          // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's
-          // own header comment in ics.ts: METHOD:PUBLISH silently fails to
-          // add on Android when opened from a local download. alarms —
-          // chosen in AddToCalendarAlarmsDialog at the moment the checkbox
-          // above was checked, remembered in calendarAlarms until this
-          // deferred download actually runs.
-          { kind: 'todo', omitMethod: true, alarms: calendarAlarms }
-        )
-        const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'would-you-please-todo.ics'
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      } catch {
-        // Swallowed — see comment above.
-      }
+      setPendingCalendarTodoId(newTodo.id)
+      setCalendarDialogOpen(true)
+      setSaving(false)
+      return
     }
 
     setSaving(false)
@@ -835,6 +809,45 @@ export default function CreateTodoForm() {
     // together — Detail's edit path already used back() but had no scroll
     // restore to rely on either, until now.
     router.back()
+  }
+
+  // Builds and downloads the ToDo's .ics, called from
+  // AddToCalendarAlarmsDialog's own onConfirm once Save has already
+  // succeeded — see pendingCalendarTodoId's comment above for why this
+  // fires post-Save rather than at the moment the checkbox was checked. A
+  // failure here shouldn't undo or block the save that already succeeded,
+  // so it's wrapped and swallowed rather than surfaced as an error. Same
+  // Blob-download mechanics as RequestResponseForm.tsx's/
+  // ResponseDetailForm.tsx's own handleAddToCalendar.
+  function downloadTodoCalendarIcs(todoId: string, alarms: IcsAlarmOffset[]) {
+    try {
+      const link = `${window.location.origin}/todos/${todoId}`
+      const content = buildIcsContent(
+        {
+          id: todoId,
+          description: form.description.trim(),
+          due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+          due_time: todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
+          owner_name: null,
+        },
+        link,
+        // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's
+        // own header comment in ics.ts: METHOD:PUBLISH silently fails to
+        // add on Android when opened from a local download.
+        { kind: 'todo', omitMethod: true, alarms }
+      )
+      const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'would-you-please-todo.ics'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      // Swallowed — see comment above.
+    }
   }
 
   function handleCancel() {
@@ -935,14 +948,7 @@ export default function CreateTodoForm() {
                     <input
                       type="checkbox"
                       checked={addToCalendar}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setCalendarDialogOpen(true)
-                        } else {
-                          setAddToCalendar(false)
-                          setCalendarAlarms([])
-                        }
-                      }}
+                      onChange={(e) => setAddToCalendar(e.target.checked)}
                       style={{ accentColor: 'var(--brand-blue)' }}
                     />
                     Add to Calendar
@@ -1693,11 +1699,14 @@ export default function CreateTodoForm() {
 
         <AddToCalendarAlarmsDialog
           open={calendarDialogOpen}
-          onCancel={() => setCalendarDialogOpen(false)}
-          onConfirm={(alarms) => {
-            setCalendarAlarms(alarms)
-            setAddToCalendar(true)
+          onCancel={() => {
             setCalendarDialogOpen(false)
+            router.back()
+          }}
+          onConfirm={(alarms) => {
+            setCalendarDialogOpen(false)
+            if (pendingCalendarTodoId) downloadTodoCalendarIcs(pendingCalendarTodoId, alarms)
+            router.back()
           }}
         />
       </div>
