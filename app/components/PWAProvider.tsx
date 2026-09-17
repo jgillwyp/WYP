@@ -1,6 +1,8 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+
+import { APP_VERSION } from '@/version'
 
 // BeforeInstallPromptEvent isn't part of TypeScript's DOM lib — it's a
 // Chromium-only extension, not a web standard — so its shape is declared
@@ -46,8 +48,71 @@ export function usePWAInstall() {
 // deliberate, findable, repeatable alternative — only rendered when
 // canInstall is true, so it never shows a dead control on a browser that
 // doesn't support installation or a device that already has it installed.
+// Minimum time between version checks triggered by 'visibilitychange'/
+// 'focus' — same debounce shape as MainScreen.tsx's own refetch-on-focus,
+// guarding against both events firing for the same tab switch.
+const VERSION_CHECK_MIN_INTERVAL_MS = 5000
+
 export default function PWAProvider({ children }: { children: React.ReactNode }) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+
+  // Stale-build detection (2026-09-18, owner-reported) — an iPhone tester
+  // was stuck 100 builds behind with no signal anything was wrong, iOS
+  // Safari's own well-documented aggressive caching for installed PWAs (see
+  // the "An iPhone often fails to update a Progressive Web App" writeup
+  // Jim forwarded). Rather than hope iOS notices a change to sw.js/the
+  // manifest on its own — the doc's own "Delayed Detection" section notes
+  // that check can take up to 24 hours by default — this actively compares
+  // the APP_VERSION baked into the bundle actually running against
+  // /api/version's always-fresh response (no-store, so it's never itself a
+  // stale cached read) on mount and whenever the tab/window regains focus.
+  // A mismatch means new code has already been deployed; this is purely a
+  // notice-and-offer-to-reload, never a forced reload, so nothing gets lost
+  // mid-edit. Also nudges the service worker to check for its own update
+  // (registration.update() forces a fresh, cache-busted fetch of sw.js per
+  // spec) — the doc's other suggested developer fix, "Bypass Cache on
+  // Load."
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const lastVersionCheckRef = useRef(0)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function checkForUpdate() {
+      lastVersionCheckRef.current = Date.now()
+      try {
+        const res = await fetch('/api/version', { cache: 'no-store' })
+        const data: { version?: string } = await res.json()
+        if (!cancelled && data.version && data.version !== APP_VERSION) {
+          setUpdateAvailable(true)
+        }
+      } catch {
+        // No network, or the check itself failed — nothing to report; the
+        // next focus/visibility change tries again.
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => r.update().catch(() => {}))
+        })
+      }
+    }
+
+    checkForUpdate()
+
+    function handleWake() {
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastVersionCheckRef.current < VERSION_CHECK_MIN_INTERVAL_MS) return
+      checkForUpdate()
+    }
+
+    document.addEventListener('visibilitychange', handleWake)
+    window.addEventListener('focus', handleWake)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', handleWake)
+      window.removeEventListener('focus', handleWake)
+    }
+  }, [])
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -117,6 +182,19 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
   return (
     <PWAInstallContext.Provider value={{ canInstall: deferredPrompt !== null, promptInstall }}>
       {children}
+      {updateAvailable && (
+        <div className="updatebanner">
+          <span>A new version of Would You Please is available.</span>
+          <div className="updatebanner-acts">
+            <button className="updatebanner-reload" type="button" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+            <button className="updatebanner-dismiss" type="button" onClick={() => setUpdateAvailable(false)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </PWAInstallContext.Provider>
   )
 }
