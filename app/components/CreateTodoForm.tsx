@@ -762,14 +762,25 @@ export default function CreateTodoForm() {
     // events, matching how Requests/ToDos "Done" is defined everywhere
     // else in the plan: wherever done_date ends up set, not just later
     // edits. See docs/WYP_Admin_Statistics_Plan.md.
-    void supabase.rpc('log_event', { p_subject_type: 'todo', p_subject_id: newTodo.id, p_action: 'created' })
-    if (effectiveDoneDate !== null) {
-      void supabase.rpc('log_event', {
-        p_subject_type: 'todo',
-        p_subject_id: newTodo.id,
-        p_action: 'done',
-        p_detail: { done_date: effectiveDoneDate },
+    // .then() error logging added 2026-09-18 (owner-reported: "Created"
+    // stayed at 0 for real activity) — see CreateRequestForm.tsx's
+    // identical comment for the full reasoning.
+    void supabase
+      .rpc('log_event', { p_subject_type: 'todo', p_subject_id: newTodo.id, p_action: 'created' })
+      .then(({ error }) => {
+        if (error) console.error('log_event (todo created) failed:', error.message)
       })
+    if (effectiveDoneDate !== null) {
+      void supabase
+        .rpc('log_event', {
+          p_subject_type: 'todo',
+          p_subject_id: newTodo.id,
+          p_action: 'done',
+          p_detail: { done_date: effectiveDoneDate },
+        })
+        .then(({ error }) => {
+          if (error) console.error('log_event (todo done) failed:', error.message)
+        })
     }
 
     // Add to Calendar (2026-09-16) — the deferred action the checkbox above

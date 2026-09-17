@@ -234,15 +234,21 @@ export default function AddContactForm() {
     // and a Contact added and deleted within the same period still counts
     // correctly without needing to join back to a row that may no longer
     // exist.
-    void supabase.rpc('log_event', {
-      p_subject_type: 'contact',
-      p_subject_id: inserted.id,
-      p_action: 'created',
-      p_detail: {
-        has_phone: form.phone.trim() !== '',
-        has_notes: form.notes.trim() !== '',
-      },
-    })
+    // .then() error logging added 2026-09-18 — see CreateRequestForm.tsx's
+    // identical comment for the full reasoning.
+    void supabase
+      .rpc('log_event', {
+        p_subject_type: 'contact',
+        p_subject_id: inserted.id,
+        p_action: 'created',
+        p_detail: {
+          has_phone: form.phone.trim() !== '',
+          has_notes: form.notes.trim() !== '',
+        },
+      })
+      .then(({ error }) => {
+        if (error) console.error('log_event (contact created) failed:', error.message)
+      })
 
     // Return destination depends on where this screen was opened from
     // (2026-08-11) — this file's own comment used to flag Create Request's

@@ -979,20 +979,30 @@ export default function TodoDetailForm() {
     // tsx's own sendChangeNotification. 'Done' logs only on the actual
     // open-to-done transition, not on every save of an already-Done ToDo.
     if (changedFieldLabels.length > 0) {
-      void supabase.rpc('log_event', {
-        p_subject_type: 'todo',
-        p_subject_id: todoId,
-        p_action: 'changed',
-        p_detail: { fields: changedFieldLabels },
-      })
+      // .then() error logging added 2026-09-18 — see CreateRequestForm.tsx's
+      // identical comment for the full reasoning.
+      void supabase
+        .rpc('log_event', {
+          p_subject_type: 'todo',
+          p_subject_id: todoId,
+          p_action: 'changed',
+          p_detail: { fields: changedFieldLabels },
+        })
+        .then(({ error }) => {
+          if (error) console.error('log_event (todo changed) failed:', error.message)
+        })
     }
     if (effectiveDoneDate !== null && !wasAlreadyDone) {
-      void supabase.rpc('log_event', {
-        p_subject_type: 'todo',
-        p_subject_id: todoId,
-        p_action: 'done',
-        p_detail: { done_date: effectiveDoneDate },
-      })
+      void supabase
+        .rpc('log_event', {
+          p_subject_type: 'todo',
+          p_subject_id: todoId,
+          p_action: 'done',
+          p_detail: { done_date: effectiveDoneDate },
+        })
+        .then(({ error }) => {
+          if (error) console.error('log_event (todo done) failed:', error.message)
+        })
     }
 
     // router.back(), not push('/') — see RequestDetailForm.tsx's identical

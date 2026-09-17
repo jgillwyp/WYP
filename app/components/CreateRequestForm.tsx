@@ -940,7 +940,16 @@ export default function CreateRequestForm() {
     // been wired up yet, spotted while building the Requests Activity
     // screen's own 'Created' metric. See
     // docs/WYP_Admin_Statistics_Plan.md.
-    void supabase.rpc('log_event', { p_subject_type: 'request', p_subject_id: newRequest.id, p_action: 'created' })
+    // .then() error logging added 2026-09-18 (owner-reported: "Created"
+    // stayed at 0 for real activity) — this was a completely silent
+    // fire-and-forget call with no visibility into a failure; if log_event
+    // is erroring, this makes that show up in the browser console instead
+    // of vanishing without a trace.
+    void supabase
+      .rpc('log_event', { p_subject_type: 'request', p_subject_id: newRequest.id, p_action: 'created' })
+      .then(({ error }) => {
+        if (error) console.error('log_event (request created) failed:', error.message)
+      })
 
     // Dialog entries write second, against the id the insert above just
     // returned — see migration 004 and the file-level comment on why these

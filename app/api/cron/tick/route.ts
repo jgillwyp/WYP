@@ -868,6 +868,29 @@ async function handle(request: Request) {
       continue
     }
 
+    // Admin Statistics instrumentation (2026-09-18, owner-reported: "Created"
+    // stayed at 0 for a period with real Changed/Done/Archived activity) —
+    // every other creation path (CreateRequestForm.tsx/CreateTodoForm.tsx)
+    // logs a 'created' event via the client-callable log_event() RPC
+    // (migration 054), but that RPC requires auth.uid(), which a cron run
+    // has none of — this was the one Request/ToDo creation path with no
+    // 'created' event at all, silently undercounting every Repeat-generated
+    // occurrence forever. Inserted directly via the service-role client
+    // (sb), same shape log_event() itself writes (actor_user/subject_type/
+    // subject_id/request_id/action/detail) — subject_type follows this
+    // file's own contact_id-null convention for telling a ToDo from a
+    // Request. Never blocks generation on failure, matching this loop's own
+    // "continue past a non-fatal problem" posture for the Attachments
+    // carry-forward below.
+    await sb.from('events').insert({
+      actor_user: row.owner_id,
+      subject_type: row.contact_id ? 'request' : 'todo',
+      subject_id: newRow.id,
+      request_id: newRow.id,
+      action: 'created',
+      detail: { source: 'repeat' },
+    })
+
     // Attachments/Locations carry-forward — Jim's own instruction ("Dialog
     // is not carried into repeated Requests. Select any Attachments that
     // should be included with each repeat.") — duplicates every row still
