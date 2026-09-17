@@ -814,6 +814,60 @@ body {
   outline-offset: 1px;
 }
 
+/* Close button (2026-09-17, owner-reported) — Chrome's own native Date
+   picker dropdown offers "Clear" and "Today" text links, and clicking a
+   date also closes the dropdown as a side effect; the native Time picker
+   has neither affordance, forcing a click elsewhere on the page just to
+   dismiss it. There's no way to inject a real button *inside* a native
+   picker popup (browser chrome, not DOM — the same category of limitation
+   as the Print dialog's own preview pane), so this instead sits next to
+   the field like .fclear already does, and calls blur() on the actual
+   time <input>, which closes whatever native picker/keyboard UI is open
+   as a side effect. Shown only while some descendant of the field has
+   focus (:focus-within) — unlike .fclear, which only shows once a value
+   exists, Close is useful even before picking a value, so it can't be
+   gated the same way. Positioned to .fclear's own left so both can be
+   visible together (a focused field that already holds a value). Also
+   blurs itself on click (not just the time input) so :focus-within stops
+   matching and both buttons disappear again, rather than the click itself
+   moving focus onto this button and keeping them visible. Time-only, same
+   scope as .fclear — Date fields already have Chrome's own equivalent. */
+.fclose {
+  position: absolute;
+  right: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.ffloat.picker.native:focus-within .fclose {
+  display: flex;
+}
+
+.fclose:active {
+  background: var(--row-tint);
+  color: var(--brand-blue);
+}
+
+.fclose:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 1px;
+}
+
 /* ============================================================================
    FIELD ROW (§6.16) — two or more fields plus a button on one line.
    ========================================================================= */

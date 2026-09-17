@@ -1219,6 +1219,18 @@ export default function TodoDetailForm() {
                           </span>
                           Due Time <span className="subnote">(optional)</span>
                         </label>
+                        <button
+                          type="button"
+                          className="fclose"
+                          aria-label="Close Due Time picker"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.currentTarget.parentElement?.querySelector('input')?.blur()
+                            e.currentTarget.blur()
+                          }}
+                        >
+                          &#10003;
+                        </button>
                         {form.dueTime.trim() !== '' && (
                           <button
                             type="button"
@@ -1282,6 +1294,18 @@ export default function TodoDetailForm() {
                           </span>
                           Done Time <span className="subnote">(optional)</span>
                         </label>
+                        <button
+                          type="button"
+                          className="fclose"
+                          aria-label="Close Done Time picker"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.currentTarget.parentElement?.querySelector('input')?.blur()
+                            e.currentTarget.blur()
+                          }}
+                        >
+                          &#10003;
+                        </button>
                         {form.doneTime.trim() !== '' && (
                           <button
                             type="button"

@@ -958,6 +958,18 @@ export default function RequestResponseForm() {
                     </span>
                     Done Time <span className="subnote">(optional)</span>
                   </label>
+                  <button
+                    type="button"
+                    className="fclose"
+                    aria-label="Close Done Time picker"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      e.currentTarget.parentElement?.querySelector('input')?.blur()
+                      e.currentTarget.blur()
+                    }}
+                  >
+                    &#10003;
+                  </button>
                   {doneTime.trim() !== '' && (
                     <button
                       type="button"
