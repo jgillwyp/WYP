@@ -19,6 +19,7 @@ import { isReminderEligible } from '@/lib/email'
 import { buildIcsContent } from '@/lib/ics'
 import { type RepeatRule } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { printWithExpandedWindow } from '@/lib/platform'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
@@ -826,7 +827,7 @@ export default function CreateTodoForm() {
               className="iconbtn"
               type="button"
               aria-label="Print ToDo"
-              onClick={() => window.print()}
+              onClick={() => printWithExpandedWindow()}
               style={{ marginLeft: 'auto' }}
             >
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

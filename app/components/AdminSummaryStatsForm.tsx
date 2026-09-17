@@ -24,6 +24,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { printWithExpandedWindow } from '@/lib/platform'
 import {
   AdminAsOfFilterBar,
   PrintIconButton,
@@ -158,7 +159,7 @@ export default function AdminSummaryStatsForm() {
   const showLoading = loading && !needsProfile
 
   function handlePrint() {
-    window.print()
+    printWithExpandedWindow()
   }
 
   async function handleExport() {

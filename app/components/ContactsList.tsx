@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
+import { printWithExpandedWindow } from '@/lib/platform'
 
 /**
  * Contacts (2026-08-09, retitled from "My Contacts" same day) — converted
@@ -141,7 +142,7 @@ export default function ContactsList() {
 
   useEffect(() => {
     if (printTick === 0) return
-    window.print()
+    printWithExpandedWindow()
     function handleAfterPrint() {
       setShowPrint(false)
     }

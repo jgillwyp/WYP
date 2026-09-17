@@ -7,6 +7,7 @@ import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
+import { printWithExpandedWindow } from '@/lib/platform'
 
 /**
  * Archive (2026-08-14) — live conversion of
@@ -1175,7 +1176,7 @@ export default function ArchiveForm() {
 
   useEffect(() => {
     if (printTick === 0) return
-    window.print()
+    printWithExpandedWindow()
     function handleAfterPrint() {
       setShowPrint(false)
     }

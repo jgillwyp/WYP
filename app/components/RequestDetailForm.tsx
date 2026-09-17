@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { printWithExpandedWindow } from '@/lib/platform'
 
 /**
  * Request Detail (§9.3) — converted from
@@ -521,7 +522,7 @@ export default function RequestDetailForm() {
     if (printTick === 0) return
     // Same afterprint-driven pattern as MainScreen.tsx's own Print Reports —
     // fires after the .print-report JSX below has committed to the DOM.
-    window.print()
+    printWithExpandedWindow()
     function handleAfterPrint() {
       setShowPrint(false)
     }

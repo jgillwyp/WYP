@@ -67,3 +67,47 @@ export function isStandaloneDisplay(): boolean {
   const nav = navigator as Navigator & { standalone?: boolean }
   return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true
 }
+
+// Chrome's own native Print dialog sizes its own preview pane off the
+// browser/app window's current width at the moment print is invoked — no
+// CSS or web API can make that dialog's preview pane bigger directly.
+// Owner-reported 2026-09-16: printing from the installed desktop app (its
+// own launch width is 552px, see PWAProvider.tsx) showed "primarily...
+// printer settings and a very small and not readable version of the
+// report," fixed by manually widening the window first — confirmed
+// readable "at double-width of the normal app size." This automates that
+// workaround: widen just before printing, restore on 'afterprint' (fires
+// whether the person actually printed or hit Cancel). A no-op outside the
+// installed standalone window — resizeTo is refused or ignored inside a
+// normal tab, and mobile printing already reads full-page per the owner's
+// own report, so this never touches the far more common tabbed/mobile
+// experience.
+export function printWithExpandedWindow(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  if (!isStandaloneDisplay()) {
+    window.print()
+    return
+  }
+
+  const originalWidth = window.outerWidth
+  const originalHeight = window.outerHeight
+
+  function restore() {
+    window.removeEventListener('afterprint', restore)
+    try {
+      window.resizeTo(originalWidth, originalHeight)
+    } catch {
+      // Some platforms refuse resizeTo outright — harmless to skip.
+    }
+  }
+
+  try {
+    window.resizeTo(originalWidth * 2, originalHeight)
+  } catch {
+    // If the widen itself is refused, still print — just without the fix.
+  }
+  window.addEventListener('afterprint', restore)
+  window.print()
+}

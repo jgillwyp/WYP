@@ -13,6 +13,7 @@ import { isReminderEligible } from '@/lib/email'
 import { buildIcsContent } from '@/lib/ics'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { printWithExpandedWindow } from '@/lib/platform'
 
 /**
  * ToDo Detail (§9.4) — converted from
@@ -584,7 +585,7 @@ export default function TodoDetailForm() {
 
   useEffect(() => {
     if (printTick === 0) return
-    window.print()
+    printWithExpandedWindow()
     function handleAfterPrint() {
       setShowPrint(false)
     }

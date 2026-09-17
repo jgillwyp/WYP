@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { printWithExpandedWindow } from '@/lib/platform'
 import {
   AdminStatsFilterBar,
   PrintIconButton,
@@ -93,7 +94,7 @@ export default function AdminAccountsStatsForm() {
   const display = reverseForDisplay(periods, chartRows)
 
   function handlePrint() {
-    window.print()
+    printWithExpandedWindow()
   }
 
   async function handleExport() {

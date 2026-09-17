@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { printWithExpandedWindow } from '@/lib/platform'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
@@ -460,7 +461,7 @@ export default function CreateRequestForm() {
 
   useEffect(() => {
     if (printTick === 0) return
-    window.print()
+    printWithExpandedWindow()
     function handleAfterPrint() {
       setShowPrint(false)
     }

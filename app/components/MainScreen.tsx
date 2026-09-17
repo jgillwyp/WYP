@@ -8,6 +8,7 @@ import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
+import { printWithExpandedWindow } from '@/lib/platform'
 import {
   isIOSDevice,
   isMacOSDevice,
@@ -1034,7 +1035,7 @@ export default function MainScreen() {
     // not a stale one-render-behind version. 'afterprint' — not a timeout —
     // is what clears printSection back to null, since the browser's print
     // dialog is modal and there's no other reliable signal it closed.
-    window.print()
+    printWithExpandedWindow()
     function handleAfterPrint() {
       setPrintSection(null)
     }

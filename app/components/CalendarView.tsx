@@ -11,6 +11,7 @@ import interactionPlugin from '@fullcalendar/interaction'
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
+import { printWithExpandedWindow } from '@/lib/platform'
 import {
   fetchSentItems,
   fetchReceivedItems,
@@ -238,7 +239,7 @@ export default function CalendarView() {
 
   useEffect(() => {
     if (printTick === 0) return
-    window.print()
+    printWithExpandedWindow()
   }, [printTick])
 
   // printTick is the deliberate trigger below: a fresh timestamp only needs

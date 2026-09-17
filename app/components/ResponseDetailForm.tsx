@@ -12,6 +12,7 @@ import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { printWithExpandedWindow } from '@/lib/platform'
 
 /**
  * Response Detail (§6.28) — converted from
@@ -469,7 +470,7 @@ export default function ResponseDetailForm() {
 
   useEffect(() => {
     if (printTick === 0) return
-    window.print()
+    printWithExpandedWindow()
     function handleAfterPrint() {
       setShowPrint(false)
     }

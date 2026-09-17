@@ -12,6 +12,7 @@ import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate } from '@
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { printWithExpandedWindow } from '@/lib/platform'
 
 /**
  * Request Response (§9.3) — converted from
@@ -724,7 +725,7 @@ export default function RequestResponseForm() {
               className="iconbtn"
               type="button"
               aria-label="Print Request"
-              onClick={() => window.print()}
+              onClick={() => printWithExpandedWindow()}
               style={{ marginLeft: 'auto' }}
             >
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
