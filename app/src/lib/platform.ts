@@ -82,6 +82,20 @@ export function isStandaloneDisplay(): boolean {
 // normal tab, and mobile printing already reads full-page per the owner's
 // own report, so this never touches the far more common tabbed/mobile
 // experience.
+//
+// Position, not just size (2026-09-17, owner-reported) — window.screenX/
+// screenY is how a script reads where its own window sits on the physical
+// screen; there's no separate "which monitor/corner" API needed here.
+// Widening the window doesn't move it — screenX is supposed to stay fixed
+// and the window just grows rightward — but if the window is docked near
+// the right edge of the screen, the OS/browser silently repositions it
+// leftward first so the wider window still fits on-screen, changing its
+// own screenX as a side effect of the widen. Restoring only width/height
+// afterward then resizes from that shifted position, not the original one,
+// which is exactly the "jumps to the left" symptom reported (docked left,
+// with room to grow right, never triggered the clamp, so it was never
+// seen there). Capturing and explicitly restoring screenX/screenY
+// undoes that regardless of which edge the window started against.
 export function printWithExpandedWindow(): void {
   if (typeof window === 'undefined') {
     return
@@ -93,13 +107,16 @@ export function printWithExpandedWindow(): void {
 
   const originalWidth = window.outerWidth
   const originalHeight = window.outerHeight
+  const originalX = window.screenX
+  const originalY = window.screenY
 
   function restore() {
     window.removeEventListener('afterprint', restore)
     try {
       window.resizeTo(originalWidth, originalHeight)
+      window.moveTo(originalX, originalY)
     } catch {
-      // Some platforms refuse resizeTo outright — harmless to skip.
+      // Some platforms refuse resizeTo/moveTo outright — harmless to skip.
     }
   }
 
