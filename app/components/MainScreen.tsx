@@ -133,6 +133,10 @@ type SentRow = {
   // repeat_rule — Jim's own recurrence-method design, 2026-08-21, for the
   // print report's own "Repeats: ..." line only (no on-screen use here).
   repeat_rule: RepeatRule | null
+  // repeat_occurrence_index (2026-09-18) — the new "Repeating" chip only
+  // ever shows the head of a series (index 1 or null), not every
+  // subsequently-generated occurrence; see isRepeatingInitial() below.
+  repeat_occurrence_index: number | null
 }
 
 type TodoRow = {
@@ -153,6 +157,8 @@ type TodoRow = {
   // counterpart for ToDos).
   archived_at: string | null
   repeat_rule: RepeatRule | null
+  // repeat_occurrence_index — see SentRow's own identical field comment.
+  repeat_occurrence_index: number | null
 }
 
 // Shape returned by the get_received_requests() RPC (migration 012, plus
@@ -298,6 +304,7 @@ const CHIP_LABEL: Record<FilterValue, string> = {
   open: 'Open',
   overdue: 'Overdue',
   done: 'Done',
+  repeating: 'Repeating',
 }
 
 // Shared by Sent, Received, and (as of 2026-08-12) ToDos — all three now
@@ -336,13 +343,30 @@ function todoStatus(t: TodoRow): 'open' | 'overdue' | 'done' {
 // not a sibling category disjoint from Open. The Overdue chip itself still
 // narrows to just status === 'overdue', unchanged — only the Open chip's
 // own matching rule changes, to treat overdue rows as open too.
-function matchesStatusFilter(
-  status: 'open' | 'overdue' | 'done',
-  filter: 'all' | 'open' | 'overdue' | 'done'
-): boolean {
+function matchesStatusFilter(status: 'open' | 'overdue' | 'done', filter: FilterValue): boolean {
   if (filter === 'all') return true
   if (filter === 'open') return status === 'open' || status === 'overdue'
+  // 'repeating' never reaches here in practice — Received (the only caller
+  // that can't special-case it the way filteredSent/filteredTodos do above)
+  // never renders a Repeating chip, so receivedFilter can never actually
+  // hold this value — but the type is shared across all three filters (see
+  // FilterValue's own comment), so this still needs to be an exhaustive,
+  // harmless no-match rather than a type error.
+  if (filter === 'repeating') return false
   return status === filter
+}
+
+// "Repeating" chip (2026-09-18, owner's own design) — Sent/ToDos only.
+// Shows only the head of a series, not every subsequently-generated
+// occurrence: "Requests that were initially created or subsequently
+// generated could either be Done or Open, however the initial Request for
+// the repeat would be seen under that chip." repeat_occurrence_index
+// defaults to 1 for a brand-new repeat (RequestDetailForm.tsx/
+// TodoDetailForm.tsx/CreateRequestForm.tsx/CreateTodoForm.tsx all write
+// `repeatOccurrenceIndex ?? 1` the moment repeat_rule is set), so `?? 1`
+// here is a defensive fallback, not the normal case.
+function isRepeatingInitial(repeat_rule: RepeatRule | null, repeat_occurrence_index: number | null): boolean {
+  return repeat_rule != null && (repeat_occurrence_index ?? 1) <= 1
 }
 
 // Date Range search scope (2026-08-19) — either side alone is a valid
@@ -681,8 +705,13 @@ function readStoredString(key: string): string {
   return window.sessionStorage.getItem(key) ?? ''
 }
 
-type FilterValue = 'all' | 'open' | 'overdue' | 'done'
-const FILTER_VALUES = ['all', 'open', 'overdue', 'done'] as const
+// 'repeating' (2026-09-18) — only ever offered on Sent/ToDos (never
+// Received, per Jim's own scoping); shared across all three filter types
+// anyway since restoring a stored 'repeating' value for Received is
+// harmless — that section's own chip row simply never renders a button
+// that could produce it.
+type FilterValue = 'all' | 'open' | 'overdue' | 'done' | 'repeating'
+const FILTER_VALUES = ['all', 'open', 'overdue', 'done', 'repeating'] as const
 
 type MainChipPrefs = {
   sentFilter?: FilterValue
@@ -1253,7 +1282,7 @@ export default function MainScreen() {
     return Promise.all([
       supabase
         .from('requests')
-        .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule')
+        .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule, repeat_occurrence_index')
         .not('contact_id', 'is', null)
         .order('due_date', { ascending: false, nullsFirst: false }),
       // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
@@ -1265,7 +1294,7 @@ export default function MainScreen() {
       supabase.rpc('get_received_requests'),
       supabase
         .from('requests')
-        .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at, repeat_rule')
+        .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at, repeat_rule, repeat_occurrence_index')
         .is('contact_id', null)
         .order('priority', { ascending: true, nullsFirst: false }),
     ])
@@ -1379,10 +1408,16 @@ export default function MainScreen() {
   // switches to either the text query or the Date Range, whichever scope is
   // active — never both, since selectSearchScope keeps the other scope's
   // fields cleared. At rest, behavior is unchanged from before this batch.
+  const hasRepeatingSent = useMemo(
+    () => sent.some((r) => isRepeatingInitial(r.repeat_rule, r.repeat_occurrence_index)),
+    [sent]
+  )
+
   const filteredSent = useMemo(() => {
     return sent.filter((r) => {
       if (!isSearching) {
         if (r.archived_at) return false
+        if (sentFilter === 'repeating') return isRepeatingInitial(r.repeat_rule, r.repeat_occurrence_index)
         return matchesStatusFilter(sentStatus(r), sentFilter)
       }
       if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
@@ -1416,10 +1451,16 @@ export default function MainScreen() {
   // sense of. Sent/Received never matched Category at all (neither screen
   // shows it, matching PRD §2.3's own recipient-visibility rule), so no
   // change needed there.
+  const hasRepeatingTodos = useMemo(
+    () => todos.some((t) => isRepeatingInitial(t.repeat_rule, t.repeat_occurrence_index)),
+    [todos]
+  )
+
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
       if (!isSearching) {
         if (t.archived_at) return false
+        if (todoFilter === 'repeating') return isRepeatingInitial(t.repeat_rule, t.repeat_occurrence_index)
         return matchesStatusFilter(todoStatus(t), todoFilter)
       }
       if (searchScope === 'daterange') return todoDatesEnabled && matchesDateRange(t.due_date, fromDate, toDate)
@@ -1585,6 +1626,14 @@ export default function MainScreen() {
                   <button className={`chip${sentFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('open')}>Open</button>
                   <button className={`chip over${sentFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('overdue')}>Overdue</button>
                   <button className={`chip done${sentFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('done')}>Done</button>
+                  <button
+                    className={`chip${sentFilter === 'repeating' ? ' sel' : ''}`}
+                    type="button"
+                    disabled={!hasRepeatingSent}
+                    onClick={() => setSentFilter('repeating')}
+                  >
+                    Repeating
+                  </button>
                 </div>
               )}
             </div>
@@ -1806,6 +1855,16 @@ export default function MainScreen() {
                     <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('overdue')}>Overdue</button>
                   )}
                   <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
+                  {todoDatesEnabled && (
+                    <button
+                      className={`chip${todoFilter === 'repeating' ? ' sel' : ''}`}
+                      type="button"
+                      disabled={!hasRepeatingTodos}
+                      onClick={() => setTodoFilter('repeating')}
+                    >
+                      Repeating
+                    </button>
+                  )}
                 </div>
               )}
               <span className="subicons">

@@ -2267,6 +2267,19 @@ body {
   box-shadow: 0 1px 2px rgba(90, 102, 117, .18);
 }
 
+/* Inactive chip (2026-09-18) — the new "Repeating" chip on Sent/ToDos,
+   owner: "display the chip as active when there are Repeating items for a
+   user - otherwise show it as inactive (as the 'Done' chip is shown)."
+   Reuses .chip.done's own muted --ink-soft color for that "inactive" look,
+   plus the native disabled attribute so it can't be selected while there's
+   nothing to show — same generic treatment any future data-dependent chip
+   can reuse via the disabled attribute alone. */
+.chips .chip:disabled {
+  color: var(--ink-soft);
+  opacity: .7;
+  cursor: default;
+}
+
 /* column header bar + sort pill */
 .colbar {
   background: var(--brand-blue);

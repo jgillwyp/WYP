@@ -790,14 +790,14 @@ async function handle(request: Request) {
   // ======================================================================
   // Phase E — Repeat generation (Jim's own recurrence-method design,
   // 2026-08-21; migration 038). "The Due Date should be the determinant" —
-  // fires once, at the OWNER's own local midnight, on the calendar day the
-  // current occurrence's Due Date itself falls on (not the day after, which
-  // is Phase B's own "became Overdue" moment) — independent of Done status,
-  // so this deliberately does NOT reuse requestRows/todoRows above (both
-  // filter out Done rows). repeat_next_generated_at (migration 038) is the
-  // idempotency marker: set once a row's Due-Date-arrival has been
-  // processed, whether or not a successor was actually produced (a stopped
-  // series still needs to stop retrying every hour).
+  // fires once, at the OWNER's own local midnight on or after the calendar
+  // day the current occurrence's Due Date itself falls on (not the day
+  // after, which is Phase B's own "became Overdue" moment) — independent of
+  // Done status, so this deliberately does NOT reuse requestRows/todoRows
+  // above (both filter out Done rows). repeat_next_generated_at (migration
+  // 038) is the idempotency marker: set once a row's Due-Date-arrival has
+  // been processed, whether or not a successor was actually produced (a
+  // stopped series still needs to stop retrying every hour).
   // ======================================================================
   const { data: repeatData, error: repeatError } = await sb
     .from('requests')
@@ -825,7 +825,19 @@ async function handle(request: Request) {
   for (const row of repeatRows) {
     const profile = profileMap.get(row.owner_id) ?? null
     const zone = profile?.time_zone ?? null
-    if (localDateISO(zone, now) !== row.due_date || localHour(zone, now) !== OVERDUE_HOUR) continue
+    // "On or after," not exact-date (2026-09-18, owner-reported: a repeat
+    // whose first occurrence was due the same day it was created never
+    // generated a successor). The strict !== this replaced only ever
+    // matched during one specific hour on due_date's own calendar day — for
+    // a same-day-due row, that window (local midnight of *today*) has
+    // almost always already passed by the time the row exists, and once
+    // due_date is in the past, `now`'s date can never equal it again, so
+    // the row was silently skipped forever. repeat_next_generated_at
+    // (checked in the query above, set once this row is actually
+    // processed below) is what keeps this idempotent, same "on or after,
+    // catch up on a later hourly run" pattern Phase B/A3 already use for
+    // their own Overdue notices.
+    if (localDateISO(zone, now) < row.due_date || localHour(zone, now) !== OVERDUE_HOUR) continue
 
     const rule = row.repeat_rule
     const nextOccurrenceIndex = (row.repeat_occurrence_index ?? 1) + 1
