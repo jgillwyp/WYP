@@ -964,7 +964,13 @@ export default function ResponseDetailForm() {
           </span>
         </div>
 
-        {sendConfirmed && <div className="noticeband"><b>Response saved.</b> Your update has been recorded.</div>}
+        {/* Owner-reported, 2026-09-21 — gated on !hasChanges && !contentChanged
+            too, not sendConfirmed alone: clearing Done Date (or any other
+            further edit) after a successful Send left this banner claiming
+            "saved" while real unsent changes sat pending. */}
+        {sendConfirmed && !hasChanges && !contentChanged && (
+          <div className="noticeband"><b>Response saved.</b> Your update has been recorded.</div>
+        )}
 
         <div className="scroll">
           <form id="response-detail-form" onSubmit={handleSend} noValidate>

@@ -818,7 +818,13 @@ export default function RequestResponseForm() {
             recipient's own confirmation after clicking Send, and "saved"
             undersold what actually happened (a write plus, when eligible,
             downstream Reminder/notification behavior keyed off it). */}
-        {sendConfirmed && <div className="noticeband"><b>Response sent.</b> Your update has been recorded.</div>}
+        {/* Owner-reported, 2026-09-21 — gated on !hasUnsentChanges too, not
+            sendConfirmed alone: clearing Done Date (or any other further
+            edit) after a successful Send left this banner claiming "sent"
+            while real unsent changes sat pending. */}
+        {sendConfirmed && !hasUnsentChanges && (
+          <div className="noticeband"><b>Response sent.</b> Your update has been recorded.</div>
+        )}
 
         <div className="scroll">
           <form id="request-response-form" onSubmit={handleSend} noValidate>
