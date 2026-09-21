@@ -381,6 +381,15 @@ export default function ResponseDetailForm() {
     initialFormRef.current !== null &&
     doneDate === initialFormRef.current.doneDate &&
     doneTime === initialFormRef.current.doneTime
+  // doneChangedSinceLastSend (2026-09-21) — picks which of the two pending-
+  // change donenote messages applies below: Done itself vs. everything
+  // else (Dialog/Attachments/Reminders). initialFormRef.current now doubles
+  // as "the last-sent (or, if never sent, last-loaded) state," re-taken in
+  // handleSend's own success path.
+  const doneChangedSinceLastSend =
+    initialFormRef.current === null ||
+    doneDate !== initialFormRef.current.doneDate ||
+    doneTime !== initialFormRef.current.doneTime
   // dialogChanged/attachmentsChanged (2026-09-02) — split out of
   // contentChanged, purely to describe *which* fields changed for the
   // "UPDATED:" change-notification email sent to the owner (see
@@ -400,9 +409,6 @@ export default function ResponseDetailForm() {
   const [archiving, setArchiving] = useState(false)
   const [archiveError, setArchiveError] = useState<string | null>(null)
 
-  // Owner-reported, 2026-08-15 — see RequestResponseForm.tsx's identical
-  // comment; this screen mirrors that fix verbatim.
-  const [alreadyDoneOnLoad, setAlreadyDoneOnLoad] = useState(false)
 
   const [dialogList, setDialogList] = useState<DialogEntry[]>([])
 
@@ -518,7 +524,6 @@ export default function ResponseDetailForm() {
         reminderDayOfEnabled: payload.reminder_day_of_enabled,
         overdueReminderEnabled: payload.overdue_reminder_enabled,
       }
-      setAlreadyDoneOnLoad(!!payload.done_date)
       setDialogList(payload.dialog ?? [])
       setReceivedArchivedAt(payload.received_archived_at)
 
@@ -802,6 +807,17 @@ export default function ResponseDetailForm() {
     }
 
     void sendChangeNotification(changedFieldLabels)
+
+    // Re-take the dirty-gating snapshot now that this state has actually
+    // been sent (2026-09-21, owner's own design — see RequestResponseForm.
+    // tsx's identical fix). Without this, hasChanges/contentChanged stayed
+    // true forever after the first edit, even once it had already been
+    // sent, leaving Send enabled and the donenote wording stale.
+    initialFormRef.current = { doneDate, doneTime, reminderEnabled, reminderDayOfEnabled, overdueReminderEnabled }
+    setContentChanged(false)
+    setDialogChanged(false)
+    setAttachmentsChanged(false)
+
     setSendConfirmed(true)
   }
 
@@ -1003,17 +1019,19 @@ export default function ResponseDetailForm() {
 
             <div className="donerow">
               <span className="donenote">
-                {/* Third state added 2026-08-11 — see RequestResponseForm.tsx's
-                    identical comment; this screen mirrors that one's donerow
-                    verbatim. */}
+                {/* Revised 2026-09-21 — see RequestResponseForm.tsx's
+                    identical comment; this screen mirrors that one's
+                    donerow verbatim, reusing hasChanges/contentChanged
+                    (already gating Send's own disabled state above) instead
+                    of a separate flag. */}
                 {doneDate.trim() === '' ? (
                   <><b>Note:</b> For a quick response, click Done and Send.</>
-                ) : sendConfirmed ? (
-                  'This Request is now marked as Done and has been Sent.'
-                ) : alreadyDoneOnLoad ? (
+                ) : !hasChanges && !contentChanged ? (
                   'This Request is reported as completed.'
+                ) : doneChangedSinceLastSend ? (
+                  'Click Send to report this Request completed.'
                 ) : (
-                  'This Request is now marked as Done, just click Send.'
+                  'Click Send to report changes.'
                 )}
               </span>
               <button

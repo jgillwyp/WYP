@@ -265,16 +265,17 @@ export default function RequestResponseForm() {
   const [dialogChanged, setDialogChanged] = useState(false)
   const [attachmentsChanged, setAttachmentsChanged] = useState(false)
 
-  // Owner-reported, 2026-08-15: opening a Request that was ALREADY marked
-  // Done before this visit showed "This Request is now marked as Done, just
-  // click Send." — worded as if the visitor had just done something that
-  // still needs sending, when in fact nothing has changed yet. Set once,
-  // from the payload as first loaded, and never touched again — a Send in
-  // this session (sendConfirmed) still takes priority in the donerow below,
-  // and quick-Done/manual edits during this same visit still fall through
-  // to the original "just click Send" wording, since only the load-time
-  // snapshot means "already done before I got here."
-  const [alreadyDoneOnLoad, setAlreadyDoneOnLoad] = useState(false)
+  // Send-button dirty-gating's own snapshot — see hasUnsentChanges' comment
+  // below. Null until the first successful Send this visit; re-taken every
+  // time handleSend succeeds.
+  const sentSnapshotRef = useRef<{
+    doneDate: string
+    doneTime: string
+    reminderEnabled: boolean
+    reminderDayOfEnabled: boolean
+    overdueReminderEnabled: boolean
+  } | null>(null)
+
 
   // Reminder checkbox (migration 036, 2026-08-19) — same shared column,
   // same plain checked=on .checkrow component as Request Detail/Response
@@ -316,8 +317,7 @@ export default function RequestResponseForm() {
   // three Reminder checkboxes but nothing else (Done Date/Time unchanged,
   // no new Dialog/Attachments). The band button reads "Save" instead of
   // "Send" in that case, matching ResponseDetailForm.tsx's identical
-  // addition — this screen still has no disabled-gating of its own (see
-  // initialFormRef's own comment above), only the label changes.
+  // addition.
   const remindersOnlyChanged =
     initialFormRef.current !== null &&
     doneDate === initialFormRef.current.doneDate &&
@@ -327,6 +327,31 @@ export default function RequestResponseForm() {
     (reminderEnabled !== initialFormRef.current.reminderEnabled ||
       reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
       overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
+
+  // Send-button dirty-gating (2026-09-21, owner's own design) — this screen
+  // never had any disabled-gating on Send before (see initialFormRef's own
+  // comment history); sentSnapshotRef is null until the first successful
+  // Send, so hasUnsentChanges reads true — and Send stays enabled — for
+  // every visitor up through their first Send, same as today's always-
+  // enabled behavior. handleSend re-takes this snapshot (and clears
+  // dialogChanged/attachmentsChanged) right after a successful send, so
+  // Send greys out with nothing left to report, and re-enables the moment
+  // anything changes again — Done Date/Time, Dialog, Attachments, or any of
+  // the three Reminder checkboxes. doneChangedSinceLastSend narrows the
+  // donenote wording below: "report this Request completed" when Done
+  // itself is the pending change, "report changes" for everything else.
+  const doneChangedSinceLastSend =
+    sentSnapshotRef.current === null ||
+    doneDate !== sentSnapshotRef.current.doneDate ||
+    doneTime !== sentSnapshotRef.current.doneTime
+  const hasUnsentChanges =
+    doneChangedSinceLastSend ||
+    dialogChanged ||
+    attachmentsChanged ||
+    (sentSnapshotRef.current !== null &&
+      (reminderEnabled !== sentSnapshotRef.current.reminderEnabled ||
+        reminderDayOfEnabled !== sentSnapshotRef.current.reminderDayOfEnabled ||
+        overdueReminderEnabled !== sentSnapshotRef.current.overdueReminderEnabled))
 
   // Owner's ask, 2026-08-13 — see cameFromCalendarLink's own comment in
   // @/lib/ics: hide the Add to Calendar button when the visitor arrived by
@@ -371,7 +396,6 @@ export default function RequestResponseForm() {
       setData(payload)
       setDoneDate(payload.done_date ?? '')
       setDoneTime(payload.done_time ?? '')
-      setAlreadyDoneOnLoad(!!payload.done_date)
       setReminderEnabled(payload.reminder_enabled)
       setReminderDayOfEnabled(payload.reminder_day_of_enabled)
       setOverdueReminderEnabled(payload.overdue_reminder_enabled)
@@ -384,6 +408,20 @@ export default function RequestResponseForm() {
         reminderEnabled: payload.reminder_enabled,
         reminderDayOfEnabled: payload.reminder_day_of_enabled,
         overdueReminderEnabled: payload.overdue_reminder_enabled,
+      }
+      // Seeded only when the Request arrives already Done — the old
+      // alreadyDoneOnLoad concept, folded into the same snapshot
+      // hasUnsentChanges compares against. Left null otherwise, so a fresh,
+      // never-yet-sent visitor still has an always-enabled Send button
+      // (unchanged from before this screen had any dirty-gating at all).
+      if (payload.done_date) {
+        sentSnapshotRef.current = {
+          doneDate: payload.done_date,
+          doneTime: payload.done_time ?? '',
+          reminderEnabled: payload.reminder_enabled,
+          reminderDayOfEnabled: payload.reminder_day_of_enabled,
+          overdueReminderEnabled: payload.overdue_reminder_enabled,
+        }
       }
       setLoading(false)
     }
@@ -549,6 +587,14 @@ export default function RequestResponseForm() {
     }
 
     void sendChangeNotification(changedFieldLabels)
+
+    // Re-take the dirty-gating snapshot now that this state has actually
+    // been sent — see hasUnsentChanges' own comment above. Clearing
+    // dialogChanged/attachmentsChanged too: those are one-way flags meant
+    // to mean "changed since the last Send," not "changed since page load."
+    sentSnapshotRef.current = { doneDate, doneTime, reminderEnabled, reminderDayOfEnabled, overdueReminderEnabled }
+    setDialogChanged(false)
+    setAttachmentsChanged(false)
 
     setSendConfirmed(true)
   }
@@ -762,7 +808,7 @@ export default function RequestResponseForm() {
         <div className="band">
           <span className="glabel">Request Response</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="request-response-form" disabled={sending}>
+            <button className="btn" type="submit" form="request-response-form" disabled={sending || !hasUnsentChanges}>
               {sending ? 'Sending…' : remindersOnlyChanged ? 'Save' : 'Send'}
             </button>
           </span>
@@ -872,21 +918,23 @@ export default function RequestResponseForm() {
                 get out of sync. */}
             <div className="donerow">
               <span className="donenote">
-                {/* Third state added 2026-08-11 — owner: once Send succeeds,
-                    the wording next to the Done button itself should say so
-                    too, not just the .noticeband confirmation at the top of
-                    the screen. Reactive to sendConfirmed the same way the
-                    other two states are reactive to doneDate — no separate
-                    flag, so it can't drift out of sync with what actually
-                    happened. */}
+                {/* Revised 2026-09-21, owner's own design — reactive to
+                    hasUnsentChanges/doneChangedSinceLastSend (see their own
+                    comments above) instead of the old sendConfirmed/
+                    alreadyDoneOnLoad pair, so the wording can't say
+                    "reported" before a Send has actually happened, and
+                    correctly reopens once anything changes after an earlier
+                    Send. doneChangedSinceLastSend picks which of the two
+                    pending-change messages applies: Done itself vs.
+                    everything else (Dialog/Attachments/Reminders). */}
                 {doneDate.trim() === '' ? (
                   <><b>Note:</b> For a quick response, click Done and Send.</>
-                ) : sendConfirmed ? (
-                  'This Request is now marked as Done and has been Sent.'
-                ) : alreadyDoneOnLoad ? (
+                ) : !hasUnsentChanges ? (
                   'This Request is reported as completed.'
+                ) : doneChangedSinceLastSend ? (
+                  'Click Send to report this Request completed.'
                 ) : (
-                  'This Request is now marked as Done, just click Send.'
+                  'Click Send to report changes.'
                 )}
               </span>
               <button
