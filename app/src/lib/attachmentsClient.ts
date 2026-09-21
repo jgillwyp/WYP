@@ -90,9 +90,11 @@ export type UploadAttachmentResult =
  *
  * Only retries a failure that's plausibly transient: a network-level
  * exception (fetch itself threw — the connection dropped mid-upload,
- * exactly the shape of a weak-signal mobile upload) or a 5xx from the
- * server (upload_failed/insert_failed, a real Storage/DB hiccup). A 4xx
- * (blocked_type/too_large/limit_reached/storage_limit/not_found) is a
+ * exactly the shape of a weak-signal mobile upload), a 5xx from the server
+ * (upload_failed/insert_failed, a real Storage/DB hiccup), or 'not_found'
+ * (2026-09-20 — see that check's own comment below; a live auth-validation
+ * round-trip that can transiently fail even for a valid token). Every
+ * other 4xx (blocked_type/too_large/limit_reached/storage_limit) is a
  * deterministic answer the server will give again identically, so it
  * fails immediately with the real reason rather than wasting two more
  * attempts on an answer that can't change.
@@ -144,7 +146,18 @@ export async function uploadAttachmentWithRetry(
       if (resBody.error === 'storage_limit') {
         return { ok: false, message: resBody.detail ?? 'This would exceed the storage allowance.' }
       }
-      if (res.status < 500) {
+      // 'not_found' (2026-09-20, owner-reported, iPhone) — deliberately
+      // retried despite being a 4xx, unlike every other case here.
+      // resolvePermission() (app/api/attachments/_shared.ts) calls
+      // supabase.auth.getUser(), the exact same live Supabase-edge
+      // round-trip that produced the "JWT issued at future" clock-skew
+      // symptom MainScreen.tsx's own load retry (2026-08-18) already exists
+      // to absorb — a genuinely valid, freshly-issued token can transiently
+      // fail that check on one edge node a beat behind another,
+      // self-correcting within a second or two. A real permission denial
+      // also returns 'not_found' and gains nothing from these extra
+      // attempts beyond a ~2s delay before the same, correct failure.
+      if (res.status < 500 && resBody.error !== 'not_found') {
         return {
           ok: false,
           message: resBody.detail ? `Could not upload ${file.name}: ${resBody.detail}` : `Could not upload ${file.name}.`,

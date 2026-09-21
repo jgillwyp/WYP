@@ -200,8 +200,27 @@ export async function resolvePermission(opts: {
 
   if (authHeader) {
     const sb = getForwardedClient(authHeader)
-    const { data: userData } = await sb.auth.getUser()
-    if (!userData.user) return null
+    // Retry-with-backoff (2026-09-20, owner-reported, iPhone) — auth.
+    // getUser() is a live round-trip to Supabase's Auth servers, the same
+    // call behind the "JWT issued at future" clock-skew symptom already
+    // diagnosed and fixed once for MainScreen.tsx's own load path
+    // (2026-08-18): a genuinely valid, freshly-issued token can transiently
+    // fail this check on an edge node a beat behind another, self-
+    // correcting within a second or two. Retried here, server-side, so a
+    // hiccup resolves without the client needing to re-send the whole
+    // (potentially several-MB) file — uploadAttachmentWithRetry's own
+    // client-side retry on 'not_found' stays in place too, as a backstop
+    // for whatever this doesn't catch.
+    let userData: Awaited<ReturnType<typeof sb.auth.getUser>>['data'] | null = null
+    for (const delayMs of [0, 400, 900]) {
+      if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
+      const result = await sb.auth.getUser()
+      if (result.data.user) {
+        userData = result.data
+        break
+      }
+    }
+    if (!userData?.user) return null
 
     // Owner path: "requests: owners select own" (migration 003) already
     // scopes this to rows the caller actually owns.
