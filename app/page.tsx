@@ -64,6 +64,31 @@ import LandingPage from './components/LandingPage'
 // cascading-render pattern here since nothing async is involved. Clearing
 // the hash afterward is a real side effect (not a state update), so that
 // part still belongs in a plain useEffect below.
+// Retry-with-backoff for the session check below (2026-09-22, owner-
+// reported — iPhone Chrome) — a real, live-tested bug: a completely valid,
+// unexpired session sat in localStorage the whole time (confirmed via
+// /debug-session's own getSession()/getUser() both succeeding moments
+// later), but this screen's own single, un-retried getSession() call had
+// already concluded "anon" and shown the sign-in page. Same class of
+// transient Supabase-edge hiccup already diagnosed and fixed three times
+// elsewhere in this app (MainScreen.tsx's load retry, 2026-08-18; the
+// attachments upload auth-check retry, 2026-09-20) — this was the one
+// remaining un-retried "is there a session" check, and it happens to gate
+// the single highest-stakes decision in the app (whole-app landing-page-
+// vs-signed-in-view). Only retries when a stored session actually exists
+// (hasStoredSupabaseSession) — a genuinely new, never-signed-in visitor
+// has no token to find, and shouldn't pay a multi-second delay before
+// seeing the landing page just because this same code path also has to
+// cover the "has a token but getSession() flaked" case.
+function hasStoredSupabaseSession(): boolean {
+  if (typeof window === 'undefined') return false
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i)
+    if (key && key.startsWith('sb-') && key.includes('auth-token')) return true
+  }
+  return false
+}
+
 function parseAuthError(): string | null {
   if (typeof window === 'undefined' || !window.location.hash.includes('error=')) return null
   const params = new URLSearchParams(window.location.hash.slice(1))
@@ -88,10 +113,26 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return
-      setStatus(data.session ? 'authed' : 'anon')
-    })
+
+    async function checkSession() {
+      const delaysMs = hasStoredSupabaseSession() ? [0, 600, 1600] : [0]
+      for (let i = 0; i < delaysMs.length; i++) {
+        if (delaysMs[i] > 0) await new Promise((r) => setTimeout(r, delaysMs[i]))
+        if (cancelled) return
+        const { data } = await supabase.auth.getSession()
+        if (cancelled) return
+        if (data.session) {
+          setStatus('authed')
+          return
+        }
+        if (i === delaysMs.length - 1) {
+          setStatus('anon')
+        }
+      }
+    }
+
+    checkSession()
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
