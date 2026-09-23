@@ -923,6 +923,13 @@ export default function CreateRequestForm() {
         overdue_reminder_enabled: form.overdueReminderEnabled,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? 1 : null,
+        // repeat_series_id (migration 068, 2026-09-23) — a brand-new item
+        // can never have an existing series to preserve, so this is always
+        // a fresh id when Repeat is set. Shared by every occurrence cron
+        // Phase E later generates from this one; lets the "Repeating" chip
+        // find the current head of the series instead of requiring this
+        // exact row (occurrence 1) to still carry the rule forever.
+        repeat_series_id: repeatRule ? crypto.randomUUID() : null,
       })
       .select('id')
       .single()

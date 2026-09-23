@@ -373,6 +373,9 @@ export default function TodoDetailForm() {
   // rule/occurrence-index pair as RequestDetailForm.tsx's own copy.
   const [repeatRule, setRepeatRule] = useState<RepeatRule | null>(null)
   const [repeatOccurrenceIndex, setRepeatOccurrenceIndex] = useState<number | null>(null)
+  // repeat_series_id — see RequestDetailForm.tsx's identical comment
+  // (migration 068, 2026-09-23).
+  const [repeatSeriesId, setRepeatSeriesId] = useState<string | null>(null)
 
   // Print (2026-08-15) — same reasoning/pattern as RequestDetailForm.tsx's
   // identical addition. dialogList already has everything Dialog needs;
@@ -616,7 +619,7 @@ export default function TodoDetailForm() {
         supabase
           .from('requests')
           .select(
-            'id, description, priority, due_date, due_time, done_date, done_time, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, categories(name)'
+            'id, description, priority, due_date, due_time, done_date, done_time, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, categories(name)'
           )
           .eq('id', todoId)
           .single(),
@@ -662,6 +665,7 @@ export default function TodoDetailForm() {
         archived_at: string | null
         repeat_rule: RepeatRule | null
         repeat_occurrence_index: number | null
+        repeat_series_id: string | null
         reminder_enabled: boolean
         overdue_reminder_enabled: boolean
         reminder_sent_at: string | null
@@ -701,6 +705,7 @@ export default function TodoDetailForm() {
       setArchivedAt(row.archived_at)
       setRepeatRule(row.repeat_rule)
       setRepeatOccurrenceIndex(row.repeat_occurrence_index)
+      setRepeatSeriesId(row.repeat_series_id)
       initialFormRef.current = {
         priority: (row.priority as 1 | 2 | 3) ?? 1,
         dueDate: row.due_date ?? '',
@@ -952,6 +957,7 @@ export default function TodoDetailForm() {
         description: form.description.trim(),
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? (repeatOccurrenceIndex ?? 1) : null,
+        repeat_series_id: repeatSeriesId,
         reminder_enabled: form.reminderEnabled,
         reminder_day_of_enabled: form.reminderDayOfEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
@@ -1456,6 +1462,7 @@ export default function TodoDetailForm() {
                 onSave={(rule) => {
                   setRepeatRule(rule)
                   setRepeatOccurrenceIndex((current) => current ?? 1)
+                  setRepeatSeriesId((current) => current ?? crypto.randomUUID())
                 }}
                 onRemove={() => setRepeatRule(null)}
                 disabled={form.dueDate.trim() === '' || archivedAt !== null}

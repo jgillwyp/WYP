@@ -700,6 +700,9 @@ export default function CreateTodoForm() {
         overdue_reminder_enabled: form.overdueReminderEnabled,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? 1 : null,
+        // repeat_series_id — see CreateRequestForm.tsx's identical comment
+        // (migration 068, 2026-09-23).
+        repeat_series_id: repeatRule ? crypto.randomUUID() : null,
       })
       .select('id')
       .single()

@@ -315,6 +315,11 @@ export default function RequestDetailForm() {
   // selectedCategory below.
   const [repeatRule, setRepeatRule] = useState<RepeatRule | null>(null)
   const [repeatOccurrenceIndex, setRepeatOccurrenceIndex] = useState<number | null>(null)
+  // repeat_series_id (migration 068, 2026-09-23) — see RepeatControl's own
+  // onSave callback below for when this actually gets generated. Loaded
+  // as-is otherwise, so editing an existing repeat's rule never mints a
+  // second id for the same series.
+  const [repeatSeriesId, setRepeatSeriesId] = useState<string | null>(null)
 
   const [form, setForm] = useState<RequestFormState>({
     dueDate: '',
@@ -541,7 +546,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, archived_at, repeat_rule, repeat_occurrence_index, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -595,6 +600,7 @@ export default function RequestDetailForm() {
         archived_at: string | null
         repeat_rule: RepeatRule | null
         repeat_occurrence_index: number | null
+        repeat_series_id: string | null
         contacts: { display_name: string } | null
         categories: { name: string } | null
       }
@@ -607,6 +613,7 @@ export default function RequestDetailForm() {
       setReminderDayOfSentAt(row.reminder_day_of_sent_at)
       setRepeatRule(row.repeat_rule)
       setRepeatOccurrenceIndex(row.repeat_occurrence_index)
+      setRepeatSeriesId(row.repeat_series_id)
       setForm({
         dueDate: row.due_date ?? '',
         dueTime: row.due_time ?? '',
@@ -1123,6 +1130,7 @@ export default function RequestDetailForm() {
         overdue_reminder_enabled: form.overdueReminderEnabled,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? (repeatOccurrenceIndex ?? 1) : null,
+        repeat_series_id: repeatSeriesId,
         // Un-archive-on-clear (owner request, 2026-08-17): clearing Done
         // Date on a Request that was archived returns it to active status
         // — preserved unchanged in every other case (including a non-
@@ -1482,6 +1490,11 @@ export default function RequestDetailForm() {
               onSave={(rule) => {
                 setRepeatRule(rule)
                 setRepeatOccurrenceIndex((current) => current ?? 1)
+                // repeat_series_id (migration 068) — only ever generated
+                // once, the first time Repeat is added to a row that never
+                // had a series id; editing an already-repeating row's rule
+                // keeps whatever id it loaded with.
+                setRepeatSeriesId((current) => current ?? crypto.randomUUID())
               }}
               onRemove={() => setRepeatRule(null)}
               disabled={form.dueDate.trim() === '' || archivedAt !== null}

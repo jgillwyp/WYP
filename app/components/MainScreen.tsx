@@ -133,10 +133,11 @@ type SentRow = {
   // repeat_rule — Jim's own recurrence-method design, 2026-08-21, for the
   // print report's own "Repeats: ..." line only (no on-screen use here).
   repeat_rule: RepeatRule | null
-  // repeat_occurrence_index (2026-09-18) — the new "Repeating" chip only
-  // ever shows the head of a series (index 1 or null), not every
-  // subsequently-generated occurrence; see isRepeatingInitial() below.
+  // repeat_occurrence_index/repeat_series_id (2026-09-18, revised
+  // 2026-09-23) — the "Repeating" chip shows the current, most-recent
+  // active occurrence of each series; see repeatingHeadIds() below.
   repeat_occurrence_index: number | null
+  repeat_series_id: string | null
 }
 
 type TodoRow = {
@@ -157,8 +158,10 @@ type TodoRow = {
   // counterpart for ToDos).
   archived_at: string | null
   repeat_rule: RepeatRule | null
-  // repeat_occurrence_index — see SentRow's own identical field comment.
+  // repeat_occurrence_index/repeat_series_id — see SentRow's own identical
+  // field comment.
   repeat_occurrence_index: number | null
+  repeat_series_id: string | null
 }
 
 // Shape returned by the get_received_requests() RPC (migration 012, plus
@@ -356,17 +359,32 @@ function matchesStatusFilter(status: 'open' | 'overdue' | 'done', filter: Filter
   return status === filter
 }
 
-// "Repeating" chip (2026-09-18, owner's own design) — Sent/ToDos only.
-// Shows only the head of a series, not every subsequently-generated
-// occurrence: "Requests that were initially created or subsequently
-// generated could either be Done or Open, however the initial Request for
-// the repeat would be seen under that chip." repeat_occurrence_index
-// defaults to 1 for a brand-new repeat (RequestDetailForm.tsx/
-// TodoDetailForm.tsx/CreateRequestForm.tsx/CreateTodoForm.tsx all write
-// `repeatOccurrenceIndex ?? 1` the moment repeat_rule is set), so `?? 1`
-// here is a defensive fallback, not the normal case.
-function isRepeatingInitial(repeat_rule: RepeatRule | null, repeat_occurrence_index: number | null): boolean {
-  return repeat_rule != null && (repeat_occurrence_index ?? 1) <= 1
+// "Repeating" chip (2026-09-18, owner's own design; revised 2026-09-23) —
+// Sent/ToDos only. Originally showed only occurrence_index <= 1 ("the
+// initial Request for the repeat"), but that anchor turned out fragile:
+// repeat_rule is copied onto every generated occurrence and never cleared
+// by cron Phase E, so if occurrence 1 specifically lost its own rule (a
+// manual Remove, or simply being superseded), no row satisfied "occurrence
+// 1 AND has a rule" any more even though the series was still actively
+// generating. Owner's own fix: show "the most recent item in the series,"
+// since that's also where future generation and any Repeat edits actually
+// happen — grouped by repeat_series_id (migration 068), falling back to
+// the row's own id for a pre-migration series (no backfill — see that
+// migration's own header comment), so an old chain still shows every
+// qualifying row individually rather than being silently hidden.
+function repeatingHeadIds<
+  T extends { id: string; repeat_rule: RepeatRule | null; repeat_occurrence_index: number | null; repeat_series_id: string | null; archived_at: string | null }
+>(rows: T[]): Set<string> {
+  const heads = new Map<string, T>()
+  for (const r of rows) {
+    if (r.repeat_rule == null || r.archived_at) continue
+    const key = r.repeat_series_id ?? r.id
+    const current = heads.get(key)
+    if (!current || (r.repeat_occurrence_index ?? 1) > (current.repeat_occurrence_index ?? 1)) {
+      heads.set(key, r)
+    }
+  }
+  return new Set(Array.from(heads.values(), (r) => r.id))
 }
 
 // Date Range search scope (2026-08-19) — either side alone is a valid
@@ -1282,7 +1300,7 @@ export default function MainScreen() {
     return Promise.all([
       supabase
         .from('requests')
-        .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule, repeat_occurrence_index')
+        .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id')
         .not('contact_id', 'is', null)
         .order('due_date', { ascending: false, nullsFirst: false }),
       // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
@@ -1294,7 +1312,7 @@ export default function MainScreen() {
       supabase.rpc('get_received_requests'),
       supabase
         .from('requests')
-        .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at, repeat_rule, repeat_occurrence_index')
+        .select('id, description, priority, due_date, done_date, created_at, categories(name), dialog(count), archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id')
         .is('contact_id', null)
         .order('priority', { ascending: true, nullsFirst: false }),
     ])
@@ -1408,16 +1426,14 @@ export default function MainScreen() {
   // switches to either the text query or the Date Range, whichever scope is
   // active — never both, since selectSearchScope keeps the other scope's
   // fields cleared. At rest, behavior is unchanged from before this batch.
-  const hasRepeatingSent = useMemo(
-    () => sent.some((r) => isRepeatingInitial(r.repeat_rule, r.repeat_occurrence_index)),
-    [sent]
-  )
+  const repeatingSentIds = useMemo(() => repeatingHeadIds(sent), [sent])
+  const hasRepeatingSent = repeatingSentIds.size > 0
 
   const filteredSent = useMemo(() => {
     return sent.filter((r) => {
       if (!isSearching) {
         if (r.archived_at) return false
-        if (sentFilter === 'repeating') return isRepeatingInitial(r.repeat_rule, r.repeat_occurrence_index)
+        if (sentFilter === 'repeating') return repeatingSentIds.has(r.id)
         return matchesStatusFilter(sentStatus(r), sentFilter)
       }
       if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
@@ -1426,7 +1442,7 @@ export default function MainScreen() {
         (r.contacts?.display_name ?? '').toLowerCase().includes(query)
       )
     })
-  }, [sent, sentFilter, query, isSearching, searchScope, fromDate, toDate])
+  }, [sent, sentFilter, query, isSearching, searchScope, fromDate, toDate, repeatingSentIds])
 
   const filteredReceived = useMemo(() => {
     return received.filter((r) => {
@@ -1451,16 +1467,14 @@ export default function MainScreen() {
   // sense of. Sent/Received never matched Category at all (neither screen
   // shows it, matching PRD §2.3's own recipient-visibility rule), so no
   // change needed there.
-  const hasRepeatingTodos = useMemo(
-    () => todos.some((t) => isRepeatingInitial(t.repeat_rule, t.repeat_occurrence_index)),
-    [todos]
-  )
+  const repeatingTodoIds = useMemo(() => repeatingHeadIds(todos), [todos])
+  const hasRepeatingTodos = repeatingTodoIds.size > 0
 
   const filteredTodos = useMemo(() => {
     return todos.filter((t) => {
       if (!isSearching) {
         if (t.archived_at) return false
-        if (todoFilter === 'repeating') return isRepeatingInitial(t.repeat_rule, t.repeat_occurrence_index)
+        if (todoFilter === 'repeating') return repeatingTodoIds.has(t.id)
         return matchesStatusFilter(todoStatus(t), todoFilter)
       }
       if (searchScope === 'daterange') return todoDatesEnabled && matchesDateRange(t.due_date, fromDate, toDate)
@@ -1469,7 +1483,7 @@ export default function MainScreen() {
         (categoriesEnabled && (t.categories?.name ?? '').toLowerCase().includes(query))
       )
     })
-  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate, todoDatesEnabled, categoriesEnabled])
+  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate, todoDatesEnabled, categoriesEnabled, repeatingTodoIds])
 
   // Sorted on top of the already-filtered rows — filtering and sorting are
   // independent concerns (which rows show vs. what order they show in), so

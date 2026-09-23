@@ -214,6 +214,7 @@ type RepeatRow = {
   overdue_reminder_enabled: boolean
   repeat_rule: RepeatRule
   repeat_occurrence_index: number | null
+  repeat_series_id: string | null
 }
 
 type CarryAttachmentRow = {
@@ -802,7 +803,7 @@ async function handle(request: Request) {
   const { data: repeatData, error: repeatError } = await sb
     .from('requests')
     .select(
-      'id, owner_id, contact_id, category_id, description, priority, due_date, due_time, reminder_enabled, overdue_reminder_enabled, repeat_rule, repeat_occurrence_index'
+      'id, owner_id, contact_id, category_id, description, priority, due_date, due_time, reminder_enabled, overdue_reminder_enabled, repeat_rule, repeat_occurrence_index, repeat_series_id'
     )
     .not('repeat_rule', 'is', null)
     .is('archived_at', null)
@@ -871,6 +872,13 @@ async function handle(request: Request) {
         overdue_reminder_enabled: row.overdue_reminder_enabled,
         repeat_rule: rule,
         repeat_occurrence_index: nextOccurrenceIndex,
+        // repeat_series_id (migration 068) — carried forward unchanged, so
+        // every occurrence in a chain shares the same id the series was
+        // first minted with. A pre-migration-068 chain has row.repeat_
+        // series_id = null (no backfill — see that migration's own header
+        // comment); propagating null forward is correct, not a bug, for
+        // exactly that case.
+        repeat_series_id: row.repeat_series_id,
       })
       .select('id')
       .single()
