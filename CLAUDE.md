@@ -129,6 +129,20 @@ The database enforces access, not application code. Never write an
   each access as an event rather than consuming the token.
 - `service_role` never goes near the browser. If a design seems to need it
   client-side, the design is wrong.
+- **A new table needs an explicit `GRANT`, same as a new function already
+  does.** Supabase email, 2026-09-23: from October 30 it stops
+  auto-granting Data API reachability to a newly-created `public` table —
+  existing tables are grandfathered, unaffected. Checked WYP's own past
+  table migrations (e.g. `attachments`, migration 025) and confirmed none
+  of them ever added a table-level grant; they've only worked because of
+  the auto-grant this removes. Any migration that does
+  `create table public.x (...)` from now on also needs, in the same
+  migration: `grant select on public.x to anon;` /
+  `grant select, insert, update, delete on public.x to authenticated;` /
+  `... to service_role;` — pick the roles the table actually needs (an
+  anon grant only if it's meant to be reachable from an unauthenticated
+  context), the same judgment call already applied to which roles get
+  EXECUTE on a `SECURITY DEFINER` function.
 - Record every migration in `docs/SQL history .txt`.
 
 ## Scope discipline
