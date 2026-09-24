@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import FullCalendar from '@fullcalendar/react'
-import type { EventClickArg, EventContentArg } from '@fullcalendar/core'
+import type { DatesSetArg, EventClickArg, EventContentArg } from '@fullcalendar/core'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -132,6 +132,21 @@ export default function CalendarView() {
 
   const [printTick, setPrintTick] = useState(0)
 
+  // Week/Day view slot range (2026-09-24) — FullCalendar's time grid needs a
+  // single continuous hour range; a default 6am-6pm window covers the common
+  // case, widened only as far as needed to include an actual event that
+  // falls earlier or later. datesSet fires whenever the visible range
+  // changes (view switch, prev/next), so the range re-tightens per Day/Week
+  // rather than staying pinned to whatever was widest across every item ever
+  // loaded.
+  const [visibleStart, setVisibleStart] = useState<Date | null>(null)
+  const [visibleEnd, setVisibleEnd] = useState<Date | null>(null)
+
+  function handleDatesSet(arg: DatesSetArg) {
+    setVisibleStart(arg.start)
+    setVisibleEnd(arg.end)
+  }
+
   // Clear the round-trip marker once consumed, matching ArchiveForm.tsx's
   // own mount-effect pattern — the *next* fresh visit should read the
   // launch query string again, not a stale saved state.
@@ -202,6 +217,29 @@ export default function CalendarView() {
       })),
     [filteredItems]
   )
+
+  const { slotMinTime, slotMaxTime } = useMemo(() => {
+    const DEFAULT_MIN = 6 * 60
+    const DEFAULT_MAX = 18 * 60
+    let minMinutes = DEFAULT_MIN
+    let maxMinutes = DEFAULT_MAX
+    for (const item of filteredItems) {
+      if (!item.hasTime || !item.dueTime) continue
+      if (visibleStart && visibleEnd) {
+        const itemDate = new Date(`${item.dueDate}T00:00:00`)
+        if (itemDate < visibleStart || itemDate >= visibleEnd) continue
+      }
+      const [h, m] = item.dueTime.split(':').map(Number)
+      const minutes = h * 60 + m
+      minMinutes = Math.min(minMinutes, Math.floor(minutes / 60) * 60)
+      maxMinutes = Math.max(maxMinutes, Math.ceil((minutes + 60) / 60) * 60)
+    }
+    minMinutes = Math.max(0, minMinutes)
+    maxMinutes = Math.min(24 * 60, maxMinutes)
+    const fmt = (mins: number) =>
+      `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}:00`
+    return { slotMinTime: fmt(minMinutes), slotMaxTime: fmt(maxMinutes) }
+  }, [filteredItems, visibleStart, visibleEnd])
 
   function openItem(type: CalendarItem['type'], id: string) {
     const state: RoundTripState = { sent: sentOn, received: receivedOn, todo: todoOn, status: statusFilter, view }
@@ -374,6 +412,9 @@ export default function CalendarView() {
                 initialView={view}
                 headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
                 height="auto"
+                slotMinTime={slotMinTime}
+                slotMaxTime={slotMaxTime}
+                datesSet={handleDatesSet}
                 events={events}
                 eventClick={handleEventClick}
                 eventContent={(arg: EventContentArg) => (

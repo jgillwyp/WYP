@@ -3953,3 +3953,18 @@ link is built only after the stack is proven on Add Contact.
   screen involved: all of them already end with the `.subbanner-row`'s
   "Subscription Features and Options" button (2026-09-02 batch). `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Calendar View's Week/Day time-slot range now auto-fits instead of
+  showing all 24 hours (2026-09-24, `app/components/CalendarView.tsx`).**
+  Jim: empty hours are dead weight since a slot can't be clicked to create
+  anything. FullCalendar's time grid needs one continuous hour range, so a
+  sparse "only the hours with an event" grid isn't buildable there — agreed
+  instead (`AskUserQuestion`) on a default 06:00–18:00 window that widens
+  only as far as needed to include a real event falling earlier or later.
+  `slotMinTime`/`slotMaxTime` are computed from `filteredItems`, narrowed to
+  whatever `datesSet` reports as the currently visible range, so the window
+  re-tightens per Day/Week as you navigate rather than staying pinned to the
+  widest range across every loaded item. Month view is unaffected — it
+  never reads these props. `npx tsc --noEmit`/`npm run lint` clean. Note:
+  Calendar View itself (built 2026-09-16, see `docs/WYP_Calendar_View_Plan.md`)
+  has no earlier entry in this file — this is its first, flagged as a
+  pre-existing documentation gap rather than silently left that way.
