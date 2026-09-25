@@ -416,6 +416,15 @@ export default function CreateRequestForm() {
   const [carryPromptOpen, setCarryPromptOpen] = useState(false)
   const [carryFileIndexes, setCarryFileIndexes] = useState<Set<number>>(new Set())
 
+  // Receipt Confirmation (migration 069, 2026-09-24, owner's own PDF spec) —
+  // offerReceiptConfirmation is the Account Options gate
+  // (profiles.offer_receipt_confirmation, off by default) controlling
+  // whether the checkbox below even renders; receiptConfirmationRequested
+  // is the per-item value itself, written once at Send and never editable
+  // afterward (no mockup shows it on Request Detail).
+  const [offerReceiptConfirmation, setOfferReceiptConfirmation] = useState(false)
+  const [receiptConfirmationRequested, setReceiptConfirmationRequested] = useState(false)
+
   // Voice dictation for Description (2026-08-19) — see the module-level
   // comment above getSpeechRecognition() for the full reasoning. dictating
   // drives the mic button's visual/aria state; recognitionRef holds the
@@ -546,7 +555,7 @@ export default function CreateRequestForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, private_category_enabled, request_time_enabled, request_reminders_enabled, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after'
+        'display_name, private_category_enabled, request_time_enabled, request_reminders_enabled, offer_receipt_confirmation, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after'
       )
       .single()
       .then(({ data }) => {
@@ -554,6 +563,7 @@ export default function CreateRequestForm() {
         setCategoriesEnabled(data?.private_category_enabled ?? false)
         setRequestTimeEnabled(data?.request_time_enabled ?? true)
         setRequestRemindersEnabled(data?.request_reminders_enabled ?? false)
+        setOfferReceiptConfirmation(data?.offer_receipt_confirmation ?? false)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
         // Reminders-until-Done defaults (migration 044, split from the
         // shared reminder_default_day_before/day_of/day_after trio,
@@ -930,6 +940,7 @@ export default function CreateRequestForm() {
         // find the current head of the series instead of requiring this
         // exact row (occurrence 1) to still carry the rule forever.
         repeat_series_id: repeatRule ? crypto.randomUUID() : null,
+        receipt_confirmation_requested: receiptConfirmationRequested,
       })
       .select('id')
       .single()
@@ -1363,6 +1374,32 @@ export default function CreateRequestForm() {
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Receipt Confirmation (migration 069, 2026-09-24, owner's own
+                PDF spec) — only rendered when the Account Options toggle
+                (offerReceiptConfirmation) is on. Written once at Send,
+                never editable afterward — no mockup shows this control
+                anywhere but Create Request. Uses the standard .checkrow
+                component rather than the mockup's own inline text+checkbox
+                row, matching every other per-item optional checkbox in this
+                app (the Reminders-until-Done trio) rather than a one-off
+                bespoke layout. */}
+            {offerReceiptConfirmation && (
+              <label className="checkrow">
+                <input
+                  type="checkbox"
+                  checked={receiptConfirmationRequested}
+                  onChange={(e) => setReceiptConfirmationRequested(e.target.checked)}
+                />
+                <span className="checktext">
+                  Request a Receipt Confirmation
+                  <span className="checknote">
+                    Adds a second button to the notification email so the recipient can
+                    confirm they received this Request, separately from responding to it.
+                  </span>
+                </span>
+              </label>
             )}
 
             {/* Request Description (§6.10): 500-char limit. Plain

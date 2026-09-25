@@ -3968,3 +3968,80 @@ link is built only after the stack is proven on Add Contact.
   Calendar View itself (built 2026-09-16, see `docs/WYP_Calendar_View_Plan.md`)
   has no earlier entry in this file — this is its first, flagged as a
   pre-existing documentation gap rather than silently left that way.
+- **Receipt Confirmation for Requests — migration 069, built end to end
+  (2026-09-24), confirmed run by Jim 2026-09-25.** Jim's own PDF spec ("WYP Receipt
+  Confirmation for Requests"), with two 14x14 PNG icon references (outline
+  check = awaiting, filled check = confirmed) — redrawn as inline SVG
+  matching `DialogIcon`/`AttachmentIcon`'s own `currentColor` convention
+  rather than embedded directly, same as every other icon conversion in
+  this app. `profiles.offer_receipt_confirmation` (Account Options, Create
+  Request section, off by default) gates whether Create Request shows its
+  own per-item `requests.receipt_confirmation_requested` checkbox at all —
+  written once at Send, never editable afterward, matching the spec's own
+  scope (no mockup shows this anywhere but Create Request). When set, the
+  Initial Request/Day-before/Day-of Reminder/change-notification emails
+  (every email built from `buildRequestEmailHtml`/`Text`) all gain a second
+  "Click to confirm receipt" button, first/left of the usual "Click to
+  respond..." button, linking to `/r/[token]?confirm=1`. `get_request_by_token`
+  now takes an added `p_confirm_receipt` parameter and, as a side effect of
+  that same read call, sets `receipt_confirmed_at` — the owner's own explicit
+  requirement that "the user should not need to additionally click the Send
+  button": `RequestResponseForm.tsx` seeds its dirty-gating snapshot the
+  moment receipt is confirmed (same mechanism already used for "arrived
+  already Done"), so Send starts disabled until a real further edit, and a
+  new `.noticeband` reads "Receipt confirmed. Make other changes if desired,
+  and then Send." **Two scoping questions, not in Jim's own spec, resolved
+  via `AskUserQuestion` before building**: Response Detail (the signed-in
+  recipient's own view, never reached via the emailed link) and Request
+  Detail (the owner's own screen, which the spec never draws this on at all)
+  both get a read-only `.metarow` status line ("Awaiting confirmation" /
+  "Confirmed on ‹date›") rather than either an active control or nothing —
+  the actual confirming action stays exclusive to the emailed
+  `/r/[token]?confirm=1` link. **Response Detail's own read-only choice was
+  superseded the next day — see migration 070 below.** Sent list icon (Main
+  Screen and, for
+  consistency with the existing Dialog/Attachment icon precedent, Archive
+  too) is first/left of Dialog/Attachments per the spec's own instruction;
+  both screens' print reports gained a matching "Receipt Confirmation: ..."
+  line, reusing the existing `.prepeat`/`.prepeathead` shape rather than a
+  near-duplicate class. `get_request_by_token` needed a real drop-then-
+  recreate (a new input parameter changes its signature, which
+  `create or replace` can't apply — the same lesson this file's RETURNS
+  TABLE precedents already established, here for input arity instead of
+  output shape); `get_received_request` needed only a plain
+  `create or replace` (no signature change). No column-level grant needed
+  on the two new `requests` columns (that table uses a blanket table-level
+  grant, unlike `profiles`' own per-column convention) —
+  `offer_receipt_confirmation` on `profiles` does need one, matching every
+  other Account Options toggle. `npx tsc --noEmit`/`npm run lint`/`npm run
+  build` all clean. No mockup updated — this feature has none beyond Jim's
+  own PDF reference. Confirmed run by Jim 2026-09-25.
+- **Receipt Confirmation, signed-in recipient path — migration 070,
+  confirmed run by Jim 2026-09-25, right after migration 069 (2026-09-25).**
+  Jim, asked directly what's available for Receipt Confirmation on the
+  Received side: "one 'selling argument' for the app is the ability to work
+  in the received list for incoming requests — so, I think we have to add an
+  ability to confirm receipt on the Response Detail... it could be a
+  checkbox similar to the Create Request with different wording, e.g. 'Check
+  and Save for Receipt Confirmation' or 'Receipt Confirmed' for that
+  status." Supersedes the read-only-status-only decision for Response
+  Detail from the day before — `ResponseDetailForm.tsx` now has a real
+  `.checkrow`, Jim's own two wordings verbatim: unchecked/editable "Check
+  and Save for Receipt Confirmation" before confirmation, checked/disabled
+  "Receipt Confirmed" (with a "Confirmed on ‹date›" note) once it is —
+  permanently locked once true, same one-way behavior as the anonymous
+  `/r/[token]` flow, no un-confirm path either way. Folds into this screen's
+  existing dirty-gating (`hasChanges`/`remindersOnlyChanged`): checking the
+  box alone (nothing else touched) reads "Save," matching Jim's own "Check
+  and Save" phrasing. `set_response_done_as_recipient` needed the same
+  drop-then-recreate treatment as `get_request_by_token` (a new parameter,
+  `p_confirm_receipt boolean default false`) — only ever moves
+  `receipt_confirmed_at` from null to `now()`, mirroring migration 069's own
+  idempotent side effect. **Confirmed unchanged: Archive** — Jim: "There
+  should be nothing available related to Archive," and Archive's own
+  Received rows never selected or rendered anything for this feature in the
+  first place, so no code change was needed there. `RequestResponseForm.tsx`
+  (the anonymous mailed-link path) is untouched — its existing
+  `?confirm=1` auto-confirm flow already covers that path. `npx tsc
+  --noEmit`/`npm run lint` clean. No mockup — same as migration 069, nothing
+  beyond Jim's own PDF reference exists to update.

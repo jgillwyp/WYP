@@ -307,6 +307,14 @@ export default function RequestDetailForm() {
   const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
   const [reminderDayOfSentAt, setReminderDayOfSentAt] = useState<string | null>(null)
 
+  // Receipt Confirmation (migration 069, 2026-09-24, owner's own PDF spec) —
+  // read-only here (per the AskUserQuestion resolution: the mockup only
+  // ever draws the checkbox on Create Request, so Request Detail gets a
+  // status line, not an editing control). receiptConfirmationRequested
+  // gates whether the status line renders at all.
+  const [receiptConfirmationRequested, setReceiptConfirmationRequested] = useState(false)
+  const [receiptConfirmedAt, setReceiptConfirmedAt] = useState<string | null>(null)
+
   // Repeat (Jim's own recurrence-method design, 2026-08-21) — loaded from
   // the row itself, edited via RepeatControl's own modal, written back on
   // Save alongside everything else in `form`. Not itself part of the
@@ -546,7 +554,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, receipt_confirmation_requested, receipt_confirmed_at, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -601,6 +609,8 @@ export default function RequestDetailForm() {
         repeat_rule: RepeatRule | null
         repeat_occurrence_index: number | null
         repeat_series_id: string | null
+        receipt_confirmation_requested: boolean
+        receipt_confirmed_at: string | null
         contacts: { display_name: string } | null
         categories: { name: string } | null
       }
@@ -611,6 +621,8 @@ export default function RequestDetailForm() {
       setArchivedAt(row.archived_at)
       setReminderSentAt(row.reminder_sent_at)
       setReminderDayOfSentAt(row.reminder_day_of_sent_at)
+      setReceiptConfirmationRequested(row.receipt_confirmation_requested)
+      setReceiptConfirmedAt(row.receipt_confirmed_at)
       setRepeatRule(row.repeat_rule)
       setRepeatOccurrenceIndex(row.repeat_occurrence_index)
       setRepeatSeriesId(row.repeat_series_id)
@@ -1227,6 +1239,18 @@ export default function RequestDetailForm() {
             <div className="fgroup">
               <div className="metarow"><span className="mlabel">Date:</span><span className="mval">{formatLongDateTime(createdAt)}</span></div>
               <div className="metarow"><span className="mlabel">Recipient:</span><span className="mval">{recipientName}</span></div>
+              {/* Receipt Confirmation status (migration 069, 2026-09-24) —
+                  read-only here; only Create Request has the checkbox that
+                  sets receiptConfirmationRequested. Hidden entirely when
+                  the option wasn't requested for this Request. */}
+              {receiptConfirmationRequested && (
+                <div className="metarow">
+                  <span className="mlabel">Receipt Confirmation:</span>
+                  <span className="mval">
+                    {receiptConfirmedAt ? `Confirmed on ${formatMDYFromTimestamp(receiptConfirmedAt)}` : 'Awaiting confirmation'}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Reminders until Done banner — moved here from its old

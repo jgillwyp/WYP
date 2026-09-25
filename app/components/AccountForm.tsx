@@ -200,6 +200,11 @@ export default function AccountForm() {
   // profiles.always_show_send_reminder (migration 044) — see the
   // file-level comment. Default false.
   const [alwaysShowSendReminder, setAlwaysShowSendReminder] = useState(false)
+  // profiles.offer_receipt_confirmation (migration 069, 2026-09-24) —
+  // owner's own PDF spec, "Receipt Confirmation for Requests." Gates
+  // whether Create Request shows its own per-item "Request a Receipt
+  // Confirmation" checkbox at all. Off by default.
+  const [offerReceiptConfirmation, setOfferReceiptConfirmation] = useState(false)
   // profiles.request_reminder_default_day_before/day_of/day_after and
   // todo_reminder_default_day_before/day_of/day_after (migration 044,
   // 2026-08-23) — replace the single shared reminder_default_day_before/
@@ -284,7 +289,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
+          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
         )
         .eq('id', userData.user.id)
         .single()
@@ -306,6 +311,7 @@ export default function AccountForm() {
       setNotifyOwnerOnDone(data?.notify_owner_on_done ?? true)
       setRequestRemindersEnabled(data?.request_reminders_enabled ?? false)
       setAlwaysShowSendReminder(data?.always_show_send_reminder ?? false)
+      setOfferReceiptConfirmation(data?.offer_receipt_confirmation ?? false)
       setRequestReminderDefaultDayBefore(data?.request_reminder_default_day_before ?? true)
       setRequestReminderDefaultDayOf(data?.request_reminder_default_day_of ?? false)
       setRequestReminderDefaultDayAfter(data?.request_reminder_default_day_after ?? false)
@@ -348,6 +354,7 @@ export default function AccountForm() {
       | 'notify_owner_on_done'
       | 'request_reminders_enabled'
       | 'always_show_send_reminder'
+      | 'offer_receipt_confirmation'
       | 'request_reminder_default_day_before'
       | 'request_reminder_default_day_of'
       | 'request_reminder_default_day_after'
@@ -630,6 +637,25 @@ export default function AccountForm() {
                       Adds a Due Time and Done Time next to a Request&rsquo;s Due Date and Done
                       Date, for you and whoever you send it to. Turn it on if you want to
                       optionally set both the Date and the Time for a Request. Off by default.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={offerReceiptConfirmation}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('offer_receipt_confirmation', e.target.checked, setOfferReceiptConfirmation)
+                    }
+                  />
+                  <span className="checktext">
+                    Optionally add a Receipt Confirmation to a Request
+                    <span className="checknote">
+                      This will add a check box to each Create Request screen to allow the
+                      notification email or text to include a Receipt Confirmation. Off by
+                      default.
                     </span>
                   </span>
                 </label>

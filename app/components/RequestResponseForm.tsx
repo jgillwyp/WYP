@@ -131,6 +131,14 @@ type ResponsePayload = {
   // migration 039). Never editable here — only Request Detail's/ToDo
   // Detail's own RepeatControl on the owner's side can set or change it.
   repeat_rule: RepeatRule | null
+  // Receipt Confirmation (migration 069, 2026-09-24, owner's own PDF spec).
+  // receipt_confirmed_at is set server-side by get_request_by_token itself
+  // as a side effect of this very load, when wantsReceiptConfirm is true —
+  // see the load effect below. receipt_confirmation_requested is read only
+  // to decide whether ?confirm=1 could ever do anything (it's a no-op
+  // otherwise), never rendered directly.
+  receipt_confirmation_requested: boolean
+  receipt_confirmed_at: string | null
   contact_name: string | null
   dialog: DialogEntry[]
 }
@@ -353,6 +361,12 @@ export default function RequestResponseForm() {
         reminderDayOfEnabled !== sentSnapshotRef.current.reminderDayOfEnabled ||
         overdueReminderEnabled !== sentSnapshotRef.current.overdueReminderEnabled))
 
+  // Receipt Confirmation (migration 069, 2026-09-24) — true once
+  // receipt_confirmed_at is set, however it got that way (this visit's own
+  // ?confirm=1, or an earlier visit). Drives the "Receipt confirmed."
+  // banner below.
+  const receiptConfirmed = !!data?.receipt_confirmed_at
+
   // Owner's ask, 2026-08-13 — see cameFromCalendarLink's own comment in
   // @/lib/ics: hide the Add to Calendar button when the visitor arrived by
   // clicking the event's own link from inside their calendar app, since
@@ -362,6 +376,16 @@ export default function RequestResponseForm() {
   // — window.location.search never changes after mount for this screen.
   const [cameFromCalendar] = useState(() =>
     typeof window === 'undefined' ? false : cameFromCalendarLink(window.location.search)
+  )
+
+  // Receipt Confirmation (migration 069, 2026-09-24) — the email's own
+  // "Click to confirm receipt" button links here with ?confirm=1, read once
+  // the same lazy way cameFromCalendar is above (this URL's query string
+  // never changes after mount). Passed to get_request_by_token as
+  // p_confirm_receipt; the actual confirming happens server-side, inside
+  // that same read call — see the load effect below.
+  const [wantsReceiptConfirm] = useState(() =>
+    typeof window === 'undefined' ? false : new URLSearchParams(window.location.search).get('confirm') === '1'
   )
 
   useEffect(() => {
@@ -374,6 +398,7 @@ export default function RequestResponseForm() {
 
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_request_by_token', {
         p_token: token,
+        p_confirm_receipt: wantsReceiptConfirm,
       })
 
       if (cancelled) return
@@ -409,14 +434,19 @@ export default function RequestResponseForm() {
         reminderDayOfEnabled: payload.reminder_day_of_enabled,
         overdueReminderEnabled: payload.overdue_reminder_enabled,
       }
-      // Seeded only when the Request arrives already Done — the old
-      // alreadyDoneOnLoad concept, folded into the same snapshot
-      // hasUnsentChanges compares against. Left null otherwise, so a fresh,
-      // never-yet-sent visitor still has an always-enabled Send button
-      // (unchanged from before this screen had any dirty-gating at all).
-      if (payload.done_date) {
+      // Seeded when the Request arrives already Done, OR when receipt has
+      // just been (or was already) confirmed — either way there's nothing
+      // pending to Send yet. The Done case is the old alreadyDoneOnLoad
+      // concept, folded into the same snapshot hasUnsentChanges compares
+      // against; the receipt case is new (migration 069, 2026-09-24) — the
+      // owner's own explicit requirement that clicking "Click to confirm
+      // receipt" shouldn't also require a Send click. Left null otherwise,
+      // so a fresh, never-yet-sent visitor still has an always-enabled Send
+      // button (unchanged from before this screen had any dirty-gating at
+      // all).
+      if (payload.done_date || payload.receipt_confirmed_at) {
         sentSnapshotRef.current = {
-          doneDate: payload.done_date,
+          doneDate: payload.done_date ?? '',
           doneTime: payload.done_time ?? '',
           reminderEnabled: payload.reminder_enabled,
           reminderDayOfEnabled: payload.reminder_day_of_enabled,
@@ -430,7 +460,7 @@ export default function RequestResponseForm() {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [token, wantsReceiptConfirm])
 
   const openQuestions = useMemo(() => {
     const answered = new Set<number>()
@@ -824,6 +854,17 @@ export default function RequestResponseForm() {
             while real unsent changes sat pending. */}
         {sendConfirmed && !hasUnsentChanges && (
           <div className="noticeband"><b>Response sent.</b> Your update has been recorded.</div>
+        )}
+
+        {/* Receipt Confirmation (migration 069, 2026-09-24) — owner's own
+            PDF spec: "the user should not need to additionally click the
+            Send button." Shown whenever receipt has been confirmed and this
+            visit hasn't already completed a real Send (sendConfirmed takes
+            over once that happens). sentSnapshotRef was seeded above at
+            load time whenever this was true, so Send already starts
+            disabled — this banner just says why. */}
+        {receiptConfirmed && !sendConfirmed && (
+          <div className="noticeband"><b>Receipt confirmed.</b> Make other changes if desired, and then Send.</div>
         )}
 
         <div className="scroll">

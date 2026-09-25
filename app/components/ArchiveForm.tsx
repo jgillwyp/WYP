@@ -164,6 +164,10 @@ type SentCandidate = {
   // repeat_rule — migration 040, alongside this batch's other Repeat print
   // additions.
   repeat_rule: RepeatRule | null
+  // Receipt Confirmation (migration 069, 2026-09-24) — Sent only, same
+  // reasoning as MainScreen.tsx's own SentRow field comment.
+  receipt_confirmation_requested: boolean
+  receipt_confirmed_at: string | null
 }
 
 type ReceivedCandidate = {
@@ -259,6 +263,24 @@ function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: 
   return (
     <div className="prepeat">
       <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
+    </div>
+  )
+}
+
+// Receipt Confirmation print line (migration 069, 2026-09-24) — same
+// .prepeat/.prepeathead shape, see MainScreen.tsx's identical copy.
+function PrintReceiptConfirmationLine({
+  requested,
+  confirmedAt,
+}: {
+  requested: boolean
+  confirmedAt: string | null
+}) {
+  if (!requested) return null
+  return (
+    <div className="prepeat">
+      <span className="prepeathead">Receipt Confirmation:</span>{' '}
+      {confirmedAt ? `Confirmed on ${formatMDYFromTimestamp(confirmedAt)}` : 'Awaiting confirmation'}
     </div>
   )
 }
@@ -508,6 +530,27 @@ function AttachmentIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+// Receipt Confirmation icons (migration 069, 2026-09-24) — duplicated
+// verbatim from MainScreen.tsx's own ReceiptAwaitingIcon/ReceiptConfirmedIcon,
+// same convention as DialogIcon/AttachmentIcon above.
+function ReceiptAwaitingIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Awaiting receipt confirmation</title>
+      <path d="M9,25 L19,35 L39,12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ReceiptConfirmedIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Receipt confirmed</title>
+      <path d="M9,25 L19,35 L39,12" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -823,7 +866,7 @@ export default function ArchiveForm() {
       return Promise.all([
         supabase
           .from('requests')
-          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count), categories(name), repeat_rule')
+          .select('id, description, due_date, done_date, created_at, archived_at, contacts(display_name), dialog(count), attachments(count), categories(name), repeat_rule, receipt_confirmation_requested, receipt_confirmed_at')
           .not('contact_id', 'is', null)
           .order('done_date', { ascending: false, nullsFirst: false }),
         // get_received_requests() (migration 012, +received_archived_at via
@@ -902,6 +945,10 @@ export default function ArchiveForm() {
     // from in the first place; ReceivedCandidate has no such field).
     category: string | null
     repeatRule: RepeatRule | null
+    // Receipt Confirmation (migration 069, 2026-09-24) — Sent only, always
+    // false/null for Received and ToDos (neither branch below sets it).
+    receiptConfirmationRequested: boolean
+    receiptConfirmedAt: string | null
   }
 
   const rows: Row[] = useMemo(() => {
@@ -924,6 +971,8 @@ export default function ArchiveForm() {
           attachmentCount: r.attachments?.[0]?.count ?? 0,
           category: r.categories?.name ?? null,
           repeatRule: r.repeat_rule,
+          receiptConfirmationRequested: r.receipt_confirmation_requested,
+          receiptConfirmedAt: r.receipt_confirmed_at,
         }))
     }
     if (currentType === 'received') {
@@ -945,6 +994,8 @@ export default function ArchiveForm() {
           attachmentCount: r.attachment_count,
           category: null,
           repeatRule: r.repeat_rule,
+          receiptConfirmationRequested: false,
+          receiptConfirmedAt: null,
         }))
     }
     // 2026-08-17 — due/date populated (previously always null): Archive's
@@ -969,6 +1020,8 @@ export default function ArchiveForm() {
         dialogCount: t.dialog?.[0]?.count ?? 0,
         attachmentCount: 0,
         repeatRule: t.repeat_rule,
+        receiptConfirmationRequested: false,
+        receiptConfirmedAt: null,
       }))
   }, [currentType, action, sentData, receivedData, todoData])
 
@@ -1845,6 +1898,11 @@ export default function ArchiveForm() {
                             <span className="dn">{r.doneDisp}</span>
                           </div>
                           <div className="r2">
+                            {currentType === 'sent' && r.receiptConfirmationRequested && (
+                              <span className="ii">
+                                {r.receiptConfirmedAt ? <ReceiptConfirmedIcon /> : <ReceiptAwaitingIcon />}
+                              </span>
+                            )}
                             {r.dialogCount > 0 && (
                               <span className="ii"><DialogIcon /></span>
                             )}
@@ -2011,6 +2069,10 @@ export default function ArchiveForm() {
                       </>
                     )}
                     <PrintRepeatLine rule={r.repeatRule} dueDate={r.dueISO} />
+                    <PrintReceiptConfirmationLine
+                      requested={r.receiptConfirmationRequested}
+                      confirmedAt={r.receiptConfirmedAt}
+                    />
                     {detail && <PrintDialogList entries={detail.dialog} />}
                     {detail && (
                       <PrintAttachmentList entries={detail.attachments} heading={currentType === 'todos' ? 'Locations' : 'Attachments'} />

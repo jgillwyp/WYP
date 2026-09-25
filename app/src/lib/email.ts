@@ -239,10 +239,13 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
 }
 
 // A single primary call-to-action rendered as a filled brand-blue button —
-// every email here has exactly one (Click to respond, Open Request, Open
+// most emails here have exactly one (Click to respond, Open Request, Open
 // ToDo, or the closing signup CTA); a digest's own per-row links stay
 // plain text (a button per <li> in a list of several reads as visual
-// noise, plain brand-blue link text doesn't).
+// noise, plain brand-blue link text doesn't). buildRequestEmailHtml is the
+// one exception (2026-09-24) — it can render a second, smaller Receipt
+// Confirmation button alongside the primary one, see offerReceiptConfirmation
+// on RequestEmailBodyFields above.
 //
 // emailButtonRaw takes inner HTML rather than plain text, so
 // buildRequestEmailHtml can nest a de-emphasized <span> around the
@@ -476,6 +479,17 @@ type RequestEmailBodyFields = {
   // emails, none of which are ever sent for an already-Done Request) is
   // equivalent to null — same "not done" phrasing.
   doneDate?: string | null
+  // Receipt Confirmation (2026-09-24, migration 069) — Jim's own mockup: a
+  // second, smaller CTA button, "Click to confirm receipt," to the left of
+  // the usual "Click to respond..." button, present on every email built
+  // from this template (Initial Request, Day-before/Day-of Reminder, and
+  // the change-notification email) while the Request still wants a receipt
+  // confirmed and hasn't gotten one yet. The caller computes that
+  // condition (receipt_confirmation_requested && !receipt_confirmed_at) —
+  // this module has no database access of its own. Also suppressed
+  // whenever doneDate is set, same reasoning REQUEST_DONE_LINK_TEXT already
+  // uses: nothing left to confirm receipt of once the Request is Done.
+  offerReceiptConfirmation?: boolean
 }
 
 // Minimal HTML-escaping for the one piece of this email that's real user
@@ -578,6 +592,15 @@ export function buildReminderScheduleSentence(
 // toward completion.
 export const REQUEST_DONE_LINK_TEXT = 'This Request is Done, click to see or edit it'
 
+// Receipt Confirmation's own CTA text (2026-09-24) — Jim's own mockup
+// wording, verbatim, distinct enough from the main button's "Click to
+// respond..." that a recipient scanning both at once doesn't confuse them.
+export const RECEIPT_CONFIRM_LINK_TEXT = 'Click to confirm receipt'
+
+function showReceiptConfirmButton(fields: RequestEmailBodyFields): boolean {
+  return !!fields.offerReceiptConfirmation && !fields.doneDate
+}
+
 export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
   const buttonInner = fields.doneDate
     ? REQUEST_DONE_LINK_TEXT
@@ -585,7 +608,17 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
       ? `Click to respond or mark this Request from ${escapeHtml(fields.ownerName)} as completed`
       : 'Click to respond or mark this Request as completed'
 
-  const buttonHtml = emailButtonRaw(fields.link, buttonInner)
+  // Receipt Confirmation button (2026-09-24) — first/left of the two, per
+  // Jim's own mockup ("if either button is clicked the target Request
+  // Response is the same" — both point at fields.link, this one with
+  // ?confirm=1 appended so RequestResponseForm.tsx can auto-confirm on
+  // load without requiring an extra Send click). inline-block + a small
+  // fixed-width spacer wraps cleanly to stacked buttons on a narrow mail
+  // client, same as the primary button already does on its own.
+  const confirmButtonHtml = showReceiptConfirmButton(fields)
+    ? `${emailButtonRaw(`${fields.link}?confirm=1`, RECEIPT_CONFIRM_LINK_TEXT)}<span style="display:inline-block; width:10px; line-height:1px;">&nbsp;</span>`
+    : ''
+  const buttonHtml = confirmButtonHtml + emailButtonRaw(fields.link, buttonInner)
   const parts =
     fields.changedFields && fields.changedFields.length > 0
       ? [emailChangedFieldsBox(fields.changedFields, buttonHtml)]
@@ -618,17 +651,23 @@ export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
     : fields.ownerName
       ? `Click to respond or mark this Request from ${fields.ownerName} as completed:`
       : 'Click to respond or mark this Request as completed:'
+  // Receipt Confirmation lines (2026-09-24) — same ?confirm=1 link as the
+  // HTML button, placed first, matching that version's left-to-right order.
+  const confirmLines = showReceiptConfirmButton(fields)
+    ? [`${RECEIPT_CONFIRM_LINK_TEXT}:`, `${fields.link}?confirm=1`, '']
+    : []
   const lines =
     fields.changedFields && fields.changedFields.length > 0
       ? [
           changedFieldsSentence(fields.changedFields, fields.changedFields.join(', ')),
           '',
+          ...confirmLines,
           buttonLine,
           fields.link,
           '',
           fields.description,
         ]
-      : [buttonLine, fields.link, '', fields.description]
+      : [...confirmLines, buttonLine, fields.link, '', fields.description]
 
   if (fields.reminderSchedule) {
     lines.push('', buildReminderScheduleSentence(fields.dueDate, fields.dueTime, fields.reminderSchedule))

@@ -252,6 +252,12 @@ type RequestRow = {
   // structure, but this route has nothing left to use it for.
   overdue_reminder_enabled: boolean
   overdue_notified_at: string | null
+  // Receipt Confirmation (2026-09-24, migration 069) — see email.ts's
+  // offerReceiptConfirmation comment. Read here so the day-before/day-of
+  // Reminder emails can offer the same confirm button the Initial Request
+  // email does, for a recipient who hasn't confirmed yet.
+  receipt_confirmation_requested: boolean
+  receipt_confirmed_at: string | null
   contacts: ContactInfo
 }
 
@@ -300,7 +306,7 @@ async function handle(request: Request) {
   const { data: reqData, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, overdue_reminder_enabled, overdue_notified_at, contacts(email, display_name, time_zone)'
+      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, overdue_reminder_enabled, overdue_notified_at, receipt_confirmation_requested, receipt_confirmed_at, contacts(email, display_name, time_zone)'
     )
     .not('contact_id', 'is', null)
     .is('done_date', null)
@@ -455,6 +461,10 @@ async function handle(request: Request) {
       dueDate: row.due_date,
       dueTime: row.due_time,
       ownerName,
+      // Receipt Confirmation (2026-09-24) — same gate as the Initial
+      // Request email; a Reminder is a second chance to confirm receipt if
+      // the recipient hasn't yet.
+      offerReceiptConfirmation: row.receipt_confirmation_requested && !row.receipt_confirmed_at,
     }
     const icsFields: IcsRequestFields = {
       id: row.id,
@@ -538,6 +548,10 @@ async function handle(request: Request) {
       dueDate: row.due_date,
       dueTime: row.due_time,
       ownerName,
+      // Receipt Confirmation (2026-09-24) — same gate as the Initial
+      // Request email; a Reminder is a second chance to confirm receipt if
+      // the recipient hasn't yet.
+      offerReceiptConfirmation: row.receipt_confirmation_requested && !row.receipt_confirmed_at,
     }
     const icsFields: IcsRequestFields = {
       id: row.id,

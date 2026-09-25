@@ -128,7 +128,7 @@ export async function POST(request: Request) {
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, description, due_date, due_time, reminder_enabled, reminder_day_of_enabled, overdue_reminder_enabled, contacts(email)'
+      'id, description, due_date, due_time, reminder_enabled, reminder_day_of_enabled, overdue_reminder_enabled, receipt_confirmation_requested, receipt_confirmed_at, contacts(email)'
     )
     .eq('id', requestId)
     .single()
@@ -145,6 +145,8 @@ export async function POST(request: Request) {
     reminder_enabled: boolean
     reminder_day_of_enabled: boolean
     overdue_reminder_enabled: boolean
+    receipt_confirmation_requested: boolean
+    receipt_confirmed_at: string | null
     contacts: { email: string } | null
   }
   const reqRow = reqRes as unknown as Row | null
@@ -194,6 +196,9 @@ export async function POST(request: Request) {
     dueDate: reqRow.due_date,
     dueTime: reqRow.due_time,
     ownerName,
+    // Receipt Confirmation (2026-09-24) — see email.ts's own comment on
+    // offerReceiptConfirmation for the full reasoning.
+    offerReceiptConfirmation: reqRow.receipt_confirmation_requested && !reqRow.receipt_confirmed_at,
   }
   const html = buildRequestEmailHtml(emailBodyFields)
   const text = buildRequestEmailText(emailBodyFields)

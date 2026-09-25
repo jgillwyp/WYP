@@ -138,6 +138,12 @@ type SentRow = {
   // active occurrence of each series; see repeatingHeadIds() below.
   repeat_occurrence_index: number | null
   repeat_series_id: string | null
+  // Receipt Confirmation (migration 069, 2026-09-24, owner's own PDF spec)
+  // — Sent-only (a recipient confirming receipt is only meaningful to the
+  // Requestor who asked for it); drives the new icon in .r2 below and the
+  // print report's own status line.
+  receipt_confirmation_requested: boolean
+  receipt_confirmed_at: string | null
 }
 
 type TodoRow = {
@@ -782,6 +788,32 @@ function AttachmentIcon() {
   )
 }
 
+// Receipt Confirmation icons (migration 069, 2026-09-24, owner's own PDF
+// spec — "the Receipt Confirmation icon should be the first on the left").
+// Owner supplied two 14x14 reference PNGs (outline check = awaiting, filled
+// check = confirmed); redrawn as inline SVG matching DialogIcon/
+// AttachmentIcon's own currentColor/viewBox convention rather than embedding
+// the PNGs directly, same as every other icon conversion in this app (see
+// this file's own header comment). <title> supplies the hover-text callout
+// the owner's spec asked for, same mechanism as Dialog/Attachments' own.
+function ReceiptAwaitingIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Awaiting receipt confirmation</title>
+      <path d="M9,25 L19,35 L39,12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ReceiptConfirmedIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Receipt confirmed</title>
+      <path d="M9,25 L19,35 L39,12" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 // Category prefix (2026-08-15, owner's own xlsx print mockups, comment #3:
 // "If a Private Category is used, it would prefix the description text as
 // it does in the Main Screen"). Applied literally to print only — on
@@ -806,6 +838,26 @@ function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: 
   return (
     <div className="prepeat">
       <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
+    </div>
+  )
+}
+
+// Receipt Confirmation print line (migration 069, 2026-09-24) — same
+// .prepeat/.prepeathead shape as PrintRepeatLine above, reused rather than
+// a near-duplicate class for one more label:value print line. Sent only —
+// see SentRow's own field comment.
+function PrintReceiptConfirmationLine({
+  requested,
+  confirmedAt,
+}: {
+  requested: boolean
+  confirmedAt: string | null
+}) {
+  if (!requested) return null
+  return (
+    <div className="prepeat">
+      <span className="prepeathead">Receipt Confirmation:</span>{' '}
+      {confirmedAt ? `Confirmed on ${formatMDYFromTimestamp(confirmedAt)}` : 'Awaiting confirmation'}
     </div>
   )
 }
@@ -1300,7 +1352,7 @@ export default function MainScreen() {
     return Promise.all([
       supabase
         .from('requests')
-        .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id')
+        .select('id, description, due_date, due_time, done_date, created_at, contacts(display_name), dialog(count), attachments(count), categories(name), archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, receipt_confirmation_requested, receipt_confirmed_at')
         .not('contact_id', 'is', null)
         .order('due_date', { ascending: false, nullsFirst: false }),
       // get_received_requests() (migration 012, +due_time via migration 017) — a plain owner-scoped RLS
@@ -1712,6 +1764,11 @@ export default function MainScreen() {
                       </div>
                       <div className="r2">
                         {r.archived_at && <span className="archtag">Archived</span>}
+                        {r.receipt_confirmation_requested && (
+                          <span className="ii">
+                            {r.receipt_confirmed_at ? <ReceiptConfirmedIcon /> : <ReceiptAwaitingIcon />}
+                          </span>
+                        )}
                         {dialogCount(r.dialog) > 0 && (
                           <span className="ii"><DialogIcon /></span>
                         )}
@@ -2508,6 +2565,10 @@ export default function MainScreen() {
                         </span>
                       </div>
                       <PrintRepeatLine rule={r.repeat_rule} dueDate={r.due_date} />
+                      <PrintReceiptConfirmationLine
+                        requested={r.receipt_confirmation_requested}
+                        confirmedAt={r.receipt_confirmed_at}
+                      />
                       {detail && <PrintDialogList entries={detail.dialog} />}
                       {detail && <PrintAttachmentList entries={detail.attachments} heading="Attachments" />}
                     </div>
