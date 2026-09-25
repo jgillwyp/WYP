@@ -1001,7 +1001,12 @@ export default function RequestDetailForm() {
       } else if (json.reason === 'not_configured') {
         setReminderResult({ ok: false, text: 'Email sending is not configured yet.' })
       } else if (json.reason === 'not_overdue') {
-        setReminderResult({ ok: false, text: 'This Request is no longer overdue.' })
+        // Wording fixed 2026-09-25 — the route's own 'not_overdue' reason
+        // actually fires on Done/archived (a stale button click), not on
+        // the Request no longer being overdue; the old text stopped making
+        // sense once Send Reminder could be shown on a not-yet-overdue
+        // Request at all (always_show_send_reminder, migration 044).
+        setReminderResult({ ok: false, text: 'This Request has already been marked Done or archived.' })
       } else {
         setReminderResult({ ok: false, text: 'The Reminder could not be sent. Please try again.' })
       }

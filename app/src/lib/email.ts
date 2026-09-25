@@ -292,9 +292,9 @@ function emailSignupFooter(siteUrl: string): string {
   ].join('\n')
 }
 
-// Plain-text mirror of emailSignupFooter above — same two call sites
-// (buildRequestEmailText, buildOverdueRecipientEmailText), same wording,
-// minus SIGNUP_CTA_TEXT's own internal colon (a button's line break, not a
+// Plain-text mirror of emailSignupFooter above — same call sites
+// (buildRequestEmailText, buildReminderNoticeText), same wording, minus
+// SIGNUP_CTA_TEXT's own internal colon (a button's line break, not a
 // sentence), so the trailing colon before the URL reads as the only one.
 function textSignupFooterLines(siteUrl: string): string[] {
   return [`New to Would You Please? ${SIGNUP_CTA_TEXT.replace(':', '')}:`, siteUrl]
@@ -729,25 +729,6 @@ export function buildRequestEmailFromName(ownerName: string | null): string {
 // Done") is equally accurate for a single day-after send; only the cron
 // route's own call pattern changed, not this template.
 // ----------------------------------------------------------------------------
-type OverdueRecipientEmailFields = {
-  ownerName: string | null
-  description: string
-  dueDate: string
-  dueTime: string | null
-  link: string
-  siteUrl: string
-}
-
-export function buildOverdueRecipientEmailSubject(
-  ownerName: string | null,
-  dueDate: string,
-  dueTime: string | null
-): string {
-  const from = ownerName ? ` from ${ownerName}` : ''
-  const due = formatMDY(dueDate) + (dueTime && dueTime.trim() !== '' ? ` ${formatTime12h(dueTime)}` : '')
-  return `OVERDUE: A Would You Please Request${from}, Due: ${due}`
-}
-
 // Link text — changed 2026-08-19 (owner's own concern: generic "Request
 // Detail" anchor text on an unsolicited-feeling Overdue notice risked being
 // reported as spam). This is the recipient's own /r/[token] link (see
@@ -757,29 +738,81 @@ export function buildOverdueRecipientEmailSubject(
 // action-oriented wording is literally true, not just friendlier-sounding.
 const OVERDUE_LINK_TEXT = 'Open Request to mark Done or to turn off notifications'
 
-export function buildOverdueRecipientEmailHtml(fields: OverdueRecipientEmailFields): string {
-  const due = formatMDY(fields.dueDate) + (fields.dueTime ? ` ${formatTime12h(fields.dueTime)}` : '')
+// Reminder-family notice — replaces the old, single-purpose
+// buildOverdueRecipientEmailSubject/Html/Text (2026-09-25, owner-reported
+// bug + full rewrite). Owner-reported: the manual "Send Reminder" button
+// (app/api/email/send-reminder/route.ts) always sent this Overdue-styled
+// email regardless of the Request's actual state — for a Request due four
+// days out and still awaiting Receipt Confirmation, it wrongly said
+// "OVERDUE... has passed." His own corrected spec ("Reminder messages.pdf"):
+// exactly one of three states, in priority order —
+//   1. awaiting_confirmation: still awaiting Receipt Confirmation,
+//      regardless of before/after Due Date. Subject "REMINDER", body asks
+//      for confirmation, adds the Receipt Confirmation button.
+//   2. before_due: Due Date hasn't passed yet. Subject "REMINDER", plain
+//      reminder wording, no additional button.
+//   3. after_due: Due Date has passed. Subject "OVERDUE", the original
+//      "has passed... not reported as Done" wording, no additional button.
+// Used by the manual Send Reminder button and the automatic Day-after cron
+// send (app/api/cron/tick/route.ts Phase B) for all three states, and by
+// the automatic Day-before/Day-of cron sends (Phases A1/A1b) for state 1
+// only — confirmed with Jim: those two keep their own existing detailed
+// body (full Description, reminder-schedule sentence) for states 2/3,
+// switching to this terse wording only when Receipt Confirmation is still
+// outstanding.
+export type ReminderUrgency = 'awaiting_confirmation' | 'before_due' | 'after_due'
+
+type ReminderNoticeFields = {
+  ownerName: string | null
+  description: string
+  dueDate: string
+  dueTime: string | null
+  link: string
+  siteUrl: string
+}
+
+export function buildReminderNoticeSubject(
+  urgency: ReminderUrgency,
+  ownerName: string | null,
+  dueDate: string,
+  dueTime: string | null
+): string {
+  const from = ownerName ? ` from ${ownerName}` : ''
+  const due = formatMDY(dueDate) + (dueTime && dueTime.trim() !== '' ? ` ${formatTime12h(dueTime)}` : '')
+  const prefix = urgency === 'after_due' ? 'OVERDUE' : 'REMINDER'
+  return `${prefix}: A Would You Please Request${from}, Due: ${due}`
+}
+
+function reminderNoticeMessage(urgency: ReminderUrgency, dueDate: string, dueTime: string | null): string {
+  const due = formatMDY(dueDate) + (dueTime && dueTime.trim() !== '' ? ` ${formatTime12h(dueTime)}` : '')
+  if (urgency === 'awaiting_confirmation') {
+    return `This is a reminder to confirm receipt of this Request by clicking the button below. The Due Date is ${due}.`
+  }
+  if (urgency === 'before_due') {
+    return `This is a reminder for the Request described below with a Due Date of ${due}.`
+  }
+  return `The Due Date for this Request has passed (${due}) and it has not been reported as Done.`
+}
+
+export function buildReminderNoticeHtml(urgency: ReminderUrgency, fields: ReminderNoticeFields): string {
+  const confirmButtonHtml =
+    urgency === 'awaiting_confirmation' ? emailButtonRaw(`${fields.link}?confirm=1`, RECEIPT_CONFIRM_LINK_TEXT) : ''
   const body = [
-    `<p style="margin:0 0 18px;">The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.</p>`,
-    `<p style="margin:0 0 18px;">${emailButton(fields.link, OVERDUE_LINK_TEXT)}</p>`,
+    `<p style="margin:0 0 18px;">${reminderNoticeMessage(urgency, fields.dueDate, fields.dueTime)}</p>`,
+    `<p style="margin:0 0 18px;">${confirmButtonHtml}${emailButtonRaw(fields.link, OVERDUE_LINK_TEXT)}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
     emailSignupFooter(fields.siteUrl),
   ].join('\n')
   return wrapEmailHtml(fields.siteUrl, body)
 }
 
-export function buildOverdueRecipientEmailText(fields: OverdueRecipientEmailFields): string {
-  const due = formatMDY(fields.dueDate) + (fields.dueTime ? ` ${formatTime12h(fields.dueTime)}` : '')
-  return [
-    `The Due Date${fields.dueTime ? '/Time' : ''} for this Request has passed (${due}) and it has not been reported as Done.`,
-    '',
-    `${OVERDUE_LINK_TEXT}:`,
-    fields.link,
-    '',
-    fields.description,
-    '',
-    ...textSignupFooterLines(fields.siteUrl),
-  ].join('\n')
+export function buildReminderNoticeText(urgency: ReminderUrgency, fields: ReminderNoticeFields): string {
+  const lines = [reminderNoticeMessage(urgency, fields.dueDate, fields.dueTime), '']
+  if (urgency === 'awaiting_confirmation') {
+    lines.push(`${RECEIPT_CONFIRM_LINK_TEXT}:`, `${fields.link}?confirm=1`, '')
+  }
+  lines.push(`${OVERDUE_LINK_TEXT}:`, fields.link, '', fields.description, '', ...textSignupFooterLines(fields.siteUrl))
+  return lines.join('\n')
 }
 
 // ----------------------------------------------------------------------------

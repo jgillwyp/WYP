@@ -4,10 +4,12 @@ import nodemailer from 'nodemailer'
 import {
   EMAIL_FROM_ADDRESS,
   buildRequestEmailFromName,
-  buildOverdueRecipientEmailSubject,
-  buildOverdueRecipientEmailHtml,
-  buildOverdueRecipientEmailText,
+  buildReminderNoticeSubject,
+  buildReminderNoticeHtml,
+  buildReminderNoticeText,
+  type ReminderUrgency,
 } from '@/lib/email'
+import { hasLocalDateTimePassed } from '@/lib/cronTime'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -22,16 +24,29 @@ export const runtime = 'nodejs'
  * the next cron cycle. This would accommodate a Requestor who does not
  * want automated notifications sent out."
  *
- * Reuses the exact Overdue notice template (buildOverdueRecipientEmail
- * Subject/Html/Text) the cron route's own automatic "Day after" send
- * already uses (app/api/cron/tick/route.ts) — same content, different
- * trigger. Deliberately does NOT touch requests.overdue_notified_at: that
- * column is the automatic "Day after" checkbox's own one-shot idempotency
- * marker, and a manual send here is independent of it by design — an
- * owner who has all three Reminder checkboxes off, or whose Day-after
- * window already fired or hasn't yet, can still click this button whenever
- * they want, and doing so must never suppress or fast-forward the
- * automatic system's own separate state.
+ * Real bug, owner-reported 2026-09-25 and fixed here: this route used to
+ * always send the Overdue-styled notice (buildOverdueRecipientEmail
+ * Subject/Html/Text), regardless of whether the Request was actually
+ * overdue — the button is clickable any time (always_show_send_reminder,
+ * migration 044, can show it even when not overdue), so a click on a
+ * Request due days out and still awaiting Receipt Confirmation wrongly
+ * said "OVERDUE... has passed." Now classifies the Request's actual state
+ * — still awaiting Receipt Confirmation (regardless of before/after Due
+ * Date), before Due Date, or after Due Date — via buildReminderNoticeSubject/
+ * Html/Text (app/src/lib/email.ts), the same three-state template the
+ * automatic Day-after cron send (Phase B) now also uses, replacing the old
+ * single-purpose Overdue builders entirely. hasLocalDateTimePassed
+ * (app/src/lib/cronTime.ts) needs a time zone — the Recipient's own
+ * (contacts.time_zone, falling back to the owner's own profiles.time_zone),
+ * matching every other recipient-facing timing decision in this app.
+ *
+ * Deliberately does NOT touch requests.overdue_notified_at: that column is
+ * the automatic "Day after" checkbox's own one-shot idempotency marker, and
+ * a manual send here is independent of it by design — an owner who has all
+ * three Reminder checkboxes off, or whose Day-after window already fired or
+ * hasn't yet, can still click this button whenever they want, and doing so
+ * must never suppress or fast-forward the automatic system's own separate
+ * state.
  *
  * Same posture as send-request/route.ts, not cron/tick/route.ts: this is
  * triggered by the signed-in owner from the browser, so it runs as that
@@ -108,7 +123,9 @@ export async function POST(request: Request) {
 
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
-    .select('id, description, due_date, due_time, done_date, archived_at, contacts(email)')
+    .select(
+      'id, description, due_date, due_time, done_date, archived_at, receipt_confirmation_requested, receipt_confirmed_at, contacts(email, time_zone)'
+    )
     .eq('id', requestId)
     .single()
 
@@ -119,7 +136,9 @@ export async function POST(request: Request) {
     due_time: string | null
     done_date: string | null
     archived_at: string | null
-    contacts: { email: string } | null
+    receipt_confirmation_requested: boolean
+    receipt_confirmed_at: string | null
+    contacts: { email: string; time_zone: string | null } | null
   }
   const reqRow = reqRes as unknown as Row | null
 
@@ -134,15 +153,16 @@ export async function POST(request: Request) {
 
   // Guard against a stale button click (e.g. the Request was marked Done
   // or archived in another tab/device between page load and this click) —
-  // the button itself is only ever rendered/enabled while overdue and
-  // un-archived, but this route re-checks server-side rather than trusting
-  // the client's own state, same "don't trust the client" posture every
-  // other route in this app takes.
+  // the button can be clicked any time (always_show_send_reminder,
+  // migration 044, can show it even when not overdue), but never once
+  // Done or archived; this route re-checks server-side rather than
+  // trusting the client's own state, same "don't trust the client"
+  // posture every other route in this app takes.
   if (reqRow.done_date || reqRow.archived_at) {
     return Response.json({ sent: false, reason: 'not_overdue' }, { status: 200 })
   }
 
-  const { data: profile } = await sb.from('profiles').select('display_name').single()
+  const { data: profile } = await sb.from('profiles').select('display_name, time_zone').single()
   const ownerName = profile?.display_name ?? null
   const ownerEmail = userData.user.email ?? ''
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
@@ -156,6 +176,19 @@ export async function POST(request: Request) {
     siteUrl,
   }
 
+  // Reminder state (2026-09-25, the actual bug fix — see this file's own
+  // header comment): awaiting Receipt Confirmation overrides Overdue
+  // regardless of Due Date; otherwise before/after Due Date decides
+  // REMINDER vs. OVERDUE. Zone: the Recipient's own, falling back to the
+  // owner's own — same fallback chain cron/tick/route.ts's Phase A1/B use.
+  const zone = reqRow.contacts?.time_zone ?? profile?.time_zone ?? null
+  const urgency: ReminderUrgency =
+    reqRow.receipt_confirmation_requested && !reqRow.receipt_confirmed_at
+      ? 'awaiting_confirmation'
+      : hasLocalDateTimePassed(zone, reqRow.due_date, reqRow.due_time)
+        ? 'after_due'
+        : 'before_due'
+
   const transporter = getSmtpTransport()
   if (!transporter) {
     return Response.json({ sent: false, reason: 'not_configured' }, { status: 200 })
@@ -166,9 +199,9 @@ export async function POST(request: Request) {
       from: `"${buildRequestEmailFromName(ownerName)}" <${EMAIL_FROM_ADDRESS}>`,
       to: recipientEmail,
       replyTo: ownerEmail || undefined,
-      subject: buildOverdueRecipientEmailSubject(ownerName, reqRow.due_date, reqRow.due_time),
-      text: buildOverdueRecipientEmailText(fields),
-      html: buildOverdueRecipientEmailHtml(fields),
+      subject: buildReminderNoticeSubject(urgency, ownerName, reqRow.due_date, reqRow.due_time),
+      text: buildReminderNoticeText(urgency, fields),
+      html: buildReminderNoticeHtml(urgency, fields),
     })
 
     return Response.json({ sent: true }, { status: 200 })

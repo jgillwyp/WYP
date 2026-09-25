@@ -4132,3 +4132,51 @@ link is built only after the stack is proven on Add Contact.
   `.form`'s own background/padding to the whole `<form>` (a bigger,
   unrequested visual change). `npx tsc --noEmit`/`npm run lint`/`npm run
   build` all clean.
+- **Reminder-family email rewrite — manual Send Reminder always sent
+  Overdue-styled email regardless of actual state; new 3-way message spec
+  (2026-09-25, no migration).** Jim, with a PDF spec and a screenshot: the
+  manual "Send Reminder" button sent "OVERDUE: ... has passed" for a
+  Request due four days out and still awaiting Receipt Confirmation — a
+  real bug, confirmed via `AskUserQuestion`. Root cause:
+  `app/api/email/send-reminder/route.ts` always used
+  `buildOverdueRecipientEmailHtml/Text`, with no check of the Request's
+  actual Due-Date/Receipt-Confirmation state at all — the button can be
+  clicked any time (`always_show_send_reminder`, migration 044, shows it
+  even when not overdue). Replaced with a proper 3-state classification,
+  exactly matching Jim's own spec (priority order): **awaiting_confirmation**
+  (still awaiting Receipt Confirmation, regardless of before/after Due
+  Date) → subject "REMINDER", "This is a reminder to confirm receipt of
+  this Request by clicking the button below. The Due Date is …", plus the
+  Receipt Confirmation button; **before_due** → subject "REMINDER", "This
+  is a reminder for the Request described below with a Due Date of …", no
+  extra button; **after_due** → subject "OVERDUE", "The Due Date for this
+  Request has passed (…) and it has not been reported as Done.", no extra
+  button (this branch is the old Overdue wording, now correctly gated to
+  only fire when genuinely overdue, and with a stray "/Time" conditional
+  Jim's own literal text never had now removed). New shared
+  `buildReminderNoticeSubject/Html/Text` (`app/src/lib/email.ts`) replace
+  the old single-purpose `buildOverdueRecipientEmailSubject/Html/Text`
+  outright — no other caller existed. **Scope, confirmed via two rounds of
+  `AskUserQuestion`**: applies fully (all 3 states) to the manual Send
+  Reminder button and the automatic Day-after cron send (`cron/tick/
+  route.ts` Phase B, which already only fires once genuinely overdue but
+  never checked for a still-outstanding Receipt Confirmation override);
+  the automatic Day-before/Day-of cron sends (Phases A1/A1b) keep their
+  own existing detailed body (CTA button, full Description, reminder-
+  schedule sentence) and "REMINDER"/"DUE TODAY" subjects for the ordinary
+  case, switching to the new terse `awaiting_confirmation` wording only
+  when Receipt Confirmation is still outstanding for that send. The manual
+  route needed a real Due-Date-passed check it never had before —
+  `hasLocalDateTimePassed` (`app/src/lib/cronTime.ts`, previously only
+  imported by the cron route, now also used here), zoned to the
+  Recipient's own `contacts.time_zone` falling back to the owner's
+  `profiles.time_zone`, same fallback chain Phase A1/B already use.
+  **Same-day companion bug also fixed**: `RequestDetailForm.tsx`'s own
+  client-side failure message for this button, "This Request is no longer
+  overdue," was already inaccurate before this batch (the route's
+  `not_overdue` reason actually means Done/archived, not "no longer
+  overdue") and became clearly wrong once the button could be shown/used
+  on a never-overdue Request — reworded to "This Request has already been
+  marked Done or archived." `npx tsc --noEmit`/`npm run lint`/`npm run
+  build` all clean. No mockup — this feature family has none beyond Jim's
+  own PDF references.

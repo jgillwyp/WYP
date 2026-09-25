@@ -12,9 +12,9 @@ import {
   buildRequestEmailSubject,
   buildRequestEmailHtml,
   buildRequestEmailText,
-  buildOverdueRecipientEmailSubject,
-  buildOverdueRecipientEmailHtml,
-  buildOverdueRecipientEmailText,
+  buildReminderNoticeSubject,
+  buildReminderNoticeHtml,
+  buildReminderNoticeText,
   buildTodoReminderEmailSubject,
   buildTodoReminderEmailHtml,
   buildTodoReminderEmailText,
@@ -474,11 +474,17 @@ async function handle(request: Request) {
       owner_name: ownerName,
     }
 
+    // Awaiting Receipt Confirmation (2026-09-25, Jim's own spec) — Day
+    // before switches to the terse "confirm receipt" wording/subject for
+    // this one state; otherwise keeps its own usual detailed body.
+    const awaitingConfirmation = row.receipt_confirmation_requested && !row.receipt_confirmed_at
     const sent = await sendMail({
       to: row.contacts.email,
-      subject: buildRequestEmailSubject('reminder', ownerName, row.due_date, row.due_time),
-      html: buildRequestEmailHtml(bodyFields),
-      text: buildRequestEmailText(bodyFields),
+      subject: awaitingConfirmation
+        ? buildReminderNoticeSubject('awaiting_confirmation', ownerName, row.due_date, row.due_time)
+        : buildRequestEmailSubject('reminder', ownerName, row.due_date, row.due_time),
+      html: awaitingConfirmation ? buildReminderNoticeHtml('awaiting_confirmation', bodyFields) : buildRequestEmailHtml(bodyFields),
+      text: awaitingConfirmation ? buildReminderNoticeText('awaiting_confirmation', bodyFields) : buildRequestEmailText(bodyFields),
       fromName: buildRequestEmailFromName(ownerName),
       replyTo: ownerEmail,
       icsContent: buildIcsContent(icsFields, link),
@@ -561,11 +567,16 @@ async function handle(request: Request) {
       owner_name: ownerName,
     }
 
+    // Awaiting Receipt Confirmation (2026-09-25, Jim's own spec) — same
+    // override as Phase A1 above.
+    const awaitingConfirmation = row.receipt_confirmation_requested && !row.receipt_confirmed_at
     const sent = await sendMail({
       to: row.contacts.email,
-      subject: buildRequestEmailSubject('reminder_day_of', ownerName, row.due_date, row.due_time),
-      html: buildRequestEmailHtml(bodyFields),
-      text: buildRequestEmailText(bodyFields),
+      subject: awaitingConfirmation
+        ? buildReminderNoticeSubject('awaiting_confirmation', ownerName, row.due_date, row.due_time)
+        : buildRequestEmailSubject('reminder_day_of', ownerName, row.due_date, row.due_time),
+      html: awaitingConfirmation ? buildReminderNoticeHtml('awaiting_confirmation', bodyFields) : buildRequestEmailHtml(bodyFields),
+      text: awaitingConfirmation ? buildReminderNoticeText('awaiting_confirmation', bodyFields) : buildRequestEmailText(bodyFields),
       fromName: buildRequestEmailFromName(ownerName),
       replyTo: ownerEmail,
       icsContent: buildIcsContent(icsFields, link),
@@ -744,12 +755,17 @@ async function handle(request: Request) {
       link,
       siteUrl: siteUrl(),
     }
+    // Receipt Confirmation overrides Overdue (2026-09-25, Jim's own spec) —
+    // "regardless of before/after Due Date," a Request still awaiting
+    // confirmation gets the REMINDER-to-confirm wording, never OVERDUE,
+    // even though this phase only ever fires once genuinely overdue.
+    const urgency = row.receipt_confirmation_requested && !row.receipt_confirmed_at ? 'awaiting_confirmation' : 'after_due'
 
     const sent = await sendMail({
       to: row.contacts.email,
-      subject: buildOverdueRecipientEmailSubject(ownerName, row.due_date, row.due_time),
-      html: buildOverdueRecipientEmailHtml(fields),
-      text: buildOverdueRecipientEmailText(fields),
+      subject: buildReminderNoticeSubject(urgency, ownerName, row.due_date, row.due_time),
+      html: buildReminderNoticeHtml(urgency, fields),
+      text: buildReminderNoticeText(urgency, fields),
       fromName: buildRequestEmailFromName(ownerName),
       replyTo: ownerEmail,
     })
