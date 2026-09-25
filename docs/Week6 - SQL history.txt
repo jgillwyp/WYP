@@ -6615,3 +6615,94 @@ grant execute on function public.set_response_done_as_recipient(uuid, date, time
 --   -- confirm receipt_confirmed_at is set and the checkbox now shows
 --   -- disabled/"Receipt Confirmed".
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 071 (2026-09-25) -- get_received_requests() gains
+-- receipt_confirmation_requested/receipt_confirmed_at, for the Receipt
+-- Confirmation icon on Main Screen's and Archive's own Received lists.
+-- DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Jim, for consistency: "since the dialog and attachments icons are shown,
+-- the confirmed icons should be shown in the Requests Received list" --
+-- dialog_count/attachment_count are already returned by this same function
+-- (migration 027) and already drive that exact icon row on Received; this
+-- migration adds the two Receipt Confirmation fields the same way, so the
+-- new icon can show there too (awaiting or confirmed, matching Sent's own
+-- treatment -- not confirmed-only, despite Jim's shorthand "the confirmed
+-- icons," since an item still awaiting confirmation needs its own icon too,
+-- same reasoning Sent already uses).
+--
+-- RETURNS TABLE -- same migration-017/021/027/040/069 precedent: a
+-- RETURNS TABLE function's row shape can't be changed by create-or-replace,
+-- drop-then-create is required. Body copied verbatim from migration 039's
+-- own text (Week6 - SQL history.txt, line ~1706 above) with only the two
+-- new columns added.
+-- ============================================================================
+
+begin;
+
+drop function if exists public.get_received_requests();
+
+create function public.get_received_requests()
+returns table (
+  id uuid,
+  description text,
+  due_date date,
+  due_time time,
+  done_date date,
+  created_at timestamptz,
+  owner_name text,
+  owner_request_time_enabled boolean,
+  dialog_count bigint,
+  attachment_count bigint,
+  received_archived_at timestamptz,
+  repeat_rule jsonb,
+  receipt_confirmation_requested boolean,
+  receipt_confirmed_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if v_email = '' then
+    return; -- no email claim on the session; nothing to match
+  end if;
+
+  return query
+    select
+      r.id, r.description, r.due_date, r.due_time, r.done_date, r.created_at,
+      p.display_name as owner_name,
+      coalesce(p.request_time_enabled, true) as owner_request_time_enabled,
+      (select count(*) from public.dialog d where d.request_id = r.id) as dialog_count,
+      (select count(*) from public.attachments a where a.request_id = r.id and a.kind = 'file') as attachment_count,
+      r.received_archived_at,
+      r.repeat_rule,
+      r.receipt_confirmation_requested,
+      r.receipt_confirmed_at
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where lower(trim(c.email)) = v_email
+    order by r.due_date desc nulls last;
+end;
+$$;
+
+revoke all on function public.get_received_requests() from public;
+grant execute on function public.get_received_requests() to authenticated;
+
+commit;
+
+-- Verify (superuser, proves creation only):
+--   select prosrc from pg_proc where proname = 'get_received_requests';
+--        -> should show receipt_confirmation_requested/receipt_confirmed_at
+--           in both the returns table and the select list
+--
+-- Verify as a client, not here:
+--   Open Main Screen's or Archive's own Received list for a Received
+--   Request whose issuer turned on Receipt Confirmation -- the new icon
+--   (awaiting or confirmed) should show first/left of the Dialog/
+--   Attachments icons, matching Sent's own treatment.
+-- ============================================================================

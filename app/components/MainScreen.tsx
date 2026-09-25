@@ -209,6 +209,12 @@ type ReceivedRow = {
   // additions. The issuer's own rule, read-only here same as everywhere
   // else Received shows issuer-owned information.
   repeat_rule: RepeatRule | null
+  // Receipt Confirmation (migration 071, 2026-09-25) — Jim, for consistency
+  // with Dialog/Attachments already showing on Received: "the confirmed
+  // icons should be shown in the Requests Received list." The issuer's own
+  // setting/state, read-only here same as repeat_rule above.
+  receipt_confirmation_requested: boolean
+  receipt_confirmed_at: string | null
 }
 
 // Print Reports detail (2026-08-15) — the owner's own xlsx print mockups
@@ -790,17 +796,25 @@ function AttachmentIcon() {
 
 // Receipt Confirmation icons (migration 069, 2026-09-24, owner's own PDF
 // spec — "the Receipt Confirmation icon should be the first on the left").
-// Owner supplied two 14x14 reference PNGs (outline check = awaiting, filled
-// check = confirmed); redrawn as inline SVG matching DialogIcon/
-// AttachmentIcon's own currentColor/viewBox convention rather than embedding
-// the PNGs directly, same as every other icon conversion in this app (see
-// this file's own header comment). <title> supplies the hover-text callout
-// the owner's spec asked for, same mechanism as Dialog/Attachments' own.
+// <title> supplies the hover-text callout the owner's spec asked for, same
+// mechanism as Dialog/Attachments' own.
+//
+// Redesigned 2026-09-25 — the first two drafts (varying only strokeWidth,
+// then a hollow-outline-vs-solid-fill pair) were both flagged as too subtle
+// or too thin to read reliably at this app's ~14-15px icon size. Jim's own
+// third idea, adopted: keep one identical bold checkmark shape for both
+// states (same path/thickness this icon has used since it first shipped —
+// no legibility risk, nothing new to prove out) and distinguish them by
+// color instead — Awaiting is hardcoded to --alert-red ("Awaiting deserves
+// a red highlighting"), Confirmed stays on currentColor (this app's usual
+// --icon-grey, matching Dialog/Attachments) since a confirmed item needs no
+// attention at all. Color reads instantly regardless of icon size, unlike
+// either geometric alternative that was tried first.
 function ReceiptAwaitingIcon() {
   return (
     <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <title>Awaiting receipt confirmation</title>
-      <path d="M9,25 L19,35 L39,12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9,25 L19,35 L39,12" stroke="var(--alert-red)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -1888,6 +1902,11 @@ export default function MainScreen() {
                       </div>
                       <div className="r2">
                         {r.received_archived_at && <span className="archtag">Archived</span>}
+                        {r.receipt_confirmation_requested && (
+                          <span className="ii">
+                            {r.receipt_confirmed_at ? <ReceiptConfirmedIcon /> : <ReceiptAwaitingIcon />}
+                          </span>
+                        )}
                         {r.dialog_count > 0 && (
                           <span className="ii"><DialogIcon /></span>
                         )}
@@ -2623,6 +2642,10 @@ export default function MainScreen() {
                         <span className="pdesc">{r.description}</span>
                       </div>
                       <PrintRepeatLine rule={r.repeat_rule} dueDate={r.due_date} />
+                      <PrintReceiptConfirmationLine
+                        requested={r.receipt_confirmation_requested}
+                        confirmedAt={r.receipt_confirmed_at}
+                      />
                       {detail && <PrintDialogList entries={detail.dialog} />}
                       {detail && <PrintAttachmentList entries={detail.attachments} heading="Attachments" />}
                     </div>

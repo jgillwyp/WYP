@@ -4045,3 +4045,47 @@ link is built only after the stack is proven on Add Contact.
   `?confirm=1` auto-confirm flow already covers that path. `npx tsc
   --noEmit`/`npm run lint` clean. No mockup — same as migration 069, nothing
   beyond Jim's own PDF reference exists to update.
+- **Receipt Confirmation icons recolored (red/grey) after two rejected
+  geometric drafts; icon extended to Requests Received — migration 071
+  DRAFTED, NOT YET CONFIRMED RUN (2026-09-25).** Two separate follow-ups in
+  one message, plus a same-day course correction on the first.
+  (1) Jim: the awaiting/confirmed icons (originally identical checkmark
+  path, differing only in `strokeWidth`) "not quickly visually
+  distinguishable... unless they are next to each other. I prefer an
+  outlined check mark for the awaiting version." First draft — a thin
+  Material Design "check" glyph, hollow (`fill="none"`, thin stroke) for
+  awaiting vs. solid-filled for confirmed — was placed in
+  `docs/check_awaiting.svg`/`docs/check_confirmed.svg` for review, not yet
+  wired into the app. Jim's own follow-up rejected it: too thin to read at
+  this app's ~14-15px icon size, and thinner-looking overall than the
+  original PNG reference he'd supplied for "confirmed." He then proposed a
+  third approach, adopted outright: keep the one bold checkmark
+  shape/thickness this icon has used since it first shipped (no legibility
+  risk — proven at this size already) and distinguish the two states by
+  color instead — Awaiting hardcoded to `var(--alert-red)` ("Awaiting
+  deserves a red highlighting"), Confirmed left on `currentColor`
+  (`--icon-grey`, matching Dialog/Attachments — a confirmed item needs no
+  attention). `MainScreen.tsx`'s and `ArchiveForm.tsx`'s
+  `ReceiptAwaitingIcon`/`ReceiptConfirmedIcon` both updated; the two
+  `docs/check_*.svg` review files updated to match the final direction, not
+  left showing the rejected hollow-outline draft. (2)
+  Jim, a real (not draft) instruction: "since the dialog and attachments
+  icons are shown, the confirmed icons should be shown in the Requests
+  Received list" — extended to *both* awaiting and confirmed (not
+  confirmed-only, despite his own shorthand), matching Sent's own
+  treatment, since an unconfirmed item needs an icon too. **Migration 071**
+  adds `receipt_confirmation_requested`/`receipt_confirmed_at` to
+  `get_received_requests()` — `RETURNS TABLE`, so the migration-017/021/
+  027/040/069 drop-then-recreate precedent applies again. `MainScreen.tsx`'s
+  `ReceivedRow` and `ArchiveForm.tsx`'s `ReceivedCandidate`/shared `Row`
+  both gained the two fields (Archive's Received branch previously
+  hardcoded `false`/`null`, now reads the real values); the icon-render
+  gate in `ArchiveForm.tsx` dropped its old `currentType === 'sent' &&`
+  restriction, matching Dialog/Attachments' own always-shown-on-both
+  treatment right beside it. Both screens' Received print reports also
+  gained the matching "Receipt Confirmation: ..." line, via the same shared
+  `PrintReceiptConfirmationLine` component Sent already uses. **Archive's
+  own confirm *action* is still unavailable** — unchanged from the day
+  before ("There should be nothing available related to Archive") — this
+  batch only extends the read-only icon/print display, never a control.
+  `npx tsc --noEmit`/`npm run lint`/`npm run build` all clean.

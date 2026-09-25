@@ -1,0 +1,12 @@
+<svg width="128" height="128" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <title>Awaiting receipt confirmation</title>
+  <rect width="48" height="48" fill="#FFFFFF" />
+  <path
+    d="M9,25 L19,35 L39,12"
+    fill="none"
+    stroke="#D32F2F"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

@@ -184,6 +184,13 @@ type ReceivedCandidate = {
   dialog_count: number
   attachment_count: number
   repeat_rule: RepeatRule | null
+  // Receipt Confirmation (migration 071, 2026-09-25) — Jim, for consistency
+  // with Dialog/Attachments already showing on Received: "the confirmed
+  // icons should be shown in the Requests Received list." Same
+  // already-returned-by-the-RPC situation as dialog_count/attachment_count
+  // above.
+  receipt_confirmation_requested: boolean
+  receipt_confirmed_at: string | null
 }
 
 type TodoCandidate = {
@@ -534,14 +541,17 @@ function AttachmentIcon() {
   )
 }
 
-// Receipt Confirmation icons (migration 069, 2026-09-24) — duplicated
-// verbatim from MainScreen.tsx's own ReceiptAwaitingIcon/ReceiptConfirmedIcon,
-// same convention as DialogIcon/AttachmentIcon above.
+// Receipt Confirmation icons (migration 069, 2026-09-24; recolored
+// 2026-09-25 — see MainScreen.tsx's own ReceiptAwaitingIcon/
+// ReceiptConfirmedIcon for the full redesign reasoning) — duplicated
+// verbatim, same convention as DialogIcon/AttachmentIcon above. Same bold
+// checkmark shape/thickness for both states; Awaiting is hardcoded red
+// (--alert-red), Confirmed stays on currentColor (--icon-grey).
 function ReceiptAwaitingIcon() {
   return (
     <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <title>Awaiting receipt confirmation</title>
-      <path d="M9,25 L19,35 L39,12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9,25 L19,35 L39,12" stroke="var(--alert-red)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -945,8 +955,9 @@ export default function ArchiveForm() {
     // from in the first place; ReceivedCandidate has no such field).
     category: string | null
     repeatRule: RepeatRule | null
-    // Receipt Confirmation (migration 069, 2026-09-24) — Sent only, always
-    // false/null for Received and ToDos (neither branch below sets it).
+    // Receipt Confirmation (migration 069, 2026-09-24; extended to Received
+    // 2026-09-25, migration 071) — Sent and Received both set this from
+    // real data; always false/null for ToDos (a ToDo has no recipient).
     receiptConfirmationRequested: boolean
     receiptConfirmedAt: string | null
   }
@@ -994,8 +1005,8 @@ export default function ArchiveForm() {
           attachmentCount: r.attachment_count,
           category: null,
           repeatRule: r.repeat_rule,
-          receiptConfirmationRequested: false,
-          receiptConfirmedAt: null,
+          receiptConfirmationRequested: r.receipt_confirmation_requested,
+          receiptConfirmedAt: r.receipt_confirmed_at,
         }))
     }
     // 2026-08-17 — due/date populated (previously always null): Archive's
@@ -1898,7 +1909,11 @@ export default function ArchiveForm() {
                             <span className="dn">{r.doneDisp}</span>
                           </div>
                           <div className="r2">
-                            {currentType === 'sent' && r.receiptConfirmationRequested && (
+                            {/* Receipt Confirmation icon — Sent and Received
+                                both, 2026-09-25 (migration 071), matching
+                                Dialog/Attachments' own always-shown-on-both
+                                treatment just below. */}
+                            {r.receiptConfirmationRequested && (
                               <span className="ii">
                                 {r.receiptConfirmedAt ? <ReceiptConfirmedIcon /> : <ReceiptAwaitingIcon />}
                               </span>
