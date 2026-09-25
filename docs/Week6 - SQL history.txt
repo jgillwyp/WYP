@@ -6620,7 +6620,7 @@ grant execute on function public.set_response_done_as_recipient(uuid, date, time
 -- Migration 071 (2026-09-25) -- get_received_requests() gains
 -- receipt_confirmation_requested/receipt_confirmed_at, for the Receipt
 -- Confirmation icon on Main Screen's and Archive's own Received lists.
--- DRAFTED, NOT YET CONFIRMED RUN.
+-- CONFIRMED RUN by the owner, 2026-09-25.
 --
 -- Jim, for consistency: "since the dialog and attachments icons are shown,
 -- the confirmed icons should be shown in the Requests Received list" --

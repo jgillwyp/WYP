@@ -4047,7 +4047,7 @@ link is built only after the stack is proven on Add Contact.
   beyond Jim's own PDF reference exists to update.
 - **Receipt Confirmation icons recolored (red/grey) after two rejected
   geometric drafts; icon extended to Requests Received — migration 071
-  DRAFTED, NOT YET CONFIRMED RUN (2026-09-25).** Two separate follow-ups in
+  confirmed run by Jim, 2026-09-25.** Two separate follow-ups in
   one message, plus a same-day course correction on the first.
   (1) Jim: the awaiting/confirmed icons (originally identical checkmark
   path, differing only in `strokeWidth`) "not quickly visually
