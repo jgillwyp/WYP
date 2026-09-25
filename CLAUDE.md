@@ -4089,3 +4089,46 @@ link is built only after the stack is proven on Add Contact.
   before ("There should be nothing available related to Archive") — this
   batch only extends the read-only icon/print display, never a control.
   `npx tsc --noEmit`/`npm run lint`/`npm run build` all clean.
+- **Three fixes from real use — Response Detail's Receipt Confirmation
+  becomes automatic (migration 072, confirmed run by Jim 2026-09-25); email
+  button spacing; Copy to Create ToDo alignment (2026-09-25).** (1) Jim,
+  after actually using the feature: "the behavior of the 'receipt
+  confirmation' when a Request Response is opened should be the same if a
+  user opened a Response Detail from within the app. In both cases,
+  'looking' at the Request is a receipt confirmation" — supersedes
+  migration 070's checkbox outright, which is removed from
+  `ResponseDetailForm.tsx` entirely, along with its own wording bug Jim
+  separately caught ("Check and Save" implied a Save button that doesn't
+  exist on this screen — moot now). **Migration 072** makes
+  `get_received_request()` confirm receipt as an unconditional side effect
+  of every read — no new parameter needed (unlike `get_request_by_token`'s
+  own `p_confirm_receipt`, migration 069), since there's no mailed-link-
+  vs-not distinction to gate on here; every call already is a signed-in
+  recipient looking at their own item. `ResponseDetailForm.tsx` now shows
+  the identical `.noticeband` `RequestResponseForm.tsx` already has —
+  "Receipt confirmed. Make other changes if desired, and then Send." —
+  and no longer passes `p_confirm_receipt` to `set_response_done_as_
+  recipient` at all; that parameter is left in the schema unused, per this
+  file's own established practice of not dropping structure the app stops
+  calling into. (2) Jim: the email's two CTA buttons (Receipt Confirmation
+  + the usual "Click to respond...") "need a small margin or padding on
+  the top and/or bottom. When viewed on a phone, they wrap and vertically
+  run together." `emailButtonRaw` (`app/src/lib/email.ts`) gained
+  `margin:4px 8px 4px 0` on every button it renders — fixes the vertical
+  gap on wrap and makes the Receipt Confirmation button's old manual
+  10px horizontal spacer span redundant (removed). (3) Jim: "the 'Copy to
+  create ToDo' button on the Response Detail screen is adjacent to the
+  right margin... instead of matching the normal spacing of other
+  buttons — this is the only such button alignment issue I saw." Root
+  cause: `ConversionBanner`'s own `.fieldact` row has no horizontal padding
+  of its own, relying entirely on an ancestor's inset — `RequestDetailForm.tsx`'s
+  `<form className="form">` supplies that (`.form`'s own `padding: 14px
+  var(--pad) 6px`), but `ResponseDetailForm.tsx`'s `<form>` has no such
+  class (every other control on that screen gets its own inline
+  `style={{ padding: '0 var(--pad)' }}` instead, the established
+  convention there) — `ConversionBanner` was the one control on this
+  screen that never got wrapped that way. Fixed by wrapping it in the same
+  padding style every sibling element already uses, rather than adding
+  `.form`'s own background/padding to the whole `<form>` (a bigger,
+  unrequested visual change). `npx tsc --noEmit`/`npm run lint`/`npm run
+  build` all clean.

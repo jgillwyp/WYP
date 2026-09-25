@@ -348,12 +348,10 @@ export default function ResponseDetailForm() {
   const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
   const [reminderDayOfSentAt, setReminderDayOfSentAt] = useState<string | null>(null)
 
-  // Receipt Confirmation (migration 070, 2026-09-25) — receiptConfirmChecked
-  // is the editable checkbox state (loaded from data.receipt_confirmed_at,
-  // freely toggleable until Save actually persists it); receiptConfirmed is
-  // the permanent, server-confirmed truth (data.receipt_confirmed_at) that
-  // locks the checkbox once true — there is no un-confirm path, by design.
-  const [receiptConfirmChecked, setReceiptConfirmChecked] = useState(false)
+  // Receipt Confirmation (migration 069/072, 2026-09-25) — read-only here;
+  // confirming is now a side effect of get_received_request itself (every
+  // load of this screen), not a client action. See the .noticeband render
+  // below for the full reasoning.
   const receiptConfirmed = !!data?.receipt_confirmed_at
 
   // Close/Cancel label (2026-08-20) — same reasoning/pattern as
@@ -369,13 +367,11 @@ export default function ResponseDetailForm() {
     reminderEnabled: boolean
     reminderDayOfEnabled: boolean
     overdueReminderEnabled: boolean
-    receiptConfirmChecked: boolean
   } | null>(null)
   const hasChanges =
     initialFormRef.current !== null &&
     (doneDate !== initialFormRef.current.doneDate ||
       doneTime !== initialFormRef.current.doneTime ||
-      receiptConfirmChecked !== initialFormRef.current.receiptConfirmChecked ||
       reminderEnabled !== initialFormRef.current.reminderEnabled ||
       reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
       overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
@@ -386,14 +382,17 @@ export default function ResponseDetailForm() {
   // hasChanges by design) isn't left with a stuck-disabled Send button.
   const [contentChanged, setContentChanged] = useState(false)
   // remindersOnlyChanged (2026-09-04, Jim's own note on the Responding to a
-  // Request Help topic; extended 2026-09-25 to also cover Receipt
-  // Confirmation, migration 070) — true when hasChanges is true but Done
-  // Date/Time haven't moved, meaning the only edit was one of the three
-  // Reminder checkboxes and/or the new Receipt Confirmation checkbox. The
-  // band button reads "Save" instead of "Send" in that case — toggling a
-  // personal preference isn't really "sending" anything to the sender,
-  // unlike an actual Done-Date response. Matches Jim's own "Check and Save"
-  // wording for the new checkbox.
+  // Request Help topic) — true when hasChanges is true but Done Date/Time
+  // haven't moved, meaning the only edit was one of the three Reminder
+  // checkboxes. The band button reads "Save" instead of "Send" in that
+  // case — toggling a personal reminder preference isn't really "sending"
+  // anything to the sender, unlike an actual Done-Date response. Note:
+  // there is no "Save" button on this screen — the band's one submit
+  // button just relabels itself between "Send" and "Save" depending on
+  // what changed; Jim flagged this after the Receipt Confirmation checkbox
+  // (migration 070, since removed — see the .noticeband above) used
+  // matching "Check and Save" wording that read as if a separate Save
+  // button existed.
   const remindersOnlyChanged =
     hasChanges &&
     !contentChanged &&
@@ -536,14 +535,12 @@ export default function ResponseDetailForm() {
       setOverdueReminderEnabled(payload.overdue_reminder_enabled)
       setReminderSentAt(payload.reminder_sent_at)
       setReminderDayOfSentAt(payload.reminder_day_of_sent_at)
-      setReceiptConfirmChecked(!!payload.receipt_confirmed_at)
       initialFormRef.current = {
         doneDate: payload.done_date ?? '',
         doneTime: payload.done_time ?? '',
         reminderEnabled: payload.reminder_enabled,
         reminderDayOfEnabled: payload.reminder_day_of_enabled,
         overdueReminderEnabled: payload.overdue_reminder_enabled,
-        receiptConfirmChecked: !!payload.receipt_confirmed_at,
       }
       setDialogList(payload.dialog ?? [])
       setReceivedArchivedAt(payload.received_archived_at)
@@ -818,7 +815,6 @@ export default function ResponseDetailForm() {
       p_reminder_enabled: reminderEnabled,
       p_overdue_reminder_enabled: overdueReminderEnabled,
       p_reminder_day_of_enabled: reminderDayOfEnabled,
-      p_confirm_receipt: receiptConfirmChecked,
     })
 
     setSending(false)
@@ -829,14 +825,6 @@ export default function ResponseDetailForm() {
     }
 
     void sendChangeNotification(changedFieldLabels)
-
-    // Receipt Confirmation (migration 070, 2026-09-25) — reflect the new
-    // permanent, server-side state locally rather than refetching. Once
-    // true, receiptConfirmed (derived from data.receipt_confirmed_at) locks
-    // the checkbox — there is no un-confirm path.
-    if (receiptConfirmChecked && !data?.receipt_confirmed_at) {
-      setData((d) => (d ? { ...d, receipt_confirmed_at: new Date().toISOString() } : d))
-    }
 
     // Re-take the dirty-gating snapshot now that this state has actually
     // been sent (2026-09-21, owner's own design — see RequestResponseForm.
@@ -849,7 +837,6 @@ export default function ResponseDetailForm() {
       reminderEnabled,
       reminderDayOfEnabled,
       overdueReminderEnabled,
-      receiptConfirmChecked,
     }
     setContentChanged(false)
     setDialogChanged(false)
@@ -1009,6 +996,21 @@ export default function ResponseDetailForm() {
           <div className="noticeband"><b>Response saved.</b> Your update has been recorded.</div>
         )}
 
+        {/* Receipt Confirmation (migration 072, 2026-09-25) — supersedes the
+            2026-09-25 checkbox: Jim, after using the feature, concluded
+            simply opening this screen should confirm receipt automatically,
+            same as viewing the emailed /r/[token] link already does — "in
+            both cases, 'looking' at the Request is a receipt confirmation."
+            get_received_request now sets receipt_confirmed_at as a side
+            effect of every read (no query-param trigger needed here, unlike
+            the mailed-link path — there's no equivalent "did they click a
+            specific link" signal, so every visit counts). Same
+            `.noticeband` wording/placement as RequestResponseForm.tsx's
+            identical banner. */}
+        {receiptConfirmed && !sendConfirmed && (
+          <div className="noticeband"><b>Receipt confirmed.</b> Make other changes if desired, and then Send.</div>
+        )}
+
         <div className="scroll">
           <form id="response-detail-form" onSubmit={handleSend} noValidate>
 
@@ -1042,35 +1044,6 @@ export default function ResponseDetailForm() {
                 </span>
               </div>
             </div>
-
-            {/* Receipt Confirmation (migration 070, 2026-09-25) — a real,
-                working checkbox here, not just a status line (superseding
-                the 2026-09-24 read-only-only decision). Jim: "one 'selling
-                argument' for the app is the ability to work in the received
-                list for incoming requests" — a signed-in recipient found via
-                Main Screen's own Received list, not just the emailed link,
-                should be able to confirm receipt right here. Own full-width
-                row below .meta, matching the Reminders banner's own
-                placement precedent immediately below. Hidden entirely when
-                the issuer never requested it. */}
-            {data.receipt_confirmation_requested && (
-              <label className={`checkrow${receiptConfirmed ? ' checkrow-disabled' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={receiptConfirmChecked}
-                  disabled={receiptConfirmed}
-                  onChange={(e) => setReceiptConfirmChecked(e.target.checked)}
-                />
-                <span className="checktext">
-                  {receiptConfirmed ? 'Receipt Confirmed' : 'Check and Save for Receipt Confirmation'}
-                  <span className="checknote">
-                    {receiptConfirmed
-                      ? `Confirmed on ${formatMDYFromTimestamp(data.receipt_confirmed_at)}.`
-                      : 'Lets the sender know you have received this Request.'}
-                  </span>
-                </span>
-              </label>
-            )}
 
             {/* Reminders until Done banner (migration 036/037,
                 2026-08-19/20) — new capability, owner's own design
@@ -1312,6 +1285,15 @@ export default function ResponseDetailForm() {
                 quick-Done band and Archive already use — never a plain
                 table update, which RLS would refuse from this side
                 anyway. */}
+            {/* Wrapped in the same per-element style={{ padding: '0
+                var(--pad)' }} convention every other control on this
+                screen already uses (this screen's own <form> has no
+                shared .form wrapper class, unlike Request Detail's) —
+                owner-reported, 2026-09-25: without it, ConversionBanner's
+                own .fieldact right-aligned button sat flush against the
+                screen's outer edge instead of matching every other
+                button's inset. */}
+            <div style={{ padding: '0 var(--pad)' }}>
             <ConversionBanner
               direction="request-to-todo"
               sourceType="recipient"
@@ -1336,6 +1318,7 @@ export default function ResponseDetailForm() {
                   : undefined
               }
             />
+            </div>
           </form>
         </div>
 

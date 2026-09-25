@@ -6706,3 +6706,131 @@ commit;
 --   (awaiting or confirmed) should show first/left of the Dialog/
 --   Attachments icons, matching Sent's own treatment.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 072 (2026-09-25) -- get_received_request() confirms receipt
+-- automatically, on every read, superseding migration 070's checkbox.
+-- CONFIRMED RUN by the owner, 2026-09-25.
+--
+-- Jim, after actually using the feature: "the behavior of the 'receipt
+-- confirmation' when a Request Response is opened should be the same if a
+-- user opened a Response Detail from within the app. In both cases,
+-- 'looking' at the Request is a receipt confirmation (and should not -- as
+-- I originally designed it -- require the user to check and then Send the
+-- response 'confirmation')." Also flagged the migration-070 checkbox's own
+-- wording bug (it said "Check and Save," but this screen has no Save
+-- button, only Send) -- moot now that the checkbox is removed outright
+-- rather than reworded; see ResponseDetailForm.tsx's own updated comments.
+--
+-- Unlike get_request_by_token's own p_confirm_receipt (migration 069),
+-- this needs no new parameter -- there is no mailed-link-vs-not distinction
+-- to gate on here; every call to this function already IS "a signed-in
+-- recipient looking at their own Received item," so the side effect fires
+-- unconditionally. Plain create-or-replace is safe -- same jsonb return
+-- type, no signature change. Body is otherwise byte-for-byte identical to
+-- the version at line ~6417 above (migration 069's own edit) -- only the
+-- new side effect (mirroring get_request_by_token's own) is added, placed
+-- after the events insert and before the jsonb is built so the returned
+-- payload already reflects the just-set value.
+--
+-- set_response_done_as_recipient's own p_confirm_receipt parameter
+-- (migration 070) is left in the schema, unused from now on -- consistent
+-- with this file's own established practice of not dropping structure just
+-- because the app stops calling into a particular argument (e.g.
+-- last_overdue_nudge_at, migration 043's own header comment). No migration
+-- needed to remove it; ResponseDetailForm.tsx simply stops passing it.
+-- ============================================================================
+
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at, r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled,
+         r.reminder_day_of_enabled, r.reminder_day_of_sent_at, r.repeat_rule,
+         r.receipt_confirmation_requested, r.receipt_confirmed_at,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  -- Receipt Confirmation side effect (migration 072) -- fires on every read,
+  -- unconditionally (no p_confirm_receipt gate, unlike get_request_by_token
+  -- -- see this migration's own header comment for why). Idempotent: a
+  -- no-op once receipt_confirmed_at is already set, and a no-op if this
+  -- particular Request never had the option requested in the first place.
+  if v_request.receipt_confirmation_requested and v_request.receipt_confirmed_at is null then
+    update public.requests set receipt_confirmed_at = now() where id = v_request.id;
+    v_request.receipt_confirmed_at := now();
+  end if;
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'receipt_confirmation_requested', v_request.receipt_confirmation_requested,
+    'receipt_confirmed_at', v_request.receipt_confirmed_at,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+-- Verify:
+--   select prosrc from pg_proc where proname = 'get_received_request';
+--        -> should show the new receipt_confirmed_at update block
+--   -- Then, from Response Detail on a Received Request that has
+--   -- receipt_confirmation_requested = true and receipt_confirmed_at still
+--   -- null: simply opening the screen should confirm it -- no checkbox, no
+--   -- extra click -- and the new "Receipt confirmed." noticeband should
+--   -- show immediately.
+-- ============================================================================

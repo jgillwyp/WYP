@@ -252,8 +252,16 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
 // Requestor's own name inside the button (2026-08-22) without that name
 // fighting the rest of the label for visual weight. emailButton is the
 // plain-text convenience wrapper every other call site still uses.
+// margin: 4px 8px 4px 0 (2026-09-25, owner-reported) — on a phone, the
+// Receipt Confirmation button and the primary "Click to respond..." button
+// (buildRequestEmailHtml, both inline-block) wrap onto separate lines with
+// no gap between them, reading as one run-together block. Vertical margin
+// here gives every button breathing room whether it wraps or not; the
+// right margin doubles as the horizontal gap between two buttons sitting
+// side by side, making the confirm button's own manual spacer span
+// (previously the only source of horizontal spacing) redundant.
 function emailButtonRaw(href: string, innerHtml: string): string {
-  return `<a href="${href}" style="display:inline-block; background:${EMAIL_BRAND_BLUE}; color:#FFFFFF; text-decoration:none; font-weight:700; font-size:15px; padding:12px 22px; border-radius:8px; font-family:Arial, Helvetica, sans-serif;">${innerHtml}</a>`
+  return `<a href="${href}" style="display:inline-block; background:${EMAIL_BRAND_BLUE}; color:#FFFFFF; text-decoration:none; font-weight:700; font-size:15px; padding:12px 22px; border-radius:8px; margin:4px 8px 4px 0; font-family:Arial, Helvetica, sans-serif;">${innerHtml}</a>`
 }
 
 function emailButton(href: string, text: string): string {
@@ -612,11 +620,12 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
   // Jim's own mockup ("if either button is clicked the target Request
   // Response is the same" — both point at fields.link, this one with
   // ?confirm=1 appended so RequestResponseForm.tsx can auto-confirm on
-  // load without requiring an extra Send click). inline-block + a small
-  // fixed-width spacer wraps cleanly to stacked buttons on a narrow mail
-  // client, same as the primary button already does on its own.
+  // load without requiring an extra Send click). No separate spacer span
+  // needed (removed 2026-09-25) — emailButtonRaw's own margin now supplies
+  // both the horizontal gap between the two buttons and vertical breathing
+  // room for whichever wraps onto its own line on a narrow phone.
   const confirmButtonHtml = showReceiptConfirmButton(fields)
-    ? `${emailButtonRaw(`${fields.link}?confirm=1`, RECEIPT_CONFIRM_LINK_TEXT)}<span style="display:inline-block; width:10px; line-height:1px;">&nbsp;</span>`
+    ? emailButtonRaw(`${fields.link}?confirm=1`, RECEIPT_CONFIRM_LINK_TEXT)
     : ''
   const buttonHtml = confirmButtonHtml + emailButtonRaw(fields.link, buttonInner)
   const parts =
