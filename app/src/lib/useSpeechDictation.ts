@@ -13,12 +13,14 @@ type SpeechRecognitionEventLike = {
   results: { length: number; [index: number]: SpeechRecognitionResultLike }
 }
 
+type SpeechRecognitionErrorEventLike = { error?: string }
+
 type SpeechRecognitionLike = {
   continuous: boolean
   interimResults: boolean
   lang: string
   onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: (() => void) | null
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null
   onend: (() => void) | null
   start: () => void
   stop: () => void
@@ -54,6 +56,12 @@ function joinParts(...parts: string[]): string {
     .join(' ')
 }
 
+// How long a pause has to last, total, before dictation actually turns
+// off — see lastActivityAtRef's own comment below for why this is layered
+// on top of (not a replacement for) the browser's own shorter internal
+// timeout.
+const SILENCE_TIMEOUT_MS = 4000
+
 export function useSpeechDictation(value: string, setValue: (value: string) => void) {
   const valueRef = useRef(value)
   const setValueRef = useRef(setValue)
@@ -69,6 +77,16 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   const committedTextRef = useRef('')
   const finalizedIndexesRef = useRef(new Set<number>())
   const sessionRef = useRef(0)
+  // lastActivityAtRef (2026-09-28, owner's own follow-up: "I like the
+  // auto-turn-off 'feature', just not how quickly it happens... allow it
+  // to turn off after 4 seconds") — the browser's own internal pause
+  // timeout (roughly ~1 second, per his report) is shorter than that, so
+  // handleEnd below restarts through several of the browser's own short
+  // cutoffs, each time comparing time-since-real-speech against
+  // SILENCE_TIMEOUT_MS, and only actually stops once that's exceeded —
+  // stitching several ~1-second browser sessions into what reads to the
+  // user as one continuous ~4-second grace period.
+  const lastActivityAtRef = useRef(0)
   const [supported, setSupported] = useState(false)
   const [dictating, setDictating] = useState(false)
 
@@ -126,7 +144,14 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       }
     }
 
+    // Tracks whatever interim (not-yet-final) text was on screen as of the
+    // last onresult event — read by handleEnd below so a restart (see its
+    // own comment) doesn't silently lose the last word or two the user was
+    // mid-saying exactly when the browser cut the session off.
+    let lastInterimText = ''
+
     function renderTranscript(currentInterimText: string): void {
+      lastInterimText = currentInterimText
       setValueRef.current(joinParts(baseTextRef.current, committedTextRef.current, currentInterimText))
     }
 
@@ -135,8 +160,79 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       setDictating(false)
     }
 
+    // Owner-reported, 2026-09-28 (same day as the staircase fix above, but
+    // unrelated to it — nothing above touches session timing): a brief
+    // hesitation (his own estimate, "only a 1 second hesitation") was
+    // turning dictation off entirely. Confirmed he likes the auto-turn-off
+    // itself, just wanted more grace before it fires — landed on 4 seconds
+    // (SILENCE_TIMEOUT_MS above). The Web Speech API gives no standard,
+    // cross-browser way to configure the browser's own internal pause
+    // threshold directly — it's the browser/OS's own speech endpointer,
+    // outside this codebase's control even with `continuous = true` set
+    // (some implementations honor `continuous` loosely and end the
+    // underlying session on a pause anyway, most commonly signaled as an
+    // `onerror` with `error: 'no-speech'`, followed by `onend`). What IS
+    // controllable is how this hook reacts: instead of treating the
+    // browser's own short cutoff as "the user is done dictating," restart
+    // listening and only actually stop once handleEnd's own 4-second check
+    // says real silence has gone on that long. baseTextRef/committedTextRef/
+    // finalizedIndexesRef are untouched by a restart (only toggle()'s own
+    // explicit-start path clears them), so whatever was already dictated
+    // stays exactly as rendered and recognition just keeps listening —
+    // from the user's own perspective, one continuous ~4-second grace
+    // period, not several short browser-imposed ones.
+    function isRecoverableError(errorCode: string | undefined): boolean {
+      return errorCode === 'no-speech'
+    }
+
+    // sessionRef.current === 0 only when toggle()'s own stop path zeroed it
+    // first (or, since this batch, a non-recoverable onerror doing the
+    // same — see below) — that's the one case this actually finishes
+    // outright. Any other time onend fires (a pause timeout, or right
+    // after a recoverable error), it's the browser ending the session on
+    // its own after its own short internal timeout — restart unless the
+    // owner's own 4-second grace period has actually been exceeded across
+    // however many of these short restarts it took to get there. A
+    // start() that throws (e.g. called too soon after the previous
+    // instance tore down) falls back to finishing rather than risking a
+    // silently broken, visibly-still-on mic button.
+    function handleEnd(): void {
+      if (sessionRef.current === 0) {
+        finishSession()
+        return
+      }
+      if (Date.now() - lastActivityAtRef.current >= SILENCE_TIMEOUT_MS) {
+        finishSession()
+        return
+      }
+      // Fold in whatever was still interim (never finalized) at the exact
+      // moment the browser cut the session off — otherwise the next
+      // session's own first render would silently overwrite it, since
+      // renderTranscript always replaces the whole value from scratch.
+      if (lastInterimText) {
+        mergeFinal(lastInterimText)
+        lastInterimText = ''
+      }
+      // A restarted recognition instance numbers its own results from 0
+      // again — finalizedIndexesRef has to reset with it, or the new
+      // session's own index 0/1/2… reads as "already merged" and its real
+      // speech is silently dropped. committedTextRef (the actual
+      // accumulated text) is untouched — only the per-session index
+      // bookkeeping resets.
+      finalizedIndexesRef.current.clear()
+      try {
+        recognition.start()
+      } catch {
+        finishSession()
+      }
+    }
+
     recognition.onresult = (event) => {
       if (sessionRef.current === 0) return
+
+      // Any onresult event means the recognizer is actively hearing
+      // something — resets the 4-second silence clock handleEnd checks.
+      lastActivityAtRef.current = Date.now()
 
       // Scanned from 0, not event.resultIndex — a final result can in
       // principle be reported again in a later event (see mergeFinal's own
@@ -167,8 +263,23 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
 
       renderTranscript(interimText)
     }
-    recognition.onerror = finishSession
-    recognition.onend = finishSession
+    recognition.onerror = (event) => {
+      // A recoverable error (currently just 'no-speech') is deliberately
+      // left as a no-op here — the onend that follows it is what actually
+      // decides to restart-or-finish (handleEnd above), so there's exactly
+      // one place making that call rather than two paths that could
+      // disagree.
+      if (sessionRef.current !== 0 && isRecoverableError(event?.error)) return
+      // A real error ('not-allowed', 'audio-capture', etc.) — zero
+      // sessionRef before finishing, same signal toggle()'s own explicit
+      // stop path already sets, so the onend that follows this (browsers
+      // fire both) sees sessionRef.current === 0 and finishes cleanly too
+      // instead of trying to restart a recognizer that just failed for a
+      // reason a restart can't fix.
+      sessionRef.current = 0
+      finishSession()
+    }
+    recognition.onend = handleEnd
     recognitionRef.current = recognition
 
     queueMicrotask(() => setSupported(true))
@@ -194,6 +305,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     baseTextRef.current = valueRef.current.trim()
     committedTextRef.current = ''
     finalizedIndexesRef.current.clear()
+    lastActivityAtRef.current = Date.now()
     sessionRef.current += 1
 
     try {

@@ -4262,3 +4262,60 @@ link is built only after the stack is proven on Add Contact.
   `Set<number>`) now only tracks which indices have already been merged,
   so a re-reported already-final index is skipped rather than merged
   twice. `npx tsc --noEmit`/`npm run lint`/`npm run build` all clean.
+- **Voice dictation: auto-restart on a brief silence, same day (2026-09-28,
+  third follow-up).** With the staircase fixed, Jim found a second, real
+  issue: "hesitations in speaking result in the voice acceptance being
+  turned off more quickly — and a little too quickly... only a 1 second
+  hesitation... 3 seconds of no-speech should occur before it turns off
+  listening." The Web Speech API has no standard, cross-browser property
+  to configure that pause threshold directly — it's the browser/OS's own
+  speech endpointer, not something this codebase can tune, and nothing in
+  the staircase fix touched session timing at all (a coincidence of timing
+  on Jim's end, not a regression this session introduced). What IS
+  controllable is the reaction: `useSpeechDictation.ts` now auto-restarts
+  listening instead of treating a pause-triggered end as "the user is
+  done." `onerror`'s own type gained the real event shape
+  (`{ error?: string }`, was ignored entirely before) so a recoverable
+  `'no-speech'` error can be told apart from a real one
+  (`'not-allowed'`/`'audio-capture'`/etc., which still stop immediately —
+  auto-restarting those would loop forever chasing a mic the browser will
+  never grant). `onend` is where the actual restart happens (the one
+  reliably safe place to call `recognition.start()` again, per the common
+  cross-browser workaround pattern for this exact limitation) — restarts
+  whenever `sessionRef.current` wasn't already zeroed by `toggle()`'s own
+  explicit stop path, so a genuine user-initiated stop is unaffected.
+  `baseTextRef`/`committedTextRef` survive a restart untouched (only
+  `toggle()`'s own start path clears them) — from the user's own
+  perspective the mic just never turns off. Two real edge cases caught and
+  fixed while building this: a restarted recognition instance renumbers
+  its own results from 0, so `finalizedIndexesRef` has to clear on every
+  restart too, or the new session's real speech reads as "already merged"
+  and gets silently dropped; and whatever was still interim (never
+  finalized) at the exact moment the browser cut the session off would
+  otherwise be lost when the next session's first render overwrites the
+  whole field from scratch — a new `lastInterimText` local, read by the
+  restart path and folded into `committedTextRef` via the same
+  overlap-aware `mergeFinal` the staircase fix already uses, closes that
+  gap. `npx tsc --noEmit`/`npm run lint`/`npm run build` all clean.
+- **Voice dictation: 4-second silence budget on the auto-restart, same day
+  (2026-09-28, fourth follow-up).** Jim: "I like the auto-turn-off
+  'feature', just not how quickly it happens. Could you allow it to turn
+  off after 4 seconds?" — confirms the restart-on-pause behavior itself
+  was right, it just needed a real grace period rather than restarting
+  forever. New `lastActivityAtRef`, refreshed on every real `onresult`
+  event and initialized when dictation starts; `handleEnd()` now compares
+  elapsed time against it before deciding to restart, calling
+  `finishSession()` for real once 4 seconds (`SILENCE_TIMEOUT_MS`) of
+  actual silence have passed — stitching together however many of the
+  browser's own short (~1 second) internal cutoffs it takes to reach that,
+  so the *browser's* timeout stays exactly as short as it's always been,
+  but the *app's* behavior reads as one continuous ~4-second grace period.
+  Found and fixed a real bug in the same pass, latent since the restart
+  logic first shipped a few hours earlier: a genuinely fatal error
+  (`'not-allowed'`, `'audio-capture'`, etc.) called `finishSession()` from
+  `onerror` but never zeroed `sessionRef`, so the `onend` browsers fire
+  right after an error would have seen a non-zero session and tried to
+  restart a recognizer that had just failed for a reason no restart could
+  fix — `onerror`'s non-recoverable branch now zeroes `sessionRef` first,
+  same signal `toggle()`'s own explicit stop path already sets. `npx tsc
+  --noEmit`/`npm run lint`/`npm run build` all clean.
