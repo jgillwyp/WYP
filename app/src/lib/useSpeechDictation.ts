@@ -56,10 +56,10 @@ function joinParts(...parts: string[]): string {
     .join(' ')
 }
 
-// How long a pause has to last, total, before dictation actually turns
-// off — see lastActivityAtRef's own comment below for why this is layered
-// on top of (not a replacement for) the browser's own shorter internal
-// timeout.
+// How long a pause has to last, total, before dictation actually turns off
+// — see armSilenceTimer's own comment below for why this is a real JS
+// timer layered on top of (not a replacement for) the browser's own much
+// shorter internal pause timeout.
 const SILENCE_TIMEOUT_MS = 4000
 
 export function useSpeechDictation(value: string, setValue: (value: string) => void) {
@@ -77,16 +77,14 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   const committedTextRef = useRef('')
   const finalizedIndexesRef = useRef(new Set<number>())
   const sessionRef = useRef(0)
-  // lastActivityAtRef (2026-09-28, owner's own follow-up: "I like the
-  // auto-turn-off 'feature', just not how quickly it happens... allow it
-  // to turn off after 4 seconds") — the browser's own internal pause
-  // timeout (roughly ~1 second, per his report) is shorter than that, so
-  // handleEnd below restarts through several of the browser's own short
-  // cutoffs, each time comparing time-since-real-speech against
-  // SILENCE_TIMEOUT_MS, and only actually stops once that's exceeded —
-  // stitching several ~1-second browser sessions into what reads to the
-  // user as one continuous ~4-second grace period.
-  const lastActivityAtRef = useRef(0)
+  // silenceTimerRef (2026-09-28, revised same day — see armSilenceTimer's
+  // own comment below) drives the actual 4-second decision directly via a
+  // real JS timer, rather than comparing elapsed time at whatever moment
+  // the browser's own onend happens to fire. armSilenceTimerRef exists
+  // purely so toggle() (outside the setup effect below, which is where
+  // the recognition instance itself lives) can arm the same timer.
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const armSilenceTimerRef = useRef<(() => void) | null>(null)
   const [supported, setSupported] = useState(false)
   const [dictating, setDictating] = useState(false)
 
@@ -156,6 +154,10 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     }
 
     function finishSession(): void {
+      if (silenceTimerRef.current !== null) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
       renderTranscript('')
       setDictating(false)
     }
@@ -165,43 +167,70 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     // hesitation (his own estimate, "only a 1 second hesitation") was
     // turning dictation off entirely. Confirmed he likes the auto-turn-off
     // itself, just wanted more grace before it fires — landed on 4 seconds
-    // (SILENCE_TIMEOUT_MS above). The Web Speech API gives no standard,
-    // cross-browser way to configure the browser's own internal pause
-    // threshold directly — it's the browser/OS's own speech endpointer,
-    // outside this codebase's control even with `continuous = true` set
-    // (some implementations honor `continuous` loosely and end the
-    // underlying session on a pause anyway, most commonly signaled as an
-    // `onerror` with `error: 'no-speech'`, followed by `onend`). What IS
-    // controllable is how this hook reacts: instead of treating the
-    // browser's own short cutoff as "the user is done dictating," restart
-    // listening and only actually stop once handleEnd's own 4-second check
-    // says real silence has gone on that long. baseTextRef/committedTextRef/
-    // finalizedIndexesRef are untouched by a restart (only toggle()'s own
-    // explicit-start path clears them), so whatever was already dictated
-    // stays exactly as rendered and recognition just keeps listening —
-    // from the user's own perspective, one continuous ~4-second grace
-    // period, not several short browser-imposed ones.
+    // (SILENCE_TIMEOUT_MS above). Revised again same day: an earlier
+    // version of this fix compared elapsed time only at whatever moment
+    // the browser's own onend happened to fire, which meant the real
+    // grace period depended on how many of the browser's own short
+    // restart cycles it took to reach 4 seconds — and how reliably each
+    // one actually restarted, which turned out not to be reliable enough
+    // (owner-reported: the delay was longer than before but stopping
+    // early, around 2 seconds). A real setTimeout, armed fresh on every
+    // burst of speech and re-armed by toggle() when dictation first
+    // starts, is authoritative regardless of how the browser itself
+    // behaves in between — it fires at exactly 4000ms of no qualifying
+    // reset, once, and that firing is what actually stops recognition
+    // (see armSilenceTimer below), not a check made only when onend
+    // happens to occur.
+    //
+    // The Web Speech API gives no standard, cross-browser way to
+    // configure the browser's own internal pause threshold directly —
+    // it's the browser/OS's own speech endpointer, outside this
+    // codebase's control even with `continuous = true` set (some
+    // implementations honor `continuous` loosely and end the underlying
+    // session on a pause anyway, most commonly signaled as an `onerror`
+    // with `error: 'no-speech'`, followed by `onend`). What IS
+    // controllable is how this hook reacts to that short browser-imposed
+    // cutoff: restart listening every time, and let the independent
+    // 4-second timer be the only thing that decides when to actually
+    // stop. baseTextRef/committedTextRef/finalizedIndexesRef are untouched
+    // by a restart (only toggle()'s own explicit-start path clears them),
+    // so whatever was already dictated stays exactly as rendered.
     function isRecoverableError(errorCode: string | undefined): boolean {
       return errorCode === 'no-speech'
     }
 
-    // sessionRef.current === 0 only when toggle()'s own stop path zeroed it
-    // first (or, since this batch, a non-recoverable onerror doing the
-    // same — see below) — that's the one case this actually finishes
-    // outright. Any other time onend fires (a pause timeout, or right
-    // after a recoverable error), it's the browser ending the session on
-    // its own after its own short internal timeout — restart unless the
-    // owner's own 4-second grace period has actually been exceeded across
-    // however many of these short restarts it took to get there. A
+    // armSilenceTimer re-arms the real 4-second stop timer — called from
+    // onresult on every burst of speech (interim or final) and once from
+    // toggle() when dictation first starts, via armSilenceTimerRef. Its
+    // own firing is the ONLY thing that sets sessionRef.current = 0 while
+    // still dictating (besides an explicit user stop or a fatal error) —
+    // everything else (a short browser-imposed onend) just restarts.
+    function armSilenceTimer(): void {
+      if (silenceTimerRef.current !== null) clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        silenceTimerRef.current = null
+        sessionRef.current = 0
+        try {
+          recognition.stop()
+        } catch {
+          finishSession()
+        }
+      }, SILENCE_TIMEOUT_MS)
+    }
+    armSilenceTimerRef.current = armSilenceTimer
+
+    // sessionRef.current === 0 only when toggle()'s own stop path zeroed
+    // it first, a non-recoverable onerror doing the same, or the silence
+    // timer above firing — that's the one case this actually finishes
+    // outright. Any other time onend fires, it's just the browser ending
+    // the underlying session on its own short internal timeout; restart
+    // unconditionally and let the independent timer be the only thing
+    // that decides when enough real silence has actually passed. A
     // start() that throws (e.g. called too soon after the previous
     // instance tore down) falls back to finishing rather than risking a
     // silently broken, visibly-still-on mic button.
     function handleEnd(): void {
       if (sessionRef.current === 0) {
-        finishSession()
-        return
-      }
-      if (Date.now() - lastActivityAtRef.current >= SILENCE_TIMEOUT_MS) {
         finishSession()
         return
       }
@@ -231,8 +260,8 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       if (sessionRef.current === 0) return
 
       // Any onresult event means the recognizer is actively hearing
-      // something — resets the 4-second silence clock handleEnd checks.
-      lastActivityAtRef.current = Date.now()
+      // something — re-arms the real 4-second stop timer.
+      armSilenceTimer()
 
       // Scanned from 0, not event.resultIndex — a final result can in
       // principle be reported again in a later event (see mergeFinal's own
@@ -286,6 +315,10 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
 
     return () => {
       sessionRef.current = 0
+      if (silenceTimerRef.current !== null) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
       recognition.stop()
       recognitionRef.current = null
     }
@@ -297,6 +330,10 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
 
     if (dictating) {
       sessionRef.current = 0
+      if (silenceTimerRef.current !== null) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
       recognition.stop()
       setDictating(false)
       return
@@ -305,12 +342,16 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     baseTextRef.current = valueRef.current.trim()
     committedTextRef.current = ''
     finalizedIndexesRef.current.clear()
-    lastActivityAtRef.current = Date.now()
     sessionRef.current += 1
 
     try {
       recognition.start()
       setDictating(true)
+      // Starts the real 4-second countdown immediately — otherwise a
+      // dictation session opened and then never spoken into at all would
+      // sit listening forever instead of timing out like every other
+      // silence does.
+      armSilenceTimerRef.current?.()
     } catch {
       sessionRef.current = 0
       setDictating(false)

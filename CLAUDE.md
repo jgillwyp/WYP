@@ -4319,3 +4319,25 @@ link is built only after the stack is proven on Add Contact.
   fix — `onerror`'s non-recoverable branch now zeroes `sessionRef` first,
   same signal `toggle()`'s own explicit stop path already sets. `npx tsc
   --noEmit`/`npm run lint`/`npm run build` all clean.
+- **Voice dictation: real setTimeout instead of a per-onend elapsed-time
+  check, same day (2026-09-28, fifth follow-up).** The 4-second grace
+  period didn't hold either: "The turn-off delay seems a little longer -
+  but not more than 2 seconds?" The previous version compared
+  `Date.now()` against a last-activity timestamp only at whatever moment
+  the browser's own `onend` happened to fire — meaning the real grace
+  period depended on how many of the browser's own short (~1 second)
+  restart cycles it took to reach 4 seconds, and on every one of those
+  restarts actually succeeding, which apparently isn't reliable in
+  practice. Replaced with a real `setTimeout`/`clearTimeout` pair
+  (`silenceTimerRef`, armed by a new `armSilenceTimer()`) that's
+  authoritative on its own: re-armed on every burst of speech
+  (`onresult`) and once when dictation first starts (`toggle()`, via a new
+  `armSilenceTimerRef` so the timer-arming function defined inside the
+  setup effect is reachable from `toggle()` outside it) — its firing,
+  once, at exactly 4000ms of no qualifying reset, is now the *only* thing
+  that actually stops recognition, decoupled entirely from how many times
+  or how reliably the browser's own short internal cutoff fires and
+  restarts in between. `handleEnd()` simplified to match: no more elapsed-
+  time math, just "finish if the timer/an explicit stop/a fatal error
+  already zeroed the session, otherwise restart unconditionally." `npx tsc
+  --noEmit`/`npm run lint`/`npm run build` all clean.
