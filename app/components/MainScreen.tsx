@@ -2156,6 +2156,28 @@ export default function MainScreen() {
                       <span className="hknote"> — add, view, edit, or delete</span>
                     </span>
                   </div>
+                  {/* Private Categories (2026-09-28) — closes a real gap:
+                      Add Category (Create Request/Create ToDo) could only
+                      ever add one, never rename or remove it. Gated on the
+                      same private_category_enabled toggle that hides the
+                      Category field itself everywhere else — a category can
+                      only be created while the feature is on, so hiding
+                      this management screen while it's off is consistent,
+                      not a loss. */}
+                  {categoriesEnabled && (
+                    <div
+                      className="hkrow"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push('/categories')}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push('/categories') }}
+                    >
+                      <span className="hktext">
+                        <span className="hktitle">Private Categories</span>
+                        <span className="hknote"> — add, rename, or delete</span>
+                      </span>
+                    </div>
+                  )}
                   {/* Storage Management (2026-09-03) — converts
                       design/screens/WYP_storage_maintenance_palette1.html to
                       live. Also reachable from Account Options' own

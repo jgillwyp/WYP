@@ -4177,6 +4177,59 @@ body {
   line-height: 1.34;
 }
 
+/* Private Categories print report (2026-09-28) — same .pcon- namespacing
+   convention as Contacts' own print report just above, one column set
+   simpler (no email/phone/time zone, just name + the two usage counts). */
+.pcat-colbar {
+  display: grid;
+  grid-template-columns: 1fr 90px 90px;
+  column-gap: 10px;
+  background: var(--strip);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pcat-colbar .pcat-c-count {
+  text-align: center;
+}
+
+.pcat-rows {
+  margin-top: 4px;
+}
+
+.pcat-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 90px;
+  column-gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.pcat-row:last-child {
+  border-bottom: none;
+}
+
+.pcat-row:nth-of-type(even) {
+  background: var(--row-tint);
+}
+
+.pcat-name {
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pcat-count {
+  font-size: 10pt;
+  font-style: italic;
+  color: var(--ink);
+  text-align: center;
+}
+
 /* ============================================================================
    CONTACT DELETION (2026-09-01, §6.46 PROPOSED) — Contact Detail's Request
    Activity Summary panel, Delete Contact control, and the confirmation

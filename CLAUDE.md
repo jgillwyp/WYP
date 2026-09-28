@@ -4180,3 +4180,56 @@ link is built only after the stack is proven on Add Contact.
   marked Done or archived." `npx tsc --noEmit`/`npm run lint`/`npm run
   build` all clean. No mockup — this feature family has none beyond Jim's
   own PDF references.
+- **Private Categories — a real management screen for renaming/deleting
+  Categories, new (2026-09-28), no migration needed.** Closes a gap Jim
+  spotted: Create Request/Create ToDo's own Add Category modal could only
+  ever add a category — nothing anywhere let a user rename or remove one
+  once created. New `app/components/PrivateCategoriesList.tsx` (`/categories`),
+  built from Jim's own pasted mockup — a Contacts-list-shaped screen
+  (`.hkrows`/`.hkrow`, Add Category + Close band) where clicking a plain-name
+  row opens an Edit Category modal: Category Name field, an "In use: N
+  ToDos&nbsp;&nbsp;N Requests" recap (`.actsummary`, the exact component
+  Contact Detail's own Delete Contact confirmation already uses), and a
+  Delete Category button — no second confirm step, unlike Delete Contact:
+  `requests.category_id references categories(id) on delete set null`
+  (migration 003) means deleting a Category only clears the label off
+  whatever Request/ToDo referenced it, never cascades to deleting the item
+  itself, so the usage recap sitting right there **is** the warning, per
+  Jim's own mockup showing no separate confirmation dialog. **No migration
+  needed at all** — `categories` already carries full owner-scoped RLS
+  (select/insert/update/delete, migration 003), so rename and delete are
+  both plain client calls, same posture Add Category's own insert already
+  had. Usage counts come from a plain client-side tally (`requests.select
+  ('category_id, contact_id').not('category_id','is',null)`, RLS-scoped,
+  `contact_id === null` distinguishing a ToDo from a Request) — no RPC
+  needed, unlike Contacts' own Sent/Rec'd counts, which need one specifically
+  because they cross-reference another user's own login email server-side.
+  **Named "Private Categories," not "Categories"** — Jim's own correction,
+  matching Account Options' existing "Show Private Category" toggle wording
+  rather than the mockup's own shorter caption. The new Housekeeping row
+  (`MainScreen.tsx`, right after Contacts, alphabetically before Storage
+  Management) is gated on that same `private_category_enabled` toggle — a
+  category can only ever be created while the feature is on, so hiding this
+  management screen while it's off is consistent, not a loss. Gained a Print
+  icon/report too (new `.pcat-*` CSS, mirroring Contacts' own `.pcon-*`
+  namespace) — present in Jim's own mockup, not just inferred. `npx tsc
+  --noEmit`/`npm run lint`/`npm run build` all clean.
+- **Voice dictation: hardened the space-insertion between existing
+  Description text and newly dictated text (2026-09-28).** Jim: dictated
+  text was landing glued directly onto existing text with no separating
+  space. Traced `useSpeechDictation.ts`'s own join logic
+  (`baseTextRef.current` + committed/interim transcript, joined via
+  `joinParts`) and found it already inserts a space in isolation — every
+  part is individually trimmed before the join, and `.filter(Boolean)
+  .join(' ')` always separates two non-empty parts. Couldn't reproduce a
+  definitive counter-example through static tracing or a standalone Node
+  simulation, so rather than guess at a specific root cause, hardened
+  `joinParts` itself to trim every part again right at the join point —
+  makes a stray leading/trailing space on any one part harmless instead of
+  silently load-bearing, which is the one change that unconditionally
+  guarantees what was reported (never zero spaces between two non-empty
+  parts). Flagged rather than claimed as a confirmed root-cause fix — if
+  the issue persists after this, it likely wants a specific device/browser
+  repro to chase further, since the underlying `SpeechRecognition` API
+  itself is the one part of this feature not under this codebase's control.
+  `npx tsc --noEmit`/`npm run lint` clean.

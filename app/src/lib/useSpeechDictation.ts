@@ -35,8 +35,23 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
+// Owner-reported, 2026-09-28: dictated text was landing glued directly onto
+// the end of whatever Description already held, no separating space —
+// "the first word adjacent to the last word." Every part passed in here is
+// already individually trimmed before this runs (baseTextRef.current at
+// assignment, each committed/interim transcript at capture), so a plain
+// `.filter(Boolean).join(' ')` should already separate them — but that
+// relies on every future caller keeping its own part pre-trimmed, which is
+// exactly the kind of implicit contract that's easy to violate without
+// noticing. Trimming again here, right at the join, makes a leading or
+// trailing space on any one part harmless instead of load-bearing, and is
+// the one change that directly guarantees what was reported: never zero
+// spaces between two non-empty parts, and never a stray double space either.
 function joinParts(...parts: string[]): string {
-  return parts.filter(Boolean).join(' ')
+  return parts
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .join(' ')
 }
 
 export function useSpeechDictation(value: string, setValue: (value: string) => void) {
