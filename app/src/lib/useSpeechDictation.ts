@@ -59,7 +59,15 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   const setValueRef = useRef(setValue)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const baseTextRef = useRef('')
-  const finalResultsRef = useRef(new Map<number, string>())
+  // committedTextRef (2026-09-28, replaces the old per-index
+  // Map<number,string> — see mergeFinal below) is the single running
+  // "everything finalized so far this session" string. finalizedIndexesRef
+  // just remembers which result indices have already been folded in, so a
+  // later event re-reporting the same already-final index (the browser is
+  // allowed to keep echoing old entries in event.results) is a no-op
+  // instead of being merged again.
+  const committedTextRef = useRef('')
+  const finalizedIndexesRef = useRef(new Set<number>())
   const sessionRef = useRef(0)
   const [supported, setSupported] = useState(false)
   const [dictating, setDictating] = useState(false)
@@ -81,15 +89,45 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     recognition.interimResults = true
     recognition.lang = 'en-US'
 
-    function committedText(): string {
-      return [...finalResultsRef.current.entries()]
-        .sort(([left], [right]) => left - right)
-        .map(([, transcript]) => transcript)
-        .join(' ')
+    // mergeFinal folds a newly-finalized transcript into committedTextRef.
+    // Owner-reported, 2026-09-28: dictated text was coming out as a
+    // "staircase" — each new bit of speech re-appending everything already
+    // said, e.g. "Hello" -> "Hello Hello world" -> "Hello Hello world Hello
+    // world today". The previous version (per-index Map, blind join)
+    // assumed every browser reports each result index as its own
+    // self-contained incremental phrase; some report each new final result
+    // as the *whole growing transcript so far*, which the blind join then
+    // appends on top of everything already committed instead of replacing
+    // it. Checking for overlap first, in both directions, makes this safe
+    // regardless of which convention the browser actually uses, without
+    // needing to know which one it is:
+    //   - nothing committed yet -> just take it
+    //   - the new transcript already starts with everything committed ->
+    //     it's the cumulative case; replace, don't append
+    //   - what's committed already starts with the new transcript -> the
+    //     browser re-sent an old, shorter final; already accounted for,
+    //     drop it
+    //   - neither contains the other -> genuinely new incremental content;
+    //     append it
+    function mergeFinal(transcript: string): void {
+      const t = transcript.trim()
+      if (!t) return
+      const committed = committedTextRef.current
+      const tLower = t.toLowerCase()
+      const committedLower = committed.toLowerCase()
+      if (!committed) {
+        committedTextRef.current = t
+      } else if (tLower.startsWith(committedLower)) {
+        committedTextRef.current = t
+      } else if (committedLower.startsWith(tLower)) {
+        // already fully accounted for — nothing new to add
+      } else {
+        committedTextRef.current = joinParts(committed, t)
+      }
     }
 
     function renderTranscript(currentInterimText: string): void {
-      setValueRef.current(joinParts(baseTextRef.current, committedText(), currentInterimText))
+      setValueRef.current(joinParts(baseTextRef.current, committedTextRef.current, currentInterimText))
     }
 
     function finishSession(): void {
@@ -100,14 +138,15 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     recognition.onresult = (event) => {
       if (sessionRef.current === 0) return
 
-      // Accumulate finalized segments only, keyed by result index. This is what
-      // keeps the staircase gone: each index is written at most once with its
-      // own final transcript, never grown by concatenating repeated interim
-      // fragments onto committed text.
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      // Scanned from 0, not event.resultIndex — a final result can in
+      // principle be reported again in a later event (see mergeFinal's own
+      // comment); finalizedIndexesRef is what actually prevents re-merging
+      // it, not the scan's own starting point.
+      for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index]
-        if (result.isFinal) {
-          finalResultsRef.current.set(index, (result[0]?.transcript ?? '').trim())
+        if (result.isFinal && !finalizedIndexesRef.current.has(index)) {
+          finalizedIndexesRef.current.add(index)
+          mergeFinal(result[0]?.transcript ?? '')
         }
       }
 
@@ -153,7 +192,8 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     }
 
     baseTextRef.current = valueRef.current.trim()
-    finalResultsRef.current.clear()
+    committedTextRef.current = ''
+    finalizedIndexesRef.current.clear()
     sessionRef.current += 1
 
     try {

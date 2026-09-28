@@ -4233,3 +4233,32 @@ link is built only after the stack is proven on Add Contact.
   repro to chase further, since the underlying `SpeechRecognition` API
   itself is the one part of this feature not under this codebase's control.
   `npx tsc --noEmit`/`npm run lint` clean.
+- **Voice dictation: real fix for "staircase" duplication, same day
+  follow-up (2026-09-28).** The space fix above didn't hold — Jim tested
+  again (both appending to existing Description text and on a fresh
+  Create Request) and got the exact bug this hook's own Sept 11 rewrite
+  was supposed to have already fixed: each new bit of speech re-appending
+  everything already said, e.g. "Hello" → "Hello Hello world" → "Hello
+  Hello world Hello world today". Root cause, now actually found: the old
+  design accumulated finalized speech in a `Map<number, string>` keyed by
+  `SpeechRecognition` result index, joining every entry — correct only if
+  the browser reports each final result index as its own self-contained
+  incremental phrase. Some browsers instead report each new final result
+  as the *whole growing transcript so far*; blindly joining that onto
+  everything already committed is exactly what produces a staircase.
+  Replaced the Map with a single accumulating `committedTextRef` and a new
+  `mergeFinal()` that checks for overlap in both directions before
+  deciding whether to append or replace: nothing committed yet → take it;
+  the new transcript already starts with everything committed → it's the
+  cumulative case, replace instead of append; what's committed already
+  starts with the new transcript → an old final got re-sent, already
+  accounted for, drop it; neither contains the other → genuinely new
+  incremental content, append it. Verified with a standalone Node
+  simulation of both browser conventions plus the re-sent-old-final case —
+  all three land on the correct, non-duplicated text (kept the script in
+  the turn, not committed to the repo, same as this project's own
+  8-combination reminder-sentence verification precedent). `finalResultsRef`
+  (the old per-index Map) is gone; `finalizedIndexesRef` (a plain
+  `Set<number>`) now only tracks which indices have already been merged,
+  so a re-reported already-final index is skipped rather than merged
+  twice. `npx tsc --noEmit`/`npm run lint`/`npm run build` all clean.
