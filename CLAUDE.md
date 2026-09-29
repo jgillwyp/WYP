@@ -4514,6 +4514,29 @@ link is built only after the stack is proven on Add Contact.
   listener to exist, not that it handle every request, so letting non-GET
   requests fall through untouched preserves the Android install-prompt
   behavior this file exists for while eliminating the iOS corruption path
-  entirely. `npx tsc --noEmit`/`npm run lint` clean. Not yet re-confirmed
-  by John on the next deploy, but this is a real, well-understood bug with
-  a narrow, low-risk fix — high confidence this resolves it.
+  entirely. `npx tsc --noEmit`/`npm run lint` clean. **Confirmed fixed by
+  Jim** — the private tester's iPhone attachment upload now succeeds. Both
+  iPhone reports from this same conversation (sign-in code truncation,
+  attachment upload) are now closed.
+- **`/login`'s "Check your email" screen now leads with the code, not the
+  link, when it detects a standalone iOS home-screen icon (2026-09-29, same
+  conversation).** Jim: "Is there a way to only offer the method that works
+  (the 8-digit #) to iPhone users - to avoid their needing to either be
+  instructed on what to ignore?" Scoped precisely to the diagnosed bug, not
+  "iPhone" broadly — a normal iOS Safari/Chrome tab's magic link works fine;
+  only a *standalone* iOS home-screen icon is guaranteed broken (tapping the
+  link always opens the external browser, never back into the icon's own
+  window). Reuses `isIOSDevice()`/`isStandaloneDisplay()`
+  (`app/src/lib/platform.ts`, built for the Install-row detection) via a new
+  `iosStandalone` state, computed once in a microtask-deferred mount effect
+  — same `react-hooks/set-state-in-effect`-safe pattern as
+  `CreateRequestForm.tsx`'s own `voiceSupported`, so there's no hydration
+  mismatch. When true: the "click the link" paragraph is replaced with one
+  explaining the link will open a separate tab instead of signing in here,
+  and the code field's own lead-in drops its "On a Home Screen icon and the
+  link doesn't sign you in?" framing (now redundant) for a direct "Enter the
+  sign-in code from that email:" Every other context is unchanged — normal
+  browser tabs, Android, desktop — so this never adds friction to the case
+  that already works. Not security-relevant: a wrong platform guess only
+  changes which instructions are shown, never what `verifyOtp()` itself
+  accepts. `npx tsc --noEmit`/`npm run lint` clean.

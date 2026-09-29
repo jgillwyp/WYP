@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 import WypHeader from '../components/WypHeader'
 import { supabase, setRememberMe } from '@/lib/supabaseClient'
+import { isIOSDevice, isStandaloneDisplay } from '@/lib/platform'
 
 /** Supabase allows one magic link per user per 60 seconds. */
 const RESEND_COOLDOWN_SECONDS = 60
@@ -82,6 +83,24 @@ function LoginScreen() {
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
+
+  // iOS home-screen icon detection (2026-09-29, owner-reported follow-up —
+  // "is there a way to only offer the method that works to iPhone users").
+  // Standalone iOS is the one case diagnosed above where the mailed link is
+  // guaranteed to fail (it always opens the external browser, never this
+  // window) — every other context (a normal iOS Safari/Chrome tab, or any
+  // non-iOS platform) has the link working fine, so this is scoped exactly
+  // to the broken case rather than assuming "iPhone" broadly. Starts false
+  // on both server and first client render (no hydration mismatch), flips
+  // after mount — same pattern as CreateRequestForm.tsx's own
+  // `voiceSupported`. Not security-relevant: a wrong guess only changes
+  // which instructions are shown, never what verifyOtp() itself accepts.
+  const [iosStandalone, setIosStandalone] = useState(false)
+  useEffect(() => {
+    queueMicrotask(() => {
+      setIosStandalone(isIOSDevice() && isStandaloneDisplay())
+    })
+  }, [])
 
   const emailRef = useRef<HTMLInputElement>(null)
 
@@ -375,9 +394,17 @@ function LoginScreen() {
                 <br />
                 <span className="sent-addr">{email.trim()}</span>
               </p>
-              <p className="sent-p">
-                Open that email and click the link. You&rsquo;ll be signed in automatically.
-              </p>
+              {iosStandalone ? (
+                <p className="sent-p">
+                  Tapping the link in that email will open a separate browser tab instead
+                  of signing you in here — enter the sign-in code from that same email
+                  below instead.
+                </p>
+              ) : (
+                <p className="sent-p">
+                  Open that email and click the link. You&rsquo;ll be signed in automatically.
+                </p>
+              )}
 
               {/* Sign-in code fallback (2026-09-29) — see the state
                   declarations above for the full iOS home-screen-icon
@@ -388,11 +415,17 @@ function LoginScreen() {
                   Jim's own account, 2026-09-29, showed this project's actual
                   code is 8 digits, not Supabase's documented 6-digit
                   default; the field now accepts 4-10 digits and lets
-                  verifyOtp() itself be the authority on correctness. */}
+                  verifyOtp() itself be the authority on correctness.
+                  Same-day follow-up: on a detected iOS home-screen icon, the
+                  paragraph above already explains the link won't work here,
+                  so this line drops the redundant "On a Home Screen icon and
+                  the link doesn't sign you in?" framing and just asks for
+                  the code directly. */}
               <form onSubmit={handleVerifyCode} noValidate>
                 <p className="sent-meta" style={{ marginTop: 4 }}>
-                  On a Home Screen icon and the link doesn&rsquo;t sign you in? Enter the
-                  sign-in code from that same email instead:
+                  {iosStandalone
+                    ? 'Enter the sign-in code from that email:'
+                    : "On a Home Screen icon and the link doesn't sign you in? Enter the sign-in code from that same email instead:"}
                 </p>
                 <div className={`fgroup ffloat${verifyError ? ' is-invalid' : ''}`} style={{ marginTop: 10 }}>
                   <input
