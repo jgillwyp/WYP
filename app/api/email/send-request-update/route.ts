@@ -8,6 +8,7 @@ import {
   buildRequestEmailSubject,
   buildRequestEmailText,
   sanitizeChangedFields,
+  hasStatsWorthyChange,
 } from '@/lib/email'
 
 // nodemailer needs Node's net/tls modules — see send-request/route.ts's own
@@ -145,16 +146,21 @@ export async function POST(request: Request) {
       request_id: string
       action: string
       detail: Record<string, unknown>
-    }> = [
-      {
+    }> = []
+    // hasStatsWorthyChange (2026-09-29, owner-reported) — a save whose only
+    // tracked field was Done Date/Time already logs its own 'done' event
+    // below; logging 'changed' too would double-count it under Admin
+    // Statistics' separate "Changed" column.
+    if (hasStatsWorthyChange(changedFields)) {
+      events.push({
         actor_user: userData.user.id,
         subject_type: 'request',
         subject_id: requestId,
         request_id: requestId,
         action: 'changed',
         detail: { fields: changedFields },
-      },
-    ]
+      })
+    }
     if (changedFields.includes('Done Date') && reqRow.done_date) {
       events.push({
         actor_user: userData.user.id,
@@ -165,7 +171,7 @@ export async function POST(request: Request) {
         detail: { done_date: reqRow.done_date },
       })
     }
-    await admin.from('events').insert(events)
+    if (events.length > 0) await admin.from('events').insert(events)
   }
 
   const recipientEmail = reqRow.contacts?.email

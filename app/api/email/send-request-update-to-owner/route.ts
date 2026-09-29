@@ -7,6 +7,7 @@ import {
   buildOwnerUpdateEmailSubject,
   buildOwnerUpdateEmailText,
   sanitizeChangedFields,
+  hasStatsWorthyChange,
 } from '@/lib/email'
 
 // nodemailer needs Node's net/tls modules — see send-request/route.ts's own
@@ -201,8 +202,11 @@ export async function POST(request: Request) {
       request_id: string
       action: string
       detail: Record<string, unknown>
-    }> = [
-      {
+    }> = []
+    // hasStatsWorthyChange (2026-09-29, owner-reported) — see
+    // send-request-update/route.ts's identical comment.
+    if (hasStatsWorthyChange(changedFields)) {
+      events.push({
         actor_user: null,
         actor_label: reqRow.contacts?.display_name ?? null,
         subject_type: 'request',
@@ -210,8 +214,8 @@ export async function POST(request: Request) {
         request_id: reqRow.id,
         action: 'changed',
         detail: { fields: changedFields },
-      },
-    ]
+      })
+    }
     if (changedFields.includes('Done Date') && reqRow.done_date) {
       events.push({
         actor_user: null,
@@ -223,7 +227,7 @@ export async function POST(request: Request) {
         detail: { done_date: reqRow.done_date },
       })
     }
-    await sbc.from('events').insert(events)
+    if (events.length > 0) await sbc.from('events').insert(events)
   }
 
   // notify_owner_on_done gating (migration 066, 2026-09-13) — only applies

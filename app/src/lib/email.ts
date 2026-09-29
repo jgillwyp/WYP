@@ -423,6 +423,24 @@ export function sanitizeChangedFields(fields: unknown): ChangedFieldLabel[] {
   return out
 }
 
+// Admin Statistics' own "Changed" count (2026-09-29, owner-reported: "since
+// there is a separate 'Done' column, it seems appropriate not to include
+// 'Done' changes in the count for 'Changed'") — a save whose only tracked
+// field was Done Date and/or Done Time already shows up in the "Done"
+// column (a separate events row, action 'done'); logging a 'changed' event
+// for that same save double-counted it under "Changed" too. A save that
+// changes Done Date/Time *alongside* something else (e.g. Description) is
+// still a real, substantive edit and still counts — this only suppresses
+// the case where Done is the entire story. Used by every 'changed'-event
+// call site (send-request-update/route.ts, send-request-update-to-owner/
+// route.ts, TodoDetailForm.tsx) to decide whether to log the event at all,
+// not by the admin_stats_requests()/admin_stats_todos() SQL functions
+// themselves, which just count existing 'changed' rows — the fix belongs
+// where the event gets created, not in how it's later tallied.
+export function hasStatsWorthyChange(fields: string[]): boolean {
+  return fields.some((f) => f !== 'Done Date' && f !== 'Done Time')
+}
+
 // Singular/plural-aware "what changed" sentence, plain text (no markup) —
 // shared by both the HTML box below and the plain-text builders, so the
 // one field/fields distinction only has to be written once. 2026-09-02,

@@ -4381,3 +4381,28 @@ link is built only after the stack is proven on Add Contact.
   `reminder_enabled`/`reminder_day_of_enabled`/`overdue_reminder_enabled`
   columns, regardless of these two account-level flags. `npx tsc --noEmit`/
   `npm run lint`/`npm run build` all clean.
+- **Admin Statistics' "Changed" column no longer double-counts a Done-only
+  save (2026-09-29, no migration).** Jim asked directly: does "Changed"
+  include a Done Date/Time entry, given there's already a separate "Done"
+  column? Checked the actual event-logging code and confirmed yes — every
+  one of the three places that logs a `'changed'` events-table row
+  (`send-request-update/route.ts`, owner edits; `send-request-update-to-
+  owner/route.ts`, recipient edits; `TodoDetailForm.tsx`, direct
+  `log_event` RPC) logged one unconditionally whenever `changedFields.length
+  > 0`, with no check for whether Done Date/Time were the *only* thing in
+  that list — so a save that only marked something Done bumped both the
+  "Done" and "Changed" counts, in addition to its own paired `'done'`
+  event. New shared `hasStatsWorthyChange()` (`app/src/lib/email.ts`) —
+  true when the changed-fields list contains anything other than "Done
+  Date"/"Done Time" — now gates whether each of the three sites logs the
+  `'changed'` event at all; the `'done'` event's own condition is
+  unchanged. A save that changes Done Date *alongside* something else
+  (e.g. also edited the Description) still counts as "Changed," correctly
+  — this only suppresses the case where Done is the entire story. Fixed at
+  the point each event is created, not in how `admin_stats_requests()`/
+  `admin_stats_todos()` later tally existing `'changed'` rows — those SQL
+  functions needed no change, they just count what's already there.
+  **Historical counts are still inflated** by every Done-only save logged
+  before this fix — not touched here; offered to Jim as a one-time cleanup
+  script if he wants past stats corrected too, not built unprompted. `npx
+  tsc --noEmit`/`npm run lint`/`npm run build` all clean.

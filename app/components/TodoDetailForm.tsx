@@ -10,7 +10,7 @@ import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
 import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
 import { supabase } from '@/lib/supabaseClient'
-import { isReminderEligible } from '@/lib/email'
+import { isReminderEligible, hasStatsWorthyChange } from '@/lib/email'
 import { buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
@@ -984,7 +984,11 @@ export default function TodoDetailForm() {
     // "never let this block or fail Save" posture as RequestDetailForm.
     // tsx's own sendChangeNotification. 'Done' logs only on the actual
     // open-to-done transition, not on every save of an already-Done ToDo.
-    if (changedFieldLabels.length > 0) {
+    // hasStatsWorthyChange (2026-09-29, owner-reported) — a save whose only
+    // changed label is 'Done Date' already logs its own 'done' event below;
+    // logging 'changed' too would double-count it under the separate
+    // "Changed" column.
+    if (hasStatsWorthyChange(changedFieldLabels)) {
       // .then() error logging added 2026-09-18 — see CreateRequestForm.tsx's
       // identical comment for the full reasoning.
       void supabase
