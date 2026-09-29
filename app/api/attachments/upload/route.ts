@@ -42,11 +42,20 @@ export const runtime = 'nodejs'
  * getOwnerStorageStatus() in ../_shared.ts.
  */
 export async function POST(request: Request) {
+  // Diagnostic detail on every branch below (2026-09-29, owner-reported —
+  // a private tester's iPhone Chrome upload failed with only the client's
+  // generic "Could not upload <name>." fallback, which fires whenever a
+  // response has no `detail` field; every branch here used to return none,
+  // making it impossible to tell which check actually failed without a
+  // server log. Purely diagnostic — none of the checks themselves changed.
   let form: FormData
   try {
     form = await request.formData()
-  } catch {
-    return Response.json({ error: 'bad_request' }, { status: 400 })
+  } catch (err) {
+    return Response.json(
+      { error: 'bad_request', detail: `Could not read the upload: ${err instanceof Error ? err.message : String(err)}` },
+      { status: 400 }
+    )
   }
 
   const file = form.get('file')
@@ -58,8 +67,17 @@ export async function POST(request: Request) {
   // start sending it.
   const carryIntoRepeats = form.get('carryIntoRepeats') === 'true'
 
-  if (!(file instanceof File) || typeof requestId !== 'string' || !requestId) {
-    return Response.json({ error: 'bad_request' }, { status: 400 })
+  if (!(file instanceof File)) {
+    return Response.json(
+      { error: 'bad_request', detail: 'No file was received by the server — try choosing the file again.' },
+      { status: 400 }
+    )
+  }
+  if (typeof requestId !== 'string' || !requestId) {
+    return Response.json(
+      { error: 'bad_request', detail: 'Missing Request/ToDo id — try again.' },
+      { status: 400 }
+    )
   }
 
   const authHeader = request.headers.get('authorization')
@@ -70,7 +88,15 @@ export async function POST(request: Request) {
   })
 
   if (!permission) {
-    return Response.json({ error: 'not_found' }, { status: 404 })
+    return Response.json(
+      {
+        error: 'not_found',
+        detail: authHeader
+          ? 'Permission check failed for this Request/ToDo — try refreshing the page and uploading again.'
+          : 'This link is no longer valid for uploading.',
+      },
+      { status: 404 }
+    )
   }
 
   if (isBlockedFileType(file.name)) {
@@ -81,7 +107,10 @@ export async function POST(request: Request) {
   }
 
   if (file.size > MAX_ATTACHMENT_BYTES) {
-    return Response.json({ error: 'too_large' }, { status: 400 })
+    return Response.json(
+      { error: 'too_large', detail: `${file.name} (${formatBytes(file.size)}) is larger than the ${formatBytes(MAX_ATTACHMENT_BYTES)} limit.` },
+      { status: 400 }
+    )
   }
 
   const admin = getServiceRoleClient()
@@ -103,7 +132,10 @@ export async function POST(request: Request) {
     .single()
 
   if (!ownerRow) {
-    return Response.json({ error: 'not_found' }, { status: 404 })
+    return Response.json(
+      { error: 'not_found', detail: 'Could not find the owning Request/ToDo — try again.' },
+      { status: 404 }
+    )
   }
 
   const { usedBytes, limitBytes } = await getOwnerStorageStatus(admin, ownerRow.owner_id)
@@ -127,7 +159,10 @@ export async function POST(request: Request) {
     .eq('kind', 'file')
 
   if ((count ?? 0) >= MAX_ATTACHMENTS_PER_ITEM) {
-    return Response.json({ error: 'limit_reached' }, { status: 400 })
+    return Response.json(
+      { error: 'limit_reached', detail: `This Request/ToDo already has the maximum of ${MAX_ATTACHMENTS_PER_ITEM} attachments.` },
+      { status: 400 }
+    )
   }
 
   const { data: existingRows } = await admin

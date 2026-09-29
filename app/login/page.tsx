@@ -195,8 +195,8 @@ function LoginScreen() {
   async function handleVerifyCode(e: React.FormEvent) {
     e.preventDefault()
     const token = code.trim()
-    if (!/^\d{6}$/.test(token)) {
-      setVerifyError('Enter the 6-digit code from the email.')
+    if (!/^\d{4,10}$/.test(token)) {
+      setVerifyError('Enter the sign-in code from the email.')
       return
     }
     setVerifying(true)
@@ -379,15 +379,20 @@ function LoginScreen() {
                 Open that email and click the link. You&rsquo;ll be signed in automatically.
               </p>
 
-              {/* 6-digit code fallback (2026-09-29) — see the state
+              {/* Sign-in code fallback (2026-09-29) — see the state
                   declarations above for the full iOS home-screen-icon
                   reasoning. Requires the Supabase project's own Magic Link
                   email template to actually include {{ .Token }} — a
-                  dashboard setting, not something this codebase controls. */}
+                  dashboard setting, not something this codebase controls.
+                  Deliberately not hardcoded to a specific digit count —
+                  Jim's own account, 2026-09-29, showed this project's actual
+                  code is 8 digits, not Supabase's documented 6-digit
+                  default; the field now accepts 4-10 digits and lets
+                  verifyOtp() itself be the authority on correctness. */}
               <form onSubmit={handleVerifyCode} noValidate>
                 <p className="sent-meta" style={{ marginTop: 4 }}>
                   On a Home Screen icon and the link doesn&rsquo;t sign you in? Enter the
-                  6-digit code from that same email instead:
+                  sign-in code from that same email instead:
                 </p>
                 <div className={`fgroup ffloat${verifyError ? ' is-invalid' : ''}`} style={{ marginTop: 10 }}>
                   <input
@@ -396,16 +401,16 @@ function LoginScreen() {
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
-                    maxLength={6}
+                    maxLength={10}
                     placeholder=" "
                     value={code}
                     onChange={(e) => {
-                      setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                      setCode(e.target.value.replace(/\D/g, '').slice(0, 10))
                       if (verifyError) setVerifyError(null)
                     }}
                   />
                   <label className="flabel" htmlFor="otp">
-                    6-digit code
+                    Sign-in code
                   </label>
                 </div>
                 {verifyError && (
@@ -416,7 +421,7 @@ function LoginScreen() {
                 <button
                   className="btn-secondary btn-block"
                   type="submit"
-                  disabled={verifying || code.length !== 6}
+                  disabled={verifying || code.length < 4}
                   style={{ marginTop: 10 }}
                 >
                   {verifying ? 'Verifying…' : 'Verify code'}

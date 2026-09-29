@@ -4450,3 +4450,45 @@ link is built only after the stack is proven on Add Contact.
   run lint`/`npm run build` all clean. The separate "cannot add attachments
   on iPhone" report from the same conversation is still open, pending more
   diagnostic detail from the tester — not yet investigated further.
+- **Sign-in code field no longer hardcoded to 6 digits (2026-09-29, same-day
+  follow-up).** Jim: "The sign-in link is issued as an 8-digit number. When
+  pasted into the field named '6-digit code' it truncates and fails." The
+  batch above assumed Supabase's documented 6-digit default without
+  confirming this project's actual configured length. `app/login/page.tsx`'s
+  `maxLength`/truncating `.slice()`/button-`disabled` length check and
+  `handleVerifyCode`'s own regex all widened from an exact `\d{6}` match to
+  `\d{4,10}` — `verifyOtp()` itself is the real authority on whether a code
+  is correct, so the field no longer guesses an exact digit count at all.
+  Label/copy changed from "6-digit code" to "sign-in code" throughout so a
+  future change to Supabase's own code length (a dashboard setting, not
+  controlled here) can't make the wording wrong again. `npx tsc --noEmit`/
+  `npm run lint` clean.
+- **Attachment-upload failure on iPhone Chrome — investigated, not yet
+  root-caused; diagnostics improved instead (2026-09-29).** Jim reproduced
+  with a screenshot: creating a Request on iPhone Chrome (regular browsing,
+  not the home-screen icon — already signed in normally) saved the Request
+  but failed a 47 KB PNG attachment with the generic "Request saved, but
+  attachments could not be uploaded: Could not upload IMG_1469.png." —
+  `uploadAttachmentWithRetry`'s own fallback text, which only ever fires
+  when the server's response carries no `detail` field. Traced every branch
+  of `app/api/attachments/upload/route.ts`: `limit_reached`/`storage_limit`
+  are ruled out (both already produce distinct, more specific client-side
+  text); `upload_failed`/`insert_failed` (true 500s) are unlikely, since
+  both already always carry a real Storage/Postgres error message as
+  `detail` and would show *that*, not the generic fallback — leaving
+  `bad_request` (a `file instanceof File`/`requestId` check failing) or a
+  persistent `not_found` (despite the existing 2026-09-20 iPhone-specific
+  3x server-side retry in `resolvePermission()`, `_shared.ts`) as the two
+  most likely candidates, with no way to distinguish which from static
+  analysis alone. Also checked `uploadAttachmentWithRetry`'s own `fetch()`
+  call against the one well-known iOS-adjacent FormData pitfall (manually
+  setting `Content-Type`, which breaks the multipart boundary) — not
+  present here; only `Authorization` is ever set. **Rather than guess at a
+  fix for an unconfirmed cause**, every error branch in `upload/route.ts`
+  that previously returned no `detail` (`bad_request` ×2, `not_found` ×2,
+  `too_large`, `limit_reached`) now returns a specific one — the client
+  already shows `detail` verbatim whenever present, so the next
+  reproduction will surface exactly which check failed instead of the
+  generic fallback. `npx tsc --noEmit`/`npm run lint` clean. **Still open**
+  — needs a real repro with the improved message before a fix can be
+  targeted; ask Jim to have the tester try again on the next deploy.
