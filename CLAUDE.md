@@ -4540,3 +4540,16 @@ link is built only after the stack is proven on Add Contact.
   that already works. Not security-relevant: a wrong platform guess only
   changes which instructions are shown, never what `verifyOtp()` itself
   accepts. `npx tsc --noEmit`/`npm run lint` clean.
+- **`app/src/version.ts` (the in-app build-version stamp, `scripts/stamp-
+  version.mjs`) goes stale whenever a batch is verified with only `npx tsc
+  --noEmit`/`npm run lint` and no `npm run build`** — the stamping only
+  happens as `npm run build`'s own `prebuild` hook, which can't run in this
+  sandbox (the known SWC-binary limitation, Known gaps above). Caught
+  2026-09-29 when Jim noticed the two most recent pushes (the service-
+  worker fix, the iOS-standalone login copy) never bumped the number he
+  was seeing. Fixed by writing the file directly with the value the script
+  would have produced (`1.03.<git rev-list --count HEAD>` — the count
+  reflects the *parent* commit, since the version-bump lands in its own
+  commit on top). Watch for this after any batch pushed without a real
+  local `npm run build` — Jim's own next local build will self-correct it
+  regardless, but it can otherwise sit stale for several commits.
