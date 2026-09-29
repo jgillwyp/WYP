@@ -4406,3 +4406,47 @@ link is built only after the stack is proven on Add Contact.
   before this fix — not touched here; offered to Jim as a one-time cleanup
   script if he wants past stats corrected too, not built unprompted. `npx
   tsc --noEmit`/`npm run lint`/`npm run build` all clean.
+- **6-digit code fallback on `/login`, for iOS home-screen-icon sign-in —
+  new, 2026-09-29, no migration.** A private tester (John) reported his
+  iPhone home-screen icon (added either via a native install prompt or via
+  Chrome's iOS share-sheet "Add to Home Screen," both end up the same way)
+  always lands back on the sign-in screen, even though his regular Chrome
+  browsing signs in and stays signed in correctly. Root-caused via
+  `WebSearch` against Apple's own WebKit bug tracker and other real apps
+  hitting the identical problem (e.g. Outline's GitHub issue "Magic link
+  aren't compatible with iOS PWA mode"): a home-screen web app runs in its
+  own isolated storage container on iOS, completely separate from any full
+  browser app's own storage — Chrome or Safari alike, regardless of which
+  one is the device's default. Tapping the emailed sign-in link always
+  opens in the default browser (confirmed with Jim: Chrome, for this
+  tester), which writes the session into *that* app's storage — the icon's
+  own separate storage never receives it, no matter how many times the
+  flow is repeated. This is a genuine, documented iOS/WebKit platform
+  limitation, not a bug in this codebase, and there's no way to route a
+  tapped external link back into an already-open standalone web app on
+  iOS (no equivalent to Android's app-link handling exists for pure web
+  apps). **The fix**: Supabase's own `signInWithOtp` already generates a
+  6-digit numeric code alongside the magic link on every send; added a
+  "Or enter the 6-digit code from that email" field + Verify button to
+  `/login`'s existing "Check your email" screen, calling
+  `supabase.auth.verifyOtp({ email, token, type: 'email' })` (the correct
+  pairing for a `signInWithOtp({ email })`-generated code, not the
+  `'sms'`/phone variant). Because reading and typing a code never requires
+  leaving the current window — unlike tapping a link, which always does —
+  the resulting session gets written directly into the icon's *own*
+  storage via the same `hybridStorage`/`setRememberMe` mechanism a normal
+  browser tab already uses correctly, sidestepping the isolation problem
+  entirely rather than trying to work around it. **No architecture
+  change** — still magic-link-only, no passwords; this is a second way to
+  complete the exact same underlying one-time-password flow Supabase
+  already implements, not a new auth mechanism. **Real dependency, not yet
+  confirmed**: this only works if the Supabase project's own Magic Link
+  email template (dashboard → Authentication → Email Templates) actually
+  includes `{{ .Token }}` somewhere in its body — a project-level setting
+  outside this codebase, same category as the Custom SMTP configuration
+  documented above; if the current template only shows the link, the code
+  field has nothing for a user to read and type. Flagged for Jim to check/
+  add before this is genuinely usable end to end. `npx tsc --noEmit`/`npm
+  run lint`/`npm run build` all clean. The separate "cannot add attachments
+  on iPhone" report from the same conversation is still open, pending more
+  diagnostic detail from the tester — not yet investigated further.
