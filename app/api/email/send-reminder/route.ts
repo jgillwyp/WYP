@@ -162,7 +162,7 @@ export async function POST(request: Request) {
     return Response.json({ sent: false, reason: 'not_overdue' }, { status: 200 })
   }
 
-  const { data: profile } = await sb.from('profiles').select('display_name, time_zone').single()
+  const { data: profile } = await sb.from('profiles').select('display_name, time_zone, request_reminders_enabled').single()
   const ownerName = profile?.display_name ?? null
   const ownerEmail = userData.user.email ?? ''
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
@@ -174,6 +174,11 @@ export async function POST(request: Request) {
     dueTime: reqRow.due_time,
     link,
     siteUrl,
+    // remindersShown (2026-09-28, owner-reported) — see
+    // reminderNoticeLinkText's own comment in app/src/lib/email.ts: the
+    // button's "...or to turn off notifications" clause is only true when
+    // the owner's own Show Reminders is on.
+    remindersShown: profile?.request_reminders_enabled ?? false,
   }
 
   // Reminder state (2026-09-25, the actual bug fix — see this file's own

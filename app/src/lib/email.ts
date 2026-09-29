@@ -736,7 +736,20 @@ export function buildRequestEmailFromName(ownerName: string | null): string {
 // Request Done there and, as of migration 036/RequestResponseForm.tsx's own
 // Reminder checkbox (2026-08-19), opt out of further Reminder emails, so the
 // action-oriented wording is literally true, not just friendlier-sounding.
-const OVERDUE_LINK_TEXT = 'Open Request to mark Done or to turn off notifications'
+//
+// Made conditional 2026-09-28 — Jim, from a screenshot: "This phrase is
+// only valid if the Requester's Account Options, Create Request, 'Show
+// Reminders' is checked." Correct: when the owner's own
+// request_reminders_enabled is off, the Reminders-until-Done banner (and
+// its Reminder checkboxes) is hidden entirely on both recipient-facing
+// screens (Request Response/Response Detail, gated on
+// owner_request_reminders_enabled) — there's genuinely nothing to "turn
+// off" if the recipient clicks through, so the claim would be false.
+function reminderNoticeLinkText(remindersShown: boolean): string {
+  return remindersShown
+    ? 'Open Request to mark Done or to turn off notifications'
+    : 'Open Request to mark Done'
+}
 
 // Reminder-family notice — replaces the old, single-purpose
 // buildOverdueRecipientEmailSubject/Html/Text (2026-09-25, owner-reported
@@ -769,6 +782,12 @@ type ReminderNoticeFields = {
   dueTime: string | null
   link: string
   siteUrl: string
+  // remindersShown (2026-09-28) — the owner's own request_reminders_enabled
+  // ("Show Reminders," Account Options → Create Request), read purely to
+  // pick the right button wording — see reminderNoticeLinkText's own
+  // comment. Required, not optional/defaulted here, so every caller has to
+  // consciously supply a real value rather than silently drifting stale.
+  remindersShown: boolean
 }
 
 export function buildReminderNoticeSubject(
@@ -799,7 +818,7 @@ export function buildReminderNoticeHtml(urgency: ReminderUrgency, fields: Remind
     urgency === 'awaiting_confirmation' ? emailButtonRaw(`${fields.link}?confirm=1`, RECEIPT_CONFIRM_LINK_TEXT) : ''
   const body = [
     `<p style="margin:0 0 18px;">${reminderNoticeMessage(urgency, fields.dueDate, fields.dueTime)}</p>`,
-    `<p style="margin:0 0 18px;">${confirmButtonHtml}${emailButtonRaw(fields.link, OVERDUE_LINK_TEXT)}</p>`,
+    `<p style="margin:0 0 18px;">${confirmButtonHtml}${emailButtonRaw(fields.link, reminderNoticeLinkText(fields.remindersShown))}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
     emailSignupFooter(fields.siteUrl),
   ].join('\n')
@@ -811,7 +830,14 @@ export function buildReminderNoticeText(urgency: ReminderUrgency, fields: Remind
   if (urgency === 'awaiting_confirmation') {
     lines.push(`${RECEIPT_CONFIRM_LINK_TEXT}:`, `${fields.link}?confirm=1`, '')
   }
-  lines.push(`${OVERDUE_LINK_TEXT}:`, fields.link, '', fields.description, '', ...textSignupFooterLines(fields.siteUrl))
+  lines.push(
+    `${reminderNoticeLinkText(fields.remindersShown)}:`,
+    fields.link,
+    '',
+    fields.description,
+    '',
+    ...textSignupFooterLines(fields.siteUrl)
+  )
   return lines.join('\n')
 }
 
@@ -825,6 +851,13 @@ type TodoReminderEmailFields = {
   dueDate: string
   link: string
   siteUrl: string
+  // remindersShown (2026-09-28) — see reminderNoticeLinkText's own comment;
+  // same idea, the ToDo-side toggle (profiles.todo_reminders_enabled,
+  // Account Options → ToDo). Supersedes this field group's own older
+  // "a ToDo has no per-item Reminder toggle" assumption, true when
+  // TODO_REMINDER_LINK_TEXT was first written (2026-08-19) but outdated
+  // since the ToDo Reminders feature (2026-08-22) added exactly that.
+  remindersShown: boolean
 }
 
 export function buildTodoReminderEmailSubject(dueDate: string): string {
@@ -832,16 +865,16 @@ export function buildTodoReminderEmailSubject(dueDate: string): string {
 }
 
 // Link text — changed 2026-08-19, same spam-risk reasoning as
-// OVERDUE_LINK_TEXT above, but a ToDo has no per-item Reminder toggle
-// (todo_dates_enabled gates the whole feature, not a checkbox on any one
-// ToDo — see TodoDetailForm.tsx, which carries no Reminder control at all),
-// so this wording only promises what's actually there: marking it Done.
-const TODO_REMINDER_LINK_TEXT = 'Open ToDo to mark Done'
+// reminderNoticeLinkText above. Made conditional 2026-09-28, same reasoning
+// and same day as that function's own change.
+function todoReminderLinkText(remindersShown: boolean): string {
+  return remindersShown ? 'Open ToDo to mark Done or to turn off notifications' : 'Open ToDo to mark Done'
+}
 
 export function buildTodoReminderEmailHtml(fields: TodoReminderEmailFields): string {
   const body = [
     `<p style="margin:0 0 18px;">This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.</p>`,
-    `<p style="margin:0 0 18px;">${emailButton(fields.link, TODO_REMINDER_LINK_TEXT)}</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, todoReminderLinkText(fields.remindersShown))}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ].join('\n')
   return wrapEmailHtml(fields.siteUrl, body)
@@ -851,7 +884,7 @@ export function buildTodoReminderEmailText(fields: TodoReminderEmailFields): str
   return [
     `This ToDo is due tomorrow, ${formatMDY(fields.dueDate)}.`,
     '',
-    `${TODO_REMINDER_LINK_TEXT}:`,
+    `${todoReminderLinkText(fields.remindersShown)}:`,
     fields.link,
     '',
     fields.description,
@@ -874,6 +907,8 @@ type TodoDayOfEmailFields = {
   dueDate: string
   link: string
   siteUrl: string
+  // remindersShown (2026-09-28) — see TodoReminderEmailFields' identical field.
+  remindersShown: boolean
 }
 
 export function buildTodoDayOfEmailSubject(dueDate: string): string {
@@ -883,7 +918,7 @@ export function buildTodoDayOfEmailSubject(dueDate: string): string {
 export function buildTodoDayOfEmailHtml(fields: TodoDayOfEmailFields): string {
   const body = [
     `<p style="margin:0 0 18px;">This ToDo is due today, ${formatMDY(fields.dueDate)}.</p>`,
-    `<p style="margin:0 0 18px;">${emailButton(fields.link, TODO_REMINDER_LINK_TEXT)}</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, todoReminderLinkText(fields.remindersShown))}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ].join('\n')
   return wrapEmailHtml(fields.siteUrl, body)
@@ -893,7 +928,7 @@ export function buildTodoDayOfEmailText(fields: TodoDayOfEmailFields): string {
   return [
     `This ToDo is due today, ${formatMDY(fields.dueDate)}.`,
     '',
-    `${TODO_REMINDER_LINK_TEXT}:`,
+    `${todoReminderLinkText(fields.remindersShown)}:`,
     fields.link,
     '',
     fields.description,
@@ -919,20 +954,18 @@ type TodoOverdueEmailFields = {
   dueDate: string
   link: string
   siteUrl: string
+  // remindersShown (2026-09-28) — see TodoReminderEmailFields' identical field.
+  remindersShown: boolean
 }
 
 export function buildTodoOverdueEmailSubject(dueDate: string): string {
   return `OVERDUE: Your Would You Please ToDo, Due: ${formatMDY(dueDate)}`
 }
 
-// Same action-oriented wording and reasoning as OVERDUE_LINK_TEXT above,
-// scoped to what a ToDo Detail screen actually offers.
-const TODO_OVERDUE_LINK_TEXT = 'Open ToDo to mark Done or to turn off notifications'
-
 export function buildTodoOverdueEmailHtml(fields: TodoOverdueEmailFields): string {
   const body = [
     `<p style="margin:0 0 18px;">The Due Date for this ToDo has passed (${formatMDY(fields.dueDate)}) and it has not been marked Done.</p>`,
-    `<p style="margin:0 0 18px;">${emailButton(fields.link, TODO_OVERDUE_LINK_TEXT)}</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, todoReminderLinkText(fields.remindersShown))}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
   ].join('\n')
   return wrapEmailHtml(fields.siteUrl, body)
@@ -942,7 +975,7 @@ export function buildTodoOverdueEmailText(fields: TodoOverdueEmailFields): strin
   return [
     `The Due Date for this ToDo has passed (${formatMDY(fields.dueDate)}) and it has not been marked Done.`,
     '',
-    `${TODO_OVERDUE_LINK_TEXT}:`,
+    `${todoReminderLinkText(fields.remindersShown)}:`,
     fields.link,
     '',
     fields.description,
@@ -967,22 +1000,31 @@ export type DigestItem = {
   description: string
   dueTime: string | null
   link: string
+  // remindersShown (2026-09-28) — see reminderNoticeLinkText's own comment.
+  // Every item in one digest email belongs to the same owner, so this is
+  // really one value per digest, denormalized onto each row — same
+  // "carries what it needs" shape recipientName/description/dueTime
+  // already use, rather than threading a second parameter through the
+  // four digest wrapper functions below for what map(digestRowHtml) already
+  // handles per-item.
+  remindersShown: boolean
 }
 
 // Link text — changed 2026-08-19, same reasoning and wording as
-// OVERDUE_LINK_TEXT above. These digest rows link to the same /r/[token]
-// recipient path (see pushDigestItem/mintLink in
+// reminderNoticeLinkText above. These digest rows link to the same
+// /r/[token] recipient path (see pushDigestItem/mintLink in
 // app/api/cron/tick/route.ts) — the Requestor reading the digest is
 // clicking through to their own Recipient's response screen, where Done and
-// the Reminder checkbox both genuinely live.
+// the Reminder checkbox both genuinely live. Made conditional 2026-09-28,
+// same reasoning and same day as reminderNoticeLinkText's own change.
 function digestRowHtml(item: DigestItem): string {
   const time = item.dueTime ? ` &nbsp; ${formatTime12h(item.dueTime)}` : ''
-  return `<li style="margin-bottom:10px;"><b>${escapeHtml(item.recipientName)}</b> — ${escapeHtml(item.description)}${time} — <a href="${item.link}" style="color:${EMAIL_BRAND_BLUE}; font-weight:600;">${OVERDUE_LINK_TEXT}</a></li>`
+  return `<li style="margin-bottom:10px;"><b>${escapeHtml(item.recipientName)}</b> — ${escapeHtml(item.description)}${time} — <a href="${item.link}" style="color:${EMAIL_BRAND_BLUE}; font-weight:600;">${reminderNoticeLinkText(item.remindersShown)}</a></li>`
 }
 
 function digestRowText(item: DigestItem): string {
   const time = item.dueTime ? `  ${formatTime12h(item.dueTime)}` : ''
-  return `${item.recipientName} — ${item.description}${time} — ${OVERDUE_LINK_TEXT}: ${item.link}`
+  return `${item.recipientName} — ${item.description}${time} — ${reminderNoticeLinkText(item.remindersShown)}: ${item.link}`
 }
 
 export function buildReminderDigestEmailSubject(): string {

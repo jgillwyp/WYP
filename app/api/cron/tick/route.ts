@@ -169,9 +169,19 @@ type ProfileRow = {
   todo_dates_enabled: boolean
   reminder_digest_enabled: boolean
   // request_reminders_enabled / todo_reminders_enabled (migrations 041/044)
-  // are no longer read here — as of 2026-08-25 they're pure UI-visibility
-  // toggles (Account Options' "Show Reminders"), not sending gates. See
-  // this file's header comment.
+  // — reintroduced here 2026-09-28, read-only, for a narrower purpose than
+  // their old sending-gate role: Jim spotted an email button claiming "...
+  // or to turn off notifications" on a Request whose owner had Show
+  // Reminders off, where that control genuinely isn't visible anywhere the
+  // link goes. Used only to pick email wording (buildReminderNoticeSubject
+  // /Html/Text's own remindersShown field, and the ToDo equivalents) —
+  // still NOT a sending gate. That role was deliberately removed
+  // 2026-08-25 (see this file's own header comment) and stays removed;
+  // whether a Reminder/Overdue email goes out at all is still governed
+  // solely by each row's own reminder_enabled/reminder_day_of_enabled/
+  // overdue_reminder_enabled columns, regardless of these two flags.
+  request_reminders_enabled: boolean
+  todo_reminders_enabled: boolean
   //
   // tier (2026-08-27) — added when Repeat moved from subscriber-only to
   // free-with-limits (Jim's own wording: "up to 5 available, a
@@ -356,7 +366,7 @@ async function handle(request: Request) {
     const { data: profileData } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb, storage_limit_override_bytes'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, request_reminders_enabled, todo_reminders_enabled, tier, subscription_storage_gb, storage_limit_override_bytes'
       )
       .in('id', ownerIds)
     for (const p of (profileData ?? []) as ProfileRow[]) profileMap.set(p.id, p)
@@ -465,6 +475,11 @@ async function handle(request: Request) {
       // Request email; a Reminder is a second chance to confirm receipt if
       // the recipient hasn't yet.
       offerReceiptConfirmation: row.receipt_confirmation_requested && !row.receipt_confirmed_at,
+      // remindersShown (2026-09-28) — only read by buildReminderNoticeHtml/
+      // Text (the awaitingConfirmation branch below); ignored by
+      // buildRequestEmailHtml/Text, which has no such field. See that
+      // function's own comment for why the button wording depends on it.
+      remindersShown: profile?.request_reminders_enabled ?? false,
     }
     const icsFields: IcsRequestFields = {
       id: row.id,
@@ -499,6 +514,7 @@ async function handle(request: Request) {
           description: row.description,
           dueTime: row.due_time,
           link,
+          remindersShown: profile?.request_reminders_enabled ?? false,
         })
       }
     }
@@ -558,6 +574,8 @@ async function handle(request: Request) {
       // Request email; a Reminder is a second chance to confirm receipt if
       // the recipient hasn't yet.
       offerReceiptConfirmation: row.receipt_confirmation_requested && !row.receipt_confirmed_at,
+      // remindersShown (2026-09-28) — see Phase A1's identical field.
+      remindersShown: profile?.request_reminders_enabled ?? false,
     }
     const icsFields: IcsRequestFields = {
       id: row.id,
@@ -612,7 +630,15 @@ async function handle(request: Request) {
       counts.errors += 1
       continue
     }
-    const fields = { description: row.description, dueDate: row.due_date, link: `${siteUrl()}/todos/${row.id}`, siteUrl: siteUrl() }
+    // remindersShown (2026-09-28) — see reminderNoticeLinkText's own
+    // comment in app/src/lib/email.ts; the ToDo-side equivalent toggle.
+    const fields = {
+      description: row.description,
+      dueDate: row.due_date,
+      link: `${siteUrl()}/todos/${row.id}`,
+      siteUrl: siteUrl(),
+      remindersShown: profile?.todo_reminders_enabled ?? false,
+    }
     const sent = await sendMail({
       to: ownerEmail,
       subject: buildTodoReminderEmailSubject(row.due_date),
@@ -650,7 +676,15 @@ async function handle(request: Request) {
       counts.errors += 1
       continue
     }
-    const fields = { description: row.description, dueDate: row.due_date, link: `${siteUrl()}/todos/${row.id}`, siteUrl: siteUrl() }
+    // remindersShown (2026-09-28) — see reminderNoticeLinkText's own
+    // comment in app/src/lib/email.ts; the ToDo-side equivalent toggle.
+    const fields = {
+      description: row.description,
+      dueDate: row.due_date,
+      link: `${siteUrl()}/todos/${row.id}`,
+      siteUrl: siteUrl(),
+      remindersShown: profile?.todo_reminders_enabled ?? false,
+    }
     const sent = await sendMail({
       to: ownerEmail,
       subject: buildTodoDayOfEmailSubject(row.due_date),
@@ -693,7 +727,15 @@ async function handle(request: Request) {
       counts.errors += 1
       continue
     }
-    const fields = { description: row.description, dueDate: row.due_date, link: `${siteUrl()}/todos/${row.id}`, siteUrl: siteUrl() }
+    // remindersShown (2026-09-28) — see reminderNoticeLinkText's own
+    // comment in app/src/lib/email.ts; the ToDo-side equivalent toggle.
+    const fields = {
+      description: row.description,
+      dueDate: row.due_date,
+      link: `${siteUrl()}/todos/${row.id}`,
+      siteUrl: siteUrl(),
+      remindersShown: profile?.todo_reminders_enabled ?? false,
+    }
     const sent = await sendMail({
       to: ownerEmail,
       subject: buildTodoOverdueEmailSubject(row.due_date),
@@ -754,6 +796,8 @@ async function handle(request: Request) {
       dueTime: row.due_time,
       link,
       siteUrl: siteUrl(),
+      // remindersShown (2026-09-28) — see Phase A1's identical field.
+      remindersShown: profile?.request_reminders_enabled ?? false,
     }
     // Receipt Confirmation overrides Overdue (2026-09-25, Jim's own spec) —
     // "regardless of before/after Due Date," a Request still awaiting
@@ -778,6 +822,7 @@ async function handle(request: Request) {
         description: row.description,
         dueTime: row.due_time,
         link,
+        remindersShown: profile?.request_reminders_enabled ?? false,
       })
     }
   }
@@ -847,7 +892,7 @@ async function handle(request: Request) {
     const { data: moreProfiles } = await sb
       .from('profiles')
       .select(
-        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, tier, subscription_storage_gb, storage_limit_override_bytes'
+        'id, display_name, time_zone, todo_dates_enabled, reminder_digest_enabled, request_reminders_enabled, todo_reminders_enabled, tier, subscription_storage_gb, storage_limit_override_bytes'
       )
       .in('id', Array.from(new Set(repeatOwnerIds)))
     for (const p of (moreProfiles ?? []) as ProfileRow[]) profileMap.set(p.id, p)

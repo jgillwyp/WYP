@@ -4341,3 +4341,43 @@ link is built only after the stack is proven on Add Contact.
   time math, just "finish if the timer/an explicit stop/a fatal error
   already zeroed the session, otherwise restart unconditionally." `npx tsc
   --noEmit`/`npm run lint`/`npm run build` all clean.
+- **Email "...or to turn off notifications" made conditional everywhere it
+  appears, not just the one screenshotted email (2026-09-28, no
+  migration).** Jim, from a screenshot: the button on a Reminder email said
+  "Open Request to mark Done or to turn off notifications," but the
+  Requestor's own Account Options → Create Request → "Show Reminders" was
+  off for that Request — with the Reminders-until-Done banner hidden
+  entirely on both recipient-facing screens in that state
+  (`owner_request_reminders_enabled`), there's genuinely nothing to "turn
+  off" if the recipient clicks through, so the claim was false. The exact
+  same fixed-phrase pattern existed in three other places sharing the same
+  root cause, all fixed together for consistency rather than leaving the
+  same bug class live elsewhere: the Request Reminder/Overdue notice
+  (`buildReminderNoticeHtml`/`Text`, all three urgency states), the two
+  Requestor-facing digest emails (`digestRowHtml`/`Text` — one row per
+  Request, but the Show Reminders flag is per-owner, so it's the same
+  value repeated onto every row in one digest, matching how
+  `recipientName`/`description`/`dueTime` already denormalize onto
+  `DigestItem`), and the ToDo-side day-before/day-of/Overdue notices
+  (gated on `profiles.todo_reminders_enabled`, the ToDo-side "Show
+  Reminders," instead — closes a second, previously-uncaught gap in
+  `TODO_REMINDER_LINK_TEXT`'s own 2026-08-19 comment, which claimed "a
+  ToDo has no per-item Reminder toggle" — true then, made stale by the ToDo
+  Reminders feature three days later). Each fixed-string constant
+  (`OVERDUE_LINK_TEXT`, `TODO_REMINDER_LINK_TEXT`, `TODO_OVERDUE_LINK_TEXT`)
+  became a small function taking a `remindersShown: boolean`, now a
+  required field on every affected fields type
+  (`ReminderNoticeFields`/`TodoReminderEmailFields`/`TodoDayOfEmailFields`/
+  `TodoOverdueEmailFields`/`DigestItem`) — required, not optional/defaulted,
+  so a missed call site fails to typecheck rather than silently defaulting
+  to the wrong wording (confirmed: every call site needed the update, and
+  `npx tsc --noEmit` came back clean once all of them had it). Read from
+  `profiles.request_reminders_enabled`/`todo_reminders_enabled` — both
+  reintroduced to `cron/tick/route.ts`'s own `ProfileRow` (removed
+  2026-08-25 as sending gates, per that migration's own reasoning) for this
+  narrower, read-only, wording-only purpose; the file's own header comment
+  and the new field's own comment are explicit that this does **not**
+  reopen that decision — sending still depends solely on each row's own
+  `reminder_enabled`/`reminder_day_of_enabled`/`overdue_reminder_enabled`
+  columns, regardless of these two account-level flags. `npx tsc --noEmit`/
+  `npm run lint`/`npm run build` all clean.
