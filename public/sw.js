@@ -16,6 +16,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
+// Only intercept GET (2026-09-29, owner-reported — iPhone attachment
+// uploads failed server-side with "Failed to parse body as FormData," in
+// both Chrome and the home-screen icon on iOS, which are both WebKit under
+// Apple's rules). Passing a Request with a multipart/FormData body (a
+// File upload) through fetch(event.request) is a known WebKit bug: it
+// doesn't reliably reconstruct the body, corrupting the multipart
+// boundary before it ever reaches the server. This SW does no caching
+// either way, so there's no reason to intercept a POST at all — Chrome's
+// installability check only requires an active fetch listener to exist,
+// not that it handle every request; letting non-GET requests fall through
+// untouched (no respondWith call) avoids the bug entirely.
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return
   event.respondWith(fetch(event.request))
 })

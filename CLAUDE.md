@@ -4492,3 +4492,28 @@ link is built only after the stack is proven on Add Contact.
   generic fallback. `npx tsc --noEmit`/`npm run lint` clean. **Still open**
   — needs a real repro with the improved message before a fix can be
   targeted; ask Jim to have the tester try again on the next deploy.
+- **Attachment-upload failure on iPhone — root-caused and fixed, same day
+  (2026-09-29, `public/sw.js`).** The diagnostics above worked immediately:
+  John retried and the improved error surfaced "Could not read the upload:
+  Failed to parse body as FormData." — identically in both Chrome and the
+  home-screen icon (both are WebKit under Apple's rules, regardless of
+  which browser's chrome wraps them), and only for the attachment upload,
+  never the Request save itself (plain JSON, unaffected). Root cause: the
+  PWA service worker (`public/sw.js`, 2026-08-18) intercepts every fetch
+  and re-issues it via `event.respondWith(fetch(event.request))` — a known
+  WebKit bug is that passing a `Request` carrying a multipart/FormData body
+  (a real `File`) through a service worker this way doesn't reliably
+  reconstruct the body, corrupting the multipart boundary before it ever
+  reaches the server (this app's own `request.formData()` call in
+  `upload/route.ts` is what actually surfaced the corruption as a parse
+  failure). Fixed by scoping the interception to `GET` only —
+  `if (event.request.method !== 'GET') return` before the existing
+  `respondWith` call — since this worker does no caching either way (see
+  its own header comment), there was never a reason to intercept a POST at
+  all; Chrome's installability check only requires an active fetch
+  listener to exist, not that it handle every request, so letting non-GET
+  requests fall through untouched preserves the Android install-prompt
+  behavior this file exists for while eliminating the iOS corruption path
+  entirely. `npx tsc --noEmit`/`npm run lint` clean. Not yet re-confirmed
+  by John on the next deploy, but this is a real, well-understood bug with
+  a narrow, low-risk fix — high confidence this resolves it.
