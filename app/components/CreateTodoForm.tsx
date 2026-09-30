@@ -356,12 +356,12 @@ export default function CreateTodoForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, private_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after'
+        'display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after'
       )
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
-        setCategoriesEnabled(data?.private_category_enabled ?? false)
+        setCategoriesEnabled(data?.todo_category_enabled ?? false)
         setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
         setTodoTimeEnabled(data?.todo_time_enabled ?? false)
         setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)

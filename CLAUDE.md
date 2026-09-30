@@ -4553,3 +4553,69 @@ link is built only after the stack is proven on Add Contact.
   commit on top). Watch for this after any batch pushed without a real
   local `npm run build` — Jim's own next local build will self-correct it
   regardless, but it can otherwise sit stale for several commits.
+- **Private Category split into independent Requests(sent)/ToDos toggles;
+  Receipt Confirmation becomes a Subscriber feature; Account Options'
+  General section removed — migrations 073/074, confirmed run by Jim,
+  2026-09-30.** Jim: "I would like to be able to just use Private
+  Categories for ToDos and think that instead of a single option it should
+  be optional for both ToDos and Requests... These options can be placed
+  at the top of the Requests and ToDos sections... we can continue to use
+  a single Category list for both," plus exact new checknote wording for
+  each of the two split toggles (used verbatim). **Migration 073** replaces
+  the single `profiles.private_category_enabled` (migration 018) with
+  `request_category_enabled`/`todo_category_enabled`, each backfilled from
+  the old shared value before it's dropped — the underlying `categories`
+  table/list is untouched, still one shared list for both, only the two
+  *visibility* toggles split (same shape as `request_time_enabled`/
+  `todo_time_enabled`). Every app-side read repointed in this batch:
+  `AccountForm.tsx` (now two separate `.checkrow`s, one first in each of
+  the Requests (sent)/ToDos sections, Jim's own exact wording for each),
+  `MainScreen.tsx` and `ArchiveForm.tsx` (each split into
+  `sentCategoriesEnabled`/`todoCategoriesEnabled` — both screens show
+  *both* Sent and ToDos, unlike the single-type Detail/Create screens,
+  which just repoint their existing `categoriesEnabled` local variable to
+  the one relevant column), `CreateRequestForm.tsx`/`RequestDetailForm.tsx`
+  (`request_category_enabled`), `CreateTodoForm.tsx`/`TodoDetailForm.tsx`
+  (`todo_category_enabled`). The "Private Categories" Housekeeping row
+  (`MainScreen.tsx`) is now gated on *either* toggle being on, since the
+  list is still shared — a category can be created from either side.
+  **Section titles renamed**, same batch: "Create Request" → "Requests
+  (sent)" (Jim: "some of the options for the current 'Create Request'
+  section relate to being in a Requests sent state") and "ToDo" → "ToDos"
+  (Jim's own consistency follow-on). "Notify Me When Reminders Are Sent"
+  and "Notify Me When Requests Are Marked Done" moved from the old General
+  section to the bottom of the new Requests (sent) section, per Jim's own
+  instruction. **The General section itself is removed outright** (JSX and
+  its `generalOpen`/`wyp.acctGeneralOpen` state), not just emptied — Jim's
+  own words left this genuinely open-ended ("there is currently no need
+  for the General section, although there may be a need for it later.
+  Perhaps it is only hidden now."), interrupted before he could finish the
+  thought; removed as an engineering-judgment call rather than left as a
+  visible-but-empty section (which would read as a bug), flagged here for
+  Jim to correct if he'd rather it stayed visible. `sectionHead()` itself
+  is untouched and fully reusable if a future setting needs a similar
+  home. **Migration 074**, same conversation, same day: Jim, separately —
+  "the Receipt Confirmation should be a Subscriber feature, not a Free
+  Account feature." `AccountForm.tsx`'s "Optionally add a Receipt
+  Confirmation to a Request" toggle and `CreateRequestForm.tsx`'s own
+  per-item checkbox are both now additionally gated on `tier ===
+  'subscriber'`, hidden entirely rather than `.is-locked` — same precedent
+  Repeat used before its own free-tier expansion. Client-side hiding alone
+  was judged insufficient, matching CLAUDE.md's own "the locked button is
+  a courtesy" doctrine: `requests.receipt_confirmation_requested` is set
+  via a plain client insert (RLS-protected owner-insert-own, no SECURITY
+  DEFINER function in front of it), so migration 074 adds a real
+  `before insert or update of receipt_confirmation_requested` trigger that
+  silently forces the value back to `false` whenever the request's own
+  owner isn't currently a subscriber — silent, not a raised exception, so
+  a bypass attempt can't turn into a failed Send for the whole Request,
+  just a quietly-withheld add-on. Per the Entitlements section above, an
+  already-requested confirmation on an existing row is untouched even if
+  the owner later lapses tier — the trigger's `WHEN` clause only matches a
+  genuine attempt to newly set the value `true`. No email/cron code needed
+  any change: every downstream read of `offerReceiptConfirmation` already
+  derives it from the row's own already-set `receipt_confirmation_requested`/
+  `receipt_confirmed_at`, never re-reading the account-level toggle live.
+  `npx tsc --noEmit`/`npm run lint` clean. No mockup — this feature family
+  has none beyond Jim's own PDF references (Receipt Confirmation) and this
+  file's own AccountForm.tsx (which has never had one).

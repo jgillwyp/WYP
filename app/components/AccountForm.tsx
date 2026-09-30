@@ -106,6 +106,56 @@ import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPane
  * request_reminder_default_* / todo_reminder_default_* below. See that
  * migration's own header for the split.
  *
+ * Private Category split into request_category_enabled/
+ * todo_category_enabled (migration 073, 2026-09-30) — supersedes the
+ * single shared private_category_enabled (migration 018) above. Jim: "I
+ * would like to be able to just use Private Categories for ToDos and think
+ * that instead of a single option it should be optional for both ToDos and
+ * Requests... These options can be placed at the top of the Requests and
+ * ToDos sections." The underlying categories table/list stays one shared
+ * list for both — only the two *visibility* toggles split, same "one
+ * feature, two independently-gateable surfaces" shape already established
+ * by request_time_enabled/todo_time_enabled. Each toggle now sits first in
+ * its own section, with its own wording (Jim's own text, verbatim). Backed
+ * up by dropping the old column outright in the same migration (Jim's own
+ * data carried forward to both new columns as its starting value, per this
+ * file's own established precedent for a split — see migration 044's own
+ * header on the old shared reminder_default trio).
+ *
+ * The General section is removed as of this same batch (2026-09-30) — its
+ * three items (Show Private Category, Notify Me When Reminders Are Sent,
+ * Notify Me When Requests Are Marked Done) either split into the two new
+ * per-section Category toggles above or moved to the bottom of the
+ * Requests (sent) section (Notify Me When Reminders Are Sent / Notify Me
+ * When Requests Are Marked Done — Jim's own instruction). Jim's own words
+ * left this open-ended ("there is currently no need for the General
+ * section, although there may be a need for it later. Perhaps it is only
+ * hidden now.") — removed rather than kept as a visible-but-empty section,
+ * an engineering-judgment call (not explicitly confirmed): the
+ * sectionHead()/collapsible-section pattern stays fully reusable for a
+ * future setting that needs a General-style home, but an empty section
+ * with a Show/Hide chip pair and nothing under it would read as a bug, not
+ * a placeholder. Flagged for Jim to correct if he'd rather it stayed
+ * visible, just empty.
+ *
+ * Receipt Confirmation becomes a Subscriber feature (migration 074,
+ * 2026-09-30) — Jim: "the Receipt Confirmation should be a Subscriber
+ * feature, not a Free Account feature." The Account Options toggle below is
+ * now hidden entirely unless tier === 'subscriber' (same "hidden entirely,
+ * not .is-locked" precedent Repeat used before its own free-tier
+ * expansion), and Create Request's own per-item checkbox gained the
+ * identical tier check. Client-side hiding alone was never enough — this
+ * field is set via a plain client insert on `requests` (RLS-protected
+ * owner-insert-own, no SECURITY DEFINER function in front of it), so
+ * migration 074 also adds a real trigger that silently forces the value
+ * back to false on any insert/update attempting to set it true while the
+ * owner isn't currently a subscriber (see that migration's own header for
+ * why it's a silent downgrade, not a raised error). Per CLAUDE.md's own
+ * Entitlements section ("gates govern adding, never viewing"), an already-
+ * requested confirmation on an existing row is untouched even if the owner
+ * later lapses tier — the trigger only fires on a genuine attempt to newly
+ * set the value true.
+ *
  * profiles.request_reminders_enabled / always_show_send_reminder /
  * request_reminder_default_day_before/day_of/day_after /
  * todo_reminder_default_day_before/day_of/day_after (migration 044,
@@ -158,7 +208,10 @@ export default function AccountForm() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
-  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
+  // Split from the old single private_category_enabled, migration 073 —
+  // see the file-level comment.
+  const [requestCategoriesEnabled, setRequestCategoriesEnabled] = useState(false)
+  const [todoCategoriesEnabled, setTodoCategoriesEnabled] = useState(false)
   // Default flipped to false, migration 023 — see the file-level comment.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(false)
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
@@ -257,13 +310,14 @@ export default function AccountForm() {
   const [storageOverrideSaving, setStorageOverrideSaving] = useState(false)
   const [storageOverrideError, setStorageOverrideError] = useState<string | null>(null)
 
-  // Collapsible section state (2026-08-23) — General Options open, the
-  // other three hidden, by default; persists per Jim's own "remain as
-  // last-used" wording within a session (sessionStorage), resets on the
-  // next fresh tab. Lazy useState initializers so the very first render
-  // already reflects any earlier choice this session, matching
-  // MainScreen.tsx's own readStoredChip convention.
-  const [generalOpen, setGeneralOpen] = useState(() => readStoredOpen('wyp.acctGeneralOpen', true))
+  // Collapsible section state (2026-08-23) — all three hidden by default;
+  // persists per Jim's own "remain as last-used" wording within a session
+  // (sessionStorage), resets on the next fresh tab. Lazy useState
+  // initializers so the very first render already reflects any earlier
+  // choice this session, matching MainScreen.tsx's own readStoredChip
+  // convention. The General section itself (previously defaulted open) was
+  // removed 2026-09-30 — see the file-level comment; sectionHead() stays
+  // reusable if a future setting needs a similar home.
   const [requestOpen, setRequestOpen] = useState(() => readStoredOpen('wyp.acctRequestOpen', false))
   const [todoOpen, setTodoOpen] = useState(() => readStoredOpen('wyp.acctTodoOpen', false))
   const [subscriberOpen, setSubscriberOpen] = useState(() => readStoredOpen('wyp.acctSubscriberOpen', false))
@@ -289,7 +343,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'private_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
+          'request_category_enabled, todo_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
         )
         .eq('id', userData.user.id)
         .single()
@@ -302,7 +356,8 @@ export default function AccountForm() {
         return
       }
 
-      setCategoriesEnabled(data?.private_category_enabled ?? false)
+      setRequestCategoriesEnabled(data?.request_category_enabled ?? false)
+      setTodoCategoriesEnabled(data?.todo_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? false)
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
       setTodoTimeEnabled(data?.todo_time_enabled ?? false)
@@ -345,7 +400,8 @@ export default function AccountForm() {
 
   async function handleToggle(
     field:
-      | 'private_category_enabled'
+      | 'request_category_enabled'
+      | 'todo_category_enabled'
       | 'request_time_enabled'
       | 'todo_dates_enabled'
       | 'todo_time_enabled'
@@ -501,10 +557,6 @@ export default function AccountForm() {
     )
   }
 
-  function setGeneralOpenAndStore(v: boolean) {
-    setGeneralOpen(v)
-    window.sessionStorage.setItem('wyp.acctGeneralOpen', v ? '1' : '0')
-  }
   function setRequestOpenAndStore(v: boolean) {
     setRequestOpen(v)
     window.sessionStorage.setItem('wyp.acctRequestOpen', v ? '1' : '0')
@@ -553,75 +605,39 @@ export default function AccountForm() {
         </div>
 
         <div className="scroll">
-          {/* ---------------------------------------------------- General */}
+          {/* ---------------------------------------------------- Request */}
+          {/* Retitled "Requests (sent)," 2026-09-30 — Jim: some of these
+              options relate specifically to being in a Requests Sent state.
+              The old General section is gone (see the file-level comment) —
+              its Show Private Category split into a Requests-side toggle
+              here (now first in the section, Jim's own placement) and a
+              ToDos-side one below; Notify Me When Reminders Are Sent/Notify
+              Me When Requests Are Marked Done moved to the bottom of this
+              section, Jim's own instruction. */}
           <div className="subcard">
-            {sectionHead('General', generalOpen, setGeneralOpenAndStore)}
-            {generalOpen && (
+            {sectionHead('Requests (sent)', requestOpen, setRequestOpenAndStore)}
+            {requestOpen && (
               <div className="subbody">
                 <label className="checkrow">
                   <input
                     type="checkbox"
-                    checked={categoriesEnabled}
+                    checked={requestCategoriesEnabled}
                     disabled={saving}
                     onChange={(e) =>
-                      handleToggle('private_category_enabled', e.target.checked, setCategoriesEnabled)
+                      handleToggle('request_category_enabled', e.target.checked, setRequestCategoriesEnabled)
                     }
                   />
                   <span className="checktext">
                     Show Private Category
                     <span className="checknote">
-                      Adds an optional Category field to Requests Sent and ToDos, for your own
-                      private labeling (e.g. &ldquo;Personal Fin,&rdquo; &ldquo;Future Dev&rdquo;). Turn it
-                      on any time. Off by default.
+                      Adds an optional Category field to Requests sent, for your own private
+                      labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
+                      Categories you create are shared by Requests (sent) and ToDos. Off by
+                      default.
                     </span>
                   </span>
                 </label>
 
-                <label className="checkrow">
-                  <input
-                    type="checkbox"
-                    checked={reminderDigestEnabled}
-                    disabled={saving}
-                    onChange={(e) =>
-                      handleToggle('reminder_digest_enabled', e.target.checked, setReminderDigestEnabled)
-                    }
-                  />
-                  <span className="checktext">
-                    Notify Me When Reminders Are Sent
-                    <span className="checknote">
-                      A daily summary email listing which of your Sent Requests just had a
-                      day-before Reminder go out to their Recipient, with a link to each
-                      Request. Off by default.
-                    </span>
-                  </span>
-                </label>
-
-                <label className="checkrow">
-                  <input
-                    type="checkbox"
-                    checked={notifyOwnerOnDone}
-                    disabled={saving}
-                    onChange={(e) =>
-                      handleToggle('notify_owner_on_done', e.target.checked, setNotifyOwnerOnDone)
-                    }
-                  />
-                  <span className="checktext">
-                    Notify Me When Requests Are Marked Done
-                    <span className="checknote">
-                      Unless I marked the Request as Done, send an email each time a Sent
-                      Request is marked as Done, with a link to the Request. On by default.
-                    </span>
-                  </span>
-                </label>
-              </div>
-            )}
-          </div>
-
-          {/* ---------------------------------------------------- Request */}
-          <div className="subcard">
-            {sectionHead('Create Request', requestOpen, setRequestOpenAndStore)}
-            {requestOpen && (
-              <div className="subbody">
                 <label className="checkrow">
                   <input
                     type="checkbox"
@@ -641,24 +657,31 @@ export default function AccountForm() {
                   </span>
                 </label>
 
-                <label className="checkrow">
-                  <input
-                    type="checkbox"
-                    checked={offerReceiptConfirmation}
-                    disabled={saving}
-                    onChange={(e) =>
-                      handleToggle('offer_receipt_confirmation', e.target.checked, setOfferReceiptConfirmation)
-                    }
-                  />
-                  <span className="checktext">
-                    Optionally add a Receipt Confirmation to a Request
-                    <span className="checknote">
-                      This will add a check box to each Create Request screen to allow the
-                      notification email or text to include a Receipt Confirmation. Off by
-                      default.
+                {/* Subscriber-gated, 2026-09-30 — Jim: "the Receipt
+                    Confirmation should be a Subscriber feature, not a Free
+                    Account feature." Hidden entirely for Free, same
+                    precedent as Repeat before its own free-tier expansion —
+                    see the file-level comment on migration 074. */}
+                {tier === 'subscriber' && (
+                  <label className="checkrow">
+                    <input
+                      type="checkbox"
+                      checked={offerReceiptConfirmation}
+                      disabled={saving}
+                      onChange={(e) =>
+                        handleToggle('offer_receipt_confirmation', e.target.checked, setOfferReceiptConfirmation)
+                      }
+                    />
+                    <span className="checktext">
+                      Optionally add a Receipt Confirmation to a Request
+                      <span className="checknote">
+                        This will add a check box to each Create Request screen to allow the
+                        notification email or text to include a Receipt Confirmation. Off by
+                        default.
+                      </span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+                )}
 
                 <label className="checkrow">
                   <input
@@ -768,15 +791,76 @@ export default function AccountForm() {
                     </span>
                   </span>
                 </label>
+
+                {/* Moved from the now-removed General section, 2026-09-30 —
+                    Jim's own instruction, to the bottom of this section. */}
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={reminderDigestEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('reminder_digest_enabled', e.target.checked, setReminderDigestEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Notify Me When Reminders Are Sent
+                    <span className="checknote">
+                      A daily summary email listing which of your Sent Requests just had a
+                      day-before Reminder go out to their Recipient, with a link to each
+                      Request. Off by default.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={notifyOwnerOnDone}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('notify_owner_on_done', e.target.checked, setNotifyOwnerOnDone)
+                    }
+                  />
+                  <span className="checktext">
+                    Notify Me When Requests Are Marked Done
+                    <span className="checknote">
+                      Unless I marked the Request as Done, send an email each time a Sent
+                      Request is marked as Done, with a link to the Request. On by default.
+                    </span>
+                  </span>
+                </label>
               </div>
             )}
           </div>
 
           {/* ---------------------------------------------------- ToDo */}
+          {/* Retitled "ToDos," 2026-09-30 — consistent with the Request
+              section's own "Requests (sent)" rename, same day. */}
           <div className="subcard">
-            {sectionHead('ToDo', todoOpen, setTodoOpenAndStore)}
+            {sectionHead('ToDos', todoOpen, setTodoOpenAndStore)}
             {todoOpen && (
               <div className="subbody">
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={todoCategoriesEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('todo_category_enabled', e.target.checked, setTodoCategoriesEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    Show Private Category
+                    <span className="checknote">
+                      Adds an optional Category field to ToDos, for your own private
+                      labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
+                      Categories you create are shared by Requests (sent) and ToDos. Off by
+                      default.
+                    </span>
+                  </span>
+                </label>
+
                 <label className="checkrow">
                   <input
                     type="checkbox"

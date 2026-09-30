@@ -721,12 +721,13 @@ export default function ArchiveForm() {
   // signed-in user's id).
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
 
-  // Show Private Category — profiles.private_category_enabled, added to
-  // this screen's own preference read 2026-08-24 (this screen previously
-  // never read it at all, since it never showed Category anywhere — see the
-  // ReqSortKey/TodoSortKey comments above). Same one-time-on-mount pattern
-  // as todoDatesEnabled just above.
-  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
+  // Show Private Category — split into independent Requests(sent)/ToDos
+  // toggles, migration 073, 2026-09-30 (superseding the single shared
+  // profiles.private_category_enabled this screen read since 2026-08-24 —
+  // see the ReqSortKey/TodoSortKey comments above). Same one-time-on-mount
+  // pattern as todoDatesEnabled just above.
+  const [sentCategoriesEnabled, setSentCategoriesEnabled] = useState(false)
+  const [todoCategoriesEnabled, setTodoCategoriesEnabled] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -736,12 +737,13 @@ export default function ArchiveForm() {
       if (cancelled || !uid) return
       const { data } = await supabase
         .from('profiles')
-        .select('todo_dates_enabled, private_category_enabled')
+        .select('todo_dates_enabled, request_category_enabled, todo_category_enabled')
         .eq('id', uid)
         .single()
       if (cancelled) return
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
-      setCategoriesEnabled(data?.private_category_enabled ?? false)
+      setSentCategoriesEnabled(data?.request_category_enabled ?? false)
+      setTodoCategoriesEnabled(data?.todo_category_enabled ?? false)
     }
     loadPrefs()
     return () => {
@@ -1735,7 +1737,7 @@ export default function ArchiveForm() {
               />
               <div className="archbody">
                 {currentType === 'todos' ? (
-                  <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}${categoriesEnabled ? ' catcol' : ''}`}>
+                  <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}${todoCategoriesEnabled ? ' catcol' : ''}`}>
                     <span className="namecell">
                       <ColSort
                         className="c-pri"
@@ -1749,7 +1751,7 @@ export default function ArchiveForm() {
                           2026-08-24, matching MainScreen.tsx's own batch.
                           Archive's ToDos view never showed Category at all
                           before this. */}
-                      {categoriesEnabled && (
+                      {todoCategoriesEnabled && (
                         <ColSort
                           className="c-cat"
                           label="Category"
@@ -1798,7 +1800,7 @@ export default function ArchiveForm() {
                           ReqSortKey's own comment above for why Received
                           never renders this even though the type technically
                           allows the key). */}
-                      {currentType === 'sent' && categoriesEnabled && (
+                      {currentType === 'sent' && sentCategoriesEnabled && (
                         <ColSort
                           className="c-cat"
                           label="Category"
@@ -1890,7 +1892,7 @@ export default function ArchiveForm() {
                                   (r.category ?? '—' em-dash fallback, not
                                   omitted, when the toggle is on but this
                                   particular ToDo has no Category set). */}
-                              {categoriesEnabled && (
+                              {todoCategoriesEnabled && (
                                 <>
                                   <span className="cat">{r.category ?? '—'}</span>
                                   {' — '}
@@ -1932,7 +1934,7 @@ export default function ArchiveForm() {
                                   condition is belt-and-suspenders — the
                                   currentType check alone would already be
                                   enough. */}
-                              {currentType === 'sent' && categoriesEnabled && (
+                              {currentType === 'sent' && sentCategoriesEnabled && (
                                 <>
                                   <span className="cat">{r.category ?? '—'}</span>
                                   {' — '}
@@ -2022,7 +2024,7 @@ export default function ArchiveForm() {
                 <span>Priority{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 {/* Category when shown, nothing at all when not —
                     2026-08-24, matching MainScreen.tsx's own print colbar. */}
-                {categoriesEnabled && (
+                {todoCategoriesEnabled && (
                   <span className="c-desc">Category{todoSort.key === 'category' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 )}
               </span>
@@ -2038,7 +2040,7 @@ export default function ArchiveForm() {
                 <span className="c-nm">{COL[currentType]}{currentReqSort.key === 'name' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 {/* Category heading (Sent only, per PRD §2.3 withholding Category
                     from Received) when shown, nothing at all when not — 2026-08-24. */}
-                {currentType === 'sent' && categoriesEnabled && (
+                {currentType === 'sent' && sentCategoriesEnabled && (
                   <span className="c-desc">Category{currentReqSort.key === 'category' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 )}
               </span>
@@ -2067,7 +2069,7 @@ export default function ArchiveForm() {
                           <span className="pdn">{r.doneDisp}</span>
                         </div>
                         <div className="pr2">
-                          <span className="pdesc">{categoriesEnabled && categoryPrefix(r.category)}{r.desc}</span>
+                          <span className="pdesc">{todoCategoriesEnabled && categoryPrefix(r.category)}{r.desc}</span>
                         </div>
                       </>
                     ) : (
@@ -2079,7 +2081,7 @@ export default function ArchiveForm() {
                           <span className="pdn">{r.doneDisp}</span>
                         </div>
                         <div className="pr2">
-                          <span className="pdesc">{currentType === 'sent' && categoriesEnabled && categoryPrefix(r.category)}{r.desc}</span>
+                          <span className="pdesc">{currentType === 'sent' && sentCategoriesEnabled && categoryPrefix(r.category)}{r.desc}</span>
                         </div>
                       </>
                     )}

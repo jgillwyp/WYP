@@ -547,7 +547,8 @@ export default function CreateRequestForm() {
 
     // For dialog.who — see migration 004's note on why this is a snapshot,
     // not a live join, taken once here rather than re-read at Send time.
-    // private_category_enabled (migration 018, 2026-08-13) rides along on
+    // request_category_enabled (migration 073, 2026-09-30 — supersedes the
+    // old shared private_category_enabled, migration 018) rides along on
     // the same read rather than a separate round trip — RLS's own
     // "profiles: read own" policy already scopes .single() to the caller's
     // row with no .eq('id', ...) needed, same as this call already relied
@@ -555,12 +556,12 @@ export default function CreateRequestForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, private_category_enabled, request_time_enabled, request_reminders_enabled, offer_receipt_confirmation, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after'
+        'display_name, request_category_enabled, request_time_enabled, request_reminders_enabled, offer_receipt_confirmation, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after'
       )
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
-        setCategoriesEnabled(data?.private_category_enabled ?? false)
+        setCategoriesEnabled(data?.request_category_enabled ?? false)
         setRequestTimeEnabled(data?.request_time_enabled ?? true)
         setRequestRemindersEnabled(data?.request_reminders_enabled ?? false)
         setOfferReceiptConfirmation(data?.offer_receipt_confirmation ?? false)
@@ -1384,8 +1385,16 @@ export default function CreateRequestForm() {
                 component rather than the mockup's own inline text+checkbox
                 row, matching every other per-item optional checkbox in this
                 app (the Reminders-until-Done trio) rather than a one-off
-                bespoke layout. */}
-            {offerReceiptConfirmation && (
+                bespoke layout. Additionally requires tier === 'subscriber'
+                (migration 074, 2026-09-30) — Receipt Confirmation became a
+                Subscriber feature; the Account Options toggle that sets
+                offerReceiptConfirmation is itself hidden for Free accounts,
+                but this is checked again here too, since a Free account
+                could in principle still have the flag left on from before
+                this change (a real trigger in migration 074 also refuses
+                the write server-side regardless of what this control
+                shows). */}
+            {offerReceiptConfirmation && tier === 'subscriber' && (
               <label className="checkrow">
                 <input
                   type="checkbox"

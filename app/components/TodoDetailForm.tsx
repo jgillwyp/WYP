@@ -626,7 +626,7 @@ export default function TodoDetailForm() {
         supabase.from('categories').select('id, name').order('name'),
         supabase
           .from('profiles')
-          .select('display_name, private_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier')
+          .select('display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier')
           .single(),
         // Print (2026-08-15) — same reasoning as RequestDetailForm.tsx's
         // identical addition.
@@ -693,7 +693,7 @@ export default function TodoDetailForm() {
       }
       setCategories(catRes.data ?? [])
       setOwnerName(ownerRes.data?.display_name ?? null)
-      setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
+      setCategoriesEnabled(ownerRes.data?.todo_category_enabled ?? false)
       setTodoDatesEnabled(ownerRes.data?.todo_dates_enabled ?? false)
       setTodoTimeEnabled(ownerRes.data?.todo_time_enabled ?? false)
       setTodoRemindersEnabled(ownerRes.data?.todo_reminders_enabled ?? false)

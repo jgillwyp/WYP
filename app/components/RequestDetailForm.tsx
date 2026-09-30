@@ -561,7 +561,7 @@ export default function RequestDetailForm() {
         supabase
           .from('profiles')
           .select(
-            'display_name, private_category_enabled, request_time_enabled, request_reminders_enabled, always_show_send_reminder, tier'
+            'display_name, request_category_enabled, request_time_enabled, request_reminders_enabled, always_show_send_reminder, tier'
           )
           .single(),
         // Print (2026-08-15) — same owner-scoped RLS access MainScreen.tsx's
@@ -654,7 +654,7 @@ export default function RequestDetailForm() {
       }
       setCategories(catRes.data ?? [])
       setOwnerName(ownerRes.data?.display_name ?? null)
-      setCategoriesEnabled(ownerRes.data?.private_category_enabled ?? false)
+      setCategoriesEnabled(ownerRes.data?.request_category_enabled ?? false)
       setRequestTimeEnabled(ownerRes.data?.request_time_enabled ?? true)
       setRequestRemindersEnabled(ownerRes.data?.request_reminders_enabled ?? false)
       setAlwaysShowSendReminder(ownerRes.data?.always_show_send_reminder ?? false)

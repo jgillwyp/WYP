@@ -117,11 +117,11 @@ type SentRow = {
   // technique as dialog(count) above.
   attachments: { count: number }[] | null
   // categories(name) added 2026-08-15 for the Print Reports Category-prefix
-  // feature below — Requests have always had a category_id (same as ToDos,
-  // gated by the same categoriesEnabled toggle), but Main Screen's own Sent
-  // row has never surfaced it on screen, unlike ToDos' .cat column. Fetched
-  // here only because Print now needs it; the on-screen Sent row is
-  // unchanged and still shows no Category.
+  // feature below — Requests have always had a category_id (same as ToDos).
+  // Gated by sentCategoriesEnabled (split from the old shared
+  // categoriesEnabled, migration 073, 2026-09-30) since Sent's own Category
+  // display (added 2026-08-24, see below) is now independently toggleable
+  // from ToDos'.
   categories: { name: string } | null
   // archived_at added by migration 028 (Archive, 2026-08-14) — the row's own
   // owner archived it via /archive. Deliberately still selected/fetched here
@@ -1172,14 +1172,15 @@ export default function MainScreen() {
   // docs/WYP_Admin_Statistics_Plan.md).
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // Private Category is now an opt-in account preference (migration 018,
-  // 2026-08-13), off by default — see AccountForm.tsx. Read on the same
-  // profiles round trip as main_chip_prefs above, rather than a separate
-  // call. Governs only the ToDos colbar's Category segment and each ToDo
-  // row's own Category text (see the .colbar.td / .t1 JSX below) — Sent
-  // and Received have never shown Category on Main Screen at all, so
-  // there's nothing to gate on those two sections.
-  const [categoriesEnabled, setCategoriesEnabled] = useState(false)
+  // Private Category is now an opt-in account preference, split into
+  // independent Requests(sent)/ToDos toggles (migration 073, 2026-09-30,
+  // superseding the single shared private_category_enabled, migration 018)
+  // — see AccountForm.tsx. Read on the same profiles round trip as
+  // main_chip_prefs above, rather than a separate call. Received has never
+  // shown Category on Main Screen at all (PRD §2.3), so there's nothing to
+  // gate on that section.
+  const [sentCategoriesEnabled, setSentCategoriesEnabled] = useState(false)
+  const [todoCategoriesEnabled, setTodoCategoriesEnabled] = useState(false)
 
   // profiles.tier — 2026-08-25, closing a real gap the owner spotted: the
   // bottom-of-screen .adslot ("AD — 320×50 RESERVED") was rendering
@@ -1187,7 +1188,7 @@ export default function MainScreen() {
   // this app's own "Ad-free — removes the ad banner shown to Free accounts"
   // Subscriber Features pitch (SubscriptionPanels.tsx's BecomeSubscriberPitch,
   // shared with AccountForm.tsx and SubscriptionForm.tsx). Read on the same
-  // profiles round trip as categoriesEnabled/requestTimeEnabled/
+  // profiles round trip as sentCategoriesEnabled/requestTimeEnabled/
   // todoDatesEnabled above, no extra query. .subbanner ("See Subscription
   // Features and Other Options") stays unconditional and, as of 2026-08-26,
   // is wired to navigate to /account/subscription (SubscriptionForm.tsx) —
@@ -1254,12 +1255,13 @@ export default function MainScreen() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('main_chip_prefs, private_category_enabled, request_time_enabled, todo_dates_enabled, tier, is_admin')
+        .select('main_chip_prefs, request_category_enabled, todo_category_enabled, request_time_enabled, todo_dates_enabled, tier, is_admin')
         .eq('id', uid)
         .single()
       if (cancelled) return
 
-      setCategoriesEnabled(data?.private_category_enabled ?? false)
+      setSentCategoriesEnabled(data?.request_category_enabled ?? false)
+      setTodoCategoriesEnabled(data?.todo_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? true)
       setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
       setIsAdmin(data?.is_admin === true)
@@ -1546,10 +1548,10 @@ export default function MainScreen() {
       if (searchScope === 'daterange') return todoDatesEnabled && matchesDateRange(t.due_date, fromDate, toDate)
       return (
         t.description.toLowerCase().includes(query) ||
-        (categoriesEnabled && (t.categories?.name ?? '').toLowerCase().includes(query))
+        (todoCategoriesEnabled && (t.categories?.name ?? '').toLowerCase().includes(query))
       )
     })
-  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate, todoDatesEnabled, categoriesEnabled, repeatingTodoIds])
+  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate, todoDatesEnabled, todoCategoriesEnabled, repeatingTodoIds])
 
   // Sorted on top of the already-filtered rows — filtering and sorting are
   // independent concerns (which rows show vs. what order they show in), so
@@ -1726,7 +1728,7 @@ export default function MainScreen() {
                       2026-08-24, owner. Mirrors the ToDos colbar below, and
                       is new for Sent: unlike ToDos, Sent has never had a
                       Category column heading before. */}
-                  {categoriesEnabled && (
+                  {sentCategoriesEnabled && (
                     <ColSort className="c-cat" label="Category" active={sentSort.key === 'category'} dir={sentSort.dir} onClick={() => sortSent('category')} />
                   )}
                 </span>
@@ -1797,7 +1799,7 @@ export default function MainScreen() {
                               be displayed on the main screen Requests Sent").
                               Identical .cat + em-dash treatment as the ToDos
                               row below. */}
-                          {categoriesEnabled && (
+                          {sentCategoriesEnabled && (
                             <>
                               <span className="cat">{r.categories?.name ?? '—'}</span>
                               {' — '}
@@ -1963,7 +1965,7 @@ export default function MainScreen() {
               </span>
             </div>
             <div className="subbody">
-              <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}${categoriesEnabled ? ' catcol' : ''}`}>
+              <div className={`colbar dcols${todoDatesEnabled ? ' wide' : ''}${todoCategoriesEnabled ? ' catcol' : ''}`}>
                 <span className="namecell">
                   <ColSort className="c-pri" label="Priority" active={todoSort.key === 'priority'} dir={todoSort.dir} onClick={() => sortTodos('priority')} />
                   {/* Description -> Category, sortable, when Private
@@ -1972,7 +1974,7 @@ export default function MainScreen() {
                       through 2026-08-17's redesign; this reinstates it as a
                       live sort column (retired 2026-08-17, see TodoSortKey's
                       own comment above). */}
-                  {categoriesEnabled && (
+                  {todoCategoriesEnabled && (
                     <ColSort className="c-cat" label="Category" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
                   )}
                 </span>
@@ -2029,7 +2031,7 @@ export default function MainScreen() {
                           <span className="ii"><DialogIcon /></span>
                         )}
                         <span className="desc">
-                          {categoriesEnabled && (
+                          {todoCategoriesEnabled && (
                             <>
                               <span className="cat">{t.categories?.name ?? '—'}</span>
                               {' — '}
@@ -2158,13 +2160,15 @@ export default function MainScreen() {
                   </div>
                   {/* Private Categories (2026-09-28) — closes a real gap:
                       Add Category (Create Request/Create ToDo) could only
-                      ever add one, never rename or remove it. Gated on the
-                      same private_category_enabled toggle that hides the
-                      Category field itself everywhere else — a category can
-                      only be created while the feature is on, so hiding
-                      this management screen while it's off is consistent,
-                      not a loss. */}
-                  {categoriesEnabled && (
+                      ever add one, never rename or remove it. Gated on
+                      either Category toggle being on (migration 073 split
+                      the old single private_category_enabled into
+                      request_category_enabled/todo_category_enabled) since
+                      the underlying list is shared by both — a category can
+                      only be created while at least one is on, so hiding
+                      this management screen while both are off is
+                      consistent, not a loss. */}
+                  {(sentCategoriesEnabled || todoCategoriesEnabled) && (
                     <div
                       className="hkrow"
                       role="button"
@@ -2568,7 +2572,7 @@ export default function MainScreen() {
                   <span className="c-nm">To</span>
                   {/* Same rule as the on-screen colbar above: Category when
                       shown, nothing at all when not — 2026-08-24. */}
-                  {categoriesEnabled && (
+                  {sentCategoriesEnabled && (
                     <span className="c-desc">Category{sentSort.key === 'category' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                   )}
                 </span>
@@ -2601,7 +2605,7 @@ export default function MainScreen() {
                       </div>
                       <div className="pr2">
                         <span className="pdesc">
-                          {categoriesEnabled && categoryPrefix(r.categories?.name)}
+                          {sentCategoriesEnabled && categoryPrefix(r.categories?.name)}
                           {r.description}
                         </span>
                       </div>
@@ -2696,7 +2700,7 @@ export default function MainScreen() {
                   <span>Priority{todoSort.key === 'priority' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                   {/* Same rule as Sent's print colbar above — Category when
                       shown, nothing at all when not — 2026-08-24. */}
-                  {categoriesEnabled && (
+                  {todoCategoriesEnabled && (
                     <span className="c-desc">Category{todoSort.key === 'category' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                   )}
                 </span>
@@ -2721,7 +2725,7 @@ export default function MainScreen() {
                       </div>
                       <div className="pr2">
                         <span className="pdesc">
-                          {categoriesEnabled && categoryPrefix(t.categories?.name)}
+                          {todoCategoriesEnabled && categoryPrefix(t.categories?.name)}
                           {t.description}
                         </span>
                       </div>

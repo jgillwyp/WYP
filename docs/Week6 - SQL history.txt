@@ -6834,3 +6834,129 @@ grant execute on function public.get_received_request(uuid) to authenticated;
 --   -- extra click -- and the new "Receipt confirmed." noticeband should
 --   -- show immediately.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 073 (2026-09-30) -- Private Category split into independent
+-- Requests(sent)/ToDos toggles, replacing the single shared
+-- profiles.private_category_enabled (migration 018). CONFIRMED RUN by
+-- Jim, 2026-09-30.
+--
+-- Jim: "I would like to be able to just use Private Categories for ToDos
+-- and think that instead of a single option it should be optional for both
+-- ToDos and Requests. These options can be placed at the top of the
+-- Requests and ToDos sections. It is a structural change, but I think for
+-- simplicity -- we can continue to use a single Category list for both."
+--
+-- The underlying `categories` table/list stays exactly as-is, shared by
+-- both -- only the two *visibility* toggles split, the same "one feature,
+-- two independently-gateable surfaces" shape already established by
+-- request_time_enabled/todo_time_enabled (migrations 019/067). Both new
+-- columns are backfilled from the existing shared value (so Jim's own
+-- current preference carries forward to both, rather than resetting to the
+-- false default), then the old column is dropped outright once nothing
+-- reads it anymore -- same precedent as migration 044's own retirement of
+-- the old shared reminder_default_day_before/day_of/day_after trio.
+--
+-- Every app-side read of private_category_enabled (AccountForm.tsx,
+-- MainScreen.tsx, ArchiveForm.tsx, CreateRequestForm.tsx/RequestDetailForm.tsx,
+-- CreateTodoForm.tsx/TodoDetailForm.tsx) is repointed to the appropriate one
+-- of the two new columns in this same batch -- see CLAUDE.md's own entry
+-- for the full file list.
+
+alter table public.profiles
+  add column request_category_enabled boolean not null default false,
+  add column todo_category_enabled boolean not null default false;
+
+update public.profiles
+  set request_category_enabled = private_category_enabled,
+      todo_category_enabled = private_category_enabled;
+
+alter table public.profiles drop column private_category_enabled;
+
+grant update (request_category_enabled) on public.profiles to authenticated;
+grant update (todo_category_enabled) on public.profiles to authenticated;
+
+-- Verify:
+--   select column_name from information_schema.columns
+--     where table_schema = 'public' and table_name = 'profiles'
+--       and column_name in
+--         ('private_category_enabled', 'request_category_enabled', 'todo_category_enabled');
+--   -- should list request_category_enabled and todo_category_enabled only
+--   -- (private_category_enabled should be gone).
+--   select grantee, privilege_type, column_name from information_schema.column_privileges
+--     where table_schema = 'public' and table_name = 'profiles'
+--       and column_name in ('request_category_enabled', 'todo_category_enabled')
+--       and grantee = 'authenticated';
+--   -- should show UPDATE for both, granted to authenticated.
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 074 (2026-09-30) -- Receipt Confirmation becomes a Subscriber
+-- feature, not a Free Account one. CONFIRMED RUN by Jim, 2026-09-30.
+--
+-- Jim: "One additional change that will require a migration (I think) is
+-- that the Receipt Confirmation should be a Subscriber feature, not a Free
+-- Account feature."
+--
+-- Two enforcement points, matching CLAUDE.md's own "the locked button is a
+-- courtesy, the database must refuse the write regardless" Entitlements
+-- doctrine:
+--   1. AccountForm.tsx now hides the "Optionally add a Receipt Confirmation
+--      to a Request" toggle entirely unless tier = 'subscriber' (client-side
+--      only, not touched by this migration), and CreateRequestForm.tsx's own
+--      per-item checkbox gained the identical check.
+--   2. This migration adds the real enforcement. requests.
+--      receipt_confirmation_requested is set via a plain client insert
+--      (RLS-protected "requests: owners insert own," migration 003) -- no
+--      SECURITY DEFINER function sits in front of it, so nothing server-side
+--      previously stopped a bypassed client from setting it true regardless
+--      of tier. A trigger now silently forces the value back to false on any
+--      insert/update attempting to set it true while the request's own
+--      owner isn't currently a subscriber. Deliberately a silent downgrade,
+--      not a raised exception -- an exception here would turn a bypassed or
+--      stale client into a failed Send for the whole Request, not just a
+--      quietly-withheld optional add-on; the trigger's WHEN clause only
+--      fires on a genuine attempt to newly set the value true, never on
+--      every unrelated write to the row.
+--
+-- Per CLAUDE.md's own Entitlements section ("gates govern adding, never
+-- viewing"), an already-requested confirmation on an existing row is left
+-- untouched even if the owner later lapses tier -- the WHEN clause below
+-- only matches new.receipt_confirmation_requested is true, so an update
+-- that leaves it at its already-true value, or explicitly sets it false,
+-- never fires this trigger at all.
+
+create or replace function public.enforce_receipt_confirmation_tier()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_tier text;
+begin
+  select tier into v_tier from public.profiles where id = new.owner_id;
+  if coalesce(v_tier, 'free') <> 'subscriber' then
+    new.receipt_confirmation_requested := false;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_enforce_receipt_confirmation_tier on public.requests;
+create trigger trg_enforce_receipt_confirmation_tier
+  before insert or update of receipt_confirmation_requested on public.requests
+  for each row
+  when (new.receipt_confirmation_requested is true)
+  execute function public.enforce_receipt_confirmation_tier();
+
+-- Verify:
+--   -- As a Free-tier test account, attempt (via the browser, with the
+--   -- Account Options toggle bypassed -- e.g. temporarily re-showing it, or
+--   -- a direct insert as that user) to create a Request with
+--   -- receipt_confirmation_requested = true. The saved row should come back
+--   -- with receipt_confirmation_requested = false regardless.
+--   -- As a Subscriber-tier account, the same flow should save true as
+--   -- expected -- no regression to the feature's own normal path.
+--   select tgname from pg_trigger where tgrelid = 'public.requests'::regclass
+--     and tgname = 'trg_enforce_receipt_confirmation_tier';
+--   -- should return one row.
+-- ============================================================================
