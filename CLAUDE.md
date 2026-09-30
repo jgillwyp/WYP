@@ -4633,3 +4633,54 @@ link is built only after the stack is proven on Add Contact.
   `AccountForm.tsx`'s own Subscriber section text) is intentionally not
   built in this batch — Jim's own framing was to track it as a ToDo for
   later, not to do it now.
+- **Response-link tokens: a Request can now hold multiple simultaneously-
+  valid tokens instead of one — migration 075, drafted, not yet confirmed
+  run (2026-09-30).** Root-caused from a real bug Jim reproduced: a private
+  tester (John) got "This link is no longer active. The sender has removed
+  the Request it pointed to." clicking the FIRST of two emails for the same
+  Request — nothing was ever deleted. Jim's own repro: create a Request
+  with an attachment in a desktop-icon PWA session (Initial Request email,
+  token A), open the same Sent Request in a separate Chrome tab, add a
+  second attachment and Send (triggers the "UPDATED:" change-notification
+  email, token B) — token A's link goes dead. Root cause:
+  `issue_request_link` (migration 008) always overwrote a single column,
+  `requests.link_token_hash` — its own header comment already said so
+  explicitly ("Regenerating silently invalidates whatever token existed
+  before"). Four call sites mint a fresh token whenever *they* need a link
+  for an email they're sending (`CreateRequestForm.tsx`'s Initial Request,
+  `RequestDetailForm.tsx`'s manual Send Reminder and "UPDATED:"
+  notification, `cron/tick/route.ts`'s every automated day-before/day-of/
+  day-after Reminder) — each call silently killed whatever link was in
+  *every earlier* email for that Request. In practice only the
+  most-recently-sent email's link has ever actually worked, contradicting
+  this file's own Database-section principle ("Request links are
+  multi-use... a durable capability bounded by expiry and revocation") —
+  the design intent was always correct, the implementation just never
+  matched it. Likely silently breaking links since the day-before Reminder
+  shipped (2026-08-15), worse since "UPDATED:" notifications did
+  (2026-09-02) — not limited to Jim's own two-session repro. **Fix**: new
+  table `request_links`, one row per token ever issued (`request_id`,
+  `token_hash`, `expires_at`, `revoked_at`) — the raw token is still never
+  stored, only its hash, so a still-valid earlier token's plaintext can
+  never be recovered to re-embed in a later email; letting every emailed
+  link keep working requires holding multiple valid hashed tokens at once,
+  not reusing one. Six functions touched: `issue_request_link`/
+  `cron_issue_request_link` now INSERT instead of UPDATE-overwriting;
+  `revoke_request_link` now revokes every currently-live token for a
+  Request at once (the only sensible reading of "revoke this Request's
+  link" once more than one can be valid — not currently called from any
+  live app code, rewritten anyway for correctness); `get_request_by_token`/
+  `set_response_done_by_token`/`add_dialog_by_token` all look up through
+  `request_links` instead of the single column, same generic exception for
+  every failure mode (migration 049's wording, unchanged), no signature
+  changes so all six are plain `create or replace`, no drops needed.
+  Existing live tokens are backfilled into `request_links` before the old
+  columns are marked deprecated (comment only, not dropped — left in place
+  for one cycle as an easy rollback/inspection point), so nothing already
+  working breaks the moment this runs. No client-side app code changes
+  needed at all — every call site already just calls the RPC and gets a
+  token back; only the SQL changed. `npx tsc --noEmit`/`npm run lint`
+  clean (no app code touched besides two comment updates,
+  `cron/tick/route.ts`'s `mintLink()`). See migration 075's own header
+  comment in `docs/Week6 - SQL history.txt` for the full write-up and its
+  verify block for the exact repro steps to confirm the fix once run.

@@ -388,6 +388,11 @@ async function handle(request: Request) {
     return email
   }
 
+  // Mints an additional valid token every call (migration 075, 2026-09-30)
+  // — no longer overwrites a Request's only link the way it did through
+  // migration 033's own single-column design. See that migration's own
+  // header comment for the full root-cause writeup: every earlier email's
+  // link used to go dead the instant any later email needed a fresh one.
   async function mintLink(sbc: SupabaseClient, requestId: string): Promise<string | null> {
     const { data, error } = await sbc.rpc('cron_issue_request_link', { p_request_id: requestId })
     if (error || !data) return null

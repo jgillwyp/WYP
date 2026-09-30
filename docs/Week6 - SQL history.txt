@@ -7015,3 +7015,415 @@ end $$;
 --     order by requests.created_at desc limit 1;
 --   -- should show the new ToDo, categorized "Would You Please."
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 075 (2026-09-30) -- request_links: a Request can now hold
+-- multiple simultaneously-valid response-link tokens, instead of one.
+-- DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Root-caused from a real, reproduced report: Jim reproduced a private
+-- tester's (John's) complaint that the FIRST of two emails for the same
+-- Request gave "This link is no longer active. The sender has removed the
+-- Request it pointed to." while the second worked fine -- nothing was ever
+-- deleted. Jim's own repro: create a Request with an attachment in a
+-- desktop-icon PWA session (Initial Request email, token A), open the same
+-- Sent Request in a separate Chrome tab, add a second attachment and Send
+-- (triggers the "UPDATED:" change-notification email, token B) -- token A's
+-- link is now dead.
+--
+-- issue_request_link (migration 008) always overwrote a single column,
+-- requests.link_token_hash -- its own header comment already said so
+-- explicitly: "Regenerating silently invalidates whatever token existed
+-- before, since the old hash is overwritten." Four separate call sites mint
+-- a fresh token whenever THEY need a link for an email they're sending --
+-- CreateRequestForm.tsx (Initial Request), RequestDetailForm.tsx (manual
+-- Send Reminder, and the "UPDATED:" notification), and cron/tick/route.ts's
+-- cron_issue_request_link (every automated day-before/day-of/day-after
+-- Reminder). Each call silently killed whatever link was in EVERY earlier
+-- email for that Request -- in practice, only the most-recently-sent
+-- email's link has ever actually worked, contradicting this file's own
+-- stated Database-section principle ("Request links are multi-use... a
+-- durable capability bounded by expiry and revocation"). This has likely
+-- been silently breaking links since the day-before Reminder shipped
+-- (2026-08-15) and certainly since the "UPDATED:" notifications did
+-- (2026-09-02) -- not limited to Jim's own two-session repro.
+--
+-- The raw token is deliberately never stored anywhere, only its one-way
+-- hash (CLAUDE.md's own "store digest(token,'sha256') not the token" rule)
+-- -- so a still-valid earlier token's plaintext can never be recovered to
+-- re-embed in a later email; the only way to let every emailed link keep
+-- working is to let a Request hold MULTIPLE valid hashed tokens at once,
+-- each with its own independent expiry/revocation, rather than one shared
+-- slot. New table `request_links`, one row per token ever issued.
+-- "Revoke" now means revoking every currently-live token for a Request at
+-- once, not just the most recent -- the only sensible reading of "revoke
+-- this Request's link" once more than one can be simultaneously valid.
+--
+-- The old requests.link_token_hash/link_expires_at/link_revoked_at columns
+-- are marked deprecated (comment only) rather than dropped in this same
+-- migration -- nothing reads or writes them after this migration runs, but
+-- leaving them in place for one cycle costs nothing and gives an easy
+-- rollback/inspection point if anything is found missed. Existing rows with
+-- a still-live token are backfilled into request_links first, so no
+-- currently-working link breaks the moment this migration runs.
+-- ============================================================================
+
+begin;
+
+create table public.request_links (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.requests(id) on delete cascade,
+  token_hash bytea not null,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index request_links_request_id_idx on public.request_links (request_id);
+create unique index request_links_token_hash_idx on public.request_links (token_hash);
+
+alter table public.request_links enable row level security;
+-- No policies, and no anon/authenticated grant -- reachable only through
+-- the SECURITY DEFINER functions below, which run as the function owner
+-- and so aren't gated by either RLS or table grants (the same reason
+-- requests.link_token_hash itself never needed a policy of its own). The
+-- Supabase Data-API auto-grant change CLAUDE.md's Database section
+-- documents (effective October 30) is about PostgREST reachability
+-- specifically -- irrelevant here, since this table is never meant to be
+-- queried through the REST API at all, only from inside these functions.
+-- Even a hypothetical direct read would return nothing exploitable anyway
+-- -- token_hash is a one-way digest.
+
+comment on table public.request_links is
+  'One row per response-link token ever issued for a Request (migration 075) -- replaces the single-slot requests.link_token_hash/link_expires_at/link_revoked_at (migration 008), which silently invalidated every earlier-sent email''s link each time a later email needed a fresh one. Multiple rows may be simultaneously valid for the same request_id; get_request_by_token/set_response_done_by_token/add_dialog_by_token now match against any of them, not a single column.';
+
+-- Backfill: preserve every currently-live token so nothing already working
+-- breaks the moment this migration runs. created_at is reconstructed from
+-- expires_at, since issue_request_link/cron_issue_request_link have always
+-- set a fixed 30-day expiry from the moment of issue.
+insert into public.request_links (request_id, token_hash, expires_at, revoked_at, created_at)
+  select id, link_token_hash, link_expires_at, link_revoked_at,
+         coalesce(link_expires_at - interval '30 days', now())
+  from public.requests
+  where link_token_hash is not null;
+
+comment on column public.requests.link_token_hash is
+  'DEPRECATED (migration 075) -- superseded by request_links, which supports multiple simultaneously-valid tokens per Request. No longer read or written by any function; left in place, unused, rather than dropped in the same migration that changes behavior.';
+comment on column public.requests.link_expires_at is
+  'DEPRECATED (migration 075) -- see link_token_hash''s own comment.';
+comment on column public.requests.link_revoked_at is
+  'DEPRECATED (migration 075) -- see link_token_hash''s own comment.';
+
+-- ----------------------------------------------------------------------------
+-- issue_request_link -- mints into request_links instead of overwriting the
+-- single requests column. Signature unchanged, so create-or-replace is
+-- safe -- every existing caller (CreateRequestForm.tsx, RequestDetailForm.tsx)
+-- needs no change.
+-- ----------------------------------------------------------------------------
+create or replace function public.issue_request_link(p_request_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_token text;
+begin
+  select owner_id into v_owner from public.requests where id = p_request_id;
+
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  insert into public.request_links (request_id, token_hash, expires_at)
+    values (p_request_id, digest(v_token, 'sha256'), now() + interval '30 days');
+
+  insert into public.events (actor_user, subject_type, subject_id, request_id, action, detail)
+    values (auth.uid(), 'link', p_request_id, p_request_id, 'issued', '{}'::jsonb);
+
+  return v_token;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- cron_issue_request_link -- same change, service_role-only sibling (no
+-- auth.uid() check, see migration 033's own header for why that's safe).
+-- ----------------------------------------------------------------------------
+create or replace function public.cron_issue_request_link(p_request_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_token text;
+begin
+  select owner_id into v_owner from public.requests where id = p_request_id;
+
+  if v_owner is null then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  insert into public.request_links (request_id, token_hash, expires_at)
+    values (p_request_id, digest(v_token, 'sha256'), now() + interval '30 days');
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', p_request_id, p_request_id, 'issued', '{"via": "cron"}'::jsonb);
+
+  return v_token;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- revoke_request_link -- now revokes every currently-live token for this
+-- Request at once, not a single column. Not currently called from any live
+-- app code (see app/api/contacts/delete-cascade/route.ts's own comment on
+-- why it isn't needed there -- request_links cascades away with the
+-- Request row regardless) -- rewritten anyway, for correctness, in case
+-- it's wired up later.
+-- ----------------------------------------------------------------------------
+create or replace function public.revoke_request_link(p_request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+begin
+  select owner_id into v_owner from public.requests where id = p_request_id;
+
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'Not found.';
+  end if;
+
+  update public.request_links
+    set revoked_at = now()
+    where request_id = p_request_id and revoked_at is null;
+
+  insert into public.events (actor_user, subject_type, subject_id, request_id, action, detail)
+    values (auth.uid(), 'link', p_request_id, p_request_id, 'revoked', '{}'::jsonb);
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- get_request_by_token -- looks up through request_links now; every field
+-- selected and the rest of the body (Receipt Confirmation side effect,
+-- dialog join, jsonb_build_object) is otherwise byte-for-byte identical to
+-- migration 069's version. Same generic exception for every failure mode
+-- (never-issued, expired, revoked) -- migration 049's own wording,
+-- unchanged. Signature unchanged (p_token text, p_confirm_receipt boolean
+-- default false), so create-or-replace is safe, no drop needed.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_request_by_token(p_token text, p_confirm_receipt boolean default false)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled, r.reminder_day_of_enabled,
+         r.reminder_day_of_sent_at, r.repeat_rule,
+         r.receipt_confirmation_requested, r.receipt_confirmed_at,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         ct.display_name as contact_name
+    into v_request
+    from public.request_links rl
+    join public.requests r on r.id = rl.request_id
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where rl.token_hash = v_hash
+      and rl.revoked_at is null
+      and rl.expires_at > now();
+
+  if v_request.id is null then
+    raise exception 'This link is no longer active. The sender has removed the Request it pointed to.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  -- Receipt Confirmation side effect (migration 069) -- unchanged.
+  if p_confirm_receipt
+     and v_request.receipt_confirmation_requested
+     and v_request.receipt_confirmed_at is null
+  then
+    update public.requests set receipt_confirmed_at = now() where id = v_request.id;
+    v_request.receipt_confirmed_at := now();
+  end if;
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'receipt_confirmation_requested', v_request.receipt_confirmation_requested,
+    'receipt_confirmed_at', v_request.receipt_confirmed_at,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- set_response_done_by_token -- same lookup change, rest of the body
+-- (the update, the events insert) byte-for-byte unchanged. Signature
+-- unchanged, create-or-replace safe.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_response_done_by_token(
+  p_token text,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null,
+  p_overdue_reminder_enabled boolean default null,
+  p_reminder_day_of_enabled boolean default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.request_links rl
+    join public.requests r on r.id = rl.request_id
+    where rl.token_hash = v_hash
+      and rl.revoked_at is null
+      and rl.expires_at > now();
+
+  if v_request_id is null then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled),
+        overdue_reminder_enabled = coalesce(p_overdue_reminder_enabled, overdue_reminder_enabled),
+        reminder_day_of_enabled = coalesce(p_reminder_day_of_enabled, reminder_day_of_enabled)
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request_id, v_request_id, 'response_saved',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'overdue_reminder_enabled', p_overdue_reminder_enabled, 'reminder_day_of_enabled', p_reminder_day_of_enabled));
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- add_dialog_by_token -- same lookup change, rest of the body unchanged.
+-- Signature unchanged, create-or-replace safe.
+-- ----------------------------------------------------------------------------
+create or replace function public.add_dialog_by_token(
+  p_token text,
+  p_kind text,
+  p_body text,
+  p_replies_to_id bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_request_id uuid;
+  v_who text;
+  v_new_id bigint;
+  v_created_at timestamptz;
+begin
+  select r.id, ct.display_name
+    into v_request_id, v_who
+    from public.request_links rl
+    join public.requests r on r.id = rl.request_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where rl.token_hash = digest(p_token, 'sha256')
+      and rl.revoked_at is null
+      and rl.expires_at > now();
+
+  if v_request_id is null then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  if p_kind not in ('question', 'answer', 'comment') then
+    raise exception 'Invalid Dialog entry type.';
+  end if;
+
+  if trim(coalesce(p_body, '')) = '' then
+    raise exception 'Enter Dialog Text.';
+  end if;
+
+  v_who := coalesce(v_who, 'Recipient');
+
+  insert into public.dialog (request_id, kind, body, who, replies_to_id)
+    values (
+      v_request_id, p_kind, p_body, v_who,
+      case when p_kind = 'answer' then p_replies_to_id else null end
+    )
+    returning id, created_at into v_new_id, v_created_at;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values (
+      'dialog', v_request_id, v_request_id, 'created_by_recipient',
+      jsonb_build_object('kind', p_kind, 'dialog_id', v_new_id)
+    );
+
+  return jsonb_build_object('id', v_new_id, 'created_at', v_created_at, 'who', v_who);
+end;
+$$;
+
+commit;
+
+-- Verify:
+--   select count(*) from public.request_links;
+--     -- should be >= the number of requests that had a non-null
+--     -- link_token_hash before this migration ran.
+--   -- Then, as a client: open an OLD emailed link for a Request that has
+--   -- since had a second email sent (a Reminder, an "UPDATED:" notice, or
+--   -- a manually re-clicked Get/Send Reminder) -- it should now open the
+--   -- Request instead of showing the dead-link message. Add a Dialog entry
+--   -- and mark Done from that same old link to confirm
+--   -- add_dialog_by_token/set_response_done_by_token both still work.
+--   -- Then send a brand-new email (edit and Save) and confirm ITS link
+--   -- also works, alongside the old one still working too.
+-- ============================================================================
