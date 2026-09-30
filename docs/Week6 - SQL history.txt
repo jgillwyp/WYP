@@ -6960,3 +6960,58 @@ create trigger trg_enforce_receipt_confirmation_tier
 --     and tgname = 'trg_enforce_receipt_confirmation_tier';
 --   -- should return one row.
 -- ============================================================================
+
+-- ============================================================================
+-- One-time data insert (2026-09-30), NOT a migration -- no schema change.
+-- A real WYP ToDo for Jim's own account, tracking a real follow-up he
+-- flagged while confirming migrations 073/074: "a WYP 'ToDo' needs to be
+-- set up for updating the sales literature piece and the home page for
+-- WYP and the Free vs Subscription and other related text in the
+-- Subscriber section of Account Options -- as it relates to the Receipt
+-- Confirmation being a subscription feature." Looked up by email
+-- (jimgillon@gmail.com), same "never a hardcoded uuid" precedent every
+-- other seed/data script in this project's history already follows.
+-- Categorized under "Would You Please," the same category Jim's own
+-- earlier demo-data seed (docs/Week2 - SQL history.txt) already uses for
+-- WYP-business-related ToDos -- created via the same ON CONFLICT-safe
+-- pattern if it doesn't already exist on this account (categories has a
+-- real unique index, categories_owner_name_ci_idx). Existence-checked on
+-- description text (contact_id is null, i.e. a ToDo not a Request), so
+-- re-running this block is safe. No due date -- Jim's own framing was "we
+-- don't need to do it now."
+
+do $$
+declare
+  v_owner uuid;
+  v_cat_wyp uuid;
+begin
+  select id into v_owner from auth.users where email = 'jimgillon@gmail.com';
+
+  insert into public.categories (owner_id, name)
+    values (v_owner, 'Would You Please')
+    on conflict (owner_id, (lower(name))) do nothing;
+  select id into v_cat_wyp from public.categories
+    where owner_id = v_owner and lower(name) = lower('Would You Please');
+
+  if not exists (
+    select 1 from public.requests
+    where owner_id = v_owner
+      and description = 'Update sales literature (one-pager), the WYP home page, and the Free vs. Subscriber comparison text in Account Options'' Subscriber section to reflect Receipt Confirmation as a Subscriber feature, not a Free Account feature.'
+      and contact_id is null
+  ) then
+    insert into public.requests (owner_id, category_id, description, priority)
+    values (
+      v_owner, v_cat_wyp,
+      'Update sales literature (one-pager), the WYP home page, and the Free vs. Subscriber comparison text in Account Options'' Subscriber section to reflect Receipt Confirmation as a Subscriber feature, not a Free Account feature.',
+      2
+    );
+  end if;
+end $$;
+
+-- Verify:
+--   select description, priority, categories.name from public.requests
+--     join public.categories on categories.id = requests.category_id
+--     where requests.contact_id is null
+--     order by requests.created_at desc limit 1;
+--   -- should show the new ToDo, categorized "Would You Please."
+-- ============================================================================

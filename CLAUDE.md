@@ -4619,3 +4619,17 @@ link is built only after the stack is proven on Add Contact.
   `npx tsc --noEmit`/`npm run lint` clean. No mockup — this feature family
   has none beyond Jim's own PDF references (Receipt Confirmation) and this
   file's own AccountForm.tsx (which has never had one).
+- **A real WYP ToDo tracking marketing-content follow-up, one-time data
+  insert (not a migration), `docs/Week6 - SQL history.txt` (2026-09-30).**
+  Jim, confirming migrations 073/074: "a WYP 'ToDo' needs to be set up for
+  updating the sales literature piece and the home page for WYP and the
+  Free vs Subscription and other related text in the Subscriber section of
+  Account Options — as it relates to the Receipt Confirmation being a
+  subscription feature." Categorized under "Would You Please" (the same
+  category the Week2 demo-data seed already established for WYP-business
+  ToDos), no due date, priority 2. **Not yet run by Jim as of this
+  writing.** The actual content update itself (landing page's
+  `SUBSCRIBER_FEATURES`/comparison table, `docs/WYP onepager.html`,
+  `AccountForm.tsx`'s own Subscriber section text) is intentionally not
+  built in this batch — Jim's own framing was to track it as a ToDo for
+  later, not to do it now.
