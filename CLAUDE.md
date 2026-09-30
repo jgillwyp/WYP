@@ -4684,3 +4684,22 @@ link is built only after the stack is proven on Add Contact.
   `cron/tick/route.ts`'s `mintLink()`). See migration 075's own header
   comment in `docs/Week6 - SQL history.txt` for the full write-up and its
   verify block for the exact repro steps to confirm the fix once run.
+  **Confirmed run by Jim, 2026-09-30** — re-tested end to end (added an
+  attachment to a Sent Request, Sent it, the email link worked).
+- **Calendar View: white text on timed events; time prefix, 2026-09-30
+  (`app/components/CalendarView.tsx`, `app/globals.css`).** Jim, with a
+  screenshot: a timed item (Due Time set) showed black text on its dark
+  red/blue background, unreadable. Root cause: FullCalendar renders a timed
+  (non-all-day) event as its own "dot" style in Month view, distinct from
+  an all-day event's "block" style — only the block style gets white text
+  by default, so `.wypcal .fc-event.wypcal-overdue`/`-done`/`-open`
+  (`background`/`border-color` only, no `color`) left a timed event's text
+  at the inherited black. Fixed with an explicit `color: #fff` on all
+  three. Separately, Jim asked for the time to precede the Description
+  text on a timed event — it wasn't shown at all before (the custom
+  `eventContent` render only ever output `item.label`, which never
+  included a time). New `formatTime12h()` (same small helper duplicated
+  across several other files in this codebase) prefixes the event's
+  `title` with its formatted time whenever `item.hasTime && item.dueTime`
+  — the same condition that already makes the event non-all-day. `npx tsc
+  --noEmit`/`npm run lint` clean.

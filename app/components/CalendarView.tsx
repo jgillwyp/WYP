@@ -83,6 +83,20 @@ function isRoundTrip(): boolean {
   return window.sessionStorage.getItem(CALENDAR_ROUNDTRIP_KEY) === '1'
 }
 
+// formatTime12h — same small helper duplicated across CreateRequestForm.tsx/
+// MainScreen.tsx/RequestDetailForm.tsx/etc., per this codebase's per-file
+// convention. Used to prefix a timed event's on-calendar title with its
+// time (2026-09-30, owner-reported: "the time should precede the
+// Description text").
+function formatTime12h(value: string): string {
+  const [hStr, mStr] = value.split(':')
+  let h = parseInt(hStr, 10)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h}:${mStr} ${ampm}`
+}
+
 // formatMDYSlash — print-only "M/D/YY  h:mm AM" convention already
 // established elsewhere (e.g. MainScreen.tsx's print reports); duplicated
 // here per this codebase's per-file small-helper convention.
@@ -207,7 +221,9 @@ export default function CalendarView() {
     () =>
       filteredItems.map((item) => ({
         id: `${item.type}-${item.id}`,
-        title: item.label,
+        // Time prefix, timed items only (2026-09-30, owner-reported) — the
+        // same condition that makes the event timed (allDay: false) below.
+        title: item.hasTime && item.dueTime ? `${formatTime12h(item.dueTime)} ${item.label}` : item.label,
         start: item.hasTime && item.dueTime ? `${item.dueDate}T${item.dueTime}` : item.dueDate,
         allDay: !(item.hasTime && item.dueTime),
         classNames: [

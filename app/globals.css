@@ -4583,19 +4583,27 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* color: #fff explicit on all three, 2026-09-30 (owner-reported) — a
+   timed (non-all-day) event renders as FullCalendar's own "dot" style in
+   Month view rather than the "block" style an all-day event gets, and only
+   the block style sets white text by default; the dot style leaves text at
+   the inherited (black) color, unreadable against these dark backgrounds. */
 .wypcal .fc-event.wypcal-overdue {
   background: var(--alert-red);
   border-color: var(--alert-red);
+  color: #fff;
 }
 
 .wypcal .fc-event.wypcal-done {
   background: var(--ink-soft);
   border-color: var(--ink-soft);
+  color: #fff;
 }
 
 .wypcal .fc-event.wypcal-open {
   background: var(--brand-blue);
   border-color: var(--brand-blue);
+  color: #fff;
 }
 
 /* ============================================================================
