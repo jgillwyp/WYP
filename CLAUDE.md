@@ -4634,8 +4634,8 @@ link is built only after the stack is proven on Add Contact.
   built in this batch — Jim's own framing was to track it as a ToDo for
   later, not to do it now.
 - **Response-link tokens: a Request can now hold multiple simultaneously-
-  valid tokens instead of one — migration 075, drafted, not yet confirmed
-  run (2026-09-30).** Root-caused from a real bug Jim reproduced: a private
+  valid tokens instead of one — migration 075, confirmed run by Jim,
+  2026-09-30.** Root-caused from a real bug Jim reproduced: a private
   tester (John) got "This link is no longer active. The sender has removed
   the Request it pointed to." clicking the FIRST of two emails for the same
   Request — nothing was ever deleted. Jim's own repro: create a Request

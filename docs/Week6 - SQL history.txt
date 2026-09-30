@@ -7019,7 +7019,7 @@ end $$;
 -- ============================================================================
 -- Migration 075 (2026-09-30) -- request_links: a Request can now hold
 -- multiple simultaneously-valid response-link tokens, instead of one.
--- DRAFTED, NOT YET CONFIRMED RUN.
+-- CONFIRMED RUN by Jim, 2026-09-30.
 --
 -- Root-caused from a real, reproduced report: Jim reproduced a private
 -- tester's (John's) complaint that the FIRST of two emails for the same
