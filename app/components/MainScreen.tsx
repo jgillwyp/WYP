@@ -2844,6 +2844,18 @@ export default function MainScreen() {
                   If you don&rsquo;t see either option, your browser may not
                   support installing apps from the web.
                 </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>Only see &ldquo;Uninstall&rdquo;, not
+                  &ldquo;Install&rdquo;?</b> Would You Please is already
+                  installed in your browser, even if the icon is missing —
+                  deleting a desktop icon doesn&rsquo;t remove the install
+                  itself. Open <b>chrome://apps</b> in a browser tab,
+                  right-click the Would You Please icon, and choose
+                  &ldquo;Create shortcuts&hellip;&rdquo; to add a new
+                  desktop icon without reinstalling. Or, if you&rsquo;d
+                  rather start fresh, choose &ldquo;Uninstall&rdquo; first,
+                  then revisit this site in a normal browser tab.
+                </p>
               </>
             )}
 

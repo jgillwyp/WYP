@@ -4725,3 +4725,21 @@ link is built only after the stack is proven on Add Contact.
   a desktop Firefox visitor would see instructions that don't quite
   apply, judged an acceptable tradeoff against showing nothing at all.
   `npx tsc --noEmit`/`npm run lint` clean.
+- **Install instructions: "only see Uninstall?" guidance added, same day
+  follow-up (2026-10-01).** Jim tried the new desktop-chromium
+  instructions above and hit a real platform wrinkle: deleting a desktop
+  shortcut file does **not** uninstall a Chrome-installed web app — Chrome
+  keeps its own internal "this origin is installed" registration entirely
+  separate from the shortcut icon, so Chrome's own menu only ever offers
+  "Uninstall," never "Install," once an origin is registered, regardless
+  of whether any icon still points at it. There is no web API a normal
+  page can use to ask "is this origin already installed?" (removed from
+  browsers for privacy reasons), so this can't be detected and handled
+  automatically — the fix had to be better instructions, not better code.
+  Added a paragraph to the `'desktop-chromium'` modal: open
+  `chrome://apps`, right-click the icon, "Create shortcuts…" to recreate
+  just the desktop icon without reinstalling (no data/session lost); or
+  uninstall via the menu already being shown, then revisit the site fresh
+  in a normal tab for a real reinstall. **Jim confirmed the
+  uninstall-then-revisit path worked** — a fresh desktop icon was
+  recreated. `npx tsc --noEmit`/`npm run lint` clean.
