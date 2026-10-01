@@ -4703,3 +4703,25 @@ link is built only after the stack is proven on Add Contact.
   `title` with its formatted time whenever `item.hasTime && item.dueTime`
   — the same condition that already makes the event non-all-day. `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Install Housekeeping row: desktop fallback for non-Apple platforms
+  (2026-10-01, `MainScreen.tsx`), no mockup, no migration.** Jim
+  (Windows): removed his desktop icon, signed out and back in, and
+  expected the Install row back but saw nothing. Root cause: the Chromium
+  row (`canInstall`/`promptInstall`) depends entirely on Chrome firing
+  `beforeinstallprompt`, which isn't guaranteed every session — Chrome's
+  own engagement/re-prompt heuristics can suppress it for a while right
+  after an uninstall, with no API to force it — and the existing
+  2026-09-03 Apple-guidance fallback only covered iOS/macOS Safari, so a
+  Windows (or Linux, or Mac-on-a-non-Safari-browser) visitor with no live
+  prompt had no fallback at all. New `installGuidance` value,
+  `'desktop-chromium'`, covering any non-mobile, non-(Mac+Safari),
+  non-iOS platform — reuses the exact same row/modal mechanism the Apple
+  branches already established, with generic manual instructions (address
+  bar install icon, or browser menu → "Install Would You Please…"). Not
+  narrowed to detect Chromium specifically (no reliable check exists
+  without more UA-sniffing than this file's other platform checks use,
+  all of which already accept "worst case is slightly wrong instructions,
+  never a data-access decision" per `platform.ts`'s own header comment) —
+  a desktop Firefox visitor would see instructions that don't quite
+  apply, judged an acceptable tradeoff against showing nothing at all.
+  `npx tsc --noEmit`/`npm run lint` clean.

@@ -966,7 +966,7 @@ export default function MainScreen() {
   // existing Chromium behavior where `canInstall` also goes false forever
   // once real installation happens.
   const [installGuidance, setInstallGuidance] = useState<
-    'none' | 'ios-safari' | 'ios-other' | 'mac-safari'
+    'none' | 'ios-safari' | 'ios-other' | 'mac-safari' | 'desktop-chromium'
   >('none')
   const [installHelpOpen, setInstallHelpOpen] = useState(false)
   // Jim: "the actual Icon Installation could be named Homepage Icon
@@ -1070,6 +1070,23 @@ export default function MainScreen() {
   // wins outright and leaves `installGuidance` at its 'none' default, so the
   // Apple-guidance row never shows alongside — or instead of — an icon
   // that's already there.
+  //
+  // 'desktop-chromium' fallback (2026-10-01, owner-reported) — Jim removed
+  // his desktop icon, signed out and back in, and expected the Install row
+  // back but saw nothing at all. Root cause: `canInstall` depends entirely
+  // on Chrome firing `beforeinstallprompt`, which isn't guaranteed to fire
+  // every session — Chrome's own engagement/re-prompt heuristics can
+  // suppress it for a while after an uninstall, and there's no API to force
+  // it. Until now, a non-Apple desktop browser with no live prompt had no
+  // fallback at all (only iOS/Mac Safari did) — this covers every other
+  // desktop case (Windows on any browser, Mac on a non-Safari browser) with
+  // generic manual instructions, the same way the Apple branches already
+  // cover their own platforms. Not narrowed to a specific Chromium-only
+  // check (no reliable one exists without more UA-sniffing surface than
+  // this file's other platform checks use) — worst case is slightly wrong
+  // instructions for an unsupported browser (e.g. desktop Firefox), never a
+  // data-access decision, same tradeoff platform.ts's own header comment
+  // already accepts for every other check here.
   useEffect(() => {
     Promise.resolve().then(() => {
       setInstallLabel(isMobileDevice() ? 'Homepage' : 'Desktop')
@@ -1078,6 +1095,8 @@ export default function MainScreen() {
         setInstallGuidance(isSafariBrowser() ? 'ios-safari' : 'ios-other')
       } else if (isMacOSDevice() && isSafariBrowser()) {
         setInstallGuidance('mac-safari')
+      } else if (!isMobileDevice()) {
+        setInstallGuidance('desktop-chromium')
       }
     })
   }, [])
@@ -2798,6 +2817,32 @@ export default function MainScreen() {
                 </p>
                 <p className="subnote" style={{ marginTop: 8 }}>
                   <b>3.</b> Click &ldquo;Add.&rdquo;
+                </p>
+              </>
+            )}
+
+            {installGuidance === 'desktop-chromium' && (
+              <>
+                <p className="subnote" style={{ marginTop: 10 }}>
+                  Look for an install icon in the address bar (a small
+                  monitor with a down arrow) and click it, or open your
+                  browser&rsquo;s menu.
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>1.</b> Click the <b>⋮</b> (or <b>&middot;&middot;&middot;</b>)
+                  menu in the top-right corner.
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>2.</b> Choose &ldquo;Install Would You Please&hellip;&rdquo;
+                  (sometimes under &ldquo;Apps&rdquo; or &ldquo;Save and
+                  share&rdquo;).
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  <b>3.</b> Click &ldquo;Install.&rdquo;
+                </p>
+                <p className="subnote" style={{ marginTop: 8 }}>
+                  If you don&rsquo;t see either option, your browser may not
+                  support installing apps from the web.
                 </p>
               </>
             )}
