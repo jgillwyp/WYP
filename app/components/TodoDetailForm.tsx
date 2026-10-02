@@ -384,6 +384,13 @@ export default function TodoDetailForm() {
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
   const [printTick, setPrintTick] = useState(0)
+  // liveAttachmentCount (2026-10-02, owner-reported) — ConversionBanner's
+  // own attachmentCount prop used to read straight off printAttachments.length,
+  // which is fetched once at mount for the Print feature and never updated
+  // again — adding an attachment during this same visit left "Copy to
+  // Create Request" unaware it existed. Seeded from the same initial fetch
+  // below, then kept live by AttachmentsPanel's own onContentChange callback.
+  const [liveAttachmentCount, setLiveAttachmentCount] = useState(0)
 
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -637,7 +644,11 @@ export default function TodoDetailForm() {
           .is('deleted_at', null)
           .order('created_at'),
       ])
-      if (!cancelled) setPrintAttachments((attRes.data as unknown as PrintAttachmentEntry[]) ?? [])
+      if (!cancelled) {
+        const attList = (attRes.data as unknown as PrintAttachmentEntry[]) ?? []
+        setPrintAttachments(attList)
+        setLiveAttachmentCount(attList.filter((a) => a.kind === 'file').length)
+      }
 
       const { data: sessionData } = await supabase.auth.getSession()
       if (!cancelled) {
@@ -1654,7 +1665,10 @@ export default function TodoDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
               showCarryToggle={repeatRule !== null}
-              onContentChange={() => setContentChanged(true)}
+              onContentChange={(count) => {
+                setContentChanged(true)
+                setLiveAttachmentCount(count)
+              }}
             />
 
             {/* Request<->ToDo conversion (2026-08-26) — see
@@ -1675,7 +1689,7 @@ export default function TodoDetailForm() {
                 who: e.who,
                 repliesToId: e.replies_to_id,
               }))}
-              attachmentCount={printAttachments.length}
+              attachmentCount={liveAttachmentCount}
               canCopyAttachments={tier === 'subscriber'}
               archiveAction={
                 archivedAt === null

@@ -483,6 +483,12 @@ export default function ResponseDetailForm() {
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
   const [printTick, setPrintTick] = useState(0)
+  // liveAttachmentCount (2026-10-02, owner-reported) — see
+  // TodoDetailForm.tsx's own identical comment: ConversionBanner's
+  // attachmentCount prop used to read printAttachments.length, a one-time
+  // Print-feature fetch that never updated when an attachment was added or
+  // removed during the same visit.
+  const [liveAttachmentCount, setLiveAttachmentCount] = useState(0)
 
   function startPrint() {
     setShowPrint(true)
@@ -554,7 +560,9 @@ export default function ResponseDetailForm() {
       if (!cancelled) {
         type PrintDetailRow = { request_id: string; attachments: PrintAttachmentEntry[] }
         const rows = (printDetailData as unknown as PrintDetailRow[]) ?? []
-        setPrintAttachments(rows[0]?.attachments ?? [])
+        const attList = rows[0]?.attachments ?? []
+        setPrintAttachments(attList)
+        setLiveAttachmentCount(attList.filter((a) => a.kind === 'file').length)
       }
 
       const { data: sessionData } = await supabase.auth.getSession()
@@ -1254,9 +1262,10 @@ export default function ResponseDetailForm() {
               currentUserId={currentUserId}
               ownerLabel="You"
               standalone
-              onContentChange={() => {
+              onContentChange={(count) => {
                 setContentChanged(true)
                 setAttachmentsChanged(true)
+                setLiveAttachmentCount(count)
               }}
             />
 
@@ -1310,7 +1319,7 @@ export default function ResponseDetailForm() {
                 who: e.who,
                 repliesToId: e.replies_to_id,
               }))}
-              attachmentCount={printAttachments.length}
+              attachmentCount={liveAttachmentCount}
               canCopyAttachments={viewerTier === 'subscriber'}
               archiveAction={
                 receivedArchivedAt === null

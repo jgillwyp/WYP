@@ -111,8 +111,20 @@ type Props = {
    * Close/Cancel wording's own `hasChanges` (which deliberately still
    * excludes it — see each screen's own comment on why). Not fired for
    * `handleToggleCarry` (a Repeat-carry checkbox toggle on an existing row,
-   * not new/removed content) or the background signed-URL refresh. */
-  onContentChange?: () => void
+   * not new/removed content) or the background signed-URL refresh.
+   *
+   * Now passes the panel's own up-to-the-moment `kind = 'file'` row count
+   * (2026-10-02, owner-reported) — every caller was instead feeding
+   * ConversionBanner's own `attachmentCount` prop from a *different*,
+   * one-time-fetched state (`printAttachments`, loaded once at mount for
+   * the Print feature), which never updated when this panel added or
+   * removed a file during the same visit. A real symptom: add an
+   * attachment, immediately use "Copy to Create Request/ToDo" with
+   * "Include Attachments" — the Include checkbox never even offered
+   * Attachments (or silently copied none), since the stale count still
+   * read zero. Computed from the actual new `rows` array at each call
+   * site, not a hand-tracked +1/-1, so it can never drift out of sync. */
+  onContentChange?: (fileCount: number) => void
 }
 
 const emptyLabel = { file: 'Attachments', reference: 'Locations' } as const
@@ -260,8 +272,11 @@ export default function AttachmentsPanel({
       const { uploadAttachmentWithRetry } = await import('@/lib/attachmentsClient')
       const result = await uploadAttachmentWithRetry(f, requestId, { authToken, recipientToken })
       if (result.ok) {
-        setRows((current) => [result.attachment, ...current])
-        onContentChange?.()
+        setRows((current) => {
+          const next = [result.attachment, ...current]
+          onContentChange?.(next.filter((r) => r.kind === 'file').length)
+          return next
+        })
       } else {
         setError(result.message)
       }
@@ -278,8 +293,11 @@ export default function AttachmentsPanel({
       const { deleteAttachmentReference } = await import('@/lib/attachmentsClient')
       const ok = await deleteAttachmentReference(id)
       if (ok) {
-        setRows((current) => current.filter((r) => r.id !== id))
-        onContentChange?.()
+        setRows((current) => {
+          const next = current.filter((r) => r.id !== id)
+          onContentChange?.(next.filter((r) => r.kind === 'file').length)
+          return next
+        })
       } else setError('Could not remove this Location.')
       return
     }
@@ -290,8 +308,11 @@ export default function AttachmentsPanel({
         body: JSON.stringify({ requestId, attachmentId: id }),
       })
       if (res.ok) {
-        setRows((current) => current.filter((r) => r.id !== id))
-        onContentChange?.()
+        setRows((current) => {
+          const next = current.filter((r) => r.id !== id)
+          onContentChange?.(next.filter((r) => r.kind === 'file').length)
+          return next
+        })
       } else setError('Could not remove this attachment.')
     } catch {
       setError('Could not remove this attachment.')
@@ -329,8 +350,11 @@ export default function AttachmentsPanel({
       setRefError('Could not save this Location.')
       return
     }
-    setRows((current) => [result, ...current])
-    onContentChange?.()
+    setRows((current) => {
+      const next = [result, ...current]
+      onContentChange?.(next.filter((r) => r.kind === 'file').length)
+      return next
+    })
     setRefDescription('')
     setRefLocation('')
     setRefFormOpen(false)

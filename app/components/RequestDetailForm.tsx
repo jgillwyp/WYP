@@ -442,6 +442,12 @@ export default function RequestDetailForm() {
   const [printAttachments, setPrintAttachments] = useState<PrintAttachmentEntry[]>([])
   const [showPrint, setShowPrint] = useState(false)
   const [printTick, setPrintTick] = useState(0)
+  // liveAttachmentCount (2026-10-02, owner-reported) — see
+  // TodoDetailForm.tsx's own identical comment: ConversionBanner's
+  // attachmentCount prop used to read printAttachments.length, a one-time
+  // Print-feature fetch that never updated when an attachment was added or
+  // removed during the same visit.
+  const [liveAttachmentCount, setLiveAttachmentCount] = useState(0)
 
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -576,7 +582,11 @@ export default function RequestDetailForm() {
           .is('deleted_at', null)
           .order('created_at'),
       ])
-      if (!cancelled) setPrintAttachments((attRes.data as unknown as PrintAttachmentEntry[]) ?? [])
+      if (!cancelled) {
+        const attList = (attRes.data as unknown as PrintAttachmentEntry[]) ?? []
+        setPrintAttachments(attList)
+        setLiveAttachmentCount(attList.filter((a) => a.kind === 'file').length)
+      }
 
       const { data: sessionData } = await supabase.auth.getSession()
       if (!cancelled) {
@@ -1713,9 +1723,10 @@ export default function RequestDetailForm() {
               currentUserId={currentUserId}
               ownerLabel={ownerName ?? 'You'}
               showCarryToggle={repeatRule !== null}
-              onContentChange={() => {
+              onContentChange={(count) => {
                 setContentChanged(true)
                 setAttachmentsChanged(true)
+                setLiveAttachmentCount(count)
               }}
             />
 
@@ -1737,7 +1748,7 @@ export default function RequestDetailForm() {
                 who: e.who,
                 repliesToId: e.replies_to_id,
               }))}
-              attachmentCount={printAttachments.length}
+              attachmentCount={liveAttachmentCount}
               canCopyAttachments={tier === 'subscriber'}
               archiveAction={
                 archivedAt === null

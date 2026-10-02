@@ -4774,4 +4774,41 @@ link is built only after the stack is proven on Add Contact.
   blocking Supabase's domain, no code change fixes it outright — the
   practical next step is asking the tester to try a different network
   (e.g. a personal hotspot) to confirm. `npx tsc --noEmit`/`npm run lint`
-  clean.
+  clean. **Confirmed browser-specific, not network/firewall** — the
+  tester switched from Firefox to Edge on the same device/network and
+  sign-in worked immediately. Narrows the cause to Firefox itself (most
+  likely its own Enhanced Tracking Protection or an installed extension
+  blocking the request to Supabase's domain) rather than an institutional
+  firewall — still nothing this app's own code can control either way,
+  same bottom line as before.
+- **Conversion banner's "Include Attachments" silently failed to copy an
+  attachment added during the same visit — real bug, fixed (2026-10-02,
+  `AttachmentsPanel.tsx`, `RequestDetailForm.tsx`, `TodoDetailForm.tsx`,
+  `ResponseDetailForm.tsx`).** Jim: used "Copy to Create Request" from a
+  ToDo with "Include Attachments" checked, but the new Request came
+  through without the attachment — his own working theory was that he
+  hadn't saved the ToDo first. Traced the actual mechanism instead of
+  accepting that theory at face value: `ConversionBanner`'s own
+  `attachmentCount` prop was fed from each screen's `printAttachments`
+  state, a one-time fetch done at mount purely for the Print feature —
+  never refreshed again. `AttachmentsPanel`'s own `onContentChange`
+  callback (built 2026-09-02 for a different purpose, gating the Send
+  button) already fires on every add/delete, but only as a bare
+  notification with no count — so adding an attachment during the visit
+  updated the panel's own on-screen list immediately (uploads are never
+  "staged," they save the moment they succeed, independent of the
+  surrounding form's own Save button) while `attachmentCount` stayed at
+  whatever it was when the page first loaded. Checking "Include
+  Attachments" against a stale zero either hid the option from the
+  checkbox's own label entirely or copied nothing — not a "you forgot to
+  save" issue at all. Fixed at the source: `onContentChange` now reports
+  the panel's own up-to-the-moment `kind = 'file'` row count (computed
+  from the actual new `rows` array at each of its 4 call sites, never a
+  hand-tracked +1/-1 that could drift), and all three parent screens
+  (Request Detail, ToDo Detail, Response Detail — the only three with a
+  `ConversionBanner`) now track a real `liveAttachmentCount` state, seeded
+  from the same initial Print fetch and kept live by the callback, instead
+  of reading `printAttachments.length` directly. `RequestResponseForm.tsx`
+  (the anonymous path) also uses `onContentChange` but has no
+  `ConversionBanner` at all, so it's unaffected by the signature change.
+  `npx tsc --noEmit`/`npm run lint` clean.
