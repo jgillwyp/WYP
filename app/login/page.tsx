@@ -12,6 +12,31 @@ const RESEND_COOLDOWN_SECONDS = 60
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// Raw browser fetch-failure text, friendlied up (2026-10-02, owner-reported
+// — a private tester on an institutional domain, ourdds.org, saw the literal
+// "TypeError: NetworkError when attempting to fetch resource." in the error
+// area). supabase-js catches the underlying thrown exception and surfaces it
+// as error.message verbatim rather than a real Supabase-returned rejection —
+// correct error-handling on the library's part, just not something a
+// non-technical person can act on. Matches across browsers' own differently-
+// worded phrasing for the same failure class (Firefox: "NetworkError when
+// attempting to fetch resource"; Chrome: "Failed to fetch"; Safari: "Load
+// failed") — most likely cause is the visitor's own network/firewall
+// blocking the request to Supabase's domain, not anything this app controls,
+// so the message points them at checking their connection/network rather
+// than implying an app bug.
+function isNetworkFetchError(message: string): boolean {
+  const m = message.toLowerCase()
+  return m.includes('networkerror') || m.includes('failed to fetch') || m.includes('load failed')
+}
+
+function friendlyAuthErrorMessage(message: string): string {
+  if (isNetworkFetchError(message)) {
+    return 'Could not reach the sign-in service. Check your internet connection — a work or school network sometimes blocks this — and try again, or try a different network.'
+  }
+  return message
+}
+
 // Remembered email address, 2026-08-15 — owner asked for this as a
 // fallback while investigating why a signed-in session doesn't always
 // survive a full browser close/reopen (see the decisions log's 2026-08-15
@@ -148,7 +173,7 @@ function LoginScreen() {
     setLoading(false)
 
     if (sendError) {
-      setError(sendError.message)
+      setError(friendlyAuthErrorMessage(sendError.message))
       return false
     }
 
@@ -179,13 +204,27 @@ function LoginScreen() {
     setError(null)
     setLoading(true)
 
-    const { data: allowed, error: gateError } = await supabase.rpc('can_create_account', {
-      p_email: address,
-    })
+    // Retried on a genuine network-level failure only (2026-10-02,
+    // owner-reported) — can_create_account is a pure read with no side
+    // effects, so retrying it is always safe, unlike signInWithOtp below
+    // (a retry there risks a second real email if the first request
+    // actually reached Supabase and only the response was lost — see
+    // /auth/callback's own history on duplicate sign-in emails). A
+    // non-network rejection (the gate itself refusing) returns immediately,
+    // no retry — that answer won't change on a second try.
+    let allowed: boolean | null = null
+    let gateError: { message: string } | null = null
+    for (const delayMs of [0, 600, 1600]) {
+      if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
+      const result = await supabase.rpc('can_create_account', { p_email: address })
+      allowed = result.data ?? null
+      gateError = result.error
+      if (!gateError || !isNetworkFetchError(gateError.message)) break
+    }
 
     if (gateError) {
       setLoading(false)
-      setError(gateError.message)
+      setError(friendlyAuthErrorMessage(gateError.message))
       return
     }
 

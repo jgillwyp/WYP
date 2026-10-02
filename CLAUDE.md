@@ -4743,3 +4743,35 @@ link is built only after the stack is proven on Add Contact.
   in a normal tab for a real reinstall. **Jim confirmed the
   uninstall-then-revisit path worked** — a fresh desktop icon was
   recreated. `npx tsc --noEmit`/`npm run lint` clean.
+- **`/login` surfaces raw browser network-error text verbatim; friendlied
+  up, with a safe retry on the one read-only call (2026-10-02,
+  `app/login/page.tsx`).** Jim: a private tester (bmccoy@ourdds.org —
+  likely an institutional domain with its own firewall/web filtering) saw
+  the literal "TypeError: NetworkError when attempting to fetch resource."
+  in the sign-in form's error area. The diagnostic query from 2026-09-30
+  confirmed this is the actual root cause, not a red herring —
+  `auth_user_id` is still null for this email, meaning `signInWithOtp`
+  never even reached Supabase; `tier_toggle_allowlist`/`beta_allowlist`
+  (the earlier add-private-tester SQL) are both already correctly in
+  place, unaffected. `supabase-js` catches the underlying thrown fetch
+  exception and surfaces it as `error.message` verbatim — correct
+  library behavior, just not something a non-technical visitor can act
+  on. New `isNetworkFetchError()`/`friendlyAuthErrorMessage()` match
+  across browsers' differently-worded phrasing for the same failure class
+  (Firefox "NetworkError when attempting to fetch resource", Chrome
+  "Failed to fetch", Safari "Load failed") and replace it with "Could not
+  reach the sign-in service. Check your internet connection — a work or
+  school network sometimes blocks this — and try again, or try a
+  different network." — pointing at the actual likely cause (the
+  visitor's own network) rather than implying an app bug. Also added a
+  short retry (0/600/1600ms, matching this app's established pattern)
+  around `can_create_account` specifically — a pure read with no side
+  effects, always safe to retry — but deliberately **not** around
+  `signInWithOtp` itself: a retry there risks a second real email if the
+  first request actually reached Supabase and only the response was lost,
+  the same duplicate-email risk `/auth/callback`'s own 2026-08-27 history
+  already flagged. If this is genuinely the tester's network/firewall
+  blocking Supabase's domain, no code change fixes it outright — the
+  practical next step is asking the tester to try a different network
+  (e.g. a personal hotspot) to confirm. `npx tsc --noEmit`/`npm run lint`
+  clean.
