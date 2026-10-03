@@ -183,6 +183,14 @@ export async function POST(request: Request) {
   const ownerName = profile?.display_name ?? null
   const ownerEmail = userData.user.email ?? ''
 
+  // Recipient account status (2026-10-03, migration 076) — see
+  // send-request/route.ts's own identical comment.
+  const { data: accountStatusData } = await sb.rpc('get_account_status_by_email', {
+    p_email: recipientEmail,
+  })
+  const recipientAccountStatus: 'none' | 'free' | 'subscriber' =
+    accountStatusData === 'free' || accountStatusData === 'subscriber' ? accountStatusData : 'none'
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
 
   const subject = buildRequestEmailSubject('updated', ownerName, reqRow.due_date, reqRow.due_time)
@@ -198,6 +206,7 @@ export async function POST(request: Request) {
     // Receipt Confirmation (2026-09-24) — see email.ts's own comment on
     // offerReceiptConfirmation for the full reasoning.
     offerReceiptConfirmation: reqRow.receipt_confirmation_requested && !reqRow.receipt_confirmed_at,
+    recipientAccountStatus,
   }
   const html = buildRequestEmailHtml(emailBodyFields)
   const text = buildRequestEmailText(emailBodyFields)

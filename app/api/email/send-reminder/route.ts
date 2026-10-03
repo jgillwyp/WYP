@@ -167,6 +167,14 @@ export async function POST(request: Request) {
   const ownerEmail = userData.user.email ?? ''
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
 
+  // Recipient account status (2026-10-03, migration 076) — see
+  // send-request/route.ts's own identical comment.
+  const { data: accountStatusData } = await sb.rpc('get_account_status_by_email', {
+    p_email: recipientEmail,
+  })
+  const recipientAccountStatus: 'none' | 'free' | 'subscriber' =
+    accountStatusData === 'free' || accountStatusData === 'subscriber' ? accountStatusData : 'none'
+
   const fields = {
     ownerName,
     description: reqRow.description,
@@ -179,6 +187,7 @@ export async function POST(request: Request) {
     // button's "...or to turn off notifications" clause is only true when
     // the owner's own Show Reminders is on.
     remindersShown: profile?.request_reminders_enabled ?? false,
+    recipientAccountStatus,
   }
 
   // Reminder state (2026-09-25, the actual bug fix — see this file's own

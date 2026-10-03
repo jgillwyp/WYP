@@ -4812,3 +4812,38 @@ link is built only after the stack is proven on Add Contact.
   (the anonymous path) also uses `onContentChange` but has no
   `ConversionBanner` at all, so it's unaffected by the signature change.
   `npx tsc --noEmit`/`npm run lint` clean.
+- **Recipient-facing emails now thank an already-registered Recipient
+  instead of pitching a signup — migration 076, drafted, not yet
+  confirmed run (2026-10-03).** Jim, with three reference screenshots: the
+  "New to Would You Please?" signup CTA at the bottom of every Recipient-
+  facing email showed unconditionally, even when the Recipient already has
+  their own account (e.g. a self-sent Request, or any Recipient who
+  happens to already be a WYP user). New `get_account_status_by_email()`
+  (migration 076) — same `auth.users`-reading `SECURITY DEFINER`
+  precedent as `can_create_account()`/`get_contact_request_counts()` —
+  returns `'none'`/`'free'`/`'subscriber'` for an arbitrary email,
+  case-insensitive, granted to `authenticated` and `service_role` (every
+  owner-side email route runs as the forwarded owner session; the cron
+  route uses service_role), never `anon`. New
+  `RecipientAccountStatus` type and `accountStatusThankYou()` in
+  `app/src/lib/email.ts` — `emailSignupFooter()`/`textSignupFooterLines()`
+  now take the status and show Jim's own two thank-you lines verbatim
+  ("Thank you for being a Would You Please Subscriber." /
+  "...Free Account user.") instead of the CTA whenever it's not `'none'`.
+  Scoped to exactly the two Recipient-facing template families that ever
+  called this footer — `buildRequestEmailHtml/Text` (Initial Request,
+  day-before/day-of Reminder, "UPDATED:" notification) and
+  `buildReminderNoticeHtml/Text` (the Reminder/Overdue notice family) —
+  every other outbound email (ToDo Reminders, the two Requestor digests)
+  goes to the *owner's* own account email, whose status is already known
+  without a lookup, and was never wired to this footer in the first
+  place. `recipientAccountStatus` is now a required field on both
+  `RequestEmailBodyFields`/`ReminderNoticeFields`, threaded through all 4
+  server-side callers: `send-request/route.ts`, `send-request-update/
+  route.ts`, `send-reminder/route.ts` (each a single lookup via the
+  caller's own forwarded client), and `cron/tick/route.ts`'s Phases A1/
+  A1b/B (a new `getRecipientAccountStatus()` helper, cached per
+  lowercased email alongside the file's existing `getOwnerEmail()` cache,
+  since the same Contact's address can recur across several rows in one
+  run). `npx tsc --noEmit`/`npm run lint` clean. No mockup — this feature
+  has none beyond Jim's own reference screenshots.

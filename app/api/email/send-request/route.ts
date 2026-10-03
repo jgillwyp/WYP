@@ -167,6 +167,16 @@ export async function POST(request: Request) {
   const ownerName = profile?.display_name ?? null
   const ownerEmail = userData.user.email ?? ''
 
+  // Recipient account status (2026-10-03, migration 076) — lets the
+  // footer thank an already-registered Recipient instead of pitching a
+  // signup they don't need. 'none' (the safe default) on any lookup
+  // failure — never blocks the send over this.
+  const { data: accountStatusData } = await sb.rpc('get_account_status_by_email', {
+    p_email: recipientEmail,
+  })
+  const recipientAccountStatus: 'none' | 'free' | 'subscriber' =
+    accountStatusData === 'free' || accountStatusData === 'subscriber' ? accountStatusData : 'none'
+
   // Reports the actual Reminders-until-Done schedule, not just a single
   // yes/no promise (2026-08-22, second same-day follow-up — see the
   // decisions log). "Day before" is still gated on isReminderEligible
@@ -199,6 +209,7 @@ export async function POST(request: Request) {
     // Receipt Confirmation (2026-09-24) — see email.ts's own comment on
     // offerReceiptConfirmation for the full reasoning.
     offerReceiptConfirmation: reqRow.receipt_confirmation_requested && !reqRow.receipt_confirmed_at,
+    recipientAccountStatus,
   }
   const html = buildRequestEmailHtml(emailBodyFields)
   const text = buildRequestEmailText(emailBodyFields)

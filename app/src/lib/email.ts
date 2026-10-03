@@ -285,7 +285,27 @@ function emailDescriptionBox(html: string): string {
 // for a quicker read of what's actually being offered.
 export const SIGNUP_CTA_TEXT = 'Get a Free Account to: send Requests & manage your ToDos'
 
-function emailSignupFooter(siteUrl: string): string {
+// Recipient account status (2026-10-03, owner-reported) — until now, this
+// footer showed the signup pitch unconditionally, even to a Recipient who
+// already has their own WYP account (e.g. a self-sent Request, or two
+// people who both happen to be account holders). 'none' is the only status
+// that shows the CTA; 'free'/'subscriber' show a short thank-you instead —
+// both the caller's own job to determine via a real auth.users/profiles
+// lookup (get_account_status_by_email, migration 076) before building the
+// email, since this module itself has no database access (see the file
+// header comment). Wording is Jim's own, verbatim.
+export type RecipientAccountStatus = 'none' | 'free' | 'subscriber'
+
+function accountStatusThankYou(status: 'free' | 'subscriber'): string {
+  return status === 'subscriber'
+    ? 'Thank you for being a Would You Please Subscriber.'
+    : 'Thank you for being a Would You Please Free Account user.'
+}
+
+function emailSignupFooter(siteUrl: string, accountStatus: RecipientAccountStatus): string {
+  if (accountStatus !== 'none') {
+    return `<p style="margin:18px 0 0; color:${EMAIL_BLUE_PRESSED};">${accountStatusThankYou(accountStatus)}</p>`
+  }
   return [
     `<p style="margin:18px 0 8px; font-size:17px; font-weight:700; color:${EMAIL_BLUE_PRESSED};">New to Would You Please?</p>`,
     `<p style="margin:0;">${emailButton(siteUrl, SIGNUP_CTA_TEXT)}</p>`,
@@ -296,7 +316,8 @@ function emailSignupFooter(siteUrl: string): string {
 // (buildRequestEmailText, buildReminderNoticeText), same wording, minus
 // SIGNUP_CTA_TEXT's own internal colon (a button's line break, not a
 // sentence), so the trailing colon before the URL reads as the only one.
-function textSignupFooterLines(siteUrl: string): string[] {
+function textSignupFooterLines(siteUrl: string, accountStatus: RecipientAccountStatus): string[] {
+  if (accountStatus !== 'none') return [accountStatusThankYou(accountStatus)]
   return [`New to Would You Please? ${SIGNUP_CTA_TEXT.replace(':', '')}:`, siteUrl]
 }
 
@@ -516,6 +537,11 @@ type RequestEmailBodyFields = {
   // whenever doneDate is set, same reasoning REQUEST_DONE_LINK_TEXT already
   // uses: nothing left to confirm receipt of once the Request is Done.
   offerReceiptConfirmation?: boolean
+  // Recipient account status (2026-10-03) — see RecipientAccountStatus's
+  // own comment above emailSignupFooter. The caller looks this up once per
+  // send; every current caller of this template is recipient-facing, so
+  // this is always required, not optional/defaulted.
+  recipientAccountStatus: RecipientAccountStatus
 }
 
 // Minimal HTML-escaping for the one piece of this email that's real user
@@ -660,7 +686,7 @@ export function buildRequestEmailHtml(fields: RequestEmailBodyFields): string {
 
   parts.push(
     '<p style="margin:0 0 14px;">You can also see any attachments and add questions or comments to this Request with the above link.</p>',
-    emailSignupFooter(fields.siteUrl)
+    emailSignupFooter(fields.siteUrl, fields.recipientAccountStatus)
   )
 
   return wrapEmailHtml(fields.siteUrl, parts.join('\n'))
@@ -704,7 +730,7 @@ export function buildRequestEmailText(fields: RequestEmailBodyFields): string {
     '',
     'You can also see any attachments and add questions or comments to this Request with the above link.',
     '',
-    ...textSignupFooterLines(fields.siteUrl)
+    ...textSignupFooterLines(fields.siteUrl, fields.recipientAccountStatus)
   )
 
   return lines.join('\n')
@@ -806,6 +832,9 @@ type ReminderNoticeFields = {
   // comment. Required, not optional/defaulted here, so every caller has to
   // consciously supply a real value rather than silently drifting stale.
   remindersShown: boolean
+  // Recipient account status (2026-10-03) — see RecipientAccountStatus's
+  // own comment above emailSignupFooter.
+  recipientAccountStatus: RecipientAccountStatus
 }
 
 export function buildReminderNoticeSubject(
@@ -838,7 +867,7 @@ export function buildReminderNoticeHtml(urgency: ReminderUrgency, fields: Remind
     `<p style="margin:0 0 18px;">${reminderNoticeMessage(urgency, fields.dueDate, fields.dueTime)}</p>`,
     `<p style="margin:0 0 18px;">${confirmButtonHtml}${emailButtonRaw(fields.link, reminderNoticeLinkText(fields.remindersShown))}</p>`,
     emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
-    emailSignupFooter(fields.siteUrl),
+    emailSignupFooter(fields.siteUrl, fields.recipientAccountStatus),
   ].join('\n')
   return wrapEmailHtml(fields.siteUrl, body)
 }
@@ -854,7 +883,7 @@ export function buildReminderNoticeText(urgency: ReminderUrgency, fields: Remind
     '',
     fields.description,
     '',
-    ...textSignupFooterLines(fields.siteUrl)
+    ...textSignupFooterLines(fields.siteUrl, fields.recipientAccountStatus)
   )
   return lines.join('\n')
 }

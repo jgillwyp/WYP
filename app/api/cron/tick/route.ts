@@ -388,6 +388,25 @@ async function handle(request: Request) {
     return email
   }
 
+  // Recipient account status (2026-10-03, migration 076) — same reasoning
+  // as getOwnerEmail above: lets a Recipient-facing email's footer thank an
+  // already-registered Recipient instead of pitching a signup they don't
+  // need. Cached per lowercased email, since the same Contact's address
+  // can recur across several rows in one cron run. Defaults to 'none' on
+  // any lookup failure — never blocks a send over this.
+  const recipientAccountStatusCache = new Map<string, 'none' | 'free' | 'subscriber'>()
+  async function getRecipientAccountStatus(
+    sbc: SupabaseClient,
+    email: string
+  ): Promise<'none' | 'free' | 'subscriber'> {
+    const key = email.toLowerCase()
+    if (recipientAccountStatusCache.has(key)) return recipientAccountStatusCache.get(key)!
+    const { data } = await sbc.rpc('get_account_status_by_email', { p_email: email })
+    const status: 'none' | 'free' | 'subscriber' = data === 'free' || data === 'subscriber' ? data : 'none'
+    recipientAccountStatusCache.set(key, status)
+    return status
+  }
+
   // Mints an additional valid token every call (migration 075, 2026-09-30)
   // — no longer overwrites a Request's only link the way it did through
   // migration 033's own single-column design. See that migration's own
@@ -465,9 +484,11 @@ async function handle(request: Request) {
     }
     const ownerEmail = await getOwnerEmail(sb, row.owner_id)
     const ownerName = profile?.display_name ?? null
+    const recipientAccountStatus = await getRecipientAccountStatus(sb, row.contacts.email)
     const bodyFields = {
       description: row.description,
       link,
+      recipientAccountStatus,
       // reminderSchedule omitted (2026-08-22, second same-day follow-up) —
       // a Reminder email doesn't restate the full Reminders-until-Done
       // schedule inside itself; only the Initial Request email
@@ -564,9 +585,11 @@ async function handle(request: Request) {
     }
     const ownerEmail = await getOwnerEmail(sb, row.owner_id)
     const ownerName = profile?.display_name ?? null
+    const recipientAccountStatus = await getRecipientAccountStatus(sb, row.contacts.email)
     const bodyFields = {
       description: row.description,
       link,
+      recipientAccountStatus,
       // reminderSchedule omitted (2026-08-22, second same-day follow-up) —
       // a Reminder email doesn't restate the full Reminders-until-Done
       // schedule inside itself; only the Initial Request email
@@ -794,6 +817,7 @@ async function handle(request: Request) {
     }
     const ownerEmail = await getOwnerEmail(sb, row.owner_id)
     const ownerName = profile?.display_name ?? null
+    const recipientAccountStatus = await getRecipientAccountStatus(sb, row.contacts.email)
     const fields = {
       ownerName,
       description: row.description,
@@ -803,6 +827,7 @@ async function handle(request: Request) {
       siteUrl: siteUrl(),
       // remindersShown (2026-09-28) — see Phase A1's identical field.
       remindersShown: profile?.request_reminders_enabled ?? false,
+      recipientAccountStatus,
     }
     // Receipt Confirmation overrides Overdue (2026-09-25, Jim's own spec) —
     // "regardless of before/after Due Date," a Request still awaiting

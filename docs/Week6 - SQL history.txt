@@ -7427,3 +7427,72 @@ commit;
 --   -- Then send a brand-new email (edit and Save) and confirm ITS link
 --   -- also works, alongside the old one still working too.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 076 (2026-10-03) -- get_account_status_by_email(): lets an
+-- outbound email to a Recipient know whether that email already has a WYP
+-- account, and its tier, so the footer can thank them instead of pitching
+-- a signup they don't need. DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Jim, with three reference screenshots: the "New to Would You Please?"
+-- signup CTA at the bottom of every Recipient-facing email showed
+-- unconditionally, even when the Recipient already has their own account
+-- (e.g. a self-sent Request, or any Recipient who happens to already be a
+-- WYP user) -- instead it should thank them for their existing account
+-- status. Scoped to exactly the two Recipient-facing email template
+-- families that call emailSignupFooter/textSignupFooterLines
+-- (buildRequestEmailHtml/Text -- Initial Request, day-before/day-of
+-- Reminder, and the "UPDATED:" change-notification; and
+-- buildReminderNoticeHtml/Text -- the Reminder/Overdue notice family) --
+-- every other outbound email goes to the owner's own account email, whose
+-- account status is already known without a lookup.
+--
+-- Same auth.users-reading SECURITY DEFINER precedent as
+-- can_create_account() (migration 015) and get_contact_request_counts()
+-- (migration 030) -- only this function's own owner role can see
+-- auth.users directly; every caller gets back one of three plain strings
+-- ('none'/'free'/'subscriber'), never a raw email or other account detail.
+-- Case-insensitive match (lower() both sides), matching every other
+-- email-matching function in this app. Granted to `authenticated` (every
+-- owner-side email route runs as the forwarded owner session, not
+-- service_role) and `service_role` (the cron route's own day-before/day-of/
+-- day-after Reminder sends) -- not `anon`, since no anonymous code path
+-- sends an email of either family.
+--
+-- Returns 'none' for an email with no auth.users row at all, or (the rare
+-- edge case) an auth.users row with no matching profiles row yet -- both
+-- read the same as "doesn't have an account" for this purpose, matching
+-- how RecipientAccountStatus's own 'none' branch is defined in email.ts.
+-- ============================================================================
+
+create or replace function public.get_account_status_by_email(p_email text)
+returns text
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_tier text;
+begin
+  select p.tier into v_tier
+    from auth.users u
+    join public.profiles p on p.id = u.id
+    where lower(u.email) = lower(trim(p_email));
+
+  if v_tier is null then
+    return 'none';
+  end if;
+  return case when v_tier = 'subscriber' then 'subscriber' else 'free' end;
+end;
+$$;
+
+revoke all on function public.get_account_status_by_email(text) from public;
+grant execute on function public.get_account_status_by_email(text) to authenticated, service_role;
+
+-- Verify:
+--   select get_account_status_by_email('jimgillon@gmail.com');
+--     -- should return 'free' or 'subscriber', matching that account's
+--     -- real profiles.tier
+--   select get_account_status_by_email('definitely-not-a-real-address@example.com');
+--     -- should return 'none'
+-- ============================================================================
