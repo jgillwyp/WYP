@@ -7432,7 +7432,7 @@ commit;
 -- Migration 076 (2026-10-03) -- get_account_status_by_email(): lets an
 -- outbound email to a Recipient know whether that email already has a WYP
 -- account, and its tier, so the footer can thank them instead of pitching
--- a signup they don't need. DRAFTED, NOT YET CONFIRMED RUN.
+-- a signup they don't need. CONFIRMED RUN by Jim, 2026-10-03.
 --
 -- Jim, with three reference screenshots: the "New to Would You Please?"
 -- signup CTA at the bottom of every Recipient-facing email showed

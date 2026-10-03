@@ -4813,8 +4813,8 @@ link is built only after the stack is proven on Add Contact.
   `ConversionBanner` at all, so it's unaffected by the signature change.
   `npx tsc --noEmit`/`npm run lint` clean.
 - **Recipient-facing emails now thank an already-registered Recipient
-  instead of pitching a signup — migration 076, drafted, not yet
-  confirmed run (2026-10-03).** Jim, with three reference screenshots: the
+  instead of pitching a signup — migration 076, confirmed run by Jim,
+  2026-10-03.** Jim, with three reference screenshots: the
   "New to Would You Please?" signup CTA at the bottom of every Recipient-
   facing email showed unconditionally, even when the Recipient already has
   their own account (e.g. a self-sent Request, or any Recipient who
