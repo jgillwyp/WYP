@@ -30,9 +30,27 @@ function isNetworkFetchError(message: string): boolean {
   return m.includes('networkerror') || m.includes('failed to fetch') || m.includes('load failed')
 }
 
+// A raw/empty error body leaking through as literal text (2026-10-07,
+// owner-reported — saw "{}" rendered in red after firing off several OTP
+// requests in a short window). supabase-js falls back to stringifying the
+// response body when a failure doesn't carry the usual error_description/
+// msg fields, which some Supabase Auth responses do for a rate-limited
+// request — so this is deliberately worded to name that as the likely
+// cause (distinct from the 60-second per-user cooldown this app already
+// enforces, Supabase also has its own project-level email-sending rate
+// limit) rather than show the unreadable raw body.
+function isUnhelpfulErrorMessage(message: string): boolean {
+  const m = message.trim()
+  if (!m || m === '{}' || m === '[object Object]') return true
+  return m.startsWith('{') && m.endsWith('}')
+}
+
 function friendlyAuthErrorMessage(message: string): string {
   if (isNetworkFetchError(message)) {
     return 'Could not reach the sign-in service. Check your internet connection — a work or school network sometimes blocks this — and try again, or try a different network.'
+  }
+  if (isUnhelpfulErrorMessage(message)) {
+    return 'Something went wrong sending the sign-in email. If you just requested several sign-in emails in a row, please wait a few minutes and try again.'
   }
   return message
 }

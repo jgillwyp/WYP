@@ -4847,3 +4847,43 @@ link is built only after the stack is proven on Add Contact.
   since the same Contact's address can recur across several rows in one
   run). `npx tsc --noEmit`/`npm run lint` clean. No mockup — this feature
   has none beyond Jim's own reference screenshots.
+- **iCloud sign-in email non-delivery, investigated and root-caused as
+  silent inbox-side junk filtering, not a WYP/Supabase bug; raw error
+  body ("{}") on `/login` fixed, no migration (2026-10-07).** Jim's new
+  test address (`wypgillon@icloud.com`, a real iPhone 14 Pro Max, iOS
+  18.1.1) never appeared to receive a sign-in email across several
+  attempts. Traced methodically rather than guessed at: DNS (SPF/DKIM/
+  DMARC/MX for wouldyouplease.com) all checked out exactly as the
+  2026-08-24 spam investigation found, unchanged; Supabase's own
+  Authentication Logs showed every `/otp` request completing with
+  `action: user_confirmation_requested`, `status: 200` — confirming
+  Supabase accepted each request and handed it to the configured Custom
+  SMTP (Hostinger) correctly, ruling out an app-side or Auth-API-side
+  failure; the `notifications@wouldyouplease.com` Hostinger mailbox
+  showed no bounce-back for any of the attempt timestamps, ruling out a
+  hard SMTP-level rejection by Apple. Resolved once Jim checked iCloud's
+  own Junk folder directly (at icloud.com, not just the iPhone Mail app,
+  which doesn't reliably sync/surface Junk) — all 6-7 attempts were sitting
+  there, silently filtered by Apple with zero trace on the sending side,
+  exactly the documented behavior new/low-volume sending domains hit with
+  iCloud. Marking them "Not Junk" is the standard remedy (same mechanism
+  already noted on `/login`'s own spam-folder hint for Gmail). **Not a
+  code or DNS problem** — no migration, no SPF/DKIM/DMARC change made;
+  DMARC is still `p=none` and flagged only as a future consideration if
+  this recurs with other strict providers, not changed reactively off one
+  account's result. **Real bug found along the way, fixed**: after Jim
+  fired off several OTP requests in a short window chasing the above,
+  `/login` rendered the literal text "{}" in red instead of a readable
+  error — `signInWithOtp`'s error path (`sendLink()`,
+  `friendlyAuthErrorMessage()`, 2026-10-02) only special-cased network-
+  fetch errors, so a different failure shape (most likely Supabase's own
+  project-level email-sending rate limit, separate from this app's
+  existing 60-second-per-user cooldown — some Supabase Auth responses
+  return a near-empty body for that case, which supabase-js falls back to
+  stringifying) passed the raw body straight through to the user. New
+  `isUnhelpfulErrorMessage()` catches an empty, `"{}"`,
+  `"[object Object]"`, or otherwise raw-JSON-shaped message and replaces
+  it with a plain-language explanation naming rate-limiting as the likely
+  cause, consistent with the existing network-error precedent. `npx tsc
+  --noEmit`/`npm run lint` clean. No mockup — this screen's own static
+  HTML has no error-state JS to update.
