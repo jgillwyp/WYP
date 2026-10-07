@@ -4876,14 +4876,49 @@ link is built only after the stack is proven on Add Contact.
   `/login` rendered the literal text "{}" in red instead of a readable
   error — `signInWithOtp`'s error path (`sendLink()`,
   `friendlyAuthErrorMessage()`, 2026-10-02) only special-cased network-
-  fetch errors, so a different failure shape (most likely Supabase's own
-  project-level email-sending rate limit, separate from this app's
-  existing 60-second-per-user cooldown — some Supabase Auth responses
-  return a near-empty body for that case, which supabase-js falls back to
-  stringifying) passed the raw body straight through to the user. New
-  `isUnhelpfulErrorMessage()` catches an empty, `"{}"`,
-  `"[object Object]"`, or otherwise raw-JSON-shaped message and replaces
-  it with a plain-language explanation naming rate-limiting as the likely
-  cause, consistent with the existing network-error precedent. `npx tsc
-  --noEmit`/`npm run lint` clean. No mockup — this screen's own static
-  HTML has no error-state JS to update.
+  fetch errors, so a different failure shape (a Supabase Auth response
+  with no readable error field — see the real root cause below) passed
+  the raw body straight through to the user. New `isUnhelpfulErrorMessage()`
+  catches an empty, `"{}"`, `"[object Object]"`, or otherwise raw-JSON-
+  shaped message and replaces it with a plain-language explanation; the
+  message's own wording guesses rate-limiting as the likely cause, which
+  turned out not to be it this time (see below) — left as-is since a wrong
+  guess here only costs a sentence of phrasing, not a functional problem,
+  and rate-limiting is still a real possibility for a future occurrence of
+  this same generic error shape. `npx tsc --noEmit`/`npm run lint` clean.
+  No mockup — this screen's own static HTML has no error-state JS to
+  update. **Real root cause of the "{}"/follow-up error, found via
+  Supabase's own Authentication Logs (filter: Pathname `/otp`), same day**:
+  not a rate limit at all — every failing `/otp` request was a genuine
+  `500`, and the underlying `event_message` read `535 "5.7.8 Error:
+  authentication failed: (reason unavailable)"` — a standard SMTP rejection
+  code, meaning Supabase's Auth server was being refused outright when it
+  tried to log in to Hostinger's mail server to send the email. Root cause:
+  the `notifications@wouldyouplease.com` mailbox's own password had been
+  changed or locked on Hostinger's side (most likely Hostinger's own
+  automated anti-abuse response to the earlier burst of send attempts while
+  chasing the iCloud-junk investigation above) — Jim confirmed this
+  directly: his own normal password stopped working when he tried logging
+  into the Hostinger webmail, and resetting it there restored access.
+  **This silently broke more than just sign-in** — the exact same mailbox
+  and password are also used by this app's own `nodemailer`-based
+  notification emails (`app/api/email/*`, Initial Request/Reminders/
+  "UPDATED:" notices/etc.), a completely separate code path from Supabase
+  Auth's own mailer but sharing the one credential, so all of that was
+  almost certainly failing too for the same window of time. Fixed by
+  updating the password in all three places that independently store it —
+  **Supabase Dashboard → Authentication → SMTP Settings** (controls the
+  sign-in email, the one actually failing here), **Vercel → Environment
+  Variables → `EMAIL_SMTP_PASSWORD`** (controls this app's own
+  notification emails; redeployed via Vercel's dashboard to pick up the
+  change, no git push involved), and `.env.local` (local-dev only, no
+  effect on either the live site or Supabase's own mailer — updating it
+  alone, which Jim tried first, understandably had no effect on the
+  live-site symptom and caused some confusion about needing a "push";
+  worth remembering next time this comes up that none of SMTP's three
+  credential stores are git/Vercel-build-controlled, so no push is ever
+  needed for a credential-only fix). **Confirmed resolved end to end** —
+  Jim re-sent from the iPhone, the email arrived (still landing in iCloud
+  Junk, consistent with the separate, already-diagnosed filtering issue
+  above — confirmed "Not Junk" again), and he's now signed in and using
+  the live app on the iPhone.
