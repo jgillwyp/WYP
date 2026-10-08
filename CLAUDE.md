@@ -5150,3 +5150,28 @@ link is built only after the stack is proven on Add Contact.
   hypothesis, not a confirmed fix** — flagged explicitly, since the first
   round's `display: block` fix only partially resolved the symptom and
   this is a second attempt at the same remaining iPhone-only issue.
+  **Third retest, same day: no change at all** — ruling out `overflow:
+  hidden` as a contributor. A real clue surfaced in Jim's own report:
+  Due Time renders even narrower than Due Date, an asymmetry that
+  shouldn't exist if both were correctly resolving `width: 100%` against
+  the same `.fgroup` containing block — consistent instead with each
+  input falling back to its own native, type-specific intrinsic width
+  (a `type="time"` control's natural minimum being narrower than
+  `type="date"`'s). Tried next: swapped `.ffloat`'s own wrapper tag from
+  `<span>` to `<div>` in `DateTimeField.tsx` specifically (the class
+  list and the global `display: block` rule are unchanged — a `<div>`
+  is block by default anyway, making that rule redundant here but still
+  needed for every other still-`<span>`-based `.ffloat` usage, e.g.
+  `ArchiveForm.tsx`'s paired filter). Reasoning: every other working
+  `.ffloat` usage in the app is either inside a `.frow` flex container
+  (auto-blockified regardless of tag) or combined directly onto a
+  `<div>` already (`.fgroup.ffloat` on one element, e.g. `/login`'s
+  Email field) — this component is the first to rely on `display: block`
+  alone, on a `<span>`, with no flex parent, to fully behave like a true
+  block box around a nested replaced `<input>`; WebKit has a real history
+  of edge cases in exactly that combination. **Also a hypothesis, not
+  confirmed** — three attempts in, flagged to Jim that if this one also
+  doesn't resolve it, the next step is likely a live Safari Web Inspector
+  session (Mac + iPhone, Settings → Safari → Advanced → Web Inspector) to
+  read the actual computed styles directly rather than continuing to
+  guess from photos.

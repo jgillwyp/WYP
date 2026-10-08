@@ -143,7 +143,7 @@ export default function DateTimeField({
 
   return (
     <div className="fgroup">
-      <span className={`ffloat picker native${invalid ? ' is-invalid' : ''}`}>
+      <div className={`ffloat picker native${invalid ? ' is-invalid' : ''}`}>
         <input
           ref={dateInputRef}
           className={`finput${required ? ' req' : dateValue.trim() === '' ? ' opt' : ''}${dateClassExtra ? ` ${dateClassExtra}` : ''}`}
@@ -161,12 +161,12 @@ export default function DateTimeField({
           {dateLabel}
           {!required && <span className="subnote"> (optional)</span>}
         </label>
-      </span>
+      </div>
       {invalid && errorMessage && <p className="ferror" style={{ marginTop: -8 }}>{errorMessage}</p>}
 
       {timeEnabled && (
         timeExpanded ? (
-          <span className="ffloat picker native" style={{ marginTop: 8 }}>
+          <div className="ffloat picker native" style={{ marginTop: 8 }}>
             <input
               ref={timeInputRef}
               className={`finput${timeValue.trim() === '' ? ' opt' : ''}`}
@@ -207,7 +207,7 @@ export default function DateTimeField({
             >
               &times;
             </button>
-          </span>
+          </div>
         ) : (
           !disabled && (
             <button type="button" className="linkbtn" style={{ marginTop: 6 }} onClick={handleAddTime}>
