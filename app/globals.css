@@ -628,30 +628,42 @@ body {
   padding: 20px 10px 6px;
 }
 
-/* iPhone native date/time appearance reset (2026-10-08, third round) — a
-   plain `!important` width/box-sizing override couldn't win (an earlier,
-   now-reverted attempt moved the visible box onto the wrapper instead,
-   accepting that the native text wouldn't fill it). Jim found the actual
-   standard fix: -webkit-appearance: textfield tells WebKit to stop using
-   its special native-widget sizing algorithm for this control, letting
-   ordinary width/box-sizing apply like any other input — no visual
-   compromise needed. Scoped to iOS Safari only via `@supports
-   (-webkit-touch-callout: none)` (same technique as the 2026-10-08
-   paired-field wrap fix earlier in this file) so Android/desktop, already
-   correct, are completely untouched. Not expected to lose the native
+/* iPhone native date/time appearance reset (2026-10-08, third round,
+   textfield -> none same day) — a plain `!important` width/box-sizing
+   override couldn't win (an earlier, now-reverted attempt moved the
+   visible box onto the wrapper instead, accepting that the native text
+   wouldn't fill it). `-webkit-appearance: textfield` was tried first —
+   an on-screen diagnostic confirmed it genuinely applied
+   (`getComputedStyle` reported `appearance: textfield`, and the
+   `@supports` block's own match was separately confirmed via
+   `CSS.supports()`) but had zero effect on width/box-sizing, which were
+   byte-identical to the un-reset state. `none` is the more aggressive
+   version of the same idea — strips all native chrome rather than
+   switching to generic textfield chrome — tried next since `textfield`
+   alone turned out not to be the right lever. Scoped to iOS Safari only
+   via `@supports (-webkit-touch-callout: none)` (same technique as the
+   2026-10-08 paired-field wrap fix earlier in this file) so
+   Android/desktop, already correct, are completely untouched. Explicit
+   `min-height` restated here since `appearance: none` can reset a
+   control's own intrinsic sizing contribution; `.finput`'s own base
+   `min-height: 50px` should still apply regardless, kept here as a
+   belt-and-suspenders restatement. Not expected to lose the native
    picker or its icon — this app already supplies its own calendar/clock
-   icon (CalendarGlyph/ClockGlyph in DateTimeField.tsx) rather than relying
-   on the browser's own, and opens the picker programmatically via
-   showPicker(), neither of which `-webkit-appearance` should affect;
-   `type="date"`'s own picker-on-focus behavior is independent of its
-   appearance styling. */
+   icon (CalendarGlyph/ClockGlyph in DateTimeField.tsx) rather than
+   relying on the browser's own, and opens the picker programmatically
+   via showPicker(); `type="date"`'s own picker-on-focus behavior is a
+   function of the input's type, not its appearance styling — though
+   this is less certain with `none` than it was with `textfield`, since
+   `none` is a more thorough reset, so this needs a real retest of the
+   picker itself opening correctly, not just the width. */
 @supports (-webkit-touch-callout: none) {
   input[type="date"].finput,
   input[type="time"].finput {
-    -webkit-appearance: textfield;
-    appearance: textfield;
+    -webkit-appearance: none;
+    appearance: none;
     display: block;
     width: 100%;
+    min-height: 50px;
     box-sizing: border-box;
   }
 }
