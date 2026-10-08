@@ -628,6 +628,23 @@ body {
   padding: 20px 10px 6px;
 }
 
+/* iPhone native date/time width override (2026-10-08) — owner-provided
+   on-screen diagnostic (getComputedStyle, no Mac for Web Inspector) found
+   the real cause: iOS Safari's own UA stylesheet for input[type="date"]/
+   input[type="time"] was reporting width: 95px and box-sizing: content-box
+   on the live element, overriding the plain .finput rule above entirely —
+   not a wrapper/layout problem (the .fgroup/.ffloat containers were
+   already correctly measuring full width, 402px, confirming the
+   2026-10-08 display:block/div fixes above worked). A plain class
+   selector apparently isn't enough to win against WebKit's own built-in
+   styling for this control type; the type-attribute selector raises
+   specificity and !important backstops it regardless. */
+input[type="date"].finput,
+input[type="time"].finput {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 .finput:focus,
 .ftextarea:focus {
   background: var(--focus-tint);
