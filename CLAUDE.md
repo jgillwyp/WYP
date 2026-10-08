@@ -5134,5 +5134,19 @@ link is built only after the stack is proven on Add Contact.
   Safe for every pre-existing `.frow`-contained usage (already
   blockified there, so this is a no-op), and for the few plain
   `.fgroup.ffloat` combined-class fields (Email on `/login`, etc.), whose
-  div already defaulted to block regardless. **Not yet confirmed fixed**
-  — flagged, pending Jim's next retest on both platforms.
+  div already defaulted to block regardless.
+  **Second retest, same day: the `display: block` fix resolved Android and
+  desktop fully (confirmed) and fixed iPhone's stacking/overlap, but Due
+  Date/Due Time still rendered as a tiny box on iPhone specifically.**
+  Scoped `.ffloat.picker.native { overflow: hidden; }` (the 2026-09-16
+  "iPhone Safari overlap fix," built for two native pickers sharing a row)
+  down to `.frow .ffloat.picker.native` — DateTimeField.tsx's own fields
+  never share a row with another native picker anymore, so that
+  protection has nothing left to guard there, and `overflow: hidden` on a
+  block box wrapping a replaced `<input>` with an already-ambiguous
+  `width: 100%` is a plausible contributor to the remaining shrink.
+  `ArchiveForm.tsx`'s own still-paired Starting/Ending Done date-range
+  filter keeps the protection via the narrowed selector. **A reasoned
+  hypothesis, not a confirmed fix** — flagged explicitly, since the first
+  round's `display: block` fix only partially resolved the symptom and
+  this is a second attempt at the same remaining iPhone-only issue.

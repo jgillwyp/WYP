@@ -770,8 +770,19 @@ body {
    fit the same computed width. overflow:hidden here clips any such
    overflow at the box edge instead of letting it bleed sideways — .flabel
    and .fclear both already position fully within this box in the normal
-   case, so neither is affected. */
-.ffloat.picker.native {
+   case, so neither is affected.
+   Scoped to `.frow .ffloat.picker.native` only, 2026-10-08 — owner-
+   reported: Due Date/Due Time still rendered as a tiny box on iPhone
+   even after the display:block fix above. DateTimeField.tsx's own fields
+   (Create Request, Request Detail, Response Detail, Request Response,
+   Create ToDo, ToDo Detail) never share a row with another native picker
+   anymore, so this protection has nothing left to guard there — and
+   `overflow: hidden` on a block box wrapping a replaced <input> with an
+   already-ambiguous width:100% (see .ffloat's own 2026-10-08 comment) is
+   a plausible contributor to the remaining shrink. `ArchiveForm.tsx`'s
+   own Starting/Ending Done date-range filter is still a real paired row
+   (two type="date" fields in one .frow) and keeps this protection. */
+.frow .ffloat.picker.native {
   overflow: hidden;
 }
 
