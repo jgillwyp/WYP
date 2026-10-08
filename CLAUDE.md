@@ -4953,3 +4953,38 @@ link is built only after the stack is proven on Add Contact.
   `cron/tick/route.ts`) needed any change. `npx tsc --noEmit`/`npm run
   lint` clean. No mockup — this feature family has none beyond Jim's own
   reference images.
+- **Subscriber feature list revised — Receipt Confirmation and Data
+  Retention added, Priority Support dropped (2026-10-08, "sales lit and
+  main page updates.pdf"), no migration.** Jim supplied exact replacement
+  wording for the full Subscriber Features bullet list and the Free vs.
+  Subscriber Comparison table, to reflect Receipt Confirmation (migration
+  074, Subscriber-only) now being a real feature rather than unlisted
+  anywhere in the sales copy. Used verbatim, not paraphrased. Updated the
+  one canonical source, `app/components/SubscriptionPanels.tsx`'s
+  `SUBSCRIBER_FEATURES`/`COMPARISON_ROWS` (2026-08-26 single-source-of-
+  truth design) — this alone propagated to Account Options' Subscriber
+  section, `/account/subscription`, and the live landing page, which all
+  read from it directly. **Real side effect caught and fixed**: the
+  landing page (`LandingPage.tsx`) had its own standalone "Keep everything
+  forever" bullet appended *after* the shared list, predating this
+  revision — now that a real "Data Retention" bullet is part of
+  `SUBSCRIBER_FEATURES` itself, that old bullet would have shown twice;
+  removed. Three static files with no way to import the canonical source
+  directly were updated by hand, per this project's own established "kept
+  in sync by hand, update both places together" convention for these:
+  `docs/WYP onepager.html` and `design/marketing/WYP_landing_page.html`
+  (Jim's explicit "sales literature" and "WYP home page"), plus
+  `design/screens/WYP_subscribe_palette1.html` (the Subscribe checkout
+  mockup — not explicitly asked for, updated anyway for consistency with
+  the other two, flagged here rather than silently done). **Found but
+  deliberately NOT touched**: `docs/onepager_2.html` — a second,
+  differently-named one-pager file ("Sales One-Pager v3," a two-page
+  flyer layout, browser-saved from `file:///C:/Users/jgill/Downloads/
+  onepager_2.html`) still carries the old Priority Support/"Keep
+  everything forever" wording. It's never once mentioned anywhere in this
+  file's own history, unlike `docs/WYP onepager.html`, which this project
+  has maintained continuously since 2026-08-15 — flagged for Jim to say
+  whether it's a stale leftover or a real second artifact he wants kept in
+  sync going forward, rather than guessed at. `npx tsc --noEmit`/`npm run
+  lint` clean (the two `.tsx` files; the HTML files aren't typechecked per
+  this file's own Repository layout table).

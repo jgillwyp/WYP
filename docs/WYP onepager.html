@@ -198,32 +198,35 @@ body{font-family:Inter,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;co
            .slabel .subline treatment. -->
       <div class="slabel"><span class="t">Subscription</span><span class="subline">25% Discount</span><span class="badge sub">$17.95 1st yr</span><span class="subline">or, $2.95 monthly</span><span class="rule"></span></div>
       <!-- Bullet wording matched to app/components/SubscriptionPanels.tsx's
-           SUBSCRIBER_FEATURES, 2026-08-27 — merged File Attachments+Storage
-           into one bullet, Title Case throughout, "Unlimited" prefixes
-           dropped (now redundant with the merged bullet's own "5 GB" and
-           the new comparison table's own Free-vs-Subscribed contrast). -->
+           SUBSCRIBER_FEATURES. Revised 2026-10-08 (Jim's "sales lit and main
+           page updates.pdf") — adds Receipt Confirmation and Data Retention
+           as real bullets of their own (Data Retention supersedes the old
+           standalone "Keep everything forever" line); drops Priority
+           Support outright, per that same PDF. -->
       <div class="panel sub">
         <ul>
+          <li><b>Receipt Confirmation</b> &#8212; Request recipients are offered an opportunity to confirm their receipt of requests you consider to be important.</li>
           <li><b>Voice Dictation</b> &#8212; speak your Request and ToDo Description and Dialog entries instead of typing.</li>
-          <li><b>File Attachments with 5&nbsp;GB of Storage</b> &#8212; send and receive documents, photos, and PDFs with your Requests and Responses &#8212; additional storage available at $10 per 5&nbsp;GB per year.</li>
-          <li><b>Automatic Repeating</b> &#8212; for all Requests and ToDos.</li>
-          <li><b>Request Texting</b> &#8212; deliver Requests by SMS text in addition to email.</li>
+          <li><b>File Attachments Storage (expanded to 5&nbsp;GB)</b> &#8212; send and receive documents, photos, and PDFs with your Requests and Responses (additional storage available at $10 per 5&nbsp;GB per year).</li>
+          <li><b>Automatic Repeating (expanded to unlimited)</b> &#8212; for selected Requests and ToDos.</li>
+          <li><b>Request Texting</b> &#8212; on a per-contact basis, deliver Requests by SMS text instead of by email.</li>
           <li><b>Ad-Free</b> &#8212; removes the ad banner shown to Free accounts.</li>
-          <li><b>Priority Support</b> &#8212; via email.</li>
-          <li><b>Keep everything forever</b> &#8212; perpetual history for your requests and files.</li>
+          <li><b>Data Retention (expanded from 1 year)</b> &#8212; perpetual history for your requests and attachments while subscribed.</li>
         </ul>
         <!-- Free vs. Subscriber Comparison table, 2026-08-27 — see the
-             .comparetable/.promo-sub CSS comment above for provenance. -->
+             .comparetable/.promo-sub CSS comment above for provenance.
+             Revised 2026-10-08 alongside the bullet list above. -->
         <div class="promo-sub" style="margin-top:10px;">Free vs. Subscriber Comparison</div>
         <table class="comparetable">
           <thead><tr><th>Feature</th><th>Free</th><th>Subscribed</th></tr></thead>
           <tbody>
+            <tr><td>Receipt Confirmation</td><td>Not available</td><td>Available</td></tr>
             <tr><td>Voice Dictation</td><td>Not available</td><td>Available</td></tr>
-            <tr><td>File Attachments</td><td>100&nbsp;MB</td><td>5&nbsp;GB</td></tr>
+            <tr><td>File Attachments Storage</td><td>100&nbsp;MB</td><td>5&nbsp;GB</td></tr>
             <tr><td>Automatic Repeating</td><td>up to 5</td><td>Unlimited</td></tr>
             <tr><td>Request Texting</td><td>Not available</td><td>Available</td></tr>
             <tr><td>Ads</td><td>Shown</td><td>Not shown</td></tr>
-            <tr><td>Support</td><td>Help files</td><td>Email</td></tr>
+            <tr><td>Data Retention</td><td>1 year</td><td>Unlimited</td></tr>
           </tbody>
         </table>
         <div class="note">Just $1.50 a month for your first year &#8212; a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history. A month-to-month subscription is available for $2.95.</div>

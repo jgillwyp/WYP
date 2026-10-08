@@ -342,18 +342,18 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
         </section>
 
         {/* Subscription / Coming soon — subscription bullets (2026-08-27)
-            now render from SubscriptionPanels.tsx's own SUBSCRIBER_FEATURES,
-            the same canonical list Account Options and /account/subscription
+            render from SubscriptionPanels.tsx's own SUBSCRIBER_FEATURES, the
+            same canonical list Account Options and /account/subscription
             already use, so this panel can't drift out of sync with the real
             feature set/pricing again the way it had (still listing a flat
             $17.95/yr with no first-year-discount/renewal split, and still
             pitching Voice search under "Coming soon" after Voice dictation
             for Description/Dialog Text had already shipped as a live
-            Subscriber feature). "Keep everything forever" is kept as its
-            own bullet, appended after the shared list — it's this app's
-            original free-vs-paid retention distinction (1-year vs perpetual
-            history) and isn't part of SUBSCRIBER_FEATURES, which is scoped
-            to newer capability additions only. */}
+            Subscriber feature). The standalone "Keep everything forever"
+            bullet that used to be appended here after the shared list was
+            removed 2026-10-08 — Jim's own revised SUBSCRIBER_FEATURES now
+            includes a real "Data Retention" bullet of its own, making this
+            page's separate copy a duplicate. */}
         <section className="section alt">
           <div className="wrap">
             <div className="cols">
@@ -369,7 +369,6 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                     {SUBSCRIBER_FEATURES.map((f) => (
                       <li key={f.title}><b>{f.title}</b> — {f.desc}</li>
                     ))}
-                    <li><b>Keep everything forever</b> — perpetual history for your requests and files.</li>
                   </ul>
                   {/* Comparison table, 2026-08-27 — Jim's own instruction:
                       the landing page gets this always visible, not gated

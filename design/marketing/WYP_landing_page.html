@@ -641,24 +641,24 @@ footer .wrap {
             <span class="badge sub">$17.95 1st yr</span>
             <span class="subline">or, $2.95 monthly</span>
           </div>
-          <!-- List content (2026-08-27) mirrors app/components/SubscriptionPanels.tsx's
-               own SUBSCRIBER_FEATURES array, the live app's single canonical source
+          <!-- List content mirrors app/components/SubscriptionPanels.tsx's own
+               SUBSCRIBER_FEATURES array, the live app's single canonical source
                for this list — kept in sync by hand here since this static mockup has
                no way to import it directly. Update both places together.
-               Merged File Attachments+Storage bullet and Title Case wording,
-               2026-08-27 — supersedes the earlier "Unlimited" prefixes, now
-               redundant since this bullet states 5 GB directly and the new
-               comparison table below carries the Free-vs-Subscribed contrast
-               for Automatic Repeating. -->
+               Revised 2026-10-08 (Jim's "sales lit and main page updates.pdf") —
+               adds Receipt Confirmation and Data Retention as real bullets of
+               their own (Data Retention supersedes the old standalone "Keep
+               everything forever" line, removed); drops Priority Support
+               outright, per that same PDF. -->
           <div class="panel sub">
             <ul>
+              <li><b>Receipt Confirmation</b> — Request recipients are offered an opportunity to confirm their receipt of requests you consider to be important.</li>
               <li><b>Voice Dictation</b> — speak your Request and ToDo Description and Dialog entries instead of typing.</li>
-              <li><b>File Attachments with 5 GB of Storage</b> — send and receive documents, photos, and PDFs with your Requests and Responses — additional storage available at $10 per 5 GB per year.</li>
-              <li><b>Automatic Repeating</b> — for all Requests and ToDos.</li>
-              <li><b>Request Texting</b> — deliver Requests by SMS text in addition to email.</li>
+              <li><b>File Attachments Storage (expanded to 5 GB)</b> — send and receive documents, photos, and PDFs with your Requests and Responses (additional storage available at $10 per 5 GB per year).</li>
+              <li><b>Automatic Repeating (expanded to unlimited)</b> — for selected Requests and ToDos.</li>
+              <li><b>Request Texting</b> — on a per-contact basis, deliver Requests by SMS text instead of by email.</li>
               <li><b>Ad-Free</b> — removes the ad banner shown to Free accounts.</li>
-              <li><b>Priority Support</b> — via email.</li>
-              <li><b>Keep everything forever</b> — perpetual history for your requests and files.</li>
+              <li><b>Data Retention (expanded from 1 year)</b> — perpetual history for your requests and attachments while subscribed.</li>
             </ul>
             <!-- Free vs. Subscriber Comparison table (2026-08-27) — Jim's own
                  instruction: shown always here, not gated behind a view
@@ -667,19 +667,21 @@ footer .wrap {
                  button selection"). Mirrors SubscriptionPanels.tsx's
                  SubscriberComparisonTable/COMPARISON_ROWS and globals.css's
                  .comparetable rule verbatim — same tokens, kept in sync by
-                 hand here for the same reason as the list above. -->
+                 hand here for the same reason as the list above. Revised
+                 2026-10-08 alongside the bullet list above. -->
             <div class="promo-sub" style="margin-top:14px;">Free vs. Subscriber Comparison</div>
             <table class="comparetable">
               <thead>
                 <tr><th>Feature</th><th>Free</th><th>Subscribed</th></tr>
               </thead>
               <tbody>
+                <tr><td>Receipt Confirmation</td><td>Not available</td><td>Available</td></tr>
                 <tr><td>Voice Dictation</td><td>Not available</td><td>Available</td></tr>
-                <tr><td>File Attachments</td><td>100 MB</td><td>5 GB</td></tr>
+                <tr><td>File Attachments Storage</td><td>100 MB</td><td>5 GB</td></tr>
                 <tr><td>Automatic Repeating</td><td>up to 5</td><td>Unlimited</td></tr>
                 <tr><td>Request Texting</td><td>Not available</td><td>Available</td></tr>
                 <tr><td>Ads</td><td>Shown</td><td>Not shown</td></tr>
-                <tr><td>Support</td><td>Help files</td><td>Email</td></tr>
+                <tr><td>Data Retention</td><td>1 year</td><td>Unlimited</td></tr>
               </tbody>
             </table>
             <div class="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history. A month-to-month subscription is available for $2.95.</div>

@@ -38,41 +38,42 @@ import { type CSSProperties, useState } from 'react'
  */
 type Variant = 'full' | 'embedded'
 
-// Title Case throughout, per Jim's own explicit list (2026-08-27): "Voice
-// Dictation, File Attachments with 5 GB of Storage, Automatic Repeating,
-// Request Texting, Ad-Free, and Priority Support." Supersedes the
-// "Unlimited File attachments"/"Unlimited Automatic Repeating" prefixes
-// added earlier the same day — now that File Attachments' own title spells
-// out the 5 GB/100 MB difference directly, and the new
-// SubscriberComparisonTable below carries the Free-vs-Subscribed contrast
-// for Automatic Repeating (up to 5 vs. Unlimited), the prefix was
-// redundant; dropped per this same instruction rather than kept alongside.
+// Title Case throughout. Replaced 2026-10-08 with Jim's own revised list
+// ("sales lit and main page updates.pdf") to add Receipt Confirmation
+// (migration 074, Subscriber-only) and Data Retention as real bullets of
+// their own — Data Retention supersedes the landing page's old standalone
+// "Keep everything forever" <li>, which lived outside this array and is
+// now removed as a duplicate (see LandingPage.tsx's own comment). Priority
+// Support is dropped outright, per the same PDF, which lists it nowhere —
+// neither the bullet list nor its own comparison table below.
 export const SUBSCRIBER_FEATURES: { title: string; desc: string }[] = [
+  {
+    title: 'Receipt Confirmation',
+    desc: 'Request recipients are offered an opportunity to confirm their receipt of requests you consider to be important.',
+  },
   {
     title: 'Voice Dictation',
     desc: 'speak your Request and ToDo Description and Dialog entries instead of typing.',
   },
   {
-    // File Attachments and storage merged into one bullet, 2026-08-27 —
-    // Jim's own drafted wording. Previously two separate bullets.
-    title: 'File Attachments with 5 GB of Storage',
-    desc: 'send and receive documents, photos, and PDFs with your Requests and Responses — additional storage available at $10 per 5 GB per year.',
+    title: 'File Attachments Storage (expanded to 5 GB)',
+    desc: 'send and receive documents, photos, and PDFs with your Requests and Responses (additional storage available at $10 per 5 GB per year).',
   },
   {
-    title: 'Automatic Repeating',
-    desc: 'for all Requests and ToDos.',
+    title: 'Automatic Repeating (expanded to unlimited)',
+    desc: 'for selected Requests and ToDos.',
   },
   {
     title: 'Request Texting',
-    desc: 'deliver Requests by SMS text in addition to email.',
+    desc: 'on a per-contact basis, deliver Requests by SMS text instead of by email.',
   },
   {
     title: 'Ad-Free',
     desc: 'removes the ad banner shown to Free accounts.',
   },
   {
-    title: 'Priority Support',
-    desc: 'via email.',
+    title: 'Data Retention (expanded from 1 year)',
+    desc: 'perpetual history for your requests and attachments while subscribed.',
   },
 ]
 
@@ -107,13 +108,17 @@ export const FREE_TIER_ADVANCED_FEATURES: { title: string; desc: string }[] = [
  * as well as BecomeSubscriberPitch below (toggle-gated). Colors/borders use
  * the same design tokens (--rule/--strip/--row-tint/--ink) every other
  * panel in this app already reads from `:root`, not new one-off values. */
+// Receipt Confirmation and Data Retention rows added, Support row dropped,
+// 2026-10-08 — see SUBSCRIBER_FEATURES' own comment above for the same
+// revision applied to the bullet list.
 const COMPARISON_ROWS: { feature: string; free: string; subscribed: string }[] = [
+  { feature: 'Receipt Confirmation', free: 'Not available', subscribed: 'Available' },
   { feature: 'Voice Dictation', free: 'Not available', subscribed: 'Available' },
-  { feature: 'File Attachments', free: '100 MB', subscribed: '5 GB' },
+  { feature: 'File Attachments Storage', free: '100 MB', subscribed: '5 GB' },
   { feature: 'Automatic Repeating', free: 'up to 5', subscribed: 'Unlimited' },
   { feature: 'Request Texting', free: 'Not available', subscribed: 'Available' },
   { feature: 'Ads', free: 'Shown', subscribed: 'Not shown' },
-  { feature: 'Support', free: 'Help files', subscribed: 'Email' },
+  { feature: 'Data Retention', free: '1 year', subscribed: 'Unlimited' },
 ]
 
 export function SubscriberComparisonTable() {
