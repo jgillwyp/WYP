@@ -153,9 +153,47 @@ export default function DateTimeField({
   const dateId = `${idPrefix}-date`
   const timeId = `${idPrefix}-time`
 
+  // TEMPORARY DIAGNOSTIC round 2 (2026-10-08) — -webkit-appearance:
+  // textfield had zero visible effect either, so checking whether it
+  // actually applied at all (vs. the @supports block simply not matching
+  // on this device) before guessing again. Remove once resolved.
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
+  const fgroupDiagRef = useRef<HTMLDivElement>(null)
+  const dateWrapperDiagRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const fg = fgroupDiagRef.current
+      const wrap = dateWrapperDiagRef.current
+      const inp = wrap?.querySelector('input')
+      if (!fg || !wrap || !inp) return
+      const inpCs = getComputedStyle(inp)
+      const lines = [
+        `input: w=${Math.round(inp.getBoundingClientRect().width)} cssWidth=${inpCs.width} boxSizing=${inpCs.boxSizing}`,
+        `appearance=${inpCs.getPropertyValue('-webkit-appearance') || inpCs.getPropertyValue('appearance')}`,
+        `supportsMatch=${typeof CSS !== 'undefined' && CSS.supports ? CSS.supports('(-webkit-touch-callout: none)') : 'n/a'}`,
+      ]
+      setDebugInfo(lines.join('\n'))
+    }, 300)
+    return () => clearTimeout(id)
+  }, [])
+
   return (
-    <div className={`fgroup${invalid ? ' is-invalid' : ''}`}>
-      <div className="ffloat picker native">
+    <div className={`fgroup${invalid ? ' is-invalid' : ''}`} ref={fgroupDiagRef}>
+      {debugInfo && (
+        <pre
+          style={{
+            fontSize: 10,
+            background: '#ffe9e9',
+            border: '1px solid red',
+            padding: 4,
+            margin: '0 0 6px',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {debugInfo}
+        </pre>
+      )}
+      <div className="ffloat picker native" ref={dateWrapperDiagRef}>
         <input
           ref={dateInputRef}
           className={`finput${required ? ' req' : dateValue.trim() === '' ? ' opt' : ''}${dateClassExtra ? ` ${dateClassExtra}` : ''}`}
