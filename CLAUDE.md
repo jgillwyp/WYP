@@ -4922,3 +4922,34 @@ link is built only after the stack is proven on Add Contact.
   Junk, consistent with the separate, already-diagnosed filtering issue
   above — confirmed "Not Junk" again), and he's now signed in and using
   the live app on the iPhone.
+- **Receipt Confirmation emails collapsed from two buttons to one
+  (2026-10-08), no migration.** Jim, after seeing the live two-button
+  layout (migration 069/070/071, 2026-09-24/25): concerned a recipient
+  could click the second ("Click to respond...") button without intending
+  to confirm receipt and be surprised the confirmation happened anyway.
+  In fact the two links were already functionally distinct — only the
+  first button's `?confirm=1` query param ever triggered
+  `RequestResponseForm.tsx`'s auto-confirm — but two adjacent buttons
+  where only one names "confirm receipt" read as confusing regardless of
+  what each actually did, so the fix is a real UI collapse, not just a
+  clarification. New `emailButtonTwoLine()` (`app/src/lib/email.ts`)
+  renders one button with two lines of text — `RECEIPT_CONFIRM_LINK_TEXT`
+  ("Click to confirm receipt") large/bold on top, the usual "Click to
+  respond..."/"Open Request..." instruction smaller/lighter beneath it —
+  and that one button always links to `?confirm=1`, so confirming receipt
+  and opening the Response screen are now the same single click, matching
+  Jim's own pasted mockup. Applied to both templates that ever showed the
+  two-button layout: `buildRequestEmailHtml/Text` (Initial Request,
+  day-before/day-of Reminder, "UPDATED:" notification) and
+  `buildReminderNoticeHtml/Text`'s `awaiting_confirmation` state (the
+  manual Send Reminder button and the automatic day-after cron send) —
+  grepped `RECEIPT_CONFIRM_LINK_TEXT`/`emailButtonRaw` across the whole
+  repo first to confirm no third call site had the same pattern. Plain-
+  text alternative parts collapsed the same way — one link line instead
+  of two, the secondary instruction folded into a parenthetical. No
+  server route or type signature changed, only the internal HTML/text
+  construction, so none of the four callers (`send-request/route.ts`,
+  `send-request-update/route.ts`, `send-reminder/route.ts`,
+  `cron/tick/route.ts`) needed any change. `npx tsc --noEmit`/`npm run
+  lint` clean. No mockup — this feature family has none beyond Jim's own
+  reference images.
