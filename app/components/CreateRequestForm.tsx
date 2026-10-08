@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import RepeatControl from './RepeatControl'
+import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import { supabase } from '@/lib/supabaseClient'
 import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
@@ -182,21 +183,6 @@ const LOOKUP_BROWSE_THRESHOLD = 12
 // fill these fields (§6.16's label-affordance glyph signals "focus opens a
 // picker," not "type here"), so a click anywhere in the field should open
 // the picker on desktop too, not just the icon. Owner-reported 2026-08-11.
-// showPicker() needs a user gesture and isn't implemented pre-16.4 Safari —
-// feature-detected and swallowed; the icon still works as a fallback either
-// way. Duplicated per component (short helper, same convention as
-// todayISODate/formatMDY) rather than extracted to a shared lib file.
-function openPicker(e: React.MouseEvent<HTMLInputElement>) {
-  const el = e.currentTarget
-  if (typeof el.showPicker === 'function') {
-    try {
-      el.showPicker()
-    } catch {
-      // ignore — calendar/clock icon still opens it
-    }
-  }
-}
-
 // iPhone keyboard-covers-field fix (2026-09-16, owner-reported from a
 // tester's video) — on Android, the on-screen keyboard shrinks the visual
 // viewport and the browser auto-scrolls the focused field above it; on
@@ -735,10 +721,12 @@ export default function CreateRequestForm() {
   // 2026-08-22) — three independent .reminderitem toggles in one
   // .reminderbanner box. "Day after" has no eligibility rule of its own on
   // this screen (a brand-new Request, nothing can be overdue yet) — always
-  // enabled.
-  function reminderBanner(inline: boolean) {
+  // enabled. Always renders standalone below Due Date now (2026-10-08) —
+  // the old inline variant, shown beside Due Date when Due Time was off,
+  // is gone now that Due Date/Due Time never share a row (DateTimeField.tsx).
+  function reminderBanner() {
     return (
-      <div className={`reminderbanner${inline ? ' reminderbanner-inline' : ''}`}>
+      <div className="reminderbanner">
         <p className="reminderbanner-title">Reminders until Done</p>
         <div className="reminderbanner-items">
           <label
@@ -1191,100 +1179,32 @@ export default function CreateRequestForm() {
               )}
             </div>
 
-            {/* Due row (§9.2.2 / §6.16) */}
-            <div className="fgroup frow">
-              <span className={`ffloat picker native${dueDateInvalid ? ' is-invalid' : ''}${!requestTimeEnabled ? ' due-with-reminder' : ''}`}>
-                <input
-                  className="finput req"
-                  id="dd"
-                  type="date"
-                  value={form.dueDate}
-                  onChange={(e) => {
-                    set('dueDate', e.target.value)
-                    if (dueDateInvalid) setDueDateInvalid(false)
-                  }}
-                  onClick={openPicker}
-                />
-                <label className="flabel" htmlFor="dd">
-                  <span className="lglyph" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                    </svg>
-                  </span>
-                  Due Date
-                </label>
-              </span>
-              {/* Due Time — only when the account has Due/Done Time turned on
-                  (migration 019, 2026-08-13, see AccountForm.tsx). Off
-                  collapses this row to just Due Date, matching ToDo's
-                  one-line Due Date presentation — owner: "when turned off
-                  the four-value two-line presentation of Due Date Due Time
-                  Done Date Done Time on Requests would become like a ToDo
-                  one-line two-value presentation of Due Date and Done
-                  Date." (Create Request has no Done Date/Time fields at
-                  all — those only exist once a Request has been sent — so
-                  here the effect is simply dropping Due Time.) When Due
-                  Time is off, the Reminder checkbox (below) takes this
-                  row's spare width instead — see the file-level comment. */}
-              {requestTimeEnabled ? (
-                <span className="ffloat picker native">
-                  <input
-                    className={`finput${form.dueTime.trim() === '' ? ' opt' : ''}`}
-                    id="dt"
-                    type="time"
-                    value={form.dueTime}
-                    onChange={(e) => set('dueTime', e.target.value)}
-                    onClick={openPicker}
-                  />
-                  <label className="flabel" htmlFor="dt">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                        <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    Due Time <span className="subnote">(optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    className="fclose"
-                    aria-label="Close Due Time picker"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      e.currentTarget.parentElement?.querySelector('input')?.blur()
-                      e.currentTarget.blur()
-                    }}
-                  >
-                    &#10003;
-                  </button>
-                  {form.dueTime.trim() !== '' && (
-                    <button
-                      type="button"
-                      className="fclear"
-                      aria-label="Clear Due Time"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        set('dueTime', '')
-                      }}
-                    >
-                      &times;
-                    </button>
-                  )}
-                </span>
-              ) : (
-                requestRemindersEnabled ? reminderBanner(true) : null
-              )}
-            </div>
-            {dueDateInvalid && <p className="ferror" style={{ marginTop: -8 }}>Enter a Due Date.</p>}
+            {/* Due row (§9.2.2 / §6.16) — Date+Time redesigned 2026-10-08
+                (owner-reported, real iPhone WebKit rendering bug): Due Date
+                always renders full width, with Due Time an opt-in "+ Add
+                Due Time" link (DateTimeField.tsx) rather than a side-by-
+                side pair, which doesn't fit WebKit's own native control on
+                a phone. Reminder now always sits directly below this field
+                regardless of whether Due Time is on — owner: "use the full
+                width on Create Request and place the Reminder below it,"
+                for consistency with Date/Time no longer sharing a row. */}
+            <DateTimeField
+              idPrefix="dd"
+              dateLabel="Due Date"
+              timeLabel="Due Time"
+              dateValue={form.dueDate}
+              onDateChange={(v) => {
+                set('dueDate', v)
+                if (dueDateInvalid) setDueDateInvalid(false)
+              }}
+              timeValue={form.dueTime}
+              onTimeChange={(v) => set('dueTime', v)}
+              timeEnabled={requestTimeEnabled}
+              required
+              invalid={dueDateInvalid}
+              errorMessage="Enter a Due Date."
+            />
+            {requestRemindersEnabled && reminderBanner()}
 
             {/* Repeat (§6.42 PROPOSED) — available to every tier as of
                 2026-08-27; Free's own occurrence cap is enforced
@@ -1558,11 +1478,6 @@ export default function CreateRequestForm() {
               />
               {attachError && <p className="ferror">{attachError}</p>}
             </div>
-
-            {/* Reminders until Done banner, standalone-row placement — only
-                when Due Time is on (the inline placement above already
-                covers the off case; see the file-level comment). */}
-            {requestTimeEnabled && requestRemindersEnabled && reminderBanner(false)}
 
             {error && (
               <p className="ferror" role="alert" style={{ marginTop: 4 }}>

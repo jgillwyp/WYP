@@ -902,25 +902,6 @@ body {
   min-width: 0;
 }
 
-/* A single native date/time field left alone in a .frow — Create Request's
-   Due Date when Due Time is turned off (profiles.request_time_enabled,
-   migration 019), or Request Response/Response Detail's Done Date when the
-   Request's own issuer has it off — otherwise inherits the flex:1 1 0% rule
-   above and grows to the row's full ~400px+ width. Safari's native
-   <input type="date"> renders a longer, spelled-out date ("Wednesday,
-   September 30, 2026") once the control is that wide, instead of the
-   abbreviated mm/dd/yyyy it uses at the narrower ~200px two paired fields
-   share — owner-reported 2026-08-13, comparing it against the Due:
-   metarow's own compact presentation above it on Response Detail. Capped to
-   the width a paired field would have had, rather than left to stretch,
-   which keeps the date in its familiar short format regardless of which
-   fields are turned on. `:only-child` scopes this to exactly the
-   single-field case — a .frow with two .ffloat children (or one .ffloat
-   beside a .btn, e.g. Recipient/Category) is unaffected. */
-.frow > .ffloat.picker.native:only-child {
-  flex: 0 1 220px;
-}
-
 .frow .btn {
   align-self: center;
 }
@@ -1578,23 +1559,6 @@ body {
    the same .frow as the Due Date .ffloat, not its own full-width row.
    .checkrow's base width:100%/margin-bottom:14px are both wrong for this
    placement, overridden here. */
-.frow > .checkrow.checkrow-inline {
-  width: auto;
-  flex: 1 1 auto;
-  margin-bottom: 0;
-  padding: 8px 10px;
-}
-
-/* Due Date's own §6.33 :only-child cap (flex: 0 1 220px, 2026-08-13,
-   Safari's spelled-out date format at wider widths) no longer applies once
-   the Reminder checkbox joins the row as a sibling — this rule reproduces
-   the identical cap for that specific pairing, via a class set only when
-   CreateRequestForm.tsx/RequestDetailForm.tsx actually render the checkbox
-   beside it, rather than loosening :only-child's own selector. */
-.frow > .ffloat.picker.native.due-with-reminder {
-  flex: 0 1 220px;
-}
-
 /* ============================================================================
    REMINDERS UNTIL DONE BANNER — §6.41 PROPOSED, 2026-08-20. Owner's own new
    design (two pasted mockups: Create Request, Response Detail) supersedes
@@ -1678,15 +1642,6 @@ body {
 .reminderitem-disabled input,
 .reminderitem-disabled span {
   cursor: not-allowed;
-}
-
-/* Inline placement beside Due Date (Due Time off) — same override
-   .checkrow-inline already needed (§6.37), reapplied to .reminderbanner. */
-.frow > .reminderbanner.reminderbanner-inline {
-  width: auto;
-  flex: 1 1 auto;
-  margin-bottom: 0;
-  padding: 8px 10px;
 }
 
 /* ============================================================================

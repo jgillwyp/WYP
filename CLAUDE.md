@@ -4986,3 +4986,133 @@ link is built only after the stack is proven on Add Contact.
   one-pager. `npx tsc --noEmit`/`npm run lint` clean (the two `.tsx`
   files; the HTML files aren't typechecked per
   this file's own Repository layout table).
+- **First real-iPhone-hardware testing (iPhone 14 Pro Max, iOS 18.1.1) —
+  two rendering findings, one self-resolved, one fixed (2026-10-08), no
+  migration.** Jim's first test of the live app on genuine iPhone
+  hardware (every prior iOS report in this file came from Jim's own
+  existing phone, not a fresh device) surfaced two issues this scale of
+  real-device testing hadn't caught before. **(1) Whole-app horizontal
+  overflow, requiring pinch-zoom to fit the screen** — investigated
+  (Next.js's own auto-injected viewport meta confirmed present and
+  correct via the framework's bundled output; `.app`/`.scroll` both
+  already have `overflow-x: hidden`; no fixed-width/min-width culprit
+  found in `globals.css` despite a real search) but self-resolved as Jim
+  continued using the app, with no code change made — flagged as likely a
+  transient first-load render glitch rather than a reproducible bug,
+  since it could not be pinned to any CSS rule and stopped recurring on
+  its own. **(2) Native date/time picker fields rendering cramped/
+  garbled once a value is set** — a real, reproducible bug, confirmed
+  across three different layouts (Create Request's lone Due Date field,
+  Request Detail's paired Due/Done Date-Time grid, Create ToDo). Ruled
+  out Dynamic Type/larger system text (confirmed factory default) before
+  concluding this is WebKit's own native date/time control needing more
+  rendering width than this app's existing field-width budgets provide.
+  Two separate fixes, matched to the two different layouts affected:
+  (a) **Lone-field case** (`.frow > .ffloat.picker.native:only-child`/
+  `.due-with-reminder`, §6.33/§6.41) — the existing 220px cap (tuned
+  2026-08-13, presumably against an earlier iOS version or device) bumped
+  to 260px, a reasoned-but-unverified increase applied universally (low
+  risk either way, since a lone field has no competing sibling claiming
+  that width); (b) **paired-field case** (`.frow .ffloat`, Due Date+Due
+  Time / Done Date+Done Time sharing one row 50/50, §6.11) — a real
+  design tradeoff, not just a number tweak: on this device, 50/50 gives
+  each field only ~197px, and even this app's own 480px maximum frame
+  width can't give a paired split much more than ~220px, so no magic
+  number fixes this without also affecting every other phone width.
+  **Jim's own direct test was the key piece of evidence**: this identical
+  side-by-side layout already renders correctly on Android and on
+  desktop, isolating the problem to WebKit's native control specifically,
+  not a real layout-math problem — so the fix is scoped to iOS only via
+  `@supports (-webkit-touch-callout: none)` (a well-established iOS-
+  Safari-only feature query), applying `flex-wrap: wrap` plus a fixed,
+  equal 210px `min-width` floor on both paired `.picker.native` fields —
+  deliberately not `min-width: auto` (browser-computed), which would let
+  one field's own content-dependent width outgrow the other again, the
+  exact "Due Date wider than Done Date" asymmetry the base rule's
+  `min-width: 0` was already built to prevent (2026-08-11). When the row
+  has room at that floor, the pair stays side by side and equal-width,
+  unchanged; when it doesn't — every real iPhone width — the pair wraps
+  onto two full-width lines instead of squeezing below WebKit's own
+  comfortable rendering width. Android and desktop are completely
+  unaffected by this rule (the `@supports` block never matches). Also
+  answered, not built: Jim asked whether a single combined
+  `datetime-local` input could replace the separate date/time fields —
+  explained that `due_date`/`due_time` (and the Done-Date/Done-Time,
+  Repeat-stop-date, etc. equivalents) are separate, independently-
+  optional columns threaded through dozens of files, migrations, email
+  templates, and the cron/Reminder logic specifically because a Due Date
+  can exist with no Due Time — merging them would be a much larger schema
+  change than this rendering bug calls for. `npx tsc --noEmit`/`npm run
+  lint` clean. **Neither fix has been confirmed on a retest yet** —
+  flagged, pending Jim's next iPhone session.
+- **Paired Due/Done Date+Time fields redesigned into Date-alone-plus-opt-in-
+  Time, superseding the same-day iOS-only CSS wrap fix above outright
+  (2026-10-08, new `app/components/DateTimeField.tsx`, no migration.**
+  Jim pushed back on the CSS wrap fix after seeing it: asked whether a
+  single combined date+time field was possible instead, "separate the
+  values for the database, recombine them for presentation," concerned
+  about vertical space. A real `datetime-local` widget was ruled out
+  (two rounds of discussion) — it can't cleanly represent "Due Date is
+  set, Due Time intentionally isn't" without the browser silently
+  defaulting a time in, and this app treats that distinction as real
+  (Reminders/.ics/print reports all branch on it). Landed instead on
+  Jim's own refined design, confirmed over several exchanges: Date always
+  renders alone, full width; Time is individually opt-in per item via a
+  small "+ Add Time" link (shown only when the account's own Show
+  Due/Done Time toggle is on — unchanged gate, just no longer shown
+  unconditionally), which reveals a genuinely separate, empty `type=
+  "time"` input only when tapped — never a combined widget, never a
+  defaulted value. Date and Time never share a row, so the WebKit
+  width problem the CSS wrap fix was working around doesn't arise in the
+  first place, and this actually uses *less* vertical space than before
+  on the common case (Time hidden by default) despite stacking instead
+  of pairing when it is added.
+
+  New shared `DateTimeField.tsx` replaces ~140-line hand-written Date+Time
+  blocks that had been duplicated, with real drift, across all six
+  screens that have one (Create Request, Request Detail, Response Detail,
+  Request Response, Create ToDo, ToDo Detail) — a deliberate departure
+  from this codebase's usual per-file-duplication convention, justified
+  the same way `AttachmentsPanel.tsx`/`RepeatControl.tsx`/
+  `ConversionBanner.tsx` already are: genuinely non-trivial, reused
+  identically everywhere. Collapsing onto one component also **eliminated
+  two entire branches of duplicated logic** that existed only to work
+  around the old side-by-side layout: Request Detail's and ToDo Detail's
+  own `requestTimeEnabled ? (paired rows) : (combined single row)` split,
+  and Create Request's `due-with-reminder` width-sharing hack — all now
+  just `timeEnabled={...}` on one `<DateTimeField>` call per Date/Time
+  pair, no branching left in any of the six files.
+
+  Real engineering details worth recording: the component's internal
+  "has the user added Time" state can't come from a lazy `useState`
+  initializer alone, since Request Detail/ToDo Detail/etc. all fetch
+  their record *after* mount — a `useEffect` (microtask-deferred, same
+  `react-hooks/set-state-in-effect`-satisfying pattern as `CreateRequestForm.tsx`'s
+  own `voiceSupported`) expands the field whenever a real Time value
+  arrives, whenever that happens, without ever auto-opening the native
+  picker (only the explicit "+ Add Time" click does that, via a separate
+  ref flag) — so loading an existing Time value never pops a picker open
+  unprompted. A real gap caught and fixed before shipping: the shared
+  component's date `<input>` wasn't applying `.opt` (the existing
+  grey-while-empty/white-once-filled treatment every other optional field
+  in this app already gets) for non-required fields like Done Date — the
+  first draft only ever applied `.req`, silently dropping that styling
+  for every optional date across all six screens.
+
+  **Per-item quick-Done `scrollIntoView()` preserved** (Response Detail,
+  Request Response) via a new `dateInputRef` prop forwarding to the
+  underlying date `<input>` — those two screens' `handleQuickDone()`
+  still scrolls Done Date into view after filling it, unchanged.
+  **Cleaned up as dead code once all six screens were migrated**: the
+  whole `@supports (-webkit-touch-callout: none)` block from the
+  superseded fix above, the `:only-child` 260px cap, `.due-with-reminder`,
+  `.checkrow-inline`, and `.reminderbanner-inline` — none of these has any
+  remaining caller now that Date/Time never share a `.frow` anywhere in
+  the six migrated screens. **Left alone, deliberately**: the base
+  `.frow .ffloat { flex: 1 1 0%; min-width: 0; }` pairing rule itself —
+  `ArchiveForm.tsx`'s own Starting/Ending Done date-range filter still
+  uses it for a real, still-paired two-date-field row, and nobody has
+  reported a problem with that one. `npx tsc --noEmit`/`npm run lint`
+  clean across every file touched. **Not yet confirmed on a real device**
+  — flagged, pending Jim's next iPhone test. No mockup — none of the six
+  screens' static HTML has interactive Date/Time JS to update.

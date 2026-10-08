@@ -6,6 +6,7 @@ import Link from 'next/link'
 
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
+import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
 import { supabase } from '@/lib/supabaseClient'
@@ -220,27 +221,6 @@ function currentTimeHHMM(): string {
 // app/src/lib/ics.ts, 2026-08-11 — see that file's own header comment for
 // why this earned an exception to the app's usual no-shared-lib convention
 // (ResponseDetailForm.tsx needed the identical logic verbatim).
-
-// Desktop browsers only open a date/time input's native picker when the
-// calendar/clock icon itself is clicked — unlike mobile, where tapping
-// anywhere in the field does. Hand-typing a value isn't a supported way to
-// fill these fields (§6.16's label-affordance glyph signals "focus opens a
-// picker," not "type here"), so a click anywhere in the field should open
-// the picker on desktop too, not just the icon. Owner-reported 2026-08-11.
-// showPicker() needs a user gesture and isn't implemented pre-16.4 Safari —
-// feature-detected and swallowed; the icon still works as a fallback either
-// way. Duplicated per component (short helper, same convention as
-// todayISODate/formatMDY) rather than extracted to a shared lib file.
-function openPicker(e: React.MouseEvent<HTMLInputElement>) {
-  const el = e.currentTarget
-  if (typeof el.showPicker === 'function') {
-    try {
-      el.showPicker()
-    } catch {
-      // ignore — calendar/clock icon still opens it
-    }
-  }
-}
 
 export default function RequestResponseForm() {
   const params = useParams<{ token: string }>()
@@ -999,87 +979,29 @@ export default function RequestResponseForm() {
                 editable row directly with --pad, same as every sibling block
                 below (.meta/.seclabel/.respdesc/.panelact/.panelfull/.promo
                 all carry their own var(--pad) the same way). */}
-            {/* Done Date/Done Time — collapses to Done Date alone when the
-                issuer has Due/Done Time turned off (migration 019/020,
+            {/* Done Date/Done Time — redesigned 2026-10-08 (real iPhone
+                WebKit rendering bug: WebKit's native date/time control
+                needs more width than a side-by-side pair gives it on a
+                phone, confirmed working fine on Android/desktop — so Date
+                and Time no longer share a row anywhere in the app;
+                DateTimeField.tsx). Still collapses to Done Date alone when
+                the issuer has Due/Done Time turned off (migration 019/020,
                 2026-08-13; see the Due: metarow above for the same gate).
                 doneTime itself stays whatever was loaded (or blank) and is
                 simply never sent — set_response_done_by_token still accepts
                 p_done_time null either way. */}
-            <div className="fgroup frow" style={{ padding: '0 var(--pad)' }}>
-              <span className="ffloat picker native">
-                <input
-                  ref={doneDateRef}
-                  className={`finput${doneDate.trim() === '' ? ' opt' : ''}`}
-                  id="dnd"
-                  type="date"
-                  value={doneDate}
-                  onChange={(e) => setDoneDate(e.target.value)}
-                  onClick={openPicker}
-                />
-                <label className="flabel" htmlFor="dnd">
-                  <span className="lglyph" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                      <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                      <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                      <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                    </svg>
-                  </span>
-                  Done Date <span className="subnote">(optional)</span>
-                </label>
-              </span>
-              {data.owner_request_time_enabled && (
-                <span className="ffloat picker native">
-                  <input
-                    className={`finput${doneTime.trim() === '' ? ' opt' : ''}`}
-                    id="dnt"
-                    type="time"
-                    value={doneTime}
-                    onChange={(e) => setDoneTime(e.target.value)}
-                    onClick={openPicker}
-                  />
-                  <label className="flabel" htmlFor="dnt">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                        <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    Done Time <span className="subnote">(optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    className="fclose"
-                    aria-label="Close Done Time picker"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      e.currentTarget.parentElement?.querySelector('input')?.blur()
-                      e.currentTarget.blur()
-                    }}
-                  >
-                    &#10003;
-                  </button>
-                  {doneTime.trim() !== '' && (
-                    <button
-                      type="button"
-                      className="fclear"
-                      aria-label="Clear Done Time"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDoneTime('')
-                      }}
-                    >
-                      &times;
-                    </button>
-                  )}
-                </span>
-              )}
+            <div style={{ padding: '0 var(--pad)' }}>
+              <DateTimeField
+                idPrefix="dnd"
+                dateLabel="Done Date"
+                timeLabel="Done Time"
+                dateValue={doneDate}
+                onDateChange={setDoneDate}
+                timeValue={doneTime}
+                onTimeChange={setDoneTime}
+                timeEnabled={data.owner_request_time_enabled}
+                dateInputRef={doneDateRef}
+              />
             </div>
 
             {/* Simplified empty-state row (§6.32, 2026-08-11): with no

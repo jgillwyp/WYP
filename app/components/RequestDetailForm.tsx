@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import AttachmentsPanel from './AttachmentsPanel'
 import RepeatControl from './RepeatControl'
+import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
 import { supabase } from '@/lib/supabaseClient'
@@ -247,27 +248,6 @@ function PrintRepeatLine({ rule, dueDate }: { rule: RepeatRule | null; dueDate: 
       <span className="prepeathead">Repeats:</span> {describeRepeat(rule, dueDate)}
     </div>
   )
-}
-
-// Desktop browsers only open a date/time input's native picker when the
-// calendar/clock icon itself is clicked — unlike mobile, where tapping
-// anywhere in the field does. Hand-typing a value isn't a supported way to
-// fill these fields (§6.16's label-affordance glyph signals "focus opens a
-// picker," not "type here"), so a click anywhere in the field should open
-// the picker on desktop too, not just the icon. Owner-reported 2026-08-11.
-// showPicker() needs a user gesture and isn't implemented pre-16.4 Safari —
-// feature-detected and swallowed; the icon still works as a fallback either
-// way. Duplicated per component (short helper, same convention as
-// todayISODate/formatMDY) rather than extracted to a shared lib file.
-function openPicker(e: React.MouseEvent<HTMLInputElement>) {
-  const el = e.currentTarget
-  if (typeof el.showPicker === 'function') {
-    try {
-      el.showPicker()
-    } catch {
-      // ignore — calendar/clock icon still opens it
-    }
-  }
 }
 
 // iPhone keyboard-covers-field fix (2026-09-16) — see CreateRequestForm.tsx's
@@ -1291,219 +1271,37 @@ export default function RequestDetailForm() {
                 Account preference is on (migration 044, 2026-08-23). */}
             {sendReminderPanel()}
 
-            {requestTimeEnabled ? (
-              <>
-                <div className="fgroup frow">
-                  <span className="ffloat picker native">
-                    <input
-                      className={`finput req${isOverdue ? ' overdue-date' : ''}`}
-                      id="dd"
-                      type="date"
-                      value={form.dueDate}
-                      onChange={(e) => set('dueDate', e.target.value)}
-                      onClick={openPicker}
-                    />
-                    <label className="flabel" htmlFor="dd">
-                      <span className="lglyph" aria-hidden="true">
-                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                          <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                        </svg>
-                      </span>
-                      Due Date
-                    </label>
-                  </span>
-                  <span className="ffloat picker native">
-                    <input
-                      className={`finput${form.dueTime.trim() === '' ? ' opt' : ''}`}
-                      id="dt"
-                      type="time"
-                      value={form.dueTime}
-                      onChange={(e) => set('dueTime', e.target.value)}
-                      onClick={openPicker}
-                    />
-                    <label className="flabel" htmlFor="dt">
-                      <span className="lglyph" aria-hidden="true">
-                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        </svg>
-                      </span>
-                      Due Time <span className="subnote">(optional)</span>
-                    </label>
-                    <button
-                      type="button"
-                      className="fclose"
-                      aria-label="Close Due Time picker"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        e.currentTarget.parentElement?.querySelector('input')?.blur()
-                        e.currentTarget.blur()
-                      }}
-                    >
-                      &#10003;
-                    </button>
-                    {form.dueTime.trim() !== '' && (
-                      <button
-                        type="button"
-                        className="fclear"
-                        aria-label="Clear Due Time"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          set('dueTime', '')
-                        }}
-                      >
-                        &times;
-                      </button>
-                    )}
-                  </span>
-                </div>
-
-                <div className="fgroup frow">
-                  <span className="ffloat picker native">
-                    <input
-                      className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
-                      id="dnd"
-                      type="date"
-                      value={form.doneDate}
-                      onChange={(e) => set('doneDate', e.target.value)}
-                      onClick={openPicker}
-                    />
-                    <label className="flabel" htmlFor="dnd">
-                      <span className="lglyph" aria-hidden="true">
-                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                          <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                          <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                          <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                        </svg>
-                      </span>
-                      Done Date <span className="subnote">(optional)</span>
-                    </label>
-                  </span>
-                  <span className="ffloat picker native">
-                    <input
-                      className={`finput${form.doneTime.trim() === '' ? ' opt' : ''}`}
-                      id="dnt"
-                      type="time"
-                      value={form.doneTime}
-                      onChange={(e) => set('doneTime', e.target.value)}
-                      onClick={openPicker}
-                    />
-                    <label className="flabel" htmlFor="dnt">
-                      <span className="lglyph" aria-hidden="true">
-                        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="24" cy="24" r="17" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                          <line x1="24" y1="24" x2="24" y2="13" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                          <line x1="24" y1="24" x2="32" y2="28" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        </svg>
-                      </span>
-                      Done Time <span className="subnote">(optional)</span>
-                    </label>
-                    <button
-                      type="button"
-                      className="fclose"
-                      aria-label="Close Done Time picker"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        e.currentTarget.parentElement?.querySelector('input')?.blur()
-                        e.currentTarget.blur()
-                      }}
-                    >
-                      &#10003;
-                    </button>
-                    {form.doneTime.trim() !== '' && (
-                      <button
-                        type="button"
-                        className="fclear"
-                        aria-label="Clear Done Time"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          set('doneTime', '')
-                        }}
-                      >
-                        &times;
-                      </button>
-                    )}
-                  </span>
-                </div>
-              </>
-            ) : (
-              /* Due/Done Time turned off (migration 019, 2026-08-13) — the
-                 two two-value rows above collapse into one combined row,
-                 matching ToDo Detail's own Due Date/Done Date row exactly.
-                 due_time/done_time already on the record, if any, stay in
-                 the database untouched — same "hidden, not dropped"
-                 convention as Category — they just aren't shown or edited
-                 here until the account turns this back on. */
-              <div className="fgroup frow">
-                <span className="ffloat picker native">
-                  <input
-                    className={`finput req${isOverdue ? ' overdue-date' : ''}`}
-                    id="dd"
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) => set('dueDate', e.target.value)}
-                    onClick={openPicker}
-                  />
-                  <label className="flabel" htmlFor="dd">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                        <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                        <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                        <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                        <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                        <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                        <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                      </svg>
-                    </span>
-                    Due Date
-                  </label>
-                </span>
-                <span className="ffloat picker native">
-                  <input
-                    className={`finput${form.doneDate.trim() === '' ? ' opt' : ''}`}
-                    id="dnd"
-                    type="date"
-                    value={form.doneDate}
-                    onChange={(e) => set('doneDate', e.target.value)}
-                    onClick={openPicker}
-                  />
-                  <label className="flabel" htmlFor="dnd">
-                    <span className="lglyph" aria-hidden="true">
-                      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="7" y="10" width="34" height="32" rx="4" fill="none" stroke="#5A6675" strokeWidth="3.5" />
-                        <line x1="7" y1="19" x2="41" y2="19" stroke="#5A6675" strokeWidth="3.5" />
-                        <line x1="16" y1="5" x2="16" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        <line x1="32" y1="5" x2="32" y2="12" stroke="#5A6675" strokeWidth="3.5" strokeLinecap="round" />
-                        <circle cx="16" cy="27" r="2.2" fill="#5A6675" />
-                        <circle cx="24" cy="27" r="2.2" fill="#5A6675" />
-                        <circle cx="32" cy="27" r="2.2" fill="#5A6675" />
-                        <circle cx="16" cy="35" r="2.2" fill="#5A6675" />
-                        <circle cx="24" cy="35" r="2.2" fill="#5A6675" />
-                      </svg>
-                    </span>
-                    Done Date <span className="subnote">(optional)</span>
-                  </label>
-                </span>
-              </div>
-            )}
+            {/* Due/Done Date+Time, redesigned 2026-10-08 (owner-reported,
+                real iPhone WebKit rendering bug) — DateTimeField.tsx
+                replaces the old requestTimeEnabled-branched markup (paired
+                side-by-side rows when on, a collapsed combined Due Date +
+                Done Date row when off): Date always renders full width,
+                with Time an opt-in "+ Add Time" link rather than a
+                side-by-side pair, so there's no longer a separate
+                collapsed-row case to maintain — timeEnabled alone now
+                covers both of the old branches. */}
+            <DateTimeField
+              idPrefix="dd"
+              dateLabel="Due Date"
+              timeLabel="Due Time"
+              dateValue={form.dueDate}
+              onDateChange={(v) => set('dueDate', v)}
+              timeValue={form.dueTime}
+              onTimeChange={(v) => set('dueTime', v)}
+              timeEnabled={requestTimeEnabled}
+              required
+              dateClassExtra={isOverdue ? 'overdue-date' : ''}
+            />
+            <DateTimeField
+              idPrefix="dnd"
+              dateLabel="Done Date"
+              timeLabel="Done Time"
+              dateValue={form.doneDate}
+              onDateChange={(v) => set('doneDate', v)}
+              timeValue={form.doneTime}
+              onTimeChange={(v) => set('doneTime', v)}
+              timeEnabled={requestTimeEnabled}
+            />
 
             {/* Un-archive-on-clear advisory (owner request, 2026-08-17) —
                 only shows when this Request was loaded already archived AND
