@@ -5175,3 +5175,47 @@ link is built only after the stack is proven on Add Contact.
   session (Mac + iPhone, Settings → Safari → Advanced → Web Inspector) to
   read the actual computed styles directly rather than continuing to
   guess from photos.
+  **Fourth retest, same day: still no change — but Jim had no Mac, so a
+  temporary on-screen diagnostic shipped instead of Web Inspector**, a
+  small `getComputedStyle()`/`getBoundingClientRect()` readout rendered
+  as plain text above Due Date for him to screenshot (removed once its
+  job was done). The result was the real root cause: `.fgroup`/`.ffloat`
+  were both correctly measuring full width (`402px`, `display: block`) —
+  every fix above had actually worked on the wrapper — but the `<input>`
+  itself reported `cssWidth: 95px`, `boxSizing: content-box`, neither of
+  which this app's CSS ever set. iOS Safari's own UA stylesheet for
+  `input[type="date"]`/`[type="time"]` was overriding the plain `.finput`
+  rule entirely, confirmed definitively when a **more specific selector
+  with `!important` on both properties also had zero effect** — a real,
+  documented exception in the CSS cascade: user-agent `!important`
+  outranks author `!important`. **First attempted fix: moved the visible
+  box from the input onto its `.ffloat` wrapper** (border/background/
+  padding on the div instead, input rendered bare at its own native
+  width inside it, wrapper's own `onClick` opening the picker so the
+  whole box stayed a real tap target) — a real, working pattern for this
+  exact class of problem, confirmed with an Artifact mockup and Jim's
+  go-ahead before building across both Date and Time. **Reverted the same
+  day, before shipping** — Jim found the actual standard fix first:
+  `-webkit-appearance: textfield` tells WebKit to stop using its special
+  native-widget sizing algorithm for `type="date"`/`type="time"`,
+  letting ordinary `width`/`box-sizing` apply like any other input, with
+  no visual compromise (unlike the wrapper approach, which left the
+  native-rendered text only filling its own narrow native width inside an
+  otherwise-correctly-sized box). Scoped to iOS Safari only via the same
+  `@supports (-webkit-touch-callout: none)` technique from the superseded
+  paired-field wrap fix, so Android/desktop (already correct) are
+  untouched. Judged low-risk before building: this app already supplies
+  its own calendar/clock icon (`CalendarGlyph`/`ClockGlyph` in
+  `DateTimeField.tsx`) rather than relying on the browser's native one,
+  and opens the picker programmatically via `showPicker()` — neither of
+  which `-webkit-appearance` should affect, since `type="date"`'s
+  picker-on-focus behavior is independent of its appearance styling.
+  `DateTimeField.tsx` reverted to its simpler, input-owns-the-box
+  structure from before the wrapper experiment, keeping one genuine fix
+  discovered along the way: `invalid` had been applied to the inner
+  `.ffloat` div, but the existing global rule targets `.fgroup.is-invalid
+  .finput` (matching the established `.fgroup.ffloat`-combined-class
+  convention this component doesn't use) — Due Date's invalid-state red
+  border was never actually working. Moved onto `.fgroup` to match.
+  `npx tsc --noEmit`/`npm run lint` clean. **A new hypothesis, not yet
+  confirmed** — pending Jim's next retest.
