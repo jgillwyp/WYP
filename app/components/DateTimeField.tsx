@@ -141,9 +141,49 @@ export default function DateTimeField({
   const dateId = `${idPrefix}-date`
   const timeId = `${idPrefix}-time`
 
+  // TEMPORARY DIAGNOSTIC (2026-10-08) — remove once the iPhone narrow-field
+  // issue is confirmed fixed. Jim has no Mac for Safari Web Inspector, so
+  // this reads the actual computed layout and renders it as plain text
+  // instead, right on the page, for him to screenshot.
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
+  const fgroupDiagRef = useRef<HTMLDivElement>(null)
+  const dateWrapperDiagRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const fg = fgroupDiagRef.current
+      const wrap = dateWrapperDiagRef.current
+      const inp = wrap?.querySelector('input')
+      if (!fg || !wrap || !inp) return
+      const fgCs = getComputedStyle(fg)
+      const wrapCs = getComputedStyle(wrap)
+      const inpCs = getComputedStyle(inp)
+      const lines = [
+        `fgroup: w=${Math.round(fg.getBoundingClientRect().width)} display=${fgCs.display} boxSizing=${fgCs.boxSizing}`,
+        `wrapper: w=${Math.round(wrap.getBoundingClientRect().width)} display=${wrapCs.display} boxSizing=${wrapCs.boxSizing} position=${wrapCs.position} overflow=${wrapCs.overflow}`,
+        `input: w=${Math.round(inp.getBoundingClientRect().width)} cssWidth=${inpCs.width} display=${inpCs.display} boxSizing=${inpCs.boxSizing} minWidth=${inpCs.minWidth}`,
+      ]
+      setDebugInfo(lines.join('\n'))
+    }, 300)
+    return () => clearTimeout(id)
+  }, [])
+
   return (
-    <div className="fgroup">
-      <div className={`ffloat picker native${invalid ? ' is-invalid' : ''}`}>
+    <div className="fgroup" ref={fgroupDiagRef}>
+      {debugInfo && (
+        <pre
+          style={{
+            fontSize: 10,
+            background: '#ffe9e9',
+            border: '1px solid red',
+            padding: 4,
+            margin: '0 0 6px',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {debugInfo}
+        </pre>
+      )}
+      <div className={`ffloat picker native${invalid ? ' is-invalid' : ''}`} ref={dateWrapperDiagRef}>
         <input
           ref={dateInputRef}
           className={`finput${required ? ' req' : dateValue.trim() === '' ? ' opt' : ''}${dateClassExtra ? ` ${dateClassExtra}` : ''}`}
