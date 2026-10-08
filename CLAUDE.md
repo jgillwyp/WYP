@@ -4976,15 +4976,13 @@ link is built only after the stack is proven on Add Contact.
   (Jim's explicit "sales literature" and "WYP home page"), plus
   `design/screens/WYP_subscribe_palette1.html` (the Subscribe checkout
   mockup — not explicitly asked for, updated anyway for consistency with
-  the other two, flagged here rather than silently done). **Found but
-  deliberately NOT touched**: `docs/onepager_2.html` — a second,
-  differently-named one-pager file ("Sales One-Pager v3," a two-page
-  flyer layout, browser-saved from `file:///C:/Users/jgill/Downloads/
-  onepager_2.html`) still carries the old Priority Support/"Keep
-  everything forever" wording. It's never once mentioned anywhere in this
-  file's own history, unlike `docs/WYP onepager.html`, which this project
-  has maintained continuously since 2026-08-15 — flagged for Jim to say
-  whether it's a stale leftover or a real second artifact he wants kept in
-  sync going forward, rather than guessed at. `npx tsc --noEmit`/`npm run
-  lint` clean (the two `.tsx` files; the HTML files aren't typechecked per
+  the other two, flagged here rather than silently done). **Resolved same
+  day**: the flagged second one-pager file was confirmed stale — Jim: "The
+  three .html files you created are all that is needed. We should either
+  remove or mark the other files as PRIOR or RETIRED." Renamed (`git mv`,
+  history preserved) `docs/onepager_2.html` → `docs/onepager_2 -
+  RETIRED.html`, with a header comment added inside the file itself
+  pointing back at `docs/WYP onepager.html` as the one maintained
+  one-pager. `npx tsc --noEmit`/`npm run lint` clean (the two `.tsx`
+  files; the HTML files aren't typechecked per
   this file's own Repository layout table).
