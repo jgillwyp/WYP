@@ -563,6 +563,17 @@ body {
 
 .ffloat {
   position: relative;
+  /* display: block, 2026-10-08 — every prior .ffloat usage sat inside a
+     .frow (display: flex), which auto-"blockifies" a flex item regardless
+     of its own display value, so this was never needed before. DateTimeField.tsx
+     is the first usage with no .frow ancestor; without this, the <span>
+     falls back to its tag default (inline), which both keeps it from
+     taking full width and lets a trailing sibling (the "+ Add Time" link)
+     sit on the same line instead of below it — and gives its .finput
+     child's width:100% an ambiguous containing block, a plausible
+     contributor to the real "whole screen too wide" report (owner-
+     reported, real iPhone) alongside this one. */
+  display: block;
 }
 
 .ffloat .flabel {

@@ -5113,6 +5113,26 @@ link is built only after the stack is proven on Add Contact.
   `ArchiveForm.tsx`'s own Starting/Ending Done date-range filter still
   uses it for a real, still-paired two-date-field row, and nobody has
   reported a problem with that one. `npx tsc --noEmit`/`npm run lint`
-  clean across every file touched. **Not yet confirmed on a real device**
-  — flagged, pending Jim's next iPhone test. No mockup — none of the six
-  screens' static HTML has interactive Date/Time JS to update.
+  clean across every file touched. No mockup — none of the six screens'
+  static HTML has interactive Date/Time JS to update.
+  **Real bug found on first retest, same day — `.ffloat` had no explicit
+  `display`.** Jim's retest showed Due Date rendering as a tiny pill with
+  "+ Add Due Time" sitting on the same line (iPhone) and, separately, the
+  "Due Date"/"Due Time" label text overlapping the native widget's own
+  value text (Android, same screen). Root cause: every prior `.ffloat`
+  usage sat inside a `.frow` (`display: flex`), which "blockifies" a flex
+  item regardless of its own `display` value — so `.ffloat` itself never
+  needed an explicit `display` before. `DateTimeField.tsx` is the first
+  usage with no `.frow` ancestor, so the `<span>` fell back to its tag
+  default (`inline`), which (a) let a trailing sibling sit on the same
+  line instead of starting a new one, and (b) gave the `.finput` child's
+  `width: 100%` an ambiguous containing block — different browsers
+  resolved that ambiguity differently, WebKit computing something far too
+  wide (the whole-page overflow report) and Chrome/Android computing a
+  reasonable-looking box that still broke the label's vertical spacing
+  (the overlap report). One fix for both: `.ffloat { display: block; }`.
+  Safe for every pre-existing `.frow`-contained usage (already
+  blockified there, so this is a no-op), and for the few plain
+  `.fgroup.ffloat` combined-class fields (Email on `/login`, etc.), whose
+  div already defaulted to block regardless. **Not yet confirmed fixed**
+  — flagged, pending Jim's next retest on both platforms.
