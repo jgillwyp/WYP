@@ -5267,6 +5267,4 @@ link is built only after the stack is proven on Add Contact.
   `.repeat-number`/`.stop-date-field` (RepeatControl's modal, 13px), and
   `.statfilterinput` (Admin Stats filters, 13px) all had the identical
   gap. All five bumped to 16px. `npx tsc --noEmit`/`npm run lint` clean.
-  **Not yet confirmed by Jim on a retest** — flagged, though this is a
-  well-established, low-risk fix (16px is also just a perfectly normal
-  body-text size, not purely an iOS workaround).
+  **Confirmed fixed by Jim on a retest, same day.**
