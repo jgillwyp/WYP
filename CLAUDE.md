@@ -5318,3 +5318,109 @@ link is built only after the stack is proven on Add Contact.
   "minutes before" as best-effort/rounded-to-the-hour rather than
   literal. **Awaiting Jim's decision on precision vs. cost before any of
   this is built.**
+- **"Minutes before" reminder — built end to end (2026-10-09) — migrations
+  077/078 CONFIRMED RUN by Jim, 2026-10-09.** Supersedes the "awaiting Jim's
+  decision" entry immediately above: Jim confirmed Vercel Pro supports
+  cron down to once-per-minute with real per-minute precision (checked
+  against Vercel's own current docs, not assumed), then proposed "for
+  processing efficiency, could all 'minutes before' items created or
+  changed be placed into a small table? then doing something against that
+  table every minute would have a much smaller processing cost," plus
+  5-minute increments starting at 0. Approved the resulting architecture
+  verbatim ("please build it as recommended") and separately confirmed
+  the default: "The default setting should be 10 minutes before."
+  **Migration 077** adds `requests.reminder_minutes_before_enabled`/
+  `_value`/`_sent_at` (same idempotency-column shape as the three existing
+  Reminder types), four new `profiles` default columns split Request/ToDo
+  per migration 044's own precedent
+  (`request_reminder_default_minutes_before_enabled`/`_value`,
+  `todo_reminder_default_minutes_before_enabled`/`_value`, defaults
+  false/10), their four per-column grants, and a new table,
+  `reminder_minutes_before_queue` (`request_id` primary key, `fire_at`,
+  `created_at`, `sent_at`) — `service_role`-only grant, RLS enabled with
+  no permissive policies (every access goes through the new cron route),
+  plus a partial index on `fire_at where sent_at is null`. **Migration
+  078** (same day, companion batch) exposes the new columns through the
+  four existing SECURITY DEFINER functions the two recipient-facing
+  Response screens already read/write — `get_request_by_token`/
+  `get_received_request` (plain `create or replace`, jsonb return, no
+  signature change) gain the three new fields read-only in their payload;
+  `set_response_done_by_token`/`set_response_done_as_recipient` each gain
+  two new trailing parameters (`p_reminder_minutes_before_enabled`/
+  `_value`, both default null) — a genuine signature change, so both
+  needed the drop-then-create treatment this file's own migrations
+  069/070 already established for "a new parameter, not a RETURNS TABLE
+  shape fight."
+  New `app/api/cron/minutes-before/route.ts`, a separate route on its own
+  Vercel Cron schedule (`vercel.json`, `*/5 * * * *`, alongside the
+  existing hourly `/api/cron/tick`) — not folded into the hourly route,
+  since Jim's own example (10 minutes for a call) could miss by up to 59
+  minutes on an hourly check. Two passes each run: **Sync** upserts a
+  freshly-computed `fire_at` (via a new `dueMomentUtc()` helper in
+  `app/src/lib/cronTime.ts`, factored out of `hoursSinceLocalDateTime`'s
+  own identical offset math, now shared by both) for every currently-
+  eligible, not-yet-sent row (checkbox on, Due Date **and** Due Time both
+  set — there's no exact moment to count back from with only a date — not
+  Done, not archived, and for a ToDo, `profiles.todo_dates_enabled` on),
+  then deletes any queue row that's no longer eligible. **Fire** selects
+  queue rows whose `fire_at` has arrived, re-fetches each row fresh, sends,
+  and on success marks the queue row's own `sent_at` (not an immediate
+  delete — the next sync pass's cleanup step removes it once
+  `requests.reminder_minutes_before_sent_at`, just set, makes it fail the
+  eligibility query; matches the partial index's own "sent rows accumulate
+  briefly, then get swept" assumption) plus the row's real idempotency
+  column. Zone used to convert naive `due_date`/`due_time` into an absolute
+  instant: the Recipient's own zone for a Request (falling back to the
+  owner's), the owner's own zone for a ToDo — same convention the hourly
+  route's own Recipient-facing vs. owner-facing phases already use.
+  New email templates in `app/src/lib/email.ts` —
+  `buildMinutesBeforeEmailSubject/Html/Text` (Request → Recipient) and
+  `buildTodoMinutesBeforeEmailSubject/Html/Text` (ToDo → owner) — both
+  reuse the existing `reminderNoticeLinkText`/`todoReminderLinkText`
+  helpers for their CTA button (closing the same "...or to turn off
+  notifications" conditional-wording gap fixed app-wide 2026-08-28/
+  2026-09-28, rather than reopening it for a 4th template family) rather
+  than inventing new button text. Deliberately doesn't claim exact-minute
+  phrasing ("due in 10 minutes") — a send can trail the configured moment
+  by up to this route's own 5-minute tick interval, so the body states the
+  real Due Date/Time instead ("This is your requested reminder, 10 minutes
+  before it is due. The Due Date and Time is..."). `ReminderSchedule`
+  (used by the Initial Request email's own schedule sentence) gained a
+  4th field, `minutesBefore`/`minutesBeforeValue` —
+  `buildReminderScheduleSentence()` was rewritten from its old hard-coded
+  0/1/2/3-active-day-branch shape to a generic phrase-list joiner, with
+  every pre-existing (non-minutes) combination's exact output preserved
+  byte-for-byte (verified by re-reading the old branches before
+  replacing them) and new phrasing only for any combination that
+  includes Minutes Before (e.g., "...Reminders: the day before and 10
+  minutes before it is due."). `app/api/email/send-request/route.ts`'s
+  own `reminderSchedule` construction (the one other call site) gained
+  the two new fields, gated the same way `dayBefore` already is — only
+  reported active if Due Time is actually set.
+  UI: a 4th `.reminderitem` (checkbox + a `<select>` of 5-minute
+  increments 0–120, "N minutes before") added to all six Reminders-
+  until-Done screens — `CreateRequestForm.tsx`, `RequestDetailForm.tsx`,
+  `ResponseDetailForm.tsx`, `RequestResponseForm.tsx` (built fully
+  editable here too, matching the existing precedent that a recipient —
+  signed-in or via the anonymous `/r/[token]` link — can already toggle
+  Day before/of/after on their own view, not just the owner),
+  `CreateTodoForm.tsx`, `TodoDetailForm.tsx` — each with its own
+  eligibility gate (Due Date **and** Due Time both required, since
+  there's no exact moment otherwise; same already-sent and
+  archived/Done grey-outs the existing three checkboxes already have) and
+  wired into each screen's own dirty-check/`hasChanges`/
+  `remindersOnlyChanged` snapshot where one exists. Two new toggle+stepper
+  rows added to `AccountForm.tsx`'s Requests (sent) and ToDos sections
+  ("Default: Minutes-Before Reminder (`<select>` minutes)"), each reading/
+  writing the matching default columns via a new `handleMinutesValueChange`
+  helper (the numeric sibling of the existing `handleToggle`, same
+  optimistic-update-reverted-on-failure shape). New `.reminderitem
+  select`/`.checktext select` CSS (`app/globals.css`) explicitly set
+  `font-size: 16px` — inheriting either parent's own smaller size (12.5px)
+  would have reintroduced, on this one new control, the exact iOS Safari
+  auto-zoom-on-focus bug fixed app-wide for every other field earlier in
+  this same batch (see the entry above). `npx tsc --noEmit`/`npm run lint`
+  clean across every file this batch touched. No mockup updated — none of
+  the six Reminders-until-Done screens' static HTML models the banner at
+  all (unchanged from every earlier entry in this family), and
+  `AccountForm.tsx` has never had one.

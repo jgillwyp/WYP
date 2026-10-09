@@ -1600,6 +1600,18 @@ body {
   margin-top: 2px;
 }
 
+/* "Minutes before" default stepper (migration 077, 2026-10-09,
+   AccountForm.tsx) — the one .checktext with a nested <select>. Explicit
+   16px, same iOS-Safari-auto-zoom-on-focus reasoning as .reminderitem
+   select above, not the inherited 12.5px .checktext size. */
+.checktext select {
+  font-size: 16px;
+  padding: 1px 2px;
+  border-radius: 4px;
+  border: 1px solid var(--input-border);
+  vertical-align: middle;
+}
+
 /* ============================================================================
    REMINDER CHECKBOX — §6.37 PROPOSED, 2026-08-15 (Create Request/Request
    Detail). Owner's own design: a .checkrow ("Reminder - send on the morning
@@ -1700,6 +1712,25 @@ body {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink);
+}
+
+/* "Minutes before" (migration 077, 2026-10-09) — the one .reminderitem
+   with a nested form control (a minutes-value <select>) besides its own
+   checkbox. Explicit 16px, not the inherited 12.5px .reminderitem span
+   size — anything under 16px triggers iOS Safari's auto-zoom-on-focus
+   behavior (the exact bug fixed app-wide for .finput/.ftextarea/.field/
+   etc. earlier this same batch); this is the one other focusable control
+   in the app that needed the identical fix pre-emptively. */
+.reminderitem select {
+  font-size: 16px;
+  padding: 1px 2px;
+  border-radius: 4px;
+  border: 1px solid var(--input-border);
+  vertical-align: middle;
+}
+
+.reminderitem-disabled select {
+  cursor: not-allowed;
 }
 
 .reminderitem:focus-within {

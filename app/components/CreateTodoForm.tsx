@@ -96,7 +96,15 @@ type TodoFormState = {
   reminderEnabled: boolean
   reminderDayOfEnabled: boolean
   overdueReminderEnabled: boolean
+  // "Minutes before" (migration 077/078, 2026-10-09) — see
+  // CreateRequestForm.tsx's identical field for the full reasoning.
+  reminderMinutesBeforeEnabled: boolean
+  reminderMinutesBeforeValue: number
 }
+
+// See CreateRequestForm.tsx's identical constant/comment.
+const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
+const MINUTES_BEFORE_DEFAULT = 10
 
 const initialState: TodoFormState = {
   // Owner: "the Create a ToDo should default the the 'Soon' Priority... the
@@ -123,6 +131,8 @@ const initialState: TodoFormState = {
   reminderEnabled: true,
   reminderDayOfEnabled: false,
   overdueReminderEnabled: false,
+  reminderMinutesBeforeEnabled: false,
+  reminderMinutesBeforeValue: MINUTES_BEFORE_DEFAULT,
 }
 
 const CATEGORY_CAP = 20
@@ -336,7 +346,7 @@ export default function CreateTodoForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after'
+        'display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value'
       )
       .single()
       .then(({ data }) => {
@@ -351,6 +361,8 @@ export default function CreateTodoForm() {
           reminderEnabled: data?.todo_reminder_default_day_before ?? f.reminderEnabled,
           reminderDayOfEnabled: data?.todo_reminder_default_day_of ?? f.reminderDayOfEnabled,
           overdueReminderEnabled: data?.todo_reminder_default_day_after ?? f.overdueReminderEnabled,
+          reminderMinutesBeforeEnabled: data?.todo_reminder_default_minutes_before_enabled ?? f.reminderMinutesBeforeEnabled,
+          reminderMinutesBeforeValue: data?.todo_reminder_default_minutes_before_value ?? f.reminderMinutesBeforeValue,
         }))
       })
     // pendingConversion is a stable, set-once value from its own lazy
@@ -500,6 +512,16 @@ export default function CreateTodoForm() {
     ? 'This ToDo is already marked Done.'
     : undefined
 
+  // "Minutes before" (migration 077/078, 2026-10-09) — needs Due Time as
+  // well as Due Date, since there's no exact moment to count back from
+  // with only a date.
+  const todoMinutesBeforePrereqsMissing = form.dueDate.trim() === '' || form.dueTime.trim() === ''
+  const todoMinutesBeforeTooltip = todoMinutesBeforePrereqsMissing
+    ? form.dueDate.trim() !== '' && form.dueTime.trim() === ''
+      ? 'A Minutes-before Reminder needs a Due Time.'
+      : 'Please select a Due Date before modifying the Reminder.'
+    : undefined
+
   function todoReminderBanner() {
     return (
       <div className="reminderbanner">
@@ -540,6 +562,32 @@ export default function CreateTodoForm() {
               onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
             />
             <span>Day after</span>
+          </label>
+          <label
+            className={`reminderitem${todoMinutesBeforePrereqsMissing ? ' reminderitem-disabled' : ''}`}
+            title={todoMinutesBeforeTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderMinutesBeforeEnabled}
+              disabled={todoMinutesBeforePrereqsMissing}
+              onChange={(e) => set('reminderMinutesBeforeEnabled', e.target.checked)}
+            />
+            <span>
+              <select
+                value={form.reminderMinutesBeforeValue}
+                disabled={todoMinutesBeforePrereqsMissing}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => set('reminderMinutesBeforeValue', Number(e.target.value))}
+              >
+                {MINUTES_BEFORE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>{' '}
+              minutes before
+            </span>
           </label>
         </div>
       </div>
@@ -678,6 +726,12 @@ export default function CreateTodoForm() {
         reminder_enabled: form.reminderEnabled,
         reminder_day_of_enabled: form.reminderDayOfEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
+        // Re-gated on Due Time actually being set (and the Due/Done Time
+        // account toggle being on, same as the due_time field above) — not
+        // just the checkbox's own stored value.
+        reminder_minutes_before_enabled:
+          todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled,
+        reminder_minutes_before_value: form.reminderMinutesBeforeValue,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? 1 : null,
         // repeat_series_id — see CreateRequestForm.tsx's identical comment

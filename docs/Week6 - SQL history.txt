@@ -7496,3 +7496,440 @@ grant execute on function public.get_account_status_by_email(text) to authentica
 --   select get_account_status_by_email('definitely-not-a-real-address@example.com');
 --     -- should return 'none'
 -- ============================================================================
+
+-- Migration 077 (2026-10-09) -- "Minutes before" Reminder, a fourth
+-- Reminders-until-Done option alongside Day before/Day of/Day after.
+-- CONFIRMED RUN by Jim, 2026-10-09.
+--
+-- Jim's own example: his usual lead time for a scheduled call is 10 minutes,
+-- but a medical appointment needs 30+ for travel time -- a single fixed
+-- "morning of" or "day of" notice can't serve both, and he was explicit that
+-- an hourly-rounded approximation ("off by up to ~59 minutes") wouldn't
+-- actually work for this use case, so this needs genuine minute-level
+-- precision, not a cheaper best-effort version.
+--
+-- Architecture, confirmed with Jim before building: the existing hourly
+-- cron (app/api/cron/tick/route.ts, vercel.json's "0 * * * *" entry) is
+-- precise enough for calendar-day events but can't deliver "N minutes
+-- before" -- a SEPARATE, more frequent Vercel Cron entry is needed, which
+-- Vercel's own docs confirm Pro supports down to once-per-minute with
+-- per-minute scheduling precision (this app is already on Pro). Rather
+-- than have that more-frequent tick repeatedly filter the full requests
+-- table, Jim's own suggestion: a small dedicated queue table holding only
+-- the (always sparse, by definition -- most Requests/ToDos won't use this
+-- granular an option) set of items with a pending Minutes-before reminder,
+-- so the frequent "what's due to fire" check stays cheap regardless of how
+-- large requests itself grows. The queue is kept fresh by the same cron
+-- route's own lightweight reconciliation pass each tick (not a database
+-- trigger -- simpler, consistent with this app's existing JS-side
+-- scheduling logic, and the practical difference is negligible at 5-minute
+-- precision): every tick, upsert a fresh fire_at for every currently-
+-- eligible item (self-correcting for due-date/value changes and newly-
+-- enabled reminders alike, since the WHERE clause gating this pass is
+-- already narrow -- reminder_minutes_before_enabled = true -- regardless of
+-- whether a row happens to already be queued), then delete queue rows for
+-- anything no longer eligible (disabled, sent, Done, or archived).
+--
+-- Same per-item/account-default/idempotency column shape already used
+-- three times for Day before/Day of/Day after, split Request vs. ToDo the
+-- same way migration 044 already split those defaults. Default value 10
+-- (Jim's own confirmed figure, matching his own mockup), in 5-minute
+-- increments starting at 0 (Jim's own instruction -- the UI's own number
+-- stepper enforces this, not a DB constraint, matching how Due Time/etc.
+-- are never DB-constrained either).
+-- ============================================================================
+
+alter table public.requests
+  add column reminder_minutes_before_enabled boolean not null default false,
+  add column reminder_minutes_before_value integer,
+  add column reminder_minutes_before_sent_at timestamptz;
+
+alter table public.profiles
+  add column request_reminder_default_minutes_before_enabled boolean not null default false,
+  add column request_reminder_default_minutes_before_value integer not null default 10,
+  add column todo_reminder_default_minutes_before_enabled boolean not null default false,
+  add column todo_reminder_default_minutes_before_value integer not null default 10;
+
+grant update (request_reminder_default_minutes_before_enabled) on public.profiles to authenticated;
+grant update (request_reminder_default_minutes_before_value) on public.profiles to authenticated;
+grant update (todo_reminder_default_minutes_before_enabled) on public.profiles to authenticated;
+grant update (todo_reminder_default_minutes_before_value) on public.profiles to authenticated;
+
+-- New table -- the queue itself. Purely a cron-internal scheduling cache,
+-- never read or written by the client directly (unlike attachments, which
+-- RLS also scopes to authenticated) -- every interaction goes through
+-- app/api/cron/minutes-before/route.ts using service_role, so RLS is
+-- enabled with zero permissive policies (denies everyone but service_role,
+-- which bypasses RLS entirely) and the table-level grant is service_role
+-- only, per CLAUDE.md's "a new table needs an explicit GRANT" rule.
+-- request_id is the primary key directly -- at most one pending queue row
+-- per Request/ToDo, upserted in place as its due date/value/enabled state
+-- changes, which is exactly the semantics `on conflict (request_id) do
+-- update` needs.
+create table public.reminder_minutes_before_queue (
+  request_id uuid primary key references public.requests(id) on delete cascade,
+  fire_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz
+);
+
+alter table public.reminder_minutes_before_queue enable row level security;
+
+grant select, insert, update, delete on public.reminder_minutes_before_queue to service_role;
+
+-- Partial index -- only ever scans the not-yet-sent subset, which should
+-- stay tiny regardless of how large the table's own full history grows,
+-- since sent rows accumulate but are never part of the hot "what's due"
+-- query.
+create index reminder_minutes_before_queue_fire_at_idx
+  on public.reminder_minutes_before_queue (fire_at)
+  where sent_at is null;
+
+-- Verify:
+--   select column_name from information_schema.columns
+--     where table_name = 'requests' and column_name like 'reminder_minutes_before%';
+--     -- should list all three new columns
+--   select column_name from information_schema.columns
+--     where table_name = 'profiles' and column_name like '%reminder_default_minutes_before%';
+--     -- should list all four new columns
+--   select * from public.reminder_minutes_before_queue limit 1;
+--     -- should succeed (empty result), confirming the table/RLS/grant exist
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 078 (2026-10-09) -- "Minutes before" Reminder, recipient-facing
+-- display/write plumbing. CONFIRMED RUN by Jim, 2026-10-09. Companion to
+-- migration 077 (same batch, same day) -- 077 added the columns and queue
+-- table; this one exposes them through the four SECURITY DEFINER functions
+-- the two recipient-facing Response screens (RequestResponseForm.tsx's
+-- anonymous /r/[token] path, ResponseDetailForm.tsx's signed-in path) and
+-- Request Detail's own reminder-sent-already grey-out already read/write,
+-- same pattern migrations 036/037/042 already established for "Day before"/
+-- "Day after"/"Day of."
+--
+-- get_request_by_token / get_received_request -- both already return jsonb
+-- with no OUT-parameter shape to fight (same reasoning migration 020's own
+-- header comment gives, corrected by migration 026's: it was always the
+-- jsonb return type, not "being appended last," that made plain
+-- create-or-replace safe for these two) -- adds
+-- reminder_minutes_before_enabled/value/sent_at to each payload, read-only
+-- display fields only (ResponseDetailForm.tsx/RequestResponseForm.tsx don't
+-- let the recipient edit this Reminder -- it's the owner's own preference,
+-- same as "Day before"/"Day of"/"Day after"). Neither function's own
+-- argument list changes, so a plain create-or-replace applies to both.
+--
+-- set_response_done_by_token / set_response_done_as_recipient -- these DO
+-- need two new trailing parameters each
+-- (p_reminder_minutes_before_enabled boolean default null,
+-- p_reminder_minutes_before_value integer default null), which changes
+-- each function's own signature -- drop-then-create, the same constraint
+-- this file has hit repeatedly for a genuine new parameter (migrations
+-- 069/070), not the RETURNS TABLE column-shape constraint (migrations
+-- 017/021/027/040) which is a different problem with the same fix. Neither
+-- screen currently has UI to edit this checkbox from the recipient side (it
+-- stays the owner's own Create Request/Request Detail preference,
+-- read-only everywhere else) -- these two params exist so a future
+-- recipient-side control could set them without a further migration, same
+-- forward-compatible reasoning the existing p_reminder_day_of_enabled/
+-- p_overdue_reminder_enabled params already follow; both default null
+-- (coalesced against the existing stored value) so every current caller,
+-- which never passes them, is a no-op on these two columns.
+-- ============================================================================
+
+create or replace function public.get_request_by_token(p_token text, p_confirm_receipt boolean default false)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled, r.reminder_day_of_enabled,
+         r.reminder_day_of_sent_at,
+         r.reminder_minutes_before_enabled, r.reminder_minutes_before_value, r.reminder_minutes_before_sent_at,
+         r.repeat_rule,
+         r.receipt_confirmation_requested, r.receipt_confirmed_at,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         ct.display_name as contact_name
+    into v_request
+    from public.request_links rl
+    join public.requests r on r.id = rl.request_id
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where rl.token_hash = v_hash
+      and rl.revoked_at is null
+      and rl.expires_at > now();
+
+  if v_request.id is null then
+    raise exception 'This link is no longer active. The sender has removed the Request it pointed to.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  if p_confirm_receipt
+     and v_request.receipt_confirmation_requested
+     and v_request.receipt_confirmed_at is null
+  then
+    update public.requests set receipt_confirmed_at = now() where id = v_request.id;
+    v_request.receipt_confirmed_at := now();
+  end if;
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'reminder_minutes_before_enabled', v_request.reminder_minutes_before_enabled,
+    'reminder_minutes_before_value', v_request.reminder_minutes_before_value,
+    'reminder_minutes_before_sent_at', v_request.reminder_minutes_before_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'receipt_confirmation_requested', v_request.receipt_confirmation_requested,
+    'receipt_confirmed_at', v_request.receipt_confirmed_at,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
+    'contact_name', v_request.contact_name,
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text, boolean) from public;
+grant execute on function public.get_request_by_token(text, boolean) to anon, authenticated;
+
+create or replace function public.get_received_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.received_archived_at, r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled,
+         r.reminder_day_of_enabled, r.reminder_day_of_sent_at,
+         r.reminder_minutes_before_enabled, r.reminder_minutes_before_value, r.reminder_minutes_before_sent_at,
+         r.repeat_rule,
+         r.receipt_confirmation_requested, r.receipt_confirmed_at,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         c.email as contact_email
+    into v_request
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    left join public.profiles p on p.id = r.owner_id
+    where r.id = p_request_id;
+
+  if v_request.id is null or v_email = '' or lower(trim(v_request.contact_email)) <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request.id, v_request.id, 'viewed_by_recipient', '{}'::jsonb);
+
+  if v_request.receipt_confirmation_requested and v_request.receipt_confirmed_at is null then
+    update public.requests set receipt_confirmed_at = now() where id = v_request.id;
+    v_request.receipt_confirmed_at := now();
+  end if;
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'received_archived_at', v_request.received_archived_at,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'reminder_minutes_before_enabled', v_request.reminder_minutes_before_enabled,
+    'reminder_minutes_before_value', v_request.reminder_minutes_before_value,
+    'reminder_minutes_before_sent_at', v_request.reminder_minutes_before_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'receipt_confirmation_requested', v_request.receipt_confirmation_requested,
+    'receipt_confirmed_at', v_request.receipt_confirmed_at,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_received_request(uuid) from public;
+grant execute on function public.get_received_request(uuid) to authenticated;
+
+drop function if exists public.set_response_done_by_token(text, date, time, boolean, boolean, boolean);
+
+create function public.set_response_done_by_token(
+  p_token text,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null,
+  p_overdue_reminder_enabled boolean default null,
+  p_reminder_day_of_enabled boolean default null,
+  p_reminder_minutes_before_enabled boolean default null,
+  p_reminder_minutes_before_value integer default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request_id uuid;
+begin
+  select r.id into v_request_id
+    from public.request_links rl
+    join public.requests r on r.id = rl.request_id
+    where rl.token_hash = v_hash
+      and rl.revoked_at is null
+      and rl.expires_at > now();
+
+  if v_request_id is null then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled),
+        overdue_reminder_enabled = coalesce(p_overdue_reminder_enabled, overdue_reminder_enabled),
+        reminder_day_of_enabled = coalesce(p_reminder_day_of_enabled, reminder_day_of_enabled),
+        reminder_minutes_before_enabled = coalesce(p_reminder_minutes_before_enabled, reminder_minutes_before_enabled),
+        reminder_minutes_before_value = coalesce(p_reminder_minutes_before_value, reminder_minutes_before_value)
+    where id = v_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', v_request_id, v_request_id, 'response_saved',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'overdue_reminder_enabled', p_overdue_reminder_enabled, 'reminder_day_of_enabled', p_reminder_day_of_enabled, 'reminder_minutes_before_enabled', p_reminder_minutes_before_enabled, 'reminder_minutes_before_value', p_reminder_minutes_before_value));
+end;
+$$;
+
+revoke all on function public.set_response_done_by_token(text, date, time, boolean, boolean, boolean, boolean, integer) from public;
+grant execute on function public.set_response_done_by_token(text, date, time, boolean, boolean, boolean, boolean, integer) to anon, authenticated;
+
+drop function if exists public.set_response_done_as_recipient(uuid, date, time, boolean, boolean, boolean, boolean);
+
+create function public.set_response_done_as_recipient(
+  p_request_id uuid,
+  p_done_date date,
+  p_done_time time,
+  p_reminder_enabled boolean default null,
+  p_overdue_reminder_enabled boolean default null,
+  p_reminder_day_of_enabled boolean default null,
+  p_confirm_receipt boolean default false,
+  p_reminder_minutes_before_enabled boolean default null,
+  p_reminder_minutes_before_value integer default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_contact_email text;
+  v_receipt_requested boolean;
+  v_receipt_confirmed_at timestamptz;
+begin
+  select lower(trim(c.email)), r.receipt_confirmation_requested, r.receipt_confirmed_at
+    into v_contact_email, v_receipt_requested, v_receipt_confirmed_at
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id;
+
+  if v_email = '' or v_contact_email is null or v_contact_email <> v_email then
+    raise exception 'Request not found.';
+  end if;
+
+  update public.requests
+    set done_date = p_done_date,
+        done_time = p_done_time,
+        received_archived_at = case when p_done_date is null then received_archived_at else null end,
+        reminder_enabled = coalesce(p_reminder_enabled, reminder_enabled),
+        overdue_reminder_enabled = coalesce(p_overdue_reminder_enabled, overdue_reminder_enabled),
+        reminder_day_of_enabled = coalesce(p_reminder_day_of_enabled, reminder_day_of_enabled),
+        reminder_minutes_before_enabled = coalesce(p_reminder_minutes_before_enabled, reminder_minutes_before_enabled),
+        reminder_minutes_before_value = coalesce(p_reminder_minutes_before_value, reminder_minutes_before_value),
+        receipt_confirmed_at = case
+          when p_confirm_receipt and v_receipt_requested and v_receipt_confirmed_at is null
+            then now()
+          else receipt_confirmed_at
+        end
+    where id = p_request_id;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('request', p_request_id, p_request_id, 'response_saved',
+      jsonb_build_object('done_date', p_done_date, 'done_time', p_done_time, 'reminder_enabled', p_reminder_enabled, 'overdue_reminder_enabled', p_overdue_reminder_enabled, 'reminder_day_of_enabled', p_reminder_day_of_enabled, 'confirm_receipt', p_confirm_receipt, 'reminder_minutes_before_enabled', p_reminder_minutes_before_enabled, 'reminder_minutes_before_value', p_reminder_minutes_before_value, 'via', 'recipient_session'));
+end;
+$$;
+
+revoke all on function public.set_response_done_as_recipient(uuid, date, time, boolean, boolean, boolean, boolean, boolean, integer) from public;
+grant execute on function public.set_response_done_as_recipient(uuid, date, time, boolean, boolean, boolean, boolean, boolean, integer) to authenticated;
+
+-- Verify:
+--   select proname, pronargs from pg_proc
+--     where proname in ('set_response_done_by_token', 'set_response_done_as_recipient');
+--     -- set_response_done_by_token: pronargs = 8; set_response_done_as_recipient: pronargs = 9
+--     -- (confirms each old overload was actually dropped, not left behind
+--     -- alongside the new one)
+--   select prosrc from pg_proc where proname in ('get_request_by_token', 'get_received_request');
+--     -- both should show the new reminder_minutes_before_* jsonb fields
+--   -- Then, from a Request with "Minutes before" checked (Create Request or
+--   -- Request Detail): open its Response Detail or /r/[token] link and
+--   -- confirm no error -- the new fields are read-only display fields
+--   -- there, not yet surfaced in either screen's own UI this same batch.
+-- ============================================================================

@@ -98,7 +98,14 @@ type RequestFormState = {
   reminderEnabled: boolean
   reminderDayOfEnabled: boolean
   overdueReminderEnabled: boolean
+  // "Minutes before" (migration 077, 2026-10-09) — see CreateRequestForm.tsx's
+  // identical field for the full reasoning.
+  reminderMinutesBeforeEnabled: boolean
+  reminderMinutesBeforeValue: number
 }
+
+// See CreateRequestForm.tsx's identical constant/comment.
+const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
 
 const CATEGORY_CAP = 20
 const LOOKUP_BROWSE_THRESHOLD = 12
@@ -286,6 +293,9 @@ export default function RequestDetailForm() {
   // of reminderSentAt, since the two Reminders fire on different days.
   const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
   const [reminderDayOfSentAt, setReminderDayOfSentAt] = useState<string | null>(null)
+  // "Minutes before" (migration 077, 2026-10-09) — same already-sent
+  // idempotency marker shape as the two above, independent of both.
+  const [reminderMinutesBeforeSentAt, setReminderMinutesBeforeSentAt] = useState<string | null>(null)
 
   // Receipt Confirmation (migration 069, 2026-09-24, owner's own PDF spec) —
   // read-only here (per the AskUserQuestion resolution: the mockup only
@@ -319,6 +329,8 @@ export default function RequestDetailForm() {
     reminderEnabled: true,
     reminderDayOfEnabled: false,
     overdueReminderEnabled: true,
+    reminderMinutesBeforeEnabled: false,
+    reminderMinutesBeforeValue: 10,
   })
 
   // Private Category is now an opt-in account preference (migration 018,
@@ -457,6 +469,8 @@ export default function RequestDetailForm() {
     reminderEnabled: boolean
     reminderDayOfEnabled: boolean
     overdueReminderEnabled: boolean
+    reminderMinutesBeforeEnabled: boolean
+    reminderMinutesBeforeValue: number
     repeatRule: RepeatRule | null
   } | null>(null)
   const hasChanges =
@@ -469,6 +483,8 @@ export default function RequestDetailForm() {
       form.reminderEnabled !== initialFormRef.current.reminderEnabled ||
       form.reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
       form.overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled ||
+      form.reminderMinutesBeforeEnabled !== initialFormRef.current.reminderMinutesBeforeEnabled ||
+      form.reminderMinutesBeforeValue !== initialFormRef.current.reminderMinutesBeforeValue ||
       (selectedCategory?.id ?? null) !== initialFormRef.current.categoryId ||
       JSON.stringify(repeatRule) !== JSON.stringify(initialFormRef.current.repeatRule))
   // contentChanged (2026-09-02, owner-reported) — a second, separate flag
@@ -540,7 +556,7 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, receipt_confirmation_requested, receipt_confirmed_at, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, reminder_minutes_before_enabled, reminder_minutes_before_value, reminder_minutes_before_sent_at, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, receipt_confirmation_requested, receipt_confirmed_at, contacts(display_name), categories(name)')
           .eq('id', requestId)
           .single(),
         supabase.from('categories').select('id, name').order('name'),
@@ -595,6 +611,9 @@ export default function RequestDetailForm() {
         reminder_sent_at: string | null
         reminder_day_of_enabled: boolean
         reminder_day_of_sent_at: string | null
+        reminder_minutes_before_enabled: boolean
+        reminder_minutes_before_value: number | null
+        reminder_minutes_before_sent_at: string | null
         archived_at: string | null
         repeat_rule: RepeatRule | null
         repeat_occurrence_index: number | null
@@ -611,6 +630,7 @@ export default function RequestDetailForm() {
       setArchivedAt(row.archived_at)
       setReminderSentAt(row.reminder_sent_at)
       setReminderDayOfSentAt(row.reminder_day_of_sent_at)
+      setReminderMinutesBeforeSentAt(row.reminder_minutes_before_sent_at)
       setReceiptConfirmationRequested(row.receipt_confirmation_requested)
       setReceiptConfirmedAt(row.receipt_confirmed_at)
       setRepeatRule(row.repeat_rule)
@@ -626,6 +646,8 @@ export default function RequestDetailForm() {
         reminderEnabled: row.reminder_enabled,
         reminderDayOfEnabled: row.reminder_day_of_enabled,
         overdueReminderEnabled: row.overdue_reminder_enabled,
+        reminderMinutesBeforeEnabled: row.reminder_minutes_before_enabled,
+        reminderMinutesBeforeValue: row.reminder_minutes_before_value ?? 10,
       })
       initialFormRef.current = {
         dueDate: row.due_date ?? '',
@@ -637,6 +659,8 @@ export default function RequestDetailForm() {
         reminderEnabled: row.reminder_enabled,
         reminderDayOfEnabled: row.reminder_day_of_enabled,
         overdueReminderEnabled: row.overdue_reminder_enabled,
+        reminderMinutesBeforeEnabled: row.reminder_minutes_before_enabled,
+        reminderMinutesBeforeValue: row.reminder_minutes_before_value ?? 10,
         repeatRule: row.repeat_rule,
       }
       if (row.category_id && row.categories) {
@@ -888,6 +912,24 @@ export default function RequestDetailForm() {
       ? 'This Request is already marked Done.'
       : undefined
 
+  // "Minutes before" (migration 077, 2026-10-09) — needs Due Time as well
+  // as Due Date (no exact moment to count back from otherwise); greyed out
+  // once Done, same reasoning as "Day after" above, plus its own
+  // already-sent marker, same shape as "Day before"/"Day of".
+  const minutesBeforePrereqsMissing = form.dueDate.trim() === '' || form.dueTime.trim() === ''
+  const minutesBeforeAlreadySent = reminderMinutesBeforeSentAt !== null
+  const minutesBeforeDone = form.doneDate.trim() !== ''
+  const minutesBeforeDisabled = reminderArchived || minutesBeforePrereqsMissing || minutesBeforeAlreadySent || minutesBeforeDone
+  const minutesBeforeTooltip = reminderArchived
+    ? 'Reminders are not available for archived Requests.'
+    : minutesBeforeDone
+      ? 'This Request is already marked Done.'
+      : minutesBeforePrereqsMissing
+        ? 'A Minutes-before Reminder needs a Due Date and Due Time.'
+        : minutesBeforeAlreadySent
+          ? 'The minutes-before Reminder has already been sent for this Request.'
+          : undefined
+
   function reminderBanner() {
     return (
       <div className="reminderbanner">
@@ -928,6 +970,32 @@ export default function RequestDetailForm() {
               onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
             />
             <span>Day after</span>
+          </label>
+          <label
+            className={`reminderitem${minutesBeforeDisabled ? ' reminderitem-disabled' : ''}`}
+            title={minutesBeforeTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderMinutesBeforeEnabled}
+              disabled={minutesBeforeDisabled}
+              onChange={(e) => set('reminderMinutesBeforeEnabled', e.target.checked)}
+            />
+            <span>
+              <select
+                value={form.reminderMinutesBeforeValue}
+                disabled={minutesBeforeDisabled}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => set('reminderMinutesBeforeValue', Number(e.target.value))}
+              >
+                {MINUTES_BEFORE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>{' '}
+              minutes before
+            </span>
           </label>
         </div>
       </div>
@@ -1135,6 +1203,10 @@ export default function RequestDetailForm() {
         reminder_enabled: form.reminderEnabled,
         reminder_day_of_enabled: form.reminderDayOfEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
+        // Re-gated on Due Time actually being set, same reasoning as
+        // CreateRequestForm.tsx's own insert payload.
+        reminder_minutes_before_enabled: form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled,
+        reminder_minutes_before_value: form.reminderMinutesBeforeValue,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? (repeatOccurrenceIndex ?? 1) : null,
         repeat_series_id: repeatSeriesId,

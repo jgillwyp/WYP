@@ -623,10 +623,21 @@ function escapeHtml(s: string): string {
 // comment already carves out of this app's usual per-file-duplication
 // convention for exactly this reason (shared, non-trivial logic with more
 // than one real caller).
+// Extended 2026-10-09 (migration 077) with a 4th, independent option —
+// "Minutes before," a precise lead time ahead of the exact Due Date+Time
+// (Jim's own example: 10 minutes for a call, 30+ for a medical
+// appointment's travel time) rather than a calendar-day-based notice.
+// `minutesBeforeValue` is only meaningful when `minutesBefore` is true;
+// every existing combination of the original three day-level flags
+// produces exactly the same sentence as before this change — only a
+// combination that includes `minutesBefore` produces new phrasing, added
+// below rather than woven into the original three-way branch.
 export type ReminderSchedule = {
   dayBefore: boolean
   dayOf: boolean
   dayAfter: boolean
+  minutesBefore: boolean
+  minutesBeforeValue?: number | null
 }
 
 export function buildReminderScheduleSentence(
@@ -638,20 +649,31 @@ export function buildReminderScheduleSentence(
   const dateLabel = dueTime && dueTime.trim() !== '' ? 'Due Date and Time' : 'Due Date'
   const prefix = `For the ${dateLabel} of ${due}, you are scheduled to receive `
 
-  type Key = 'dayBefore' | 'dayOf' | 'dayAfter'
-  const active: Key[] = []
-  if (schedule.dayBefore) active.push('dayBefore')
-  if (schedule.dayOf) active.push('dayOf')
-  if (schedule.dayAfter) active.push('dayAfter')
+  type DayKey = 'dayBefore' | 'dayOf' | 'dayAfter'
+  const dayKeys: DayKey[] = []
+  if (schedule.dayBefore) dayKeys.push('dayBefore')
+  if (schedule.dayOf) dayKeys.push('dayOf')
+  if (schedule.dayAfter) dayKeys.push('dayAfter')
 
-  if (active.length === 0) return `${prefix}no Reminders.`
+  const dayNoun = (key: DayKey): string => (key === 'dayBefore' ? 'day before' : key === 'dayOf' ? 'day of' : 'day after')
+  const onDay = (key: DayKey): string => `on the ${dayNoun(key)}`
 
-  const noun = (key: Key): string => (key === 'dayBefore' ? 'day before' : key === 'dayOf' ? 'day of' : 'day after')
-  const withOn = (key: Key): string => `on the ${noun(key)}`
+  if (!schedule.minutesBefore) {
+    if (dayKeys.length === 0) return `${prefix}no Reminders.`
+    if (dayKeys.length === 1) return `${prefix}Reminders only ${onDay(dayKeys[0])}.`
+    if (dayKeys.length === 2) return `${prefix}Reminders: ${onDay(dayKeys[0])} and ${onDay(dayKeys[1])}.`
+    return `${prefix}Reminders: the day before, the day of, and the day after.`
+  }
 
-  if (active.length === 1) return `${prefix}Reminders only ${withOn(active[0])}.`
-  if (active.length === 2) return `${prefix}Reminders: ${withOn(active[0])} and ${withOn(active[1])}.`
-  return `${prefix}Reminders: the day before, the day of, and the day after.`
+  const minutes = schedule.minutesBeforeValue ?? 0
+  const minutesPhrase = minutes === 0 ? 'the moment it is due' : `${minutes} minutes before it is due`
+
+  if (dayKeys.length === 0) return `${prefix}a Reminder ${minutesPhrase}.`
+
+  const items = [...dayKeys.map((k) => `the ${dayNoun(k)}`), minutesPhrase]
+  const joined =
+    items.length === 2 ? `${items[0]} and ${items[1]}` : `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
+  return `${prefix}Reminders: ${joined}.`
 }
 
 // Shown instead of the usual "click to respond"/"view or modify" phrasing
@@ -1055,6 +1077,111 @@ export function buildTodoOverdueEmailHtml(fields: TodoOverdueEmailFields): strin
 export function buildTodoOverdueEmailText(fields: TodoOverdueEmailFields): string {
   return [
     `The Due Date for this ToDo has passed (${formatMDY(fields.dueDate)}) and it has not been marked Done.`,
+    '',
+    `${todoReminderLinkText(fields.remindersShown)}:`,
+    fields.link,
+    '',
+    fields.description,
+  ].join('\n')
+}
+
+// ----------------------------------------------------------------------------
+// "Minutes before" Reminder — a fourth, independent Reminders-until-Done
+// option alongside Day before/Day of/Day after (migration 077, 2026-10-09).
+// Jim's own example: a 10-minute lead time suits a scheduled call, but a
+// medical appointment needs 30+ for travel time — a single fixed "morning
+// of"/"day of" notice can't serve both, so this is a genuinely precise,
+// per-item configurable lead time rather than a calendar-day-based one.
+// Sent by app/api/cron/minutes-before/route.ts, a separate, more frequent
+// cron tick than the hourly Day-before/of/after family (see migration 077's
+// own header comment for why). Deliberately doesn't claim exact-minute
+// phrasing ("due in N minutes") — the actual send can trail the configured
+// moment by up to the cron's own tick interval, so the wording states the
+// real Due Date/Time instead, framed as "your requested N-minute reminder."
+// Request version sent to the Recipient (same recipientAccountStatus-aware
+// footer as every other Recipient-facing template); ToDo version sent to
+// the owner's own account email, same as every other ToDo notice above.
+// ----------------------------------------------------------------------------
+type MinutesBeforeEmailFields = {
+  description: string
+  dueDate: string
+  dueTime: string
+  minutesBefore: number
+  link: string
+  siteUrl: string
+  ownerName: string | null
+  recipientAccountStatus: RecipientAccountStatus
+  // remindersShown (2026-10-09) — reuses the exact reminderNoticeLinkText
+  // helper the other Request-facing Reminder/Overdue notices already use,
+  // closing the same "...or to turn off notifications" gap fixed
+  // app-wide 2026-09-28 (a visible control claiming to exist only when
+  // the owner's own Show Reminders is actually on) rather than reopening
+  // it for this new 4th option.
+  remindersShown: boolean
+}
+
+export function buildMinutesBeforeEmailSubject(ownerName: string | null, dueDate: string, dueTime: string): string {
+  const from = ownerName ? ` from ${ownerName}` : ''
+  return `REMINDER: A Would You Please Request${from}, Due: ${formatMDY(dueDate)} ${formatTime12h(dueTime)}`
+}
+
+function minutesBeforeMessage(dueDate: string, dueTime: string, minutesBefore: number): string {
+  const due = `${formatMDY(dueDate)} ${formatTime12h(dueTime)}`
+  const lead = minutesBefore === 0 ? 'at the moment it is due' : `${minutesBefore} minutes before it is due`
+  return `This is your requested reminder, ${lead}. The Due Date and Time is ${due}.`
+}
+
+export function buildMinutesBeforeEmailHtml(fields: MinutesBeforeEmailFields): string {
+  const body = [
+    `<p style="margin:0 0 18px;">${minutesBeforeMessage(fields.dueDate, fields.dueTime, fields.minutesBefore)}</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, reminderNoticeLinkText(fields.remindersShown))}</p>`,
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
+    emailSignupFooter(fields.siteUrl, fields.recipientAccountStatus),
+  ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
+}
+
+export function buildMinutesBeforeEmailText(fields: MinutesBeforeEmailFields): string {
+  return [
+    minutesBeforeMessage(fields.dueDate, fields.dueTime, fields.minutesBefore),
+    '',
+    `${reminderNoticeLinkText(fields.remindersShown)}:`,
+    fields.link,
+    '',
+    fields.description,
+    '',
+    ...textSignupFooterLines(fields.siteUrl, fields.recipientAccountStatus),
+  ].join('\n')
+}
+
+type TodoMinutesBeforeEmailFields = {
+  description: string
+  dueDate: string
+  dueTime: string
+  minutesBefore: number
+  link: string
+  siteUrl: string
+  // remindersShown (2026-10-09) — the ToDo-side equivalent, reusing
+  // todoReminderLinkText, same reasoning as MinutesBeforeEmailFields above.
+  remindersShown: boolean
+}
+
+export function buildTodoMinutesBeforeEmailSubject(dueDate: string, dueTime: string): string {
+  return `REMINDER: Your Would You Please ToDo, Due: ${formatMDY(dueDate)} ${formatTime12h(dueTime)}`
+}
+
+export function buildTodoMinutesBeforeEmailHtml(fields: TodoMinutesBeforeEmailFields): string {
+  const body = [
+    `<p style="margin:0 0 18px;">${minutesBeforeMessage(fields.dueDate, fields.dueTime, fields.minutesBefore)}</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, todoReminderLinkText(fields.remindersShown))}</p>`,
+    emailDescriptionBox(`<p style="margin:0;">${escapeHtml(fields.description).replace(/\r?\n/g, '<br>')}</p>`),
+  ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
+}
+
+export function buildTodoMinutesBeforeEmailText(fields: TodoMinutesBeforeEmailFields): string {
+  return [
+    minutesBeforeMessage(fields.dueDate, fields.dueTime, fields.minutesBefore),
     '',
     `${todoReminderLinkText(fields.remindersShown)}:`,
     fields.link,

@@ -202,6 +202,10 @@ import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPane
  *      created." (2026-08-25, Jim's own instruction — originally present
  *      only on the two Day Before notes; now on Day Of/Day After too).
  */
+
+// See CreateRequestForm.tsx's identical constant/comment.
+const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
+
 export default function AccountForm() {
   const router = useRouter()
 
@@ -272,6 +276,13 @@ export default function AccountForm() {
   const [todoReminderDefaultDayBefore, setTodoReminderDefaultDayBefore] = useState(true)
   const [todoReminderDefaultDayOf, setTodoReminderDefaultDayOf] = useState(false)
   const [todoReminderDefaultDayAfter, setTodoReminderDefaultDayAfter] = useState(false)
+  // "Minutes before" (migration 077, 2026-10-09) — a fourth, independent
+  // Reminders-until-Done default, same shape as the three above, split
+  // Request/ToDo per migration 044's own precedent.
+  const [requestReminderDefaultMinutesBeforeEnabled, setRequestReminderDefaultMinutesBeforeEnabled] = useState(false)
+  const [requestReminderDefaultMinutesBeforeValue, setRequestReminderDefaultMinutesBeforeValue] = useState(10)
+  const [todoReminderDefaultMinutesBeforeEnabled, setTodoReminderDefaultMinutesBeforeEnabled] = useState(false)
+  const [todoReminderDefaultMinutesBeforeValue, setTodoReminderDefaultMinutesBeforeValue] = useState(10)
   // Testing-only tier toggle (migration 024) — the DB column is text
   // ('free'/'subscriber'), not boolean, so it gets its own state and
   // handler rather than joining the shared boolean handleToggle below.
@@ -343,7 +354,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'request_category_enabled, todo_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
+          'request_category_enabled, todo_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
         )
         .eq('id', userData.user.id)
         .single()
@@ -373,6 +384,10 @@ export default function AccountForm() {
       setTodoReminderDefaultDayBefore(data?.todo_reminder_default_day_before ?? true)
       setTodoReminderDefaultDayOf(data?.todo_reminder_default_day_of ?? false)
       setTodoReminderDefaultDayAfter(data?.todo_reminder_default_day_after ?? false)
+      setRequestReminderDefaultMinutesBeforeEnabled(data?.request_reminder_default_minutes_before_enabled ?? false)
+      setRequestReminderDefaultMinutesBeforeValue(data?.request_reminder_default_minutes_before_value ?? 10)
+      setTodoReminderDefaultMinutesBeforeEnabled(data?.todo_reminder_default_minutes_before_enabled ?? false)
+      setTodoReminderDefaultMinutesBeforeValue(data?.todo_reminder_default_minutes_before_value ?? 10)
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
@@ -416,7 +431,9 @@ export default function AccountForm() {
       | 'request_reminder_default_day_after'
       | 'todo_reminder_default_day_before'
       | 'todo_reminder_default_day_of'
-      | 'todo_reminder_default_day_after',
+      | 'todo_reminder_default_day_after'
+      | 'request_reminder_default_minutes_before_enabled'
+      | 'todo_reminder_default_minutes_before_enabled',
     next: boolean,
     setLocal: (value: boolean) => void,
   ) {
@@ -437,6 +454,34 @@ export default function AccountForm() {
       // actually saved, same reasoning as every other settings control in
       // this app that writes on change rather than on a separate Save.
       setLocal(!next)
+      setSaveError(updateError.message)
+    }
+  }
+
+  // "Minutes before" default value stepper (migration 077, 2026-10-09) —
+  // same auto-save-on-change, optimistic-revert-on-failure shape as
+  // handleToggle above, just for the numeric sibling column instead of a
+  // boolean one.
+  async function handleMinutesValueChange(
+    field: 'request_reminder_default_minutes_before_value' | 'todo_reminder_default_minutes_before_value',
+    next: number,
+    previous: number,
+    setLocal: (value: number) => void,
+  ) {
+    if (!userId) return
+    setLocal(next)
+    setSaving(true)
+    setSaveError(null)
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ [field]: next })
+      .eq('id', userId)
+
+    setSaving(false)
+
+    if (updateError) {
+      setLocal(previous)
       setSaveError(updateError.message)
     }
   }
@@ -792,6 +837,52 @@ export default function AccountForm() {
                   </span>
                 </label>
 
+                {/* "Minutes before" default (migration 077, 2026-10-09) —
+                    a fourth, independent Reminders-until-Done default. */}
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestReminderDefaultMinutesBeforeEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'request_reminder_default_minutes_before_enabled',
+                        e.target.checked,
+                        setRequestReminderDefaultMinutesBeforeEnabled
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Minutes-Before Reminder (
+                    <select
+                      value={requestReminderDefaultMinutesBeforeValue}
+                      disabled={saving}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        handleMinutesValueChange(
+                          'request_reminder_default_minutes_before_value',
+                          Number(e.target.value),
+                          requestReminderDefaultMinutesBeforeValue,
+                          setRequestReminderDefaultMinutesBeforeValue
+                        )
+                      }
+                    >
+                      {MINUTES_BEFORE_OPTIONS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>{' '}
+                    minutes)
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Minutes before&rdquo; Reminder checkbox and its
+                      minutes value when you create a new Request. You can still change it
+                      per item. Changing this setting never affects anything already
+                      created. Off by default.
+                    </span>
+                  </span>
+                </label>
+
                 {/* Moved from the now-removed General section, 2026-09-30 —
                     Jim's own instruction, to the bottom of this section. */}
                 <label className="checkrow">
@@ -994,6 +1085,52 @@ export default function AccountForm() {
                       Pre-fills the &ldquo;Day after&rdquo; Reminder checkbox when you create a
                       new ToDo. You can still change it per item. Changing this setting
                       never affects anything already created. Off by default.
+                    </span>
+                  </span>
+                </label>
+
+                {/* "Minutes before" default (migration 077, 2026-10-09) —
+                    a fourth, independent Reminders-until-Done default. */}
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={todoReminderDefaultMinutesBeforeEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle(
+                        'todo_reminder_default_minutes_before_enabled',
+                        e.target.checked,
+                        setTodoReminderDefaultMinutesBeforeEnabled
+                      )
+                    }
+                  />
+                  <span className="checktext">
+                    Default: Minutes-Before Reminder (
+                    <select
+                      value={todoReminderDefaultMinutesBeforeValue}
+                      disabled={saving}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        handleMinutesValueChange(
+                          'todo_reminder_default_minutes_before_value',
+                          Number(e.target.value),
+                          todoReminderDefaultMinutesBeforeValue,
+                          setTodoReminderDefaultMinutesBeforeValue
+                        )
+                      }
+                    >
+                      {MINUTES_BEFORE_OPTIONS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>{' '}
+                    minutes)
+                    <span className="checknote">
+                      Pre-fills the &ldquo;Minutes before&rdquo; Reminder checkbox and its
+                      minutes value when you create a new ToDo. You can still change it per
+                      item. Changing this setting never affects anything already created.
+                      Off by default.
                     </span>
                   </span>
                 </label>

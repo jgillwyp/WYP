@@ -138,7 +138,20 @@ type RequestFormState = {
   // thereafter" to a single one-time send, migration 043) — see the
   // Reminders-until-Done banner comment below for the full reasoning.
   overdueReminderEnabled: boolean
+  // "Minutes before" (migration 077, 2026-10-09) — a fourth, independent
+  // Reminders-until-Done checkbox, a precise lead time ahead of the exact
+  // Due Date+Time rather than a calendar-day-based notice. Requires Due
+  // Time (see reminderBanner's own comment) — reminderMinutesBeforeValue
+  // is only meaningful while this is true.
+  reminderMinutesBeforeEnabled: boolean
+  reminderMinutesBeforeValue: number
 }
+
+// 5-minute increments starting at 0, per Jim's own instruction — covers a
+// quick-call lead time (10, the default) up through a medical appointment's
+// travel time (30+).
+const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
+const MINUTES_BEFORE_DEFAULT = 10
 
 // Hardcoded fallback values, matching this app's own spam-conscious
 // defaults ("Day before" only) — overwritten on mount, once the owner's
@@ -155,6 +168,8 @@ const initialState: RequestFormState = {
   reminderEnabled: true,
   reminderDayOfEnabled: false,
   overdueReminderEnabled: false,
+  reminderMinutesBeforeEnabled: false,
+  reminderMinutesBeforeValue: MINUTES_BEFORE_DEFAULT,
 }
 
 const CATEGORY_CAP = 20
@@ -542,7 +557,7 @@ export default function CreateRequestForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, request_category_enabled, request_time_enabled, request_reminders_enabled, offer_receipt_confirmation, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after'
+        'display_name, request_category_enabled, request_time_enabled, request_reminders_enabled, offer_receipt_confirmation, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value'
       )
       .single()
       .then(({ data }) => {
@@ -557,12 +572,15 @@ export default function CreateRequestForm() {
         // migration 043) — applied on top of initialState's own hardcoded
         // fallback, functional update so any Description/Recipient/etc.
         // the owner already typed in the brief window before this resolves
-        // is preserved.
+        // is preserved. "Minutes before" (migration 077, 2026-10-09) joins
+        // the same defaults read, same functional-update pattern.
         setForm((f) => ({
           ...f,
           reminderEnabled: data?.request_reminder_default_day_before ?? f.reminderEnabled,
           reminderDayOfEnabled: data?.request_reminder_default_day_of ?? f.reminderDayOfEnabled,
           overdueReminderEnabled: data?.request_reminder_default_day_after ?? f.overdueReminderEnabled,
+          reminderMinutesBeforeEnabled: data?.request_reminder_default_minutes_before_enabled ?? f.reminderMinutesBeforeEnabled,
+          reminderMinutesBeforeValue: data?.request_reminder_default_minutes_before_value ?? f.reminderMinutesBeforeValue,
         }))
       })
     // router is stable across renders (Next's useRouter()) and this effect
@@ -716,6 +734,18 @@ export default function CreateRequestForm() {
     ? 'Please select Contact and Due Date before modifying the Reminder.'
     : undefined
 
+  // "Minutes before" (migration 077, 2026-10-09) — needs Due Time as well
+  // as Due Date and Contact, since there's no exact moment to count back
+  // from with only a date. Same Contact requirement as "Day of" (no
+  // hasAmpleReminderLeadTime-style relaxation) — a precise lead time needs
+  // the Recipient's own zone just as much as a same-day send does.
+  const minutesBeforePrereqsMissing = form.dueDate.trim() === '' || form.dueTime.trim() === '' || !selectedContact
+  const minutesBeforeTooltip = minutesBeforePrereqsMissing
+    ? form.dueTime.trim() === '' && form.dueDate.trim() !== '' && selectedContact
+      ? 'A Minutes-before Reminder needs a Due Time.'
+      : 'Please select Contact and Due Date before modifying the Reminder.'
+    : undefined
+
   // Reminders until Done banner (§6.41 PROPOSED, 2026-08-20; extended with a
   // third "Day of" checkbox 2026-08-22, then relabeled "Day after"
   // 2026-08-22) — three independent .reminderitem toggles in one
@@ -760,6 +790,32 @@ export default function CreateRequestForm() {
               onChange={(e) => set('overdueReminderEnabled', e.target.checked)}
             />
             <span>Day after</span>
+          </label>
+          <label
+            className={`reminderitem${minutesBeforePrereqsMissing ? ' reminderitem-disabled' : ''}`}
+            title={minutesBeforeTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderMinutesBeforeEnabled}
+              disabled={minutesBeforePrereqsMissing}
+              onChange={(e) => set('reminderMinutesBeforeEnabled', e.target.checked)}
+            />
+            <span>
+              <select
+                value={form.reminderMinutesBeforeValue}
+                disabled={minutesBeforePrereqsMissing}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => set('reminderMinutesBeforeValue', Number(e.target.value))}
+              >
+                {MINUTES_BEFORE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>{' '}
+              minutes before
+            </span>
           </label>
         </div>
       </div>
@@ -920,6 +976,13 @@ export default function CreateRequestForm() {
         reminder_enabled: form.reminderEnabled,
         reminder_day_of_enabled: form.reminderDayOfEnabled,
         overdue_reminder_enabled: form.overdueReminderEnabled,
+        // Re-gated on Due Time being actually set, not just the checkbox's
+        // own (disabled-when-ineligible) stored value — a value left
+        // checked from before Due Time was cleared shouldn't persist as
+        // active. The minutes value itself is always stored, harmless
+        // while the checkbox is off.
+        reminder_minutes_before_enabled: form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled,
+        reminder_minutes_before_value: form.reminderMinutesBeforeValue,
         repeat_rule: repeatRule,
         repeat_occurrence_index: repeatRule ? 1 : null,
         // repeat_series_id (migration 068, 2026-09-23) — a brand-new item

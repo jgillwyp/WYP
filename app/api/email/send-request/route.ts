@@ -128,7 +128,7 @@ export async function POST(request: Request) {
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, description, due_date, due_time, reminder_enabled, reminder_day_of_enabled, overdue_reminder_enabled, receipt_confirmation_requested, receipt_confirmed_at, contacts(email)'
+      'id, description, due_date, due_time, reminder_enabled, reminder_day_of_enabled, overdue_reminder_enabled, reminder_minutes_before_enabled, reminder_minutes_before_value, receipt_confirmation_requested, receipt_confirmed_at, contacts(email)'
     )
     .eq('id', requestId)
     .single()
@@ -145,6 +145,8 @@ export async function POST(request: Request) {
     reminder_enabled: boolean
     reminder_day_of_enabled: boolean
     overdue_reminder_enabled: boolean
+    reminder_minutes_before_enabled: boolean
+    reminder_minutes_before_value: number | null
     receipt_confirmation_requested: boolean
     receipt_confirmed_at: string | null
     contacts: { email: string } | null
@@ -190,10 +192,17 @@ export async function POST(request: Request) {
   // dayAfter still reads the overdue_reminder_enabled column — renamed in
   // meaning, not in the database, when "Daily thereafter" was simplified
   // to a single day-after send (2026-08-22).
+  // Minutes before (2026-10-09, migration 077) additionally requires a real
+  // Due Time — there's no exact moment to count back from otherwise. A
+  // value left checked from before Due Time was cleared is reported as
+  // inactive here, same "don't report a stale checkbox as live" reasoning
+  // isReminderEligible's own dayBefore gate above already uses.
   const reminderSchedule: ReminderSchedule = {
     dayBefore: isReminderEligible(reqRow.due_date) && reqRow.reminder_enabled,
     dayOf: reqRow.reminder_day_of_enabled,
     dayAfter: reqRow.overdue_reminder_enabled,
+    minutesBefore: !!reqRow.due_time && reqRow.reminder_minutes_before_enabled,
+    minutesBeforeValue: reqRow.reminder_minutes_before_value,
   }
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(link).origin
 

@@ -128,6 +128,12 @@ type ResponsePayload = {
   // reasoning.
   reminder_day_of_enabled: boolean
   reminder_day_of_sent_at: string | null
+  // "Minutes before" (migration 077/078, 2026-10-09) — a fourth,
+  // independent Reminders-until-Done checkbox; see ResponseDetailForm.tsx's
+  // identical reasoning.
+  reminder_minutes_before_enabled: boolean
+  reminder_minutes_before_value: number | null
+  reminder_minutes_before_sent_at: string | null
   // Repeat, read-only recipient footnote (Jim's own design, 2026-08-21,
   // migration 039). Never editable here — only Request Detail's/ToDo
   // Detail's own RepeatControl on the owner's side can set or change it.
@@ -151,6 +157,9 @@ type ResponsePayload = {
 function losAngelesYear(): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
 }
+
+// See CreateRequestForm.tsx's identical constant/comment.
+const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
 
 // formatMDYFromTimestamp (2026-09-02, owner-reported: Dialog entries showing
 // tomorrow's date) — for a real timestamptz like dialog.created_at. Slicing
@@ -249,6 +258,8 @@ export default function RequestResponseForm() {
     reminderEnabled: boolean
     reminderDayOfEnabled: boolean
     overdueReminderEnabled: boolean
+    reminderMinutesBeforeEnabled: boolean
+    reminderMinutesBeforeValue: number
   } | null>(null)
   const [dialogChanged, setDialogChanged] = useState(false)
   const [attachmentsChanged, setAttachmentsChanged] = useState(false)
@@ -262,6 +273,8 @@ export default function RequestResponseForm() {
     reminderEnabled: boolean
     reminderDayOfEnabled: boolean
     overdueReminderEnabled: boolean
+    reminderMinutesBeforeEnabled: boolean
+    reminderMinutesBeforeValue: number
   } | null>(null)
 
 
@@ -280,6 +293,11 @@ export default function RequestResponseForm() {
   const [overdueReminderEnabled, setOverdueReminderEnabled] = useState(true)
   const [reminderSentAt, setReminderSentAt] = useState<string | null>(null)
   const [reminderDayOfSentAt, setReminderDayOfSentAt] = useState<string | null>(null)
+  // "Minutes before" (migration 077/078, 2026-10-09) — same editable,
+  // recipient-facing opt-out shape as the three above.
+  const [reminderMinutesBeforeEnabled, setReminderMinutesBeforeEnabled] = useState(false)
+  const [reminderMinutesBeforeValue, setReminderMinutesBeforeValue] = useState(10)
+  const [reminderMinutesBeforeSentAt, setReminderMinutesBeforeSentAt] = useState<string | null>(null)
 
   const [dialogList, setDialogList] = useState<DialogEntry[]>([])
 
@@ -314,7 +332,9 @@ export default function RequestResponseForm() {
     !attachmentsChanged &&
     (reminderEnabled !== initialFormRef.current.reminderEnabled ||
       reminderDayOfEnabled !== initialFormRef.current.reminderDayOfEnabled ||
-      overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled)
+      overdueReminderEnabled !== initialFormRef.current.overdueReminderEnabled ||
+      reminderMinutesBeforeEnabled !== initialFormRef.current.reminderMinutesBeforeEnabled ||
+      reminderMinutesBeforeValue !== initialFormRef.current.reminderMinutesBeforeValue)
 
   // Send-button dirty-gating (2026-09-21, owner's own design) — this screen
   // never had any disabled-gating on Send before (see initialFormRef's own
@@ -339,7 +359,9 @@ export default function RequestResponseForm() {
     (sentSnapshotRef.current !== null &&
       (reminderEnabled !== sentSnapshotRef.current.reminderEnabled ||
         reminderDayOfEnabled !== sentSnapshotRef.current.reminderDayOfEnabled ||
-        overdueReminderEnabled !== sentSnapshotRef.current.overdueReminderEnabled))
+        overdueReminderEnabled !== sentSnapshotRef.current.overdueReminderEnabled ||
+        reminderMinutesBeforeEnabled !== sentSnapshotRef.current.reminderMinutesBeforeEnabled ||
+        reminderMinutesBeforeValue !== sentSnapshotRef.current.reminderMinutesBeforeValue))
 
   // Receipt Confirmation (migration 069, 2026-09-24) — true once
   // receipt_confirmed_at is set, however it got that way (this visit's own
@@ -406,6 +428,9 @@ export default function RequestResponseForm() {
       setOverdueReminderEnabled(payload.overdue_reminder_enabled)
       setReminderSentAt(payload.reminder_sent_at)
       setReminderDayOfSentAt(payload.reminder_day_of_sent_at)
+      setReminderMinutesBeforeEnabled(payload.reminder_minutes_before_enabled)
+      setReminderMinutesBeforeValue(payload.reminder_minutes_before_value ?? 10)
+      setReminderMinutesBeforeSentAt(payload.reminder_minutes_before_sent_at)
       setDialogList(payload.dialog ?? [])
       initialFormRef.current = {
         doneDate: payload.done_date ?? '',
@@ -413,6 +438,8 @@ export default function RequestResponseForm() {
         reminderEnabled: payload.reminder_enabled,
         reminderDayOfEnabled: payload.reminder_day_of_enabled,
         overdueReminderEnabled: payload.overdue_reminder_enabled,
+        reminderMinutesBeforeEnabled: payload.reminder_minutes_before_enabled,
+        reminderMinutesBeforeValue: payload.reminder_minutes_before_value ?? 10,
       }
       // Seeded when the Request arrives already Done, OR when receipt has
       // just been (or was already) confirmed — either way there's nothing
@@ -431,6 +458,8 @@ export default function RequestResponseForm() {
           reminderEnabled: payload.reminder_enabled,
           reminderDayOfEnabled: payload.reminder_day_of_enabled,
           overdueReminderEnabled: payload.overdue_reminder_enabled,
+          reminderMinutesBeforeEnabled: payload.reminder_minutes_before_enabled,
+          reminderMinutesBeforeValue: payload.reminder_minutes_before_value ?? 10,
         }
       }
       setLoading(false)
@@ -587,6 +616,10 @@ export default function RequestResponseForm() {
       p_reminder_enabled: reminderEnabled,
       p_overdue_reminder_enabled: overdueReminderEnabled,
       p_reminder_day_of_enabled: reminderDayOfEnabled,
+      // Re-gated on Due Time actually being set, same reasoning as
+      // RequestDetailForm.tsx's own update payload.
+      p_reminder_minutes_before_enabled: !!data?.due_time && reminderMinutesBeforeEnabled,
+      p_reminder_minutes_before_value: reminderMinutesBeforeValue,
     })
 
     setSending(false)
@@ -602,7 +635,15 @@ export default function RequestResponseForm() {
     // been sent — see hasUnsentChanges' own comment above. Clearing
     // dialogChanged/attachmentsChanged too: those are one-way flags meant
     // to mean "changed since the last Send," not "changed since page load."
-    sentSnapshotRef.current = { doneDate, doneTime, reminderEnabled, reminderDayOfEnabled, overdueReminderEnabled }
+    sentSnapshotRef.current = {
+      doneDate,
+      doneTime,
+      reminderEnabled,
+      reminderDayOfEnabled,
+      overdueReminderEnabled,
+      reminderMinutesBeforeEnabled,
+      reminderMinutesBeforeValue,
+    }
     setDialogChanged(false)
     setAttachmentsChanged(false)
 
@@ -716,6 +757,21 @@ export default function RequestResponseForm() {
     ? 'This Request is already marked Done.'
     : undefined
 
+  // "Minutes before" (migration 077/078, 2026-10-09) — needs Due Time as
+  // well as Due Date (no exact moment to count back from otherwise); same
+  // already-sent and Done grey-outs as the other three.
+  const minutesBeforePrereqsMissing = !data?.due_date || !data?.due_time
+  const minutesBeforeAlreadySent = reminderMinutesBeforeSentAt !== null
+  const minutesBeforeDisabled = minutesBeforePrereqsMissing || minutesBeforeAlreadySent || doneDate.trim() !== ''
+  const minutesBeforeTooltip =
+    doneDate.trim() !== ''
+      ? 'This Request is already marked Done.'
+      : minutesBeforePrereqsMissing
+        ? 'A Minutes-before Reminder needs a Due Date and Due Time.'
+        : minutesBeforeAlreadySent
+          ? 'The minutes-before Reminder has already been sent for this Request.'
+          : undefined
+
   function reminderBanner() {
     return (
       <div className="reminderbanner">
@@ -756,6 +812,32 @@ export default function RequestResponseForm() {
               onChange={(e) => setOverdueReminderEnabled(e.target.checked)}
             />
             <span>Day after</span>
+          </label>
+          <label
+            className={`reminderitem${minutesBeforeDisabled ? ' reminderitem-disabled' : ''}`}
+            title={minutesBeforeTooltip}
+          >
+            <input
+              type="checkbox"
+              checked={reminderMinutesBeforeEnabled}
+              disabled={minutesBeforeDisabled}
+              onChange={(e) => setReminderMinutesBeforeEnabled(e.target.checked)}
+            />
+            <span>
+              <select
+                value={reminderMinutesBeforeValue}
+                disabled={minutesBeforeDisabled}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setReminderMinutesBeforeValue(Number(e.target.value))}
+              >
+                {MINUTES_BEFORE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>{' '}
+              minutes before
+            </span>
           </label>
         </div>
       </div>

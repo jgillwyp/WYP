@@ -106,18 +106,26 @@ export function hoursSinceLocalDateTime(
   dueTime: string,
   now: Date = new Date()
 ): number {
-  // Building a real Date from local-zone Y/M/D/H/M requires knowing that
-  // zone's UTC offset at this moment (DST-safe) — derived by formatting
-  // `now` itself in the target zone and diffing against its own UTC
-  // representation, then applying that offset to the due date/time's own
-  // Y/M/D/H/M components. Good enough for hour-granularity nudge cadence;
-  // not attempting sub-minute precision.
+  // Reuses dueMomentUtc's own DST-safe UTC-offset conversion (2026-10-09,
+  // factored out when the "Minutes before" reminder needed the identical
+  // math at minute rather than hour granularity) rather than keeping two
+  // copies of the same offset arithmetic to drift apart.
+  return (now.getTime() - dueMomentUtc(tz, dueDate, dueTime, now).getTime()) / (1000 * 60 * 60)
+}
+
+/** The exact UTC instant that dueDate/dueTime represents in the given zone
+ * — DST-safe, same tzOffsetMinutes-based conversion hoursSinceLocalDateTime
+ * already uses, just returning the absolute moment itself rather than an
+ * elapsed duration. Used by the "Minutes before" reminder queue (migration
+ * 077) to precompute a fire_at timestamp once, at sync time, so the actual
+ * per-tick cron check is a plain `fire_at <= now()` comparison with no
+ * zone math needed at fire time. */
+export function dueMomentUtc(tz: string | null | undefined, dueDate: string, dueTime: string, now: Date = new Date()): Date {
   const zone = safeZone(tz)
   const offsetMinutes = tzOffsetMinutes(zone, now)
   const [y, m, d] = dueDate.split('-').map(Number)
   const [dh, dmin] = dueTime.slice(0, 5).split(':').map(Number)
-  const dueUtcMs = Date.UTC(y, m - 1, d, dh, dmin) - offsetMinutes * 60_000
-  return (now.getTime() - dueUtcMs) / (1000 * 60 * 60)
+  return new Date(Date.UTC(y, m - 1, d, dh, dmin) - offsetMinutes * 60_000)
 }
 
 function tzOffsetMinutes(zone: string, now: Date): number {
