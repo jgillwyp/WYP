@@ -76,6 +76,7 @@ type AttachmentRow = {
     kind: 'request' | 'todo'
     description: string
     contactName: string | null
+    isOpen: boolean
   }
 }
 
@@ -126,6 +127,10 @@ export default function StorageManagementForm() {
   const [attachments, setAttachments] = useState<AttachmentRow[]>([])
 
   const [sortMode, setSortMode] = useState<SortMode>('largest')
+  // Defaults checked (owner's own instruction, 2026-10-09) — a still-open
+  // item's attachment is a worse deletion candidate than a Done item's, so
+  // the default view surfaces only the safer-to-clean-up set.
+  const [excludeOpen, setExcludeOpen] = useState(true)
 
   const [removeTarget, setRemoveTarget] = useState<AttachmentRow | null>(null)
   const [removing, setRemoving] = useState(false)
@@ -178,14 +183,15 @@ export default function StorageManagementForm() {
   }, [])
 
   const sortedAttachments = useMemo(() => {
-    const copy = [...attachments]
+    const filtered = excludeOpen ? attachments.filter((a) => !a.source.isOpen) : attachments
+    const copy = [...filtered]
     if (sortMode === 'largest') {
       copy.sort((a, b) => b.size_bytes - a.size_bytes)
     } else {
       copy.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     }
     return copy
-  }, [attachments, sortMode])
+  }, [attachments, sortMode, excludeOpen])
 
   const usedPct = limitBytes > 0 ? Math.min(100, (usedBytes / limitBytes) * 100) : 0
   const availableBytes = Math.max(0, limitBytes - usedBytes)
@@ -281,6 +287,7 @@ export default function StorageManagementForm() {
             style={{
               display: 'flex',
               alignItems: 'center',
+              flexWrap: 'wrap',
               gap: 8,
               background: 'var(--strip)',
               padding: '7px var(--pad)',
@@ -304,10 +311,24 @@ export default function StorageManagementForm() {
                 Oldest first
               </button>
             </div>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto', fontSize: 12.5, color: 'var(--ink)' }}>
+              <input
+                type="checkbox"
+                checked={excludeOpen}
+                onChange={(e) => setExcludeOpen(e.target.checked)}
+              />
+              Exclude if &ldquo;Open&rdquo;
+            </label>
           </div>
 
           {sortedAttachments.length === 0 && (
-            <div className="subempty">No attachments yet.</div>
+            <div className="subempty">
+              {attachments.length === 0
+                ? 'No attachments yet.'
+                : excludeOpen
+                  ? 'No attachments on Done Requests/ToDos — uncheck "Exclude if “Open”" to see all of them.'
+                  : 'No attachments yet.'}
+            </div>
           )}
 
           {sortedAttachments.map((row) => (
@@ -325,6 +346,7 @@ export default function StorageManagementForm() {
                 </svg>
               </span>
               <div className="ameta">
+                {row.source.isOpen && <span className="opentag">Open</span>}
                 <div className="aname">
                   {row.url && isViewableInBrowser(row.file_name) ? (
                     <a

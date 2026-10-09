@@ -5268,3 +5268,53 @@ link is built only after the stack is proven on Add Contact.
   `.statfilterinput` (Admin Stats filters, 13px) all had the identical
   gap. All five bumped to 16px. `npx tsc --noEmit`/`npm run lint` clean.
   **Confirmed fixed by Jim on a retest, same day.**
+- **Storage Management: "Exclude if 'Open'" filter + per-row Open tag
+  (2026-10-09), no migration.** Jim: "the app was not distinguishing Open
+  items when looking at attachments in Storage Management" — this screen
+  (built 2026-09-03) always showed every attachment with no way to tell
+  which Request/ToDo it belonged to was still Open vs. Done, and no way
+  to filter by it. A still-open item's attachment is a worse deletion
+  candidate than a Done item's, since the underlying task isn't finished
+  — so a new checkbox, "Exclude if 'Open'", **defaults checked** (Jim's
+  own explicit instruction), narrowing the default view to the
+  safer-to-clean-up set. `app/api/attachments/owner-summary/route.ts`
+  now also selects `done_date` on the owned-Requests query and derives
+  `source.isOpen` from it (`!done_date`); the client filters
+  `sortedAttachments` on it and shows a small "Open" tag (new `.opentag`
+  CSS, same shape as the existing `.archtag` badge, own class since the
+  two mean different things and could in principle both apply to one
+  row) above the file name on any row that's still Open, whether or not
+  the filter is currently hiding the rest. Empty-state message
+  distinguishes "no attachments at all" from "filtered to nothing, try
+  unchecking the filter." `npx tsc --noEmit`/`npm run lint` clean. No
+  mockup update — built directly from Jim's own annotated screenshot of
+  the live screen.
+- **"Minutes before" reminder — architecture question answered, not yet
+  built (2026-10-09).** Jim asked whether a fourth Reminders-until-Done
+  option (alongside Day before/Day of/Day after), sending N minutes
+  before the exact Due Date+Time, would need the existing reminder
+  system rethought or could be added incrementally — with a mockup
+  (Account Options default + ToDo Detail per-item checkbox+stepper) and
+  a note that the wording referencing "Day before/of/after" throughout
+  the app would need updating, the Account Options mockup would need
+  duplicating for ToDos (same pattern `request_reminder_default_*`/
+  `todo_reminder_default_*` already split 2026-08-23), and the new
+  option's own word-wrap must not break between its checkbox, the
+  minutes value, and its description. Answered directly rather than
+  built: the **data model and UI are incremental** — a fourth
+  `reminder_minutes_before_enabled`/`_value`/`_sent_at` column set
+  follows the exact pattern already used three times. The **send
+  mechanism is the real gap** — `app/api/cron/tick/route.ts` runs
+  **hourly** (`vercel.json`, `0 * * * *`), which is precise enough for
+  calendar-day events (Day before/of/after) but can't deliver a genuine
+  "N minutes before": the best an hourly tick can do is fire sometime
+  within the hour containing that moment, off by up to ~59 minutes. True
+  minute-level accuracy needs either a materially more frequent cron
+  (Vercel Pro likely supports it, not yet confirmed against Vercel's own
+  current limits) or a different scheduling approach entirely (one
+  scheduled callback per Request/ToDo rather than a periodic sweep) —
+  flagged as a real addition, not just "add a fourth phase." Offered a
+  cheaper middle ground, not yet chosen: keep the hourly cron and treat
+  "minutes before" as best-effort/rounded-to-the-hour rather than
+  literal. **Awaiting Jim's decision on precision vs. cost before any of
+  this is built.**

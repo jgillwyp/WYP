@@ -3196,6 +3196,27 @@ body {
   letter-spacing: .02em;
 }
 
+/* Storage Management's own "Open" row tag (2026-10-09, owner-reported: "the
+   app was not distinguishing Open items when looking at attachments in
+   Storage Management") — same small-badge shape as .archtag above, own
+   class since the two mean different things (Archived vs. still-Open) and
+   could end up on the same row in principle. Sits above the file name, its
+   own line within .ameta (a plain block, so a span placed first there
+   wraps onto its own row). */
+.opentag {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 3px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--strip);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+
 /* ============================================================================
    DETAIL SCREENS (§6.28/§6.27 variants) — ported from
    design/screens/WYP_request_detail_palette1.html for RequestDetailForm.tsx

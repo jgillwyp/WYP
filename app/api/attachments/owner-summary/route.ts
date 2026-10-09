@@ -25,6 +25,13 @@ export const runtime = 'nodejs'
  * by/owner data spans multiple tables in ways RLS's per-row policies don't
  * cleanly join, and Storage signed URLs need service_role regardless, since
  * migration 026 grants no Storage RLS to authenticated at all).
+ *
+ * source.isOpen (2026-10-09, owner-reported: "the app was not distinguishing
+ * Open items when looking at attachments in Storage Management") — derived
+ * from the owning Request/ToDo's own done_date, now also selected. Drives
+ * the screen's "Exclude if 'Open'" filter and its per-row "Open" tag; a
+ * still-open item's attachment is a worse deletion candidate than a Done
+ * item's, since the task it belongs to isn't finished yet.
  */
 export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
@@ -45,13 +52,14 @@ export async function POST(request: Request) {
 
   const { data: ownedRequests } = await admin
     .from('requests')
-    .select('id, description, contact_id, contacts(display_name)')
+    .select('id, description, contact_id, done_date, contacts(display_name)')
     .eq('owner_id', ownerId)
 
   type OwnedRequest = {
     id: string
     description: string | null
     contact_id: string | null
+    done_date: string | null
     contacts: { display_name: string | null } | { display_name: string | null }[] | null
   }
   const requestMap = new Map<string, OwnedRequest>()
@@ -103,6 +111,7 @@ export async function POST(request: Request) {
           kind: (owningRequest?.contact_id ? 'request' : 'todo') as 'request' | 'todo',
           description: owningRequest?.description ?? '',
           contactName,
+          isOpen: !owningRequest?.done_date,
         },
       }
     })
