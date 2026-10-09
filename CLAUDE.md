@@ -5424,3 +5424,23 @@ link is built only after the stack is proven on Add Contact.
   the six Reminders-until-Done screens' static HTML models the banner at
   all (unchanged from every earlier entry in this family), and
   `AccountForm.tsx` has never had one.
+- **Account Options' Minutes-Before default: wording/font follow-up, same
+  day (2026-10-09).** Jim, from a screenshot: the `<select>`'s 16px font
+  read oversized against the title's own bold 12.5px, and the minutes
+  value sitting in a parenthetical after the title ("Default: Minutes-
+  Before Reminder (10 minutes)") repeated the word "minutes." Both
+  `AccountForm.tsx` call sites (Request and ToDo sections) reworded: the
+  title is now plain "Default: Minutes-Before Reminder" with no
+  parenthetical, and the `<select>` moved into the `.checknote` sentence
+  itself — "Pre-fills the 'Minutes before' Reminder checkbox with `<select>`
+  minutes when you create a new Request/ToDo...," so "minutes" appears
+  exactly once. The select's own font-size stays 16px regardless of
+  placement — required to avoid iOS Safari's auto-zoom-on-focus behavior
+  (the same bug class fixed app-wide earlier this same day) — but now
+  visually shrinks via a new `.minuteselect` CSS class
+  (`transform: scale(0.8)`, with a small negative `margin-right` to close
+  the layout gap the transform leaves behind) rather than reducing the
+  real font-size, which would have reintroduced that bug. The six
+  `.reminderitem select` controls on the Create/Detail screens are
+  unchanged — Jim's report was specifically about this screen. `npx tsc
+  --noEmit`/`npm run lint` clean.

@@ -853,32 +853,32 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    Default: Minutes-Before Reminder (
-                    <select
-                      value={requestReminderDefaultMinutesBeforeValue}
-                      disabled={saving}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        handleMinutesValueChange(
-                          'request_reminder_default_minutes_before_value',
-                          Number(e.target.value),
-                          requestReminderDefaultMinutesBeforeValue,
-                          setRequestReminderDefaultMinutesBeforeValue
-                        )
-                      }
-                    >
-                      {MINUTES_BEFORE_OPTIONS.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>{' '}
-                    minutes)
+                    Default: Minutes-Before Reminder
                     <span className="checknote">
-                      Pre-fills the &ldquo;Minutes before&rdquo; Reminder checkbox and its
-                      minutes value when you create a new Request. You can still change it
-                      per item. Changing this setting never affects anything already
-                      created. Off by default.
+                      Pre-fills the &ldquo;Minutes before&rdquo; Reminder checkbox with{' '}
+                      <select
+                        className="minuteselect"
+                        value={requestReminderDefaultMinutesBeforeValue}
+                        disabled={saving}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          handleMinutesValueChange(
+                            'request_reminder_default_minutes_before_value',
+                            Number(e.target.value),
+                            requestReminderDefaultMinutesBeforeValue,
+                            setRequestReminderDefaultMinutesBeforeValue
+                          )
+                        }
+                      >
+                        {MINUTES_BEFORE_OPTIONS.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>{' '}
+                      minutes when you create a new Request. You can still change it per
+                      item. Changing this setting never affects anything already created.
+                      Off by default.
                     </span>
                   </span>
                 </label>
@@ -1105,32 +1105,32 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    Default: Minutes-Before Reminder (
-                    <select
-                      value={todoReminderDefaultMinutesBeforeValue}
-                      disabled={saving}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        handleMinutesValueChange(
-                          'todo_reminder_default_minutes_before_value',
-                          Number(e.target.value),
-                          todoReminderDefaultMinutesBeforeValue,
-                          setTodoReminderDefaultMinutesBeforeValue
-                        )
-                      }
-                    >
-                      {MINUTES_BEFORE_OPTIONS.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>{' '}
-                    minutes)
+                    Default: Minutes-Before Reminder
                     <span className="checknote">
-                      Pre-fills the &ldquo;Minutes before&rdquo; Reminder checkbox and its
-                      minutes value when you create a new ToDo. You can still change it per
-                      item. Changing this setting never affects anything already created.
-                      Off by default.
+                      Pre-fills the &ldquo;Minutes before&rdquo; Reminder checkbox with{' '}
+                      <select
+                        className="minuteselect"
+                        value={todoReminderDefaultMinutesBeforeValue}
+                        disabled={saving}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          handleMinutesValueChange(
+                            'todo_reminder_default_minutes_before_value',
+                            Number(e.target.value),
+                            todoReminderDefaultMinutesBeforeValue,
+                            setTodoReminderDefaultMinutesBeforeValue
+                          )
+                        }
+                      >
+                        {MINUTES_BEFORE_OPTIONS.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>{' '}
+                      minutes when you create a new ToDo. You can still change it per item.
+                      Changing this setting never affects anything already created. Off by
+                      default.
                     </span>
                   </span>
                 </label>
