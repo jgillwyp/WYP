@@ -16,7 +16,7 @@ insert into beta_allowlist (email, note) values ('jimgillon@hotmail.com', 'Pleas
 2. Hostinger Agentic email setup..........................................................
 
 notifications@wouldyouplease.com
-password: aWYP!xyMail7Pw.
+password: 73maRR!23some    was: aWYP!xyMail7Pw.
 Protocol				Hostname		Port	TLS/SSL
 Incoming server (IMAP)			imap.hostinger.com	993	Yes	
 Outgoing server (SMTP)			smtp.hostinger.com	465	Yes	
@@ -33,4 +33,67 @@ insert into beta_allowlist (email, note) values ('ericjgillon@msn.com', 'Eric Gi
 
 PS C:\project\wyp> npx tsc --noEmit
 PS C:\project\wyp> npm run lint
+
+-- Run both BEFORE and AFTER sign-in===================================================================
+-- For Private Tester Setup
+-----------------------------------------------------------------------
+do $$
+declare
+  v_email text := 'social@wouldyouplease.com';
+  v_display_name text := 'Roger Smith';
+  v_renewal_date date := current_date + interval '1 year';
+begin
+  v_email := lower(trim(v_email));
+
+  -- ADD PRIVATE TESTER
+  insert into public.beta_allowlist (email, note)
+    values (v_email, v_display_name)
+    on conflict (email) do nothing;
+
+  -- ADD SUBSCRIBER CHECKBOX
+  insert into public.tier_toggle_allowlist (email, note)
+    values (v_email, 'testing Attachments/Subscriber features')
+    on conflict (email) do nothing;
+
+  -- ADD NAME
+  update public.profiles set display_name = v_display_name
+    where id = (select id from auth.users where lower(email) = v_email);
+
+  -- ADD A VALID SUBSCRIPTION EXPIRATION DATE
+  update public.profiles set subscription_renewal_date = v_renewal_date
+    where id = (select id from auth.users where lower(email) = v_email);
+end $$;
+-----------------------------------------------------------------------
+
+-- VERIFY TESTER SETUPS
+--------------------------------------------------------------------------------------------
+select
+  ba.email,
+  u.id is not null                 as has_signed_in,
+  u.id                              as auth_user_id,      -- null = never signed in yet; nothing to fix, will appear on their own first sign-in
+  -- p.id                              as profiles_row,       -- null with auth_user_id set = a genuine gap, see Step 2
+  p.is_admin,
+  p.tier                            as subscriber_status,
+  exists(
+    select 1 from tier_toggle_allowlist tta where lower(tta.email) = lower(ba.email)
+  )                                 as on_tier_toggle_allowlist
+from beta_allowlist ba
+left join auth.users u on lower(u.email) = lower(ba.email)
+left join public.profiles p on p.id = u.id
+order by ba.email;
+
+-- VERIFY KEYS/TABLES
+-------------------------------------------------------------------------------------------
+select
+  ba.email,
+  u.id                              as auth_user_id,      -- null = never signed in yet; nothing to fix, will appear on their own first sign-in
+  p.id                              as profiles_row,       -- null with auth_user_id set = a genuine gap, see Step 2
+  p.is_admin,
+  exists(
+    select 1 from tier_toggle_allowlist tta where lower(tta.email) = lower(ba.email)
+  )                                 as on_tier_toggle_allowlist
+from beta_allowlist ba
+left join auth.users u on lower(u.email) = lower(ba.email)
+left join public.profiles p on p.id = u.id
+order by ba.email;
                     
