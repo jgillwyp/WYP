@@ -5244,3 +5244,29 @@ link is built only after the stack is proven on Add Contact.
   via `@supports (-webkit-touch-callout: none)`, with zero effect on the
   already-correct Android/desktop rendering. `npx tsc --noEmit`/`npm run
   lint` clean.
+- **Root cause of "the whole screen scales wider than the phone" finally
+  identified by Jim: tapping the Contact lookup field — iOS Safari's own
+  auto-zoom-on-focus-under-16px behavior (2026-10-08), no migration.**
+  This is the SAME symptom flagged earlier (2026-10-08, first entry in
+  this file's history today) that was investigated at length — viewport
+  meta confirmed correct, no fixed-width CSS culprit found, and it
+  "self-resolved" on its own — and left unexplained. Jim isolated the
+  real trigger afterward: a well-documented, long-standing iOS Safari
+  behavior where focusing ANY `<input>`/`<textarea>` with `font-size`
+  under 16px makes the browser auto-zoom the whole page in to keep the
+  text legible — not a layout/overflow bug at all, and not scoped to one
+  field. It explains the earlier "self-resolved" report too: iOS zooms
+  back out once the field blurs, so the symptom vanishes on its own with
+  nothing in the code ever having been wrong in a way that would show up
+  in a layout audit. `.finput`/`.ftextarea` — the single class used for
+  nearly every text, lookup, and textarea field across the whole app —
+  was set to 14px, well under the threshold. Swept the rest of the app
+  for the same gap rather than fixing just the one field Jim happened to
+  trigger it on: `.field` (Main Screen's own search box — likely the
+  single most-tapped text field in the app — was at 11px),
+  `.repeat-number`/`.stop-date-field` (RepeatControl's modal, 13px), and
+  `.statfilterinput` (Admin Stats filters, 13px) all had the identical
+  gap. All five bumped to 16px. `npx tsc --noEmit`/`npm run lint` clean.
+  **Not yet confirmed by Jim on a retest** — flagged, though this is a
+  well-established, low-risk fix (16px is also just a perfectly normal
+  body-text size, not purely an iOS workaround).

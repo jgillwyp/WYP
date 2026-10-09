@@ -617,7 +617,18 @@ body {
 .finput,
 .ftextarea {
   font: inherit;
-  font-size: 14px;
+  /* 16px, not 14px (2026-10-08, owner-reported — traced the real trigger
+     for "the whole page scales wider than the screen" to tapping the
+     Contact lookup field specifically). A well-documented iOS Safari
+     behavior: focusing any text input/textarea under 16px font-size
+     makes the browser auto-zoom the whole page in, which can leave the
+     page visibly wider than the viewport — not a layout/overflow bug at
+     all, and not scoped to one field; every .finput/.ftextarea in the
+     app (every text, lookup, and textarea field) was under that
+     threshold. Explains the earlier "self-resolved" report too — iOS
+     zooms back out once the field blurs, so the symptom disappears on
+     its own without the underlying cause ever being fixed. */
+  font-size: 16px;
   color: var(--ink);
   background: #fff;
   border: 1px solid var(--input-border);
@@ -1755,7 +1766,10 @@ body {
 .repeat-number,
 .stop-date-field {
   font: inherit;
-  font-size: 13px;
+  /* 16px, not 13px (2026-10-08) — same iOS Safari auto-zoom-on-focus fix
+     as .finput/.ftextarea above; these are real text-entry inputs inside
+     the Repeat modal and were just as much under the 16px threshold. */
+  font-size: 16px;
   color: var(--ink);
   background: #fff;
   border: 1px solid var(--input-border);
@@ -2973,7 +2987,11 @@ body {
   flex: 1 1 60px;
   min-width: 0;
   font: inherit;
-  font-size: 11px;
+  /* 16px, not 11px (2026-10-08) — same iOS Safari auto-zoom-on-focus fix
+     as .finput/.ftextarea; see that rule's own comment. The Main Screen
+     search box is likely the single most-tapped text field in the app,
+     so this one mattered as much as any. */
+  font-size: 16px;
   color: var(--ink-soft);
   background: #fff;
   border: 1px solid var(--input-border);
@@ -4494,7 +4512,9 @@ body {
 }
 
 .statfilterinput {
-  font-size: 13px;
+  /* 16px, not 13px (2026-10-08) — same iOS Safari auto-zoom-on-focus fix
+     as .finput/.ftextarea; see that rule's own comment. */
+  font-size: 16px;
   padding: 5px 8px;
   border: 1px solid var(--rule);
   border-radius: 6px;
