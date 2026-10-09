@@ -5217,5 +5217,30 @@ link is built only after the stack is proven on Add Contact.
   .finput` (matching the established `.fgroup.ffloat`-combined-class
   convention this component doesn't use) — Due Date's invalid-state red
   border was never actually working. Moved onto `.fgroup` to match.
-  `npx tsc --noEmit`/`npm run lint` clean. **A new hypothesis, not yet
-  confirmed** — pending Jim's next retest.
+  `npx tsc --noEmit`/`npm run lint` clean.
+  **Fifth retest, same day: `-webkit-appearance: textfield` had zero
+  effect — but a quick diagnostic re-check confirmed it genuinely
+  applied** (`getComputedStyle` reported `appearance: textfield`, and
+  `CSS.supports('(-webkit-touch-callout: none)')` confirmed the
+  `@supports` block itself was matching) — width/box-sizing were
+  byte-identical to the un-reset state regardless. Ruled out a dead
+  `@supports` block or a stale deploy in one step; left `textfield` as a
+  real negative result (a genuine appearance change, zero width effect)
+  rather than an untested guess. **`-webkit-appearance: none` — the more
+  aggressive version of the same idea, stripping all native chrome
+  rather than switching to generic textfield chrome — was the actual
+  fix**, Jim's own find from the same source he'd pulled `textfield`
+  from. Confirmed via the same diagnostic: `cssWidth: 402px`,
+  `boxSizing: border-box`, an exact match to the wrapper's own measured
+  width — and separately confirmed the native iOS date-wheel picker
+  still opens on tap and fills the field correctly from a real
+  selection, the one functional risk `none`'s more thorough reset
+  carried that `textfield` hadn't. **Fully resolved and confirmed on
+  real hardware** — temporary diagnostic removed from `DateTimeField.tsx`
+  now that its job is done. Net result of this whole saga: one CSS rule,
+  `input[type="date"].finput, input[type="time"].finput { -webkit-
+  appearance: none; appearance: none; display: block; width: 100%;
+  min-height: 50px; box-sizing: border-box; }`, scoped to iOS Safari only
+  via `@supports (-webkit-touch-callout: none)`, with zero effect on the
+  already-correct Android/desktop rendering. `npx tsc --noEmit`/`npm run
+  lint` clean.
