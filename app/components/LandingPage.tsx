@@ -360,9 +360,9 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               <div>
                 <div className="slabel">
                   <span className="t">Subscription</span>
-                  <span className="subline">25% Discount</span>
-                  <span className="badge sub">$17.95 1st yr</span>
-                  <span className="subline">or, $2.95 monthly</span>
+                  <span className="subline">20% Discount</span>
+                  <span className="badge sub">$39 1st yr</span>
+                  <span className="subline">or, $5 monthly</span>
                 </div>
                 <div className="lpanel sub">
                   <ul>
@@ -383,7 +383,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                     Free vs. Subscriber Comparison
                   </div>
                   <SubscriberComparisonTable />
-                  <div className="note">Just $1.50 a month for your first year — a fraction of team tools. Renews at $23.95/yr. The free plan keeps a full year of history. A month-to-month subscription is available for $2.95.</div>
+                  <div className="note">Just $3.25 a month for your first year — a fraction of team tools. Renews at $49/yr. The free plan keeps a full year of history. A month-to-month subscription is available for $5.</div>
                 </div>
               </div>
               <div>

@@ -35,6 +35,13 @@ import { type CSSProperties, useState } from 'react'
  * to show, per Jim's own two differently-worded mockups: 'full' reads
  * "Thank you for subscribing," 'embedded' reads "...until the Renewal Date
  * shown below."
+ *
+ * Pricing repriced 2026-10-13 — Jim's own instruction: "$39/1st yr (a 20%
+ * discount), $49/yr thereafter" (he'd meant to type $36, caught the typo,
+ * and confirmed sticking with $39 anyway). The Monthly figure was first set
+ * to a reasoned-but-unconfirmed $5.99/mo (ratio-matched to the old $2.95/mo
+ * vs. $23.95/yr relationship); Jim then directly confirmed the real number
+ * is $5/mo flat, which is what's used throughout.
  */
 type Variant = 'full' | 'embedded'
 
@@ -247,15 +254,17 @@ export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
           Jim's identified preferred spelling — see this file's other
           "cancelled" fix at the note below and in PlanSummaryPanel. */}
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        1st year — 25% discount, only <strong>$17.95</strong>
+        1st year — 20% discount, only <strong>$39</strong>
         <br />
-        Per year — <strong>$23.95</strong>, renews each year until canceled
+        Per year — <strong>$49</strong>, renews each year until canceled
         <br />
         {/* Monthly option added 2026-08-27, Jim's own drafted addition —
             no discount attaches to it (unlike the annual plan's 1st-year
-            25% off), since it's meant as a low-commitment alternative, not
-            a cheaper path to the same year of service. */}
-        Monthly — <strong>$2.95/mo</strong>, renews each month until canceled
+            20% off), since it's meant as a low-commitment alternative, not
+            a cheaper path to the same year of service. Price repriced
+            2026-10-13 alongside the annual figures — Jim's own confirmed
+            $5/mo flat (not a 49/12 division or a ratio match). */}
+        Monthly — <strong>$5/mo</strong>, renews each month until canceled
       </p>
 
       <SubscriptionCheckoutButton style={{ width: '100%', marginTop: 12 }} />
@@ -394,26 +403,27 @@ export function PlanSummaryPanel({ heading = 'Plan Summary' }: { heading?: strin
       <div className="planrow">
         <span className="plan-name">
           Subscriber — 1st year
-          <span className="plan-sub">25% discount, billed today</span>
+          <span className="plan-sub">20% discount, billed today</span>
         </span>
-        <span className="plan-price">$17.95</span>
+        <span className="plan-price">$39</span>
       </div>
       <div className="planrow">
         <span className="plan-name">
           Renews at
           <span className="plan-sub">automatically, each year thereafter</span>
         </span>
-        <span className="plan-price">$23.95/yr</span>
+        <span className="plan-price">$49/yr</span>
       </div>
       {/* Monthly option added 2026-08-27, Jim's own drafted addition — an
           alternative plan shown for reference alongside the annual one,
-          not a live plan switch (no checkout path exists for either yet). */}
+          not a live plan switch (no checkout path exists for either yet).
+          Repriced 2026-10-13 alongside the annual figures. */}
       <div className="planrow">
         <span className="plan-name">
           Monthly
           <span className="plan-sub">renews each month until canceled</span>
         </span>
-        <span className="plan-price">$2.95/mo</span>
+        <span className="plan-price">$5/mo</span>
       </div>
 
       <SubscriberFeatureList heading="What's included" />

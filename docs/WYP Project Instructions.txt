@@ -13,7 +13,7 @@ The current canonical documents in this Project's knowledge base are:
 When knowledge files conflict with anything in chat history, the knowledge files win. When this instructions block conflicts with a knowledge file, the knowledge file wins. If you're uncertain which version a fact comes from, ask before assuming.
 
 Product at a glance 
-Would You Please is a cross-platform Request tracking + personal ToDo app for Windows, iOS, and Android, with a secure web-respond view for non-registered recipients. Domain: wouldyouplease.com. Freemium: free ad-supported (1-year retention) and $17.95/year paid (ad-free, perpetual).
+Would You Please is a cross-platform Request tracking + personal ToDo app for Windows, iOS, and Android, with a secure web-respond view for non-registered recipients. Domain: wouldyouplease.com. Freemium: free ad-supported (1-year retention) and $39/1st yr, $49/yr thereafter paid (ad-free, perpetual).
 Three core objects:
 Request — sent from one user to another with a due date
 ToDo — personal task for the logged-in user; no recipient; optional due date; Priority (1=ASAP, 2=SOON, 3=LATER); optional Category

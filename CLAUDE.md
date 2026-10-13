@@ -5444,3 +5444,108 @@ link is built only after the stack is proven on Add Contact.
   `.reminderitem select` controls on the Create/Detail screens are
   unchanged — Jim's report was specifically about this screen. `npx tsc
   --noEmit`/`npm run lint` clean.
+- **Subscription pricing changed to `$39/1st yr (20% discount), `$49/yr
+  thereafter, `$5/mo flat — across the whole product (2026-10-13), no
+  migration.** Jim: "The WYP app pricing is modified to `$39/1st yr (a 20%
+  discount), `$49/yr thereafter," with a brief same-message correction
+  ("I was going to change it to `$36/1st yr - and mistakenly entered `$39 -
+  but will stick with `$39") settling the final figure, and a separate
+  later correction fixing the monthly companion price at a flat `$5/mo
+  ("The month to month rate should `$5") — superseding an initial
+  reasoned-but-unconfirmed `$5.99/mo placeholder (ratio-matched to the old
+  `$2.95/mo vs. `$23.95/yr relationship) that was never Jim's own number.
+  Replaces the `$17.95/yr flat price that had stood since v8.0 (2026-08-13's
+  own history) and the `$23.95/yr-renewal/`$2.95/mo structure introduced
+  2026-08-24/25/27 — the first time this product's pricing has changed
+  since those two batches. `app/components/SubscriptionPanels.tsx` (the
+  single source of truth since 2026-08-26 — `SUBSCRIBER_FEATURES`,
+  `BecomeSubscriberPitch`, `PlanSummaryPanel`, `MySubscriptionSummary`) is
+  the one live-component edit; `LandingPage.tsx` updates its own
+  hand-duplicated pricing text (it imports `SUBSCRIBER_FEATURES` directly
+  but never the dollar figures). `app/components/landing.css` was checked
+  and deliberately left untouched — its one match is a dated historical
+  comment narrating why `.subline` exists, using the *old* prices only as
+  illustrative example text within that narration, not live content.
+  Hand-synced per this project's own established convention (no import
+  path exists from a static `.html` file to the live `.tsx` source):
+  `design/marketing/WYP_landing_page.html`, `design/screens/
+  WYP_subscribe_palette1.html`, `design/screens/WYP_about_palette1.html`,
+  `docs/WYP onepager.html`. **Flagged, not fixed, while in
+  `WYP_about_palette1.html`**: that mockup's own Free vs. Subscriber
+  comparison table is missing the Receipt Confirmation/Data Retention rows
+  added 2026-10-08 and still shows an odd "Support: Help files/Email" row
+  with no live-app counterpart — a pre-existing, unrelated staleness, out
+  of scope for this pricing-only pass. `docs/WYP Project Instructions.txt`
+  (the Project-knowledge reference doc, separate from this file) had its
+  one-line pricing summary updated to match.
+  **`docs/WouldYouPlease_PRD_v12_10.docx` edited in place** — no python/
+  pandoc/soffice/zip-CLI available in this sandbox (only `unzip`), so the
+  `anthropic-skills:docx` skill's normal `merge_runs.py`/`validate.py`/
+  visual-render workflow couldn't run; used PowerShell + .NET
+  `System.IO.Compression.ZipArchive` instead, editing `word/document.xml`
+  as a raw string and writing it back into the zip, with an
+  `XmlDocument.LoadXml()` well-formedness check both before and after.
+  Found the PRD had *always* used a single flat `$17.95/year` figure (zero
+  occurrences of "23.95"/"25%"/"2.95" anywhere) — meaning it had never
+  caught up to the 2026-08-24/25 two-tier restructure in the first place,
+  a gap this same pass now closes along with the new 2026-10-13 price.
+  Of 18 "`$17.95" occurrences found, 16 were live/current-fact mentions
+  (Executive Summary, the Section 6 Monetization table, Section 6.2's
+  Cost/Revenue Model narrative and its derived subscriber-revenue dollar
+  figures, Section 9 base subscription, Section 9.6 My Phrases, Section 10
+  Phased Roadmap, Section 13.2 Todoist/Asana competitor profiles, Section
+  13.4 Market Gap) and were updated; 2 sit inside Section 15.1's own
+  "Resolved (v7.0–v12.0 Owner Decisions)" table (the v8.0 "Annual
+  subscription price?" row, the v12.0 "Billing period?" row) and were
+  **left untouched**, same as this file's own Schedule-A-is-never-
+  retroactively-rewritten convention applied to a second document — they
+  correctly record what was decided at the time, and the v12.0 row's own
+  "Monthly rejected" reasoning is already stale against the live app's
+  2026-08-27 Monthly option in a way out of scope to reconcile here.
+  **Section 6.2.3's revenue-table dollar figures were proportionally
+  rescaled** to the new `$39 headline price (same per-subscriber ×
+  price − Stripe-fee methodology the old flat-price model already used,
+  just with the new constant) rather than left internally inconsistent
+  with the updated headline price sitting right above them in the same
+  section — Pilot/Year-1/Long-Term gross, net, and TOTAL cells all
+  updated, plus the two Section 6.2.4 Findings bullets that quoted derived
+  figures directly ("approximately breakeven" no longer holds at the new
+  price, since Year-1 revenue now clearly exceeds infrastructure cost;
+  the per-registered-user subscription-revenue figure moved from
+  ~`$0.18/user/year to ~`$0.40). This is a straightforward rescale, **not**
+  a rebuilt model — `docs/WYP_Hosting_Cost_Crossover_Model.xlsx` (the
+  real, maintained cost/revenue workbook, 2026-08-24) remains the
+  authoritative source and was not touched in this pass; said so
+  explicitly in the new Schedule A entry below rather than silently
+  leaving the two documents to drift apart on method. **New "v12.11"
+  Schedule A entry appended** after the existing v12.10 entry (a plain
+  `<w:p>` paragraph, not a table row — Schedule A turned out to be a flat
+  sequence of paragraphs, simpler than the table-row structure assumed
+  going in), documenting the price change, which sections were updated to
+  match, which historical records were deliberately left alone and why,
+  and that the revenue-table figures are a rescale, not a rebuild. No
+  visual verification was possible (no headless browser/soffice/pdftoppm
+  reachable in this sandbox, consistent with every other such limitation
+  already noted in this file) — verified at the XML/text level only: the
+  final file re-opened as a well-formed 25-entry ZIP with well-formed
+  `document.xml`, the new v12.11 entry is present, both untouched
+  historical entries were independently re-located and confirmed
+  byte-identical, and the only remaining "`$17.95" occurrences (6 total)
+  are the 2 Section 15.1 rows, the 2 Schedule A historical entries (v8.0,
+  v12.0), and the new v12.11 entry's own 2 deliberate backward references
+  to that history. One real-world snag along the way: the docx was
+  transiently locked by a running `WINWORD.exe` process on the owner's own
+  machine when the edited copy was first ready to write back — waited
+  rather than forcing past it (never closes another program's open file
+  without being asked), and the write succeeded once the lock cleared on
+  its own. **The "WYP Tasks" part of Jim's own instruction is not yet
+  resolved** — likely refers to the 2026-09-30 ToDo item tracking this
+  exact sales-literature update, not yet confirmed or marked done; flagged
+  for Jim rather than assumed. `app/src/version.ts` bumped by hand
+  (`1.03.298`, matching `git rev-list --count HEAD`'s pre-commit value —
+  `npm run build`'s own `prebuild` hook can't run in this sandbox, the
+  known SWC-binary limitation noted elsewhere in this file). `npx tsc
+  --noEmit`/`npm run lint` both clean across the whole batch. **Not yet
+  committed or pushed** — awaiting Jim's own review of the full batch,
+  per this project's own established practice of never committing
+  unprompted.
