@@ -5734,3 +5734,18 @@ link is built only after the stack is proven on Add Contact.
   actually resolves Twilio's automated check once deployed (the
   JS-execution theory is a reasoned diagnosis from reading the code, not
   something confirmed against Twilio's own crawler behavior).
+- **Twilio A2P 10DLC campaign reached "In Review" — not via the
+  `/textmessaging/demo` route above (2026-10-14).** Jim: Twilio's own
+  registration UI had real bugs (fields not clearing values, no working
+  upload/paste for the screenshot their own guidance asked for) — he spent
+  roughly six hours working with Google AI and ended up submitting the
+  campaign via direct `curl` calls against Twilio's API rather than their
+  web form. The `/textmessaging/demo` page built the day before may or may
+  not have been what ultimately satisfied their opt-in-proof requirement —
+  unconfirmed either way, since the campaign went through a different path
+  in the end. **Small wording fix, same conversation**: the `/privacy`
+  page's SMS Consent and Data Sharing paragraph dropped "is now or" —
+  "No mobile information is now or will be shared..." → "No mobile
+  information will be shared..." — a correction surfaced while finishing
+  the campaign submission, not explained further by Jim. `npx tsc
+  --noEmit`/`npm run lint` clean.
