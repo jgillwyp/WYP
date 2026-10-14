@@ -5702,3 +5702,35 @@ link is built only after the stack is proven on Add Contact.
   confirmation screen. `npx tsc --noEmit`/`npm run lint` clean. No mockup —
   same as the rest of this feature family. **Not yet committed or
   pushed** — awaiting Jim's review.
+- **`?demo=1` superseded same day by a dedicated `/textmessaging/demo`
+  route (2026-10-13), after Twilio's automated opt-in checker kept
+  returning the identical "we couldn't verify it automatically" message
+  even once Jim submitted the new URL.** Root-caused rather than just
+  resubmitted: `TextMessagingForm.tsx` (both the real token flow and the
+  abandoned `?demo=1` mode bolted onto it) is a Client Component whose
+  real content only exists after client JS runs — it starts in a `loading`
+  state and sits behind the `Suspense` boundary `useSearchParams()`
+  requires — so a crawler that doesn't execute JavaScript, or doesn't wait
+  out a streamed Suspense fallback, would see nothing but "Loading…"
+  regardless of which URL it was given. Jim's own suggestion (a dedicated
+  path, not a query param) was the better fix anyway, and became the
+  actual solution once combined with removing the Suspense/async
+  dependency entirely: new `app/textmessaging/demo/page.tsx` is a plain
+  Server Component (no `searchParams`, no `'use client'`, no Suspense) —
+  nothing about deciding what to render is async or client-only, so its
+  full markup is guaranteed present in the very first HTML response to
+  any request. New `app/components/TextMessagingDemoForm.tsx` holds the
+  actual form — a Client Component for the checkbox/Activate/Stop
+  interactivity Jim still needs for his own click-through screenshots, but
+  with plain synchronous `useState` only, no `useEffect`, so its first
+  render (server and client alike) already shows the real content — no
+  loading gate to hide behind. Still no Supabase import anywhere in this
+  file, same `DEMO_OWNER_NAME`/`DEMO_PHONE_DISPLAY` 555-number placeholder
+  data, same real-byte-for-byte consent wording. `TextMessagingForm.tsx`
+  reverted to its original real-token-only state — the `isDemo` branches
+  are gone, kept narrowly scoped to the one flow it was always meant for.
+  `npx tsc --noEmit`/`npm run lint` clean. No mockup. **Not yet committed
+  or pushed** — awaiting Jim's review, and awaiting confirmation this
+  actually resolves Twilio's automated check once deployed (the
+  JS-execution theory is a reasoned diagnosis from reading the code, not
+  something confirmed against Twilio's own crawler behavior).

@@ -30,21 +30,21 @@ import { supabase } from '@/lib/supabaseClient'
  * (docs/Twilio info.txt) — do not reword without checking with him first;
  * carriers check for specific exact phrasing in this kind of form.
  *
- * ?demo=1 (2026-10-13) — a stable, public, no-token preview of the pending
- * opt-in form, built for the Twilio A2P 10DLC campaign review. Twilio's own
- * automated checker can't follow a token-gated link the way a human
- * reviewer can ("Your opt-in is collected in a chat widget or pop-up, so
- * we couldn't verify it automatically... add a public URL where it
- * appears") and their registration form has no file-upload field for a
- * screenshot either, so this is the "public URL" half of their own stated
- * fallback. Renders the exact same markup/wording real visitors see, with
- * fixed placeholder data (a 555 number, never a real one) instead of a
- * real Contact's — no RPC call is ever made in this mode, on load or on
- * Activate, so it can't write to or read from the database, and no real
- * phone number is ever exposed on a page anyone can load without a token.
+ * A public, crawler-friendly preview of this same form for Twilio's A2P
+ * 10DLC campaign review lives at app/textmessaging/demo/page.tsx — a
+ * separate, dedicated static route, not a query-param mode on this
+ * component. An earlier ?demo=1 attempt bolted onto this client component
+ * was abandoned: this whole page sits behind both an async RPC call and a
+ * Suspense boundary (required for useSearchParams()), so its real content
+ * never appears in the server-rendered HTML — only after client JS runs
+ * and the RPC resolves. Twilio's own automated opt-in checker kept
+ * reporting it couldn't verify the page even after that attempt, which
+ * fits exactly that failure mode (a non-JS-executing crawler, or one that
+ * doesn't wait out Suspense's streamed fallback, sees nothing but
+ * "Loading…"). See TextMessagingDemoForm.tsx's own header comment for the
+ * fix: a route with no searchParams/RPC dependency at all, so its full
+ * markup is present in the very first HTML response.
  */
-const DEMO_OWNER_NAME = 'Jane Smith'
-const DEMO_PHONE_DISPLAY = '(555) 123-4567'
 
 type ConsentData = {
   phone: string | null
@@ -72,7 +72,6 @@ function formatE164ForDisplay(e164: string): string {
 export default function TextMessagingForm() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token') ?? ''
-  const isDemo = searchParams.get('demo') === '1'
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -86,19 +85,6 @@ export default function TextMessagingForm() {
   const [stopped, setStopped] = useState(false)
 
   useEffect(() => {
-    if (isDemo) {
-      // Fixed placeholder data, no RPC call — see this file's own ?demo=1
-      // header comment. Deferred one microtask (same react-hooks/set-state-
-      // in-effect-satisfying pattern as CreateRequestForm.tsx's own
-      // voiceSupported) rather than set synchronously in the effect body.
-      queueMicrotask(() => {
-        setData({ phone: null, owner_name: DEMO_OWNER_NAME, consent_given_at: null, opted_out_at: null })
-        setPhoneInput(DEMO_PHONE_DISPLAY)
-        setLoading(false)
-      })
-      return
-    }
-
     let cancelled = false
     // No special-cased synchronous branch for a missing token — an empty
     // string simply matches no row server-side, hitting the exact same
@@ -122,7 +108,7 @@ export default function TextMessagingForm() {
     return () => {
       cancelled = true
     }
-  }, [token, isDemo])
+  }, [token])
 
   async function handleActivate() {
     setFormError(null)
@@ -133,13 +119,6 @@ export default function TextMessagingForm() {
     }
     if (!consentChecked) {
       setFormError('Please check the box to agree before activating Text Messaging.')
-      return
-    }
-    if (isDemo) {
-      // No RPC — this mode exists specifically so clicking through to the
-      // "activated" confirmation screen below never writes real data.
-      setData((d) => (d ? { ...d, phone: normalized } : d))
-      setActivated(true)
       return
     }
     setSubmitting(true)
@@ -157,10 +136,6 @@ export default function TextMessagingForm() {
   }
 
   async function handleStop() {
-    if (isDemo) {
-      setStopped(true)
-      return
-    }
     setSubmitting(true)
     const { error } = await supabase.rpc('set_sms_opt_out', { p_token: token })
     setSubmitting(false)
@@ -332,4 +307,3 @@ export default function TextMessagingForm() {
     </div>
   )
 }
-
