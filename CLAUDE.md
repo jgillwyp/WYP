@@ -5656,3 +5656,49 @@ link is built only after the stack is proven on Add Contact.
   separately, flagged rather than bundled in here. `npx tsc --noEmit`/
   `npm run lint` both clean across the whole batch. No mockup — this
   feature family has none beyond Jim's own `docs/Twilio info.txt` spec.
+- **Flagged, not built — invalidate a Contact's `sms_consent_token_hash`
+  on opt-out (2026-10-13 campaign-registration conversation, same batch as
+  migration 079 above).** Jim's own idea while sharing a real `/textmessaging?
+  token=...` link as Twilio's requested opt-in proof: once a Contact opts
+  out, the link should stop resolving at all. Not a live exploit today —
+  `set_sms_opt_out`/`set_sms_opt_out_by_phone` already leave the link
+  harmless (`TextMessagingForm.tsx`'s terminal "stopped" state has no
+  Activate control, so the old link can't silently re-enable texting) —
+  but it would reduce exposure, since there's no real reason an opted-out
+  token should keep resolving to even a read-only status page. Deferred on
+  Jim's own instruction ("flagged as a 'later' update"); if built, both
+  `set_sms_opt_out(token)` and `set_sms_opt_out_by_phone(phone)` would
+  need to clear `sms_consent_token_hash` alongside setting `sms_opted_out_at`
+  — note this also means a future STOP-via-reply can no longer resolve a
+  token to act through (fine, since `set_sms_opt_out_by_phone` matches on
+  `sms_consent_phone`, not the token, so it's unaffected), but it also
+  removes the one existing way a Contact could revisit the same link later
+  to confirm their own stopped status — worth deciding at build time
+  whether that status check is worth keeping a narrower, read-only-only
+  token alive for, versus clearing it outright.
+- **`/textmessaging?demo=1` — a stable public preview, built for Twilio's
+  A2P 10DLC campaign review (2026-10-13, `TextMessagingForm.tsx`), no
+  migration.** Twilio's automated opt-in checker couldn't follow the real
+  token-gated link ("Your opt-in is collected in a chat widget or pop-up,
+  so we couldn't verify it automatically") and their registration form has
+  no file-upload field — their own stated fallback field asks for either a
+  public URL (if the form is live) or, if it's "not live or is behind a
+  login," two screenshots: the form itself, and what the customer sees
+  after submitting. Rather than click through the real flow (which would
+  have actually set `sms_consent_given_at` on one of Jim's real production
+  Contacts just to produce a screenshot), `?demo=1` renders the identical
+  markup/wording with fixed placeholder data (`DEMO_OWNER_NAME` = "Jane
+  Smith," `DEMO_PHONE_DISPLAY` = a 555 number, never a real one) and
+  short-circuits every handler — `handleActivate`/`handleStop` never call
+  `set_sms_consent`/`set_sms_opt_out` in this mode, so clicking all the way
+  through to the "Text Messaging is now active" confirmation screen (for
+  the second required screenshot) writes nothing to the database. Fixed a
+  small, real, pre-existing gap while wiring this up: the confirmation
+  screen reads `data.phone`, which was never updated after a successful
+  Activate — it showed the stale pre-fill value (or, in demo mode, nothing
+  at all, since the placeholder data has no `phone`) instead of the number
+  actually just submitted. Both the real and demo `handleActivate` branches
+  now update `data.phone` to the submitted value before showing the
+  confirmation screen. `npx tsc --noEmit`/`npm run lint` clean. No mockup —
+  same as the rest of this feature family. **Not yet committed or
+  pushed** — awaiting Jim's review.
