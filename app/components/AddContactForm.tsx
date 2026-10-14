@@ -86,12 +86,11 @@ export default function AddContactForm() {
 
   const [form, setForm] = useState<ContactFormState>(initialState)
 
-  // send_by is fixed to 'email' for now — Text delivery isn't built (SMS/10DLC
-  // is deferred per CLAUDE.md scope discipline), so the Text chip below is
-  // locked outright rather than gated on profiles.tier. Kept as state, not a
-  // plain constant, so the day this unlocks the chip needs a click handler
-  // and a second value, not a rewrite of how the chip reads its own state.
-  const [sendBy] = useState<'email'>('email')
+  // Text unlocked for subscribers 2026-10-13 (migration 079) — see the chip
+  // markup below and this file's own handleSubmit comment on the
+  // verification email. Free tier still gets the original locked chip.
+  const [sendBy, setSendBy] = useState<'email' | 'text'>('email')
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false)
 
   const [nameInvalid, setNameInvalid] = useState(false)
   const [emailInvalid, setEmailInvalid] = useState(false)
@@ -249,6 +248,37 @@ export default function AddContactForm() {
       .then(({ error }) => {
         if (error) console.error('log_event (contact created) failed:', error.message)
       })
+
+    // SMS consent-request email (migration 079, 2026-10-13) — best-effort,
+    // same fire-and-forget posture as the log_event call above and as
+    // ContactDetailForm.tsx's own identical block. A brand-new Contact can
+    // never already have sms_consent_given_at/requested_at, so there's no
+    // "already asked" check needed here the way Contact Detail's does.
+    if (sendBy === 'text') {
+      try {
+        const { data: consentToken } = await supabase.rpc('request_sms_consent', {
+          p_contact_id: inserted.id,
+        })
+        if (consentToken) {
+          const { data: sessionData } = await supabase.auth.getSession()
+          const accessToken = sessionData.session?.access_token
+          if (accessToken) {
+            fetch('/api/sms/send-consent-request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+              body: JSON.stringify({
+                contactId: inserted.id,
+                link: `${window.location.origin}/textmessaging?token=${consentToken}`,
+              }),
+            }).catch(() => {
+              // Best-effort — see comment above.
+            })
+          }
+        }
+      } catch {
+        // Best-effort — see comment above.
+      }
+    }
 
     // Return destination depends on where this screen was opened from
     // (2026-08-11) — this file's own comment used to flag Create Request's
@@ -498,53 +528,103 @@ export default function AddContactForm() {
                   role="radiogroup"
                   aria-labelledby="sendby-label"
                 >
-                  {/* Only one legal value exists today, so this chip has no
-                      onClick — but its "selected" class is still read off
-                      state, not hardcoded, for when Text unlocks. */}
                   <button
                     className={`chip${sendBy === 'email' ? ' selected' : ''}`}
                     type="button"
                     aria-pressed={sendBy === 'email'}
+                    onClick={() => setSendBy('email')}
                   >
                     Email
                   </button>
-                  <button
-                    className="chip is-locked"
-                    type="button"
-                    aria-disabled="true"
-                    aria-pressed={false}
-                  >
-                    <svg
-                      className="lockglyph"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
+                  {/* Unlocked for subscribers 2026-10-13 (migration 079) —
+                      opens the explanation dialog rather than selecting
+                      Text immediately; see ContactDetailForm.tsx's
+                      identical pattern. Free tier keeps the original
+                      .is-locked chip, unchanged. */}
+                  {tier === 'subscriber' ? (
+                    <button
+                      className={`chip${sendBy === 'text' ? ' selected' : ''}`}
+                      type="button"
+                      aria-pressed={sendBy === 'text'}
+                      onClick={() => {
+                        if (sendBy !== 'text') setSmsDialogOpen(true)
+                      }}
                     >
-                      <rect
-                        x="4"
-                        y="10.5"
-                        width="16"
-                        height="10"
-                        rx="2"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                      />
-                      <path
-                        d="M8 10.5V7.5a4 4 0 1 1 8 0v3"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    Text
-                  </button>
+                      Text
+                    </button>
+                  ) : (
+                    <button
+                      className="chip is-locked"
+                      type="button"
+                      aria-disabled="true"
+                      aria-pressed={false}
+                    >
+                      <svg
+                        className="lockglyph"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <rect
+                          x="4"
+                          y="10.5"
+                          width="16"
+                          height="10"
+                          rx="2"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                        />
+                        <path
+                          d="M8 10.5V7.5a4 4 0 1 1 8 0v3"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      Text
+                    </button>
+                  )}
                 </div>
                 <div className="gatenote">
-                  Request Texting is available with a subscription &mdash; see
-                  the banner below.
+                  {tier === 'subscriber'
+                    ? sendBy === 'text'
+                      ? 'Saving will email this Contact a link to approve text messaging.'
+                      : null
+                    : 'Request Texting is available with a subscription — see the banner below.'}
                 </div>
               </div>
             </div>
+
+            {smsDialogOpen && (
+              <>
+                <div className="scrim" onClick={() => setSmsDialogOpen(false)} />
+                <div className="modal" role="dialog" aria-modal="true" aria-labelledby="sms-dialog-title">
+                  <p className="modal-title" id="sms-dialog-title">
+                    Send Requests by Text
+                  </p>
+                  <p className="promo-p" style={{ margin: '0 0 12px' }}>
+                    This Contact must approve receiving text messages before any will be sent. Saving will
+                    email them a link to confirm their phone number and approve Text Messaging &mdash; until
+                    they approve, Requests will keep going by Email.
+                  </p>
+                  <div className="modalacts">
+                    <button type="button" className="btn-secondary" onClick={() => setSmsDialogOpen(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        setSendBy('text')
+                        setSmsDialogOpen(false)
+                      }}
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="fgroup">
               <textarea

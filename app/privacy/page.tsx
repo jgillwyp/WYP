@@ -86,7 +86,7 @@ export default function PrivacyPolicyPage() {
       <WypHeader />
 
       <div className="band">
-        <h1 className="glabel">Privacy Policy</h1>
+        <h1 className="glabel">Terms and Privacy Policy</h1>
         <span className="bandcluster">
           <button className="btn-secondary" type="button" onClick={() => router.back()}>
             Close
@@ -166,12 +166,20 @@ export default function PrivacyPolicyPage() {
           <li><b>Your browser&rsquo;s built-in speech recognition</b> — if you use the optional
             Voice Dictation feature, your browser (not Would You Please) processes the audio using
             its own speech-to-text service; we only ever receive the resulting text.</li>
+          <li><b>Twilio</b> — used only if you have approved receiving text messages from a Would
+            You Please user; delivers and receives SMS messages on our behalf.</li>
         </ul>
         <div className="note">
           We do not currently use any advertising network or third-party tracking or analytics
           service. Free accounts will eventually see an ad-supported placement as part of our
           business model, but no advertising partner is connected today.
         </div>
+        <p>
+          <b>SMS Consent and Data Sharing:</b> No mobile information is now or will be shared with
+          third parties/affiliates for marketing/promotional purposes. All the above categories
+          exclude text messaging originator opt-in data and consent; this information will not be
+          shared with any third parties.
+        </p>
 
         <h2>Payments</h2>
         <p>

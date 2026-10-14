@@ -5549,3 +5549,110 @@ link is built only after the stack is proven on Add Contact.
   committed or pushed** — awaiting Jim's own review of the full batch,
   per this project's own established practice of never committing
   unprompted.
+- **Request Texting: SMS consent/verification flow built — migration 079
+  confirmed run by Jim, 2026-10-13, new `twilio` npm
+  dependency.** Jim is setting up Twilio for the eventual Request Texting
+  feature (real Account SID/Auth Token/phone number now in
+  `.env.local`/Vercel only — **never committed**; the Recovery Code was
+  deliberately left out of any env file, since the app never calls Twilio
+  with it — store it in a password manager instead). He hasn't finished
+  Brand/Campaign registration and asked for exactly what's needed to get
+  there: a carrier-compliant opt-in page, plus wording changes. Scoped
+  deliberately narrow after discussion — **actual outbound SMS sending
+  (texting Request notifications instead of emailing them) is explicitly
+  deferred to a later phase**, once Campaign approval is in hand; this
+  batch only builds the consent/verification side, which Twilio's own
+  application process needs to see working first. Five open questions were
+  asked and answered directly before building: `[User Name]`/
+  `[requestor name]` in the consent text are the same person (the
+  subscriber who owns the Contact); the page resolves identity via a
+  durable, hashed, unguessable token (same pattern as `/r/[token]`), not a
+  plain query param; the trigger is a one-time verification email sent
+  when a subscriber first selects Text for a Contact, with an explanatory
+  dialog on the chip click itself (Jim's own addition); STOP/HELP honored
+  **both** ways — Twilio's own native keyword auto-reply (a console
+  setting Jim still needs to configure, Messaging Service -> Integration
+  -> Advanced Opt-Out) AND a web link, not link-only; consent lives as new
+  columns directly on `contacts`, not a separate table, since it's 1:1
+  with a Contact's own phone.
+  **Migration 079** adds `contacts.sms_consent_token_hash`/
+  `sms_consent_requested_at`/`sms_consent_given_at`/`sms_consent_phone`/
+  `sms_opted_out_at`, plus five `SECURITY DEFINER` functions:
+  `request_sms_consent` (owner-only, mints a token — same
+  mint-fresh-never-recover-raw-token posture `issue_request_link` already
+  established), `get_contact_for_sms_consent` (anon + authenticated,
+  generic error for every failure, same posture as `get_request_by_token`),
+  `set_sms_consent` (records approval, and — the recipient just confirmed
+  the number is correct — overwrites the live `contacts.phone` too, not
+  just the audit-trail `sms_consent_phone` column), `set_sms_opt_out`
+  (the web-link Stop action, also reverts `send_by` to `'email'`), and
+  `set_sms_opt_out_by_phone` (`service_role`-only, called from the inbound
+  webhook, which only ever has a phone number, not a token — matches on
+  `sms_consent_phone` specifically, not the plain `phone` column, so an
+  unrelated Contact sharing a similar number can't be misattributed).
+  **The one durable token drives two states once visited** — pending
+  shows the opt-in form, already-consented shows a Manage/Stop screen —
+  rather than minting a second token for the "manage" purpose.
+  `sms_consent_phone` is stored E.164-normalized (+1, US-only — matching
+  Add Contact's own single fixed +1 country code, whose own 2026-08-18
+  header comment had already anticipated this exact need) by the app
+  layer, not in SQL, so it matches Twilio's own inbound `From` format
+  directly.
+  New `app/textmessaging/page.tsx` + `TextMessagingForm.tsx` (no
+  `RequireAuth` — the second anonymous-reachable route in the app besides
+  `/r/[token]`; `useSearchParams()` for the `?token=` param, wrapped in
+  `Suspense` same as `/login/page.tsx`'s own established precedent).
+  Carrier-required disclosure wording is Jim's own literal spec
+  (`docs/Twilio info.txt`, also saved by Jim himself as a reference file —
+  **flagged**: it has the same real credentials in plaintext, untracked;
+  never `git add` it). New `app/src/lib/email.ts` templates
+  (`buildSmsConsentEmailSubject/Html/Text`) and
+  `app/api/sms/send-consent-request/route.ts` (forwarded-JWT, no
+  `service_role`, mirrors `send-request/route.ts`'s posture exactly —
+  re-derives the Contact's own email and the owner's own display name
+  server-side, never trusts the client for either). New
+  `app/api/sms/inbound/route.ts` — Twilio's "A MESSAGE COMES IN" webhook
+  (its URL needs configuring in the Twilio console, a Jim-side step);
+  every request is signature-verified (`twilio.validateRequest`, HMAC over
+  a deterministic `NEXT_PUBLIC_SITE_URL`-built URL + the form params,
+  keyed by `TWILIO_AUTH_TOKEN`) and rejected outright (403) if invalid,
+  since this endpoint is otherwise publicly reachable; matches STOP-family
+  keywords itself and calls `set_sms_opt_out_by_phone` via `service_role`
+  (the same narrow, already-established exception to "service_role never
+  goes near the browser" that Attachments/cron already carved out — no
+  session exists for RLS to scope an inbound webhook to), then always
+  replies with an **empty** TwiML response so it never fights whatever
+  Twilio's own console-level Advanced Opt-Out auto-reply sends.
+  Both `AddContactForm.tsx` and `ContactDetailForm.tsx` unlock the Text
+  chip for `tier === 'subscriber'` (previously `.is-locked` unconditionally,
+  regardless of tier, since Text had zero wiring behind it at all before
+  this batch) — clicking it opens a `.scrim`/`.modal` (§6.12) dialog
+  explaining a verification email is about to go out; Confirm only stages
+  `sendBy = 'text'`, the actual email fires on Save (mirroring every other
+  staged-until-Save field in these forms). Contact Detail's status line
+  (`.gatenote`, Jim's own screenshot wording) shows "Awaiting a text
+  messaging approval for: ..." or "Contact-verified text-to number: ...",
+  switching live off the loaded `sms_consent_*` columns. **No resend
+  affordance yet** — a Contact stuck in "requested but never approved"
+  can't currently be re-emailed from the UI; flagged as a follow-up, not
+  built this batch. Footer buttons renamed app-wide via the one shared
+  `AppFooter.tsx` ("Subscription Features and Options" ->
+  "Subscription Features", "Privacy" -> "Terms and Privacy Policy") —
+  confirmed this is genuinely one component, not duplicated across 9
+  files as an earlier entry in this section had described (likely a later
+  refactor this file's own history never caught up to). Privacy page
+  retitled to match, gained a new Twilio sub-processor list entry (own
+  judgment call, not explicitly asked — flagged rather than silently
+  added) and Jim's own verbatim SMS Consent and Data Sharing paragraph.
+  Landing page's own separate footer link and `WYP_about_palette1.html`'s
+  mockup footer buttons updated to match for consistency (minor
+  follow-through, not explicitly asked). **New `twilio` npm dependency**
+  (webhook signature verification; the REST client for actual sending is
+  unused so far, deferred to the next phase) — confirmed via
+  `npm audit --omit=dev --json` that it introduces zero new vulnerable
+  packages; the 9 pre-existing findings it was checked against (including
+  a critical Next.js RCE advisory, on 16.2.12) are all unrelated to this
+  batch and were not touched — worth a dedicated dependency-upgrade pass
+  separately, flagged rather than bundled in here. `npx tsc --noEmit`/
+  `npm run lint` both clean across the whole batch. No mockup — this
+  feature family has none beyond Jim's own `docs/Twilio info.txt` spec.

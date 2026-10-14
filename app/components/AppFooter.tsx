@@ -52,10 +52,10 @@ export default function AppFooter({
           aria-disabled={subscriptionDisabled}
           onClick={() => router.push('/account/subscription')}
         >
-          Subscription Features and Options
+          Subscription Features
         </button>
         <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
-          Privacy
+          Terms and Privacy Policy
         </button>
       </div>
       <p className="subcopyright">

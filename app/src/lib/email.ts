@@ -1339,3 +1339,52 @@ export function buildOwnerUpdateEmailText(fields: OwnerUpdateEmailFields): strin
     fields.description,
   ].join('\n')
 }
+
+// ----------------------------------------------------------------------------
+// SMS consent/verification email (2026-10-13, migration 079) — sent once,
+// fire-and-forget (same posture as every other email route), when a
+// subscriber selects Text as a Contact's Send Requests by channel and that
+// Contact has no existing sms_consent_given_at. Carries the carrier-
+// required consent language to the /textmessaging page rather than
+// trying to fit it in the email itself — this email's only job is to get
+// the recipient to that page. ownerName is required, not optional like
+// most other templates' owner-name fields — the consent sentence's "on
+// behalf of [User Name]" has no sensible fallback if it's null, unlike a
+// Subject line's own "from <name>" clause, which several other templates
+// already omit cleanly when null (see buildRequestEmailSubject's own
+// comment). The route calling this is expected to refuse to send rather
+// than pass an empty string.
+// ----------------------------------------------------------------------------
+type SmsConsentEmailFields = {
+  ownerName: string
+  link: string
+  siteUrl: string
+}
+
+export function buildSmsConsentEmailSubject(ownerName: string): string {
+  return `${ownerName} would like to send you Request updates by text`
+}
+
+export const SMS_CONSENT_LINK_TEXT = 'Approve Text Messaging'
+
+export function buildSmsConsentEmailHtml(fields: SmsConsentEmailFields): string {
+  const body = [
+    `<p style="margin:0 0 18px;">${escapeHtml(
+      fields.ownerName
+    )} uses Would You Please to track Requests and ToDos, and would like to send you Request updates and reminders by text message instead of email.</p>`,
+    `<p style="margin:0 0 18px;">${emailButton(fields.link, SMS_CONSENT_LINK_TEXT)}</p>`,
+    `<p style="margin:0; font-size:13px; color:${EMAIL_INK};">Approving is optional and only takes a moment. If you'd rather keep receiving email instead, you can simply ignore this message.</p>`,
+  ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
+}
+
+export function buildSmsConsentEmailText(fields: SmsConsentEmailFields): string {
+  return [
+    `${fields.ownerName} uses Would You Please to track Requests and ToDos, and would like to send you Request updates and reminders by text message instead of email.`,
+    '',
+    `${SMS_CONSENT_LINK_TEXT}:`,
+    fields.link,
+    '',
+    `Approving is optional and only takes a moment. If you'd rather keep receiving email instead, you can simply ignore this message.`,
+  ].join('\n')
+}

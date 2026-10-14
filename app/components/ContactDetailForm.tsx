@@ -48,6 +48,17 @@ function losAngelesYear(): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
 }
 
+// Same E.164 -> display-format helper as TextMessagingForm.tsx (duplicated
+// per this codebase's own small-helper convention) — sms_consent_phone is
+// stored +1XXXXXXXXXX; the "Contact-verified text-to number" status line
+// shows it the way a phone number is normally read.
+function formatE164ForDisplay(e164: string | null): string {
+  if (!e164) return ''
+  const digits = e164.replace(/^\+1/, '')
+  if (digits.length !== 10) return e164
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+}
+
 export default function ContactDetailForm() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
@@ -57,7 +68,21 @@ export default function ContactDetailForm() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', phoneExt: '', notes: '', timeZone: '' })
-  const [sendBy] = useState<'email'>('email')
+  // sendBy, SMS consent status (2026-10-13, migration 079) — Text unlocks
+  // for subscribers (see the `tier` gate on the chip below); the chip
+  // itself only stages the choice, same as every other field here. Save
+  // persists it, and a first-time switch to 'text' fires the verification
+  // email (see handleSubmit's own comment). smsConsent mirrors the status
+  // text in Jim's own mockup ("Awaiting a text messaging approval for:
+  // [phone]" / "Contact-verified text-to number: [number]").
+  const [sendBy, setSendBy] = useState<'email' | 'text'>('email')
+  const [smsConsent, setSmsConsent] = useState<{
+    given_at: string | null
+    phone: string | null
+    requested_at: string | null
+    opted_out_at: string | null
+  }>({ given_at: null, phone: null, requested_at: null, opted_out_at: null })
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false)
 
   const [nameInvalid, setNameInvalid] = useState(false)
   const [emailInvalid, setEmailInvalid] = useState(false)
@@ -136,7 +161,9 @@ export default function ContactDetailForm() {
 
       const { data, error: fetchError } = await supabase
         .from('contacts')
-        .select('display_name, email, phone, phone_ext, notes, time_zone')
+        .select(
+          'display_name, email, phone, phone_ext, notes, time_zone, send_by, sms_consent_given_at, sms_consent_phone, sms_consent_requested_at, sms_opted_out_at'
+        )
         .eq('id', contactId)
         .single()
 
@@ -147,6 +174,14 @@ export default function ContactDetailForm() {
         setLoading(false)
         return
       }
+
+      setSendBy(data.send_by === 'text' ? 'text' : 'email')
+      setSmsConsent({
+        given_at: data.sms_consent_given_at,
+        phone: data.sms_consent_phone,
+        requested_at: data.sms_consent_requested_at,
+        opted_out_at: data.sms_opted_out_at,
+      })
 
       if (data.time_zone) {
         setForm({
@@ -249,6 +284,40 @@ export default function ContactDetailForm() {
     if (updateError) {
       setError(updateError.message)
       return
+    }
+
+    // SMS consent-request email (migration 079, 2026-10-13) — best-effort,
+    // fire-and-forget, same posture as CreateRequestForm.tsx's own Initial
+    // Request email block: a failure here must never undo or block the
+    // Contact save that already succeeded above. Only fires the first time
+    // Text is chosen for this Contact (never requested before) — switching
+    // Email -> Text -> Email -> Text again on an already-pending or
+    // already-consented Contact doesn't re-send; there's no resend
+    // affordance yet, flagged as a follow-up if Jim wants one.
+    if (sendBy === 'text' && !smsConsent.given_at && !smsConsent.requested_at) {
+      try {
+        const { data: consentToken } = await supabase.rpc('request_sms_consent', {
+          p_contact_id: contactId,
+        })
+        if (consentToken) {
+          const { data: sessionData } = await supabase.auth.getSession()
+          const accessToken = sessionData.session?.access_token
+          if (accessToken) {
+            fetch('/api/sms/send-consent-request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+              body: JSON.stringify({
+                contactId,
+                link: `${window.location.origin}/textmessaging?token=${consentToken}`,
+              }),
+            }).catch(() => {
+              // Best-effort — see comment above.
+            })
+          }
+        }
+      } catch {
+        // Best-effort — see comment above.
+      }
     }
 
     // router.back(), not push('/contacts') — this screen is only ever
@@ -491,22 +560,91 @@ export default function ContactDetailForm() {
               </span>
               <div className="sendrow">
                 <div className="chippair" role="radiogroup" aria-labelledby="sendby-label">
-                  <button className={`chip${sendBy === 'email' ? ' selected' : ''}`} type="button" aria-pressed={sendBy === 'email'}>
+                  <button
+                    className={`chip${sendBy === 'email' ? ' selected' : ''}`}
+                    type="button"
+                    aria-pressed={sendBy === 'email'}
+                    onClick={() => setSendBy('email')}
+                  >
                     Email
                   </button>
-                  <button className="chip is-locked" type="button" aria-disabled="true" aria-pressed={false}>
-                    <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
-                      <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                    </svg>
-                    Text
-                  </button>
+                  {/* Unlocked for subscribers 2026-10-13 (migration 079) —
+                      see this file's header comment. Clicking it opens the
+                      explanation dialog rather than selecting Text
+                      immediately; Confirm there is what actually sets
+                      sendBy. Free tier keeps the original .is-locked chip,
+                      unchanged. */}
+                  {tier === 'subscriber' ? (
+                    <button
+                      className={`chip${sendBy === 'text' ? ' selected' : ''}`}
+                      type="button"
+                      aria-pressed={sendBy === 'text'}
+                      onClick={() => {
+                        if (sendBy !== 'text') setSmsDialogOpen(true)
+                      }}
+                    >
+                      Text
+                    </button>
+                  ) : (
+                    <button className="chip is-locked" type="button" aria-disabled="true" aria-pressed={false}>
+                      <svg className="lockglyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect x="4" y="10.5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2.2" />
+                        <path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                      </svg>
+                      Text
+                    </button>
+                  )}
                 </div>
-                <div className="gatenote">
-                  Request Texting is available with a subscription &mdash; see the banner below.
-                </div>
+                {tier === 'subscriber' ? (
+                  sendBy === 'text' && (
+                    <div className="gatenote">
+                      {smsConsent.opted_out_at
+                        ? 'This Contact has opted out of text messaging.'
+                        : smsConsent.given_at
+                          ? `Contact-verified text-to number: ${formatE164ForDisplay(smsConsent.phone)}`
+                          : smsConsent.requested_at
+                            ? `Awaiting a text messaging approval for: ${form.phone || '(phone not yet given)'}`
+                            : 'Saving will email this Contact a link to approve text messaging.'}
+                    </div>
+                  )
+                ) : (
+                  <div className="gatenote">
+                    Request Texting is available with a subscription &mdash; see the banner below.
+                  </div>
+                )}
               </div>
             </div>
+
+            {smsDialogOpen && (
+              <>
+                <div className="scrim" onClick={() => setSmsDialogOpen(false)} />
+                <div className="modal" role="dialog" aria-modal="true" aria-labelledby="sms-dialog-title">
+                  <p className="modal-title" id="sms-dialog-title">
+                    Send Requests by Text
+                  </p>
+                  <p className="promo-p" style={{ margin: '0 0 12px' }}>
+                    This Contact must approve receiving text messages before any will be sent. Saving will
+                    email them a link to confirm their phone number and approve Text Messaging &mdash; until
+                    they approve, Requests will keep going by Email.
+                  </p>
+                  <div className="modalacts">
+                    <button type="button" className="btn-secondary" onClick={() => setSmsDialogOpen(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        setSendBy('text')
+                        setSmsDialogOpen(false)
+                      }}
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="fgroup">
               <textarea
