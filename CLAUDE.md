@@ -5871,3 +5871,52 @@ link is built only after the stack is proven on Add Contact.
   it). New `docs/Week7+ - SQL history.txt` — empty of any real migration
   so far, with a header explaining the split and pointing back at Week6
   for migrations 001-080 — is now where migration 081 and onward belong.
+- **Capacitor Android wrapper scaffolded (2026-10-16), per
+  `WYP_Capacitor_Native_App_Strategy.md`'s own recommended build order's
+  step 1 — Android chosen first per Jim's own request, since it has no
+  Apple IAP/pricing dependency to resolve first. Nothing changed in the
+  web app itself; this only adds a thin native shell around it.** New
+  `@capacitor/core`/`@capacitor/android` (dependencies) and
+  `@capacitor/cli`/`@capacitor/assets` (devDependencies) — confirmed via
+  `npm ls sharp` that the one new transitive dependency flagged in `npm
+  audit` (`sharp`) traces to Next.js itself, not Capacitor; no new
+  vulnerable packages introduced by this batch. New `capacitor.config.ts`
+  at the repo root (outside `app/`, per this file's own Repository-layout
+  rule — Capacitor's project isn't something Next renders) — **remote
+  content**, not bundled: `server.url` points at `https://
+  www.wouldyouplease.com` (the canonical `www.` host directly, not the
+  bare apex, which 308-redirects at the Vercel domain level — same
+  redirect this file's own 2026-08-22 email-logo entry already traced),
+  so the WebView loads the live, continuously-deployed site exactly like
+  a browser would; ordinary web feature work needs no new app-store
+  build or re-review, only a change to the native shell itself does.
+  `capacitor-www/index.html` is a near-empty placeholder — Capacitor's
+  CLI requires a `webDir` to exist on disk even in remote mode, but its
+  content is never shown to a user with a working connection. New
+  `android/` — the full generated Gradle project (`appId
+  com.wouldyouplease.app`, `minSdkVersion 24`, `compileSdkVersion`/
+  `targetSdkVersion 36`) — Capacitor's own generated `.gitignore` inside
+  it already correctly excludes `local.properties` (the machine-specific
+  SDK path), `.gradle/`, and `build/`; confirmed via `git add -n` that
+  none of those would be staged. Real launcher icons and a splash screen
+  were generated via `@capacitor/assets` from `assets/icon.svg` (a copy
+  of the existing `public/icons/icon-source.svg` brandmark, kept in
+  `assets/` as the source for future regeneration via the new `npm run
+  cap:icons` script) — replacing Capacitor's own generic default
+  placeholder icon; the splash screen is Capacitor's auto-generated
+  default composition (icon centered on a plain background) and hasn't
+  been otherwise art-directed, flagged as a follow-up, not a blocker.
+  New `npm run cap:sync`/`cap:icons`/`android:open` scripts. `npx tsc
+  --noEmit`/`npm run lint` both clean.
+  **Cannot be built or run from this sandbox** — confirmed via direct
+  checks (`java -version`, `$env:ANDROID_HOME`, common Android Studio/SDK
+  install paths) that this Windows machine has no JDK, Android SDK, or
+  Android Studio installed; same "built here, verified by Jim locally"
+  posture this file's own `npm run build`/SWC-binary limitation has
+  documented since Week 1. **Next step is Jim's own**: install Android
+  Studio (which bundles a compatible JDK), open the generated `android/`
+  folder in it, let Gradle sync, and run on an emulator or a USB-
+  connected device — no Google Play Console registration or any other
+  store step is needed for this. iOS (`npx cap add ios`, a matching
+  `ios/` project) is deliberately not started in this batch, per Jim's
+  own "Android first" — nothing above blocks adding it later.
