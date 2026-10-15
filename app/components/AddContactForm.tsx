@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 
 /**
@@ -133,7 +133,7 @@ export default function AddContactForm() {
       setForm((f) => ({ ...f, timeZone: browserZone }))
       setSelectedTimeZone(browserZone)
 
-      const { data: userData } = await supabase.auth.getUser()
+      const { data: userData } = await getCurrentUser()
       if (!cancelled && userData.user) {
         await supabase.from('profiles').update({ time_zone: browserZone }).eq('id', userData.user.id)
       }
@@ -188,7 +188,7 @@ export default function AddContactForm() {
     // history) enforce owner_id = auth.uid() at the database regardless of
     // what this line sends. If this were wrong, or omitted, Postgres rejects
     // the insert — there is no "is this my data" branch to write in TSX.
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setError('Your session has expired. Sign in again and retry.')
       setSaving(false)

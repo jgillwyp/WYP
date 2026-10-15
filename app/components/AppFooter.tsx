@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 
 type Tier = 'free' | 'subscriber'
 
@@ -23,7 +23,7 @@ export default function AppFooter({
     }
 
     let cancelled = false
-    supabase.auth.getUser().then(async ({ data }) => {
+    getCurrentUser().then(async ({ data }) => {
       if (!data.user) return
       const { data: profile } = await supabase
         .from('profiles')

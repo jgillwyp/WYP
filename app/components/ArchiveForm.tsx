@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { printWithExpandedWindow } from '@/lib/platform'
 
@@ -732,7 +732,7 @@ export default function ArchiveForm() {
   useEffect(() => {
     let cancelled = false
     async function loadPrefs() {
-      const { data: userData } = await supabase.auth.getUser()
+      const { data: userData } = await getCurrentUser()
       const uid = userData.user?.id ?? null
       if (cancelled || !uid) return
       const { data } = await supabase

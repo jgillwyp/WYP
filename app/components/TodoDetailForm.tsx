@@ -10,7 +10,7 @@ import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
 import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { isReminderEligible, hasStatsWorthyChange } from '@/lib/email'
 import { buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
@@ -855,7 +855,7 @@ export default function TodoDetailForm() {
     }
 
     setDialogSaving(true)
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setDialogModalError('Your session has expired. Sign in again and retry.')
       setDialogSaving(false)
@@ -921,7 +921,7 @@ export default function TodoDetailForm() {
     }
 
     setCategorySaving(true)
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setCategoryError('Your session has expired. Sign in again and retry.')
       setCategorySaving(false)

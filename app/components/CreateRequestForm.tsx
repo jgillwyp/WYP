@@ -7,7 +7,7 @@ import WypHeader from './WypHeader'
 import RepeatControl from './RepeatControl'
 import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
@@ -892,7 +892,7 @@ export default function CreateRequestForm() {
     }
 
     setCategorySaving(true)
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setCategoryError('Your session has expired. Sign in again and retry.')
       setCategorySaving(false)
@@ -957,7 +957,7 @@ export default function CreateRequestForm() {
     // Same pattern as AddContactForm: owner_id is set here to populate the
     // row correctly, not as the security check. "requests: owners insert
     // own" (migration 003) enforces owner_id = auth.uid() regardless.
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setError('Your session has expired. Sign in again and retry.')
       setSaving(false)

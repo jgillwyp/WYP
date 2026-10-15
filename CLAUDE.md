@@ -5749,3 +5749,95 @@ link is built only after the stack is proven on Add Contact.
   information will be shared..." — a correction surfaced while finishing
   the campaign submission, not explained further by Jim. `npx tsc
   --noEmit`/`npm run lint` clean.
+- **"Create your own Free Account" promo on `/r/[token]` now hides for a
+  recipient who already has a WYP account — migration 080, 2026-10-15.**
+  Surfaced by Jim's own verification question (asking how the app presents
+  this control and the "Copy to Create ToDo" button) rather than a bug
+  report — confirmed the promo had shown unconditionally since it was
+  built, even though `get_account_status_by_email()` (migration 076)
+  already computes exactly this signal for the equivalent email-footer
+  decision, just was never wired into the live page itself.
+  `get_request_by_token` now also selects `ct.email` and calls
+  `get_account_status_by_email()` internally, adding
+  `recipient_account_status` (`'none' | 'free' | 'subscriber'`) to its
+  jsonb payload — no new grant needed for `anon`/`authenticated`, since
+  one `SECURITY DEFINER` function calling another executes at the outer
+  function's own owner-level privileges, not the original caller's; no
+  signature change, so a plain `create or replace` applies.
+  `RequestResponseForm.tsx`'s `.promo` block ("Send it, Track it, Get it
+  Done" / "Create your own Free Account") is now wrapped in
+  `data.recipient_account_status === 'none'`, reusing the
+  `RecipientAccountStatus` type already exported from `email.ts` rather
+  than inventing a duplicate. `ResponseDetailForm.tsx` (the signed-in
+  recipient's own screen) needed no change — it already has no such promo
+  at all, by design, since that visitor obviously already has an account.
+  **The "Copy to Create ToDo" button itself has no presentation rule** —
+  confirmed via the same verification question: it always renders on
+  Response Detail; only what the modal behind it offers varies (Category
+  never offered there, Attachments only if the viewer is a subscriber and
+  the source has one, Dialog only if the source thread isn't empty, and
+  Mark-Done-vs-Archive-only depending on whether the Request is already
+  Done) — this finding wasn't acted on, since there was nothing to fix.
+  `npx tsc --noEmit`/`npm run lint` clean. No mockup — this feature family
+  has none.
+- **Two iPhones lost their signed-in state over a weekend — real root cause
+  found via Supabase's own Auth Logs, `getCurrentUser()` retry helper built
+  and swapped into 20 call sites across 14 files (2026-10-15), no
+  migration.** Jim reported two iPhones (one Chrome, one Safari — both
+  WebKit under Apple's own platform rules, which is why the identical
+  symptom on both pointed away from a browser-specific cause) that had been
+  signed in but sat untouched over a weekend, requiring a fresh login.
+  Investigated methodically rather than guessed: ruled out an absolute
+  session-length setting first (Supabase Dashboard → Authentication →
+  Sessions: "Time-box user sessions" and "Inactivity timeout" both 0/
+  "never"), then checked the refresh-token reuse-detection setting raised
+  back on 2026-08-15 — found it's since been raised further, to 300
+  seconds, Supabase's own maximum (no further headroom there either way).
+  **Real evidence came from Jim pulling actual Auth Logs** around a short
+  (~15-minute) version of the same symptom on 2026-10-13: every single
+  `POST /token` in the whole log, at every timestamp, showed the identical
+  routine `200 "token revoked: request completed"` + `login: Login`
+  pairing — the normal success message for ordinary token rotation, not a
+  distinct reuse-detection error anywhere — ruling that theory out
+  completely. What the log actually showed: 15 straight minutes of
+  `403 GET /user — token has invalid claims: token is expired`, in bursts
+  of two or three roughly once a minute, with **no refresh ever attempted
+  in between**, until something else eventually triggered one and it
+  succeeded immediately.
+  Root cause: `supabase.auth.getUser()` does a live round-trip against
+  that exact `/user` endpoint and, unlike `getSession()`, does **not**
+  auto-refresh an expired access token — it just fails. The 2026-08-18 fix
+  only changed `app/page.tsx`/`RequireAuth.tsx` to `getSession()`; a grep
+  found **14 other files still calling `getUser()` directly** —
+  `AccountForm.tsx`, `AddContactForm.tsx`, `AppFooter.tsx`,
+  `ArchiveForm.tsx`, `CalendarView.tsx`, `ContactDetailForm.tsx`,
+  `CreateFreeAccountForm.tsx`, `CreateRequestForm.tsx`,
+  `CreateTodoForm.tsx`, `MainScreen.tsx`, `PrivateCategoriesList.tsx`,
+  `RequestDetailForm.tsx`, `SubscriptionForm.tsx`, `TodoDetailForm.tsx` —
+  almost all grabbing the current user's own id for an insert, a
+  legitimate use of `getUser()` (Supabase's own guidance recommends it
+  over `getSession()` for exactly this trust-sensitive case, since it
+  validates against the Auth server rather than a locally-cached token) —
+  the actual bug was that none of them fell back to a refresh when it
+  failed, just surfacing the raw failure every time. Compounds with
+  ordinary browser behavior: a backgrounded tab's JS timers get throttled,
+  which can stall Supabase's own proactive auto-refresh (normally renews a
+  few minutes before the 1-hour access-token expiry) until the tab
+  regains focus — so a long-idle tab's token can sit expired with nothing
+  trying to fix it.
+  **Fix**: new `getCurrentUser()` in `supabaseClient.ts` — wraps
+  `getUser()` with exactly one retry: on any error, call `getSession()`
+  (which checks expiry and refreshes internally, the same mechanism
+  `app/page.tsx`/`RequireAuth.tsx` already rely on) and try `getUser()`
+  once more; a genuinely signed-out visitor still fails the same harmless
+  way afterward, so this only fixes the "token was merely stale" case.
+  Swapped into all 20 call sites across the 14 files above via the same
+  mechanical `sed` pass (import line + call-site text are byte-identical
+  in every file, confirmed before the swap). `app/debug-session/page.tsx`
+  deliberately left on the raw `supabase.auth.getUser()` call — it exists
+  specifically to show that unretried behavior for diagnosis, swapping it
+  would defeat its own purpose. `npx tsc --noEmit`/`npm run lint` clean.
+  **Not yet confirmed against a real recurrence** — the only direct
+  evidence is the 15-minute incident's own logs; the weekend-long case
+  Jim originally reported is the same failure shape playing out over a
+  much longer idle gap, not a separately-confirmed root cause of its own.

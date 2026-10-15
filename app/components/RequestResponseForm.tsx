@@ -11,7 +11,7 @@ import Linkified from './Linkified'
 import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
 import { supabase } from '@/lib/supabaseClient'
 import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate, type IcsAlarmOffset } from '@/lib/ics'
-import { isReminderEligible } from '@/lib/email'
+import { isReminderEligible, type RecipientAccountStatus } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
@@ -147,6 +147,12 @@ type ResponsePayload = {
   receipt_confirmation_requested: boolean
   receipt_confirmed_at: string | null
   contact_name: string | null
+  // Recipient account status (migration 080, 2026-10-15) — lets the
+  // "Create your own Free Account" promo below hide itself for a visitor
+  // who already has a WYP account, reusing get_account_status_by_email()
+  // (migration 076, already proven for the equivalent email-footer
+  // decision) rather than pitching a signup they don't need.
+  recipient_account_status: RecipientAccountStatus
   dialog: DialogEntry[]
 }
 
@@ -1172,7 +1178,10 @@ export default function RequestResponseForm() {
                 shortens this block by a line. Also moved the button above
                 the descriptive sentence: with the sentence first, it read
                 as something to read before clicking, which isn't the
-                intent. */}
+                intent. Gated on recipient_account_status (migration 080,
+                2026-10-15) — a visitor who already has a WYP account has
+                nothing to sign up for. */}
+            {data.recipient_account_status === 'none' && (
             <div className="promo">
               <div className="promo-h">Send it, Track it, Get it Done</div>
               <Link href="/login?intent=signup" className="btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
@@ -1180,6 +1189,7 @@ export default function RequestResponseForm() {
               </Link>
               <p className="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
             </div>
+            )}
 
             {sendError && (
               <p className="ferror" role="alert" style={{ margin: '0 var(--pad) 12px' }}>

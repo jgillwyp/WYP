@@ -7636,6 +7636,31 @@ create index reminder_minutes_before_queue_fire_at_idx
 -- which never passes them, is a no-op on these two columns.
 -- ============================================================================
 
+-- Migration 080 (2026-10-15) -- get_request_by_token now also returns
+-- recipient_account_status, so RequestResponseForm.tsx (the anonymous
+-- /r/[token] path) can hide its own "Create your own Free Account" promo
+-- block when the visiting Contact already has a WYP account. Jim, after a
+-- verification question confirmed the gap: the on-page promo has shown
+-- unconditionally since it was built, even though get_account_status_by_
+-- email() (migration 076) already computes exactly this for the EMAIL
+-- footer, just never got wired into the live page itself.
+--
+-- Reuses get_account_status_by_email() directly rather than duplicating
+-- its auth.users-reading logic a second time -- calling one SECURITY
+-- DEFINER function from inside another needs no additional grant for the
+-- original anon/authenticated caller, since the call executes at
+-- get_request_by_token's own owner-level privileges, not the original
+-- caller's; get_account_status_by_email() itself stays granted only to
+-- authenticated/service_role, unchanged.
+--
+-- Needs ct.email added to the existing select -- contact_name alone was
+-- enough before this; the raw email is never placed in the jsonb payload,
+-- only the derived status string, same "classification, never the raw
+-- email" posture get_account_status_by_email() itself already takes. No
+-- argument-list change, so a plain create-or-replace applies (same
+-- migration-078 precedent: jsonb return, no OUT-parameter shape to fight).
+-- ============================================================================
+
 create or replace function public.get_request_by_token(p_token text, p_confirm_receipt boolean default false)
 returns jsonb
 language plpgsql
@@ -7656,7 +7681,7 @@ begin
          p.display_name as owner_name, p.tier as owner_tier,
          p.request_time_enabled as owner_request_time_enabled,
          p.request_reminders_enabled as owner_request_reminders_enabled,
-         ct.display_name as contact_name
+         ct.display_name as contact_name, ct.email as contact_email
     into v_request
     from public.request_links rl
     join public.requests r on r.id = rl.request_id
@@ -7705,6 +7730,7 @@ begin
     'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
     'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
     'contact_name', v_request.contact_name,
+    'recipient_account_status', get_account_status_by_email(v_request.contact_email),
     'dialog', coalesce(
       jsonb_agg(
         jsonb_build_object(
@@ -7725,6 +7751,14 @@ $$;
 
 revoke all on function public.get_request_by_token(text, boolean) from public;
 grant execute on function public.get_request_by_token(text, boolean) to anon, authenticated;
+
+-- Verify:
+--   select get_request_by_token(<a real token>);
+--     -- payload should include "recipient_account_status": "none" | "free" | "subscriber"
+--   -- From the live /r/[token] page for a Contact whose email matches an
+--   -- existing WYP account: the "Create your own Free Account" promo
+--   -- block should no longer render.
+-- ============================================================================
 
 create or replace function public.get_received_request(p_request_id uuid)
 returns jsonb

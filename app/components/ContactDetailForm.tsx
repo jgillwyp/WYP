@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 
 /**
@@ -219,7 +219,7 @@ export default function ContactDetailForm() {
       setLoading(false)
 
       if (!profileData?.time_zone) {
-        const { data: userData } = await supabase.auth.getUser()
+        const { data: userData } = await getCurrentUser()
         if (!cancelled && userData.user) {
           await supabase.from('profiles').update({ time_zone: fallbackZone }).eq('id', userData.user.id)
         }

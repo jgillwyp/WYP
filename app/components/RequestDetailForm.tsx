@@ -9,7 +9,7 @@ import RepeatControl from './RepeatControl'
 import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
@@ -750,7 +750,7 @@ export default function RequestDetailForm() {
     }
 
     setDialogSaving(true)
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setDialogModalError('Your session has expired. Sign in again and retry.')
       setDialogSaving(false)
@@ -817,7 +817,7 @@ export default function RequestDetailForm() {
     }
 
     setCategorySaving(true)
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setCategoryError('Your session has expired. Sign in again and retry.')
       setCategorySaving(false)

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
 import { printWithExpandedWindow } from '@/lib/platform'
 import {
@@ -1262,7 +1262,7 @@ export default function MainScreen() {
     let cancelled = false
 
     async function loadPrefs() {
-      const { data: userData } = await supabase.auth.getUser()
+      const { data: userData } = await getCurrentUser()
       const uid = userData.user?.id ?? null
       if (cancelled) return
       setUserId(uid)

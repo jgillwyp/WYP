@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPanels'
 
 /**
@@ -47,7 +47,7 @@ export default function SubscriptionForm() {
       setLoading(true)
       setLoadError(null)
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getCurrentUser()
       if (cancelled) return
 
       if (userError || !userData.user) {

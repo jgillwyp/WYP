@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 
 /**
@@ -107,7 +107,7 @@ export default function CreateFreeAccountForm() {
     let cancelled = false
 
     async function load() {
-      const { data: userData } = await supabase.auth.getUser()
+      const { data: userData } = await getCurrentUser()
       if (cancelled || !userData.user) return
       setEmail(userData.user.email ?? '')
 
@@ -174,7 +174,7 @@ export default function CreateFreeAccountForm() {
 
     setSaving(true)
 
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setError('Your session has expired. Sign in again and retry.')
       setSaving(false)

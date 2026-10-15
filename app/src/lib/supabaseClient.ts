@@ -124,3 +124,42 @@ export const supabase = new Proxy({} as SupabaseClient, {
     return typeof value === 'function' ? value.bind(client) : value
   },
 })
+
+/**
+ * `supabase.auth.getUser()` with a single refresh-and-retry on failure
+ * (2026-10-15). `getUser()` is the right call wherever a trust-sensitive
+ * operation needs a live, Auth-server-validated identity — Supabase's own
+ * guidance recommends it over `getSession()` for exactly that reason — but
+ * unlike `getSession()`, it does NOT auto-refresh an expired access token;
+ * it just fails outright.
+ *
+ * Confirmed from a real Supabase Auth Logs incident (2026-10-13, two of
+ * Jim's iPhones losing their signed-in state): 15 minutes of repeated 403
+ * "token has invalid claims: token is expired" on `/user`, in bursts of
+ * two or three roughly once a minute, with no refresh ever attempted in
+ * between — until something else eventually triggered one and it
+ * succeeded immediately. (Supabase's own refresh-token reuse-detection
+ * was checked and ruled out: every `POST /token` in that same log, at
+ * every timestamp across the whole range, showed the identical routine
+ * "token revoked: request completed" success message — the ordinary
+ * message for expected rotation, not a distinct reuse-detection error.)
+ * Browsers throttling JS timers in a backgrounded tab can also delay
+ * Supabase's own proactive auto-refresh (normally renews a few minutes
+ * before the 1-hour access-token expiry), so by the time one of these
+ * `getUser()` call sites runs again after the app sat idle, the stored
+ * token may already be stale with nothing having tried to fix it yet.
+ *
+ * This wraps `getUser()` with exactly one retry: on any error, call
+ * `getSession()` (which checks expiry and refreshes internally — the same
+ * mechanism `app/page.tsx`/`RequireAuth.tsx` already rely on for their own
+ * sign-in check) and try `getUser()` once more. If the visitor is
+ * genuinely signed out, the retry fails the same harmless way the
+ * original call would have — this only fixes the "the token was merely
+ * stale" case, not "not signed in."
+ */
+export async function getCurrentUser() {
+  const first = await supabase.auth.getUser()
+  if (!first.error) return first
+  await supabase.auth.getSession()
+  return supabase.auth.getUser()
+}

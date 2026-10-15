@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { printWithExpandedWindow } from '@/lib/platform'
 
 /**
@@ -146,7 +146,7 @@ export default function PrivateCategoriesList() {
     }
 
     setAddSaving(true)
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await getCurrentUser()
     if (userError || !userData.user) {
       setAddError('Your session has expired. Sign in again and retry.')
       setAddSaving(false)

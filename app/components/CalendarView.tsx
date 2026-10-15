@@ -10,7 +10,7 @@ import interactionPlugin from '@fullcalendar/interaction'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { printWithExpandedWindow } from '@/lib/platform'
 import {
   fetchSentItems,
@@ -173,7 +173,7 @@ export default function CalendarView() {
     async function load() {
       setLoading(true)
       setLoadError(null)
-      const { data: userData } = await supabase.auth.getUser()
+      const { data: userData } = await getCurrentUser()
       if (!userData.user) {
         if (!cancelled) setLoading(false)
         return

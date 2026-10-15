@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { formatBytes } from '@/lib/attachments'
 import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPanels'
 
@@ -340,7 +340,7 @@ export default function AccountForm() {
       setLoading(true)
       setLoadError(null)
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getCurrentUser()
       if (cancelled) return
 
       if (userError || !userData.user) {
