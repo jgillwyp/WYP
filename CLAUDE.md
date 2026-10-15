@@ -5750,7 +5750,8 @@ link is built only after the stack is proven on Add Contact.
   the campaign submission, not explained further by Jim. `npx tsc
   --noEmit`/`npm run lint` clean.
 - **"Create your own Free Account" promo on `/r/[token]` now hides for a
-  recipient who already has a WYP account — migration 080, 2026-10-15.**
+  recipient who already has a WYP account — migration 080, confirmed run
+  by Jim 2026-10-15.**
   Surfaced by Jim's own verification question (asking how the app presents
   this control and the "Copy to Create ToDo" button) rather than a bug
   report — confirmed the promo had shown unconditionally since it was

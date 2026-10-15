@@ -8160,7 +8160,8 @@ grant execute on function public.set_sms_opt_out_by_phone(text) to service_role;
 --   -- revisiting the same link afterward shows the Manage/Stop state.
 -- ============================================================================
 
--- Migration 080 (2026-10-15) -- get_request_by_token now also returns
+-- Migration 080 (2026-10-15) -- CONFIRMED RUN by Jim, 2026-10-15.
+-- get_request_by_token now also returns
 -- recipient_account_status, so RequestResponseForm.tsx (the anonymous
 -- /r/[token] path) can hide its own "Create your own Free Account" promo
 -- block when the visiting Contact already has a WYP account. Jim, after a
