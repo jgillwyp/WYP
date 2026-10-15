@@ -7636,31 +7636,6 @@ create index reminder_minutes_before_queue_fire_at_idx
 -- which never passes them, is a no-op on these two columns.
 -- ============================================================================
 
--- Migration 080 (2026-10-15) -- get_request_by_token now also returns
--- recipient_account_status, so RequestResponseForm.tsx (the anonymous
--- /r/[token] path) can hide its own "Create your own Free Account" promo
--- block when the visiting Contact already has a WYP account. Jim, after a
--- verification question confirmed the gap: the on-page promo has shown
--- unconditionally since it was built, even though get_account_status_by_
--- email() (migration 076) already computes exactly this for the EMAIL
--- footer, just never got wired into the live page itself.
---
--- Reuses get_account_status_by_email() directly rather than duplicating
--- its auth.users-reading logic a second time -- calling one SECURITY
--- DEFINER function from inside another needs no additional grant for the
--- original anon/authenticated caller, since the call executes at
--- get_request_by_token's own owner-level privileges, not the original
--- caller's; get_account_status_by_email() itself stays granted only to
--- authenticated/service_role, unchanged.
---
--- Needs ct.email added to the existing select -- contact_name alone was
--- enough before this; the raw email is never placed in the jsonb payload,
--- only the derived status string, same "classification, never the raw
--- email" posture get_account_status_by_email() itself already takes. No
--- argument-list change, so a plain create-or-replace applies (same
--- migration-078 precedent: jsonb return, no OUT-parameter shape to fight).
--- ============================================================================
-
 create or replace function public.get_request_by_token(p_token text, p_confirm_receipt boolean default false)
 returns jsonb
 language plpgsql
@@ -7681,7 +7656,7 @@ begin
          p.display_name as owner_name, p.tier as owner_tier,
          p.request_time_enabled as owner_request_time_enabled,
          p.request_reminders_enabled as owner_request_reminders_enabled,
-         ct.display_name as contact_name, ct.email as contact_email
+         ct.display_name as contact_name
     into v_request
     from public.request_links rl
     join public.requests r on r.id = rl.request_id
@@ -7730,7 +7705,6 @@ begin
     'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
     'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
     'contact_name', v_request.contact_name,
-    'recipient_account_status', get_account_status_by_email(v_request.contact_email),
     'dialog', coalesce(
       jsonb_agg(
         jsonb_build_object(
@@ -7751,14 +7725,6 @@ $$;
 
 revoke all on function public.get_request_by_token(text, boolean) from public;
 grant execute on function public.get_request_by_token(text, boolean) to anon, authenticated;
-
--- Verify:
---   select get_request_by_token(<a real token>);
---     -- payload should include "recipient_account_status": "none" | "free" | "subscriber"
---   -- From the live /r/[token] page for a Contact whose email matches an
---   -- existing WYP account: the "Create your own Free Account" promo
---   -- block should no longer render.
--- ============================================================================
 
 create or replace function public.get_received_request(p_request_id uuid)
 returns jsonb
@@ -8192,4 +8158,128 @@ grant execute on function public.set_sms_opt_out_by_phone(text) to service_role;
 --   -- verification email arrives with a working /textmessaging?token=...
 --   -- link, that submitting it sets sms_consent_given_at, and that
 --   -- revisiting the same link afterward shows the Manage/Stop state.
+-- ============================================================================
+
+-- Migration 080 (2026-10-15) -- get_request_by_token now also returns
+-- recipient_account_status, so RequestResponseForm.tsx (the anonymous
+-- /r/[token] path) can hide its own "Create your own Free Account" promo
+-- block when the visiting Contact already has a WYP account. Jim, after a
+-- verification question confirmed the gap: the on-page promo has shown
+-- unconditionally since it was built, even though get_account_status_by_
+-- email() (migration 076) already computes exactly this for the EMAIL
+-- footer, just never got wired into the live page itself.
+--
+-- Reuses get_account_status_by_email() directly rather than duplicating
+-- its auth.users-reading logic a second time -- calling one SECURITY
+-- DEFINER function from inside another needs no additional grant for the
+-- original anon/authenticated caller, since the call executes at
+-- get_request_by_token's own owner-level privileges, not the original
+-- caller's; get_account_status_by_email() itself stays granted only to
+-- authenticated/service_role, unchanged.
+--
+-- Needs ct.email added to the existing select -- contact_name alone was
+-- enough before this; the raw email is never placed in the jsonb payload,
+-- only the derived status string, same "classification, never the raw
+-- email" posture get_account_status_by_email() itself already takes. No
+-- argument-list change, so a plain create-or-replace applies (same
+-- migration-078 precedent: jsonb return, no OUT-parameter shape to fight).
+-- ============================================================================
+
+create or replace function public.get_request_by_token(p_token text, p_confirm_receipt boolean default false)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_request record;
+  v_result jsonb;
+begin
+  select r.id, r.description, r.created_at, r.due_date, r.due_time, r.done_date, r.done_time,
+         r.reminder_enabled, r.reminder_sent_at, r.overdue_reminder_enabled, r.reminder_day_of_enabled,
+         r.reminder_day_of_sent_at,
+         r.reminder_minutes_before_enabled, r.reminder_minutes_before_value, r.reminder_minutes_before_sent_at,
+         r.repeat_rule,
+         r.receipt_confirmation_requested, r.receipt_confirmed_at,
+         p.display_name as owner_name, p.tier as owner_tier,
+         p.request_time_enabled as owner_request_time_enabled,
+         p.request_reminders_enabled as owner_request_reminders_enabled,
+         ct.display_name as contact_name, ct.email as contact_email
+    into v_request
+    from public.request_links rl
+    join public.requests r on r.id = rl.request_id
+    left join public.profiles p on p.id = r.owner_id
+    left join public.contacts ct on ct.id = r.contact_id
+    where rl.token_hash = v_hash
+      and rl.revoked_at is null
+      and rl.expires_at > now();
+
+  if v_request.id is null then
+    raise exception 'This link is no longer active. The sender has removed the Request it pointed to.';
+  end if;
+
+  insert into public.events (subject_type, subject_id, request_id, action, detail)
+    values ('link', v_request.id, v_request.id, 'viewed', '{}'::jsonb);
+
+  if p_confirm_receipt
+     and v_request.receipt_confirmation_requested
+     and v_request.receipt_confirmed_at is null
+  then
+    update public.requests set receipt_confirmed_at = now() where id = v_request.id;
+    v_request.receipt_confirmed_at := now();
+  end if;
+
+  select jsonb_build_object(
+    'id', v_request.id,
+    'description', v_request.description,
+    'created_at', v_request.created_at,
+    'due_date', v_request.due_date,
+    'due_time', v_request.due_time,
+    'done_date', v_request.done_date,
+    'done_time', v_request.done_time,
+    'reminder_enabled', v_request.reminder_enabled,
+    'reminder_sent_at', v_request.reminder_sent_at,
+    'overdue_reminder_enabled', v_request.overdue_reminder_enabled,
+    'reminder_day_of_enabled', v_request.reminder_day_of_enabled,
+    'reminder_day_of_sent_at', v_request.reminder_day_of_sent_at,
+    'reminder_minutes_before_enabled', v_request.reminder_minutes_before_enabled,
+    'reminder_minutes_before_value', v_request.reminder_minutes_before_value,
+    'reminder_minutes_before_sent_at', v_request.reminder_minutes_before_sent_at,
+    'repeat_rule', v_request.repeat_rule,
+    'receipt_confirmation_requested', v_request.receipt_confirmation_requested,
+    'receipt_confirmed_at', v_request.receipt_confirmed_at,
+    'owner_name', v_request.owner_name,
+    'owner_tier', v_request.owner_tier,
+    'owner_request_time_enabled', coalesce(v_request.owner_request_time_enabled, true),
+    'owner_request_reminders_enabled', coalesce(v_request.owner_request_reminders_enabled, false),
+    'contact_name', v_request.contact_name,
+    'recipient_account_status', get_account_status_by_email(v_request.contact_email),
+    'dialog', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', d.id, 'kind', d.kind, 'body', d.body, 'who', d.who,
+          'created_at', d.created_at, 'replies_to_id', d.replies_to_id
+        ) order by d.created_at desc
+      ) filter (where d.id is not null),
+      '[]'::jsonb
+    )
+  )
+  into v_result
+  from public.dialog d
+  where d.request_id = v_request.id;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.get_request_by_token(text, boolean) from public;
+grant execute on function public.get_request_by_token(text, boolean) to anon, authenticated;
+
+-- Verify:
+--   select get_request_by_token(<a real token>);
+--     -- payload should include "recipient_account_status": "none" | "free" | "subscriber"
+--   -- From the live /r/[token] page for a Contact whose email matches an
+--   -- existing WYP account: the "Create your own Free Account" promo
+--   -- block should no longer render.
 -- ============================================================================

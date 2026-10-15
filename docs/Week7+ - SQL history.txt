@@ -1,0 +1,18 @@
+-- ============================================================================
+-- WYP SQL history, continued from "Week6 - SQL history.txt".
+--
+-- "Week6" had grown to cover far more than one calendar week (migrations 029
+-- through 080) before this split -- same as every earlier file in this
+-- series, the "WeekN" name is just a rolling label, not a literal scope.
+-- Started 2026-10-15, at Jim's own request, once a documentation-ordering
+-- mistake in Week6 (migration 080 landing physically before migration 079 --
+-- see that file's own migration 080 entry and CLAUDE.md's matching dated
+-- entry for the fix) made clear a fresh file was overdue.
+--
+-- Picks up at migration 081. Every earlier migration (001-080) is in
+-- "Week6 - SQL history.txt" and the five files before it
+-- ("Week1" through "Week5 - SQL history.txt"), in order. Same conventions
+-- as every prior file: migrations are appended here in creation order, never
+-- reordered or rewritten after the fact; each entry records whether it has
+-- been confirmed run by Jim against the live database.
+-- ============================================================================

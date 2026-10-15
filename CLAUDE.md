@@ -5841,3 +5841,32 @@ link is built only after the stack is proven on Add Contact.
   evidence is the 15-minute incident's own logs; the weekend-long case
   Jim originally reported is the same failure shape playing out over a
   much longer idle gap, not a separately-confirmed root cause of its own.
+- **Migration 080 was documented out of order in `docs/Week6 - SQL
+  history.txt` — found by Jim, fixed same day; new `docs/Week7+ - SQL
+  history.txt` started for migration 081 onward (2026-10-15).** The `Edit`
+  that added migration 080 anchored on `get_request_by_token`'s existing
+  text and replaced it in place — which happened to sit physically before
+  migration 079's own already-appended block, since migration 079 was
+  added in a separate batch earlier that day. That silently violated this
+  file's own "migrations are appended in creation order, never reordered"
+  convention twice over: migration 080 landed before migration 079 in the
+  file, and the edit overwrote migration 078's own documented function
+  body in place rather than leaving it alone and redefining it later via a
+  fresh `create or replace`, the pattern every other revising migration in
+  this file already uses. Jim caught it by inspection ("migration 080
+  seems to be located prior to migration 079"). Fixed by rebuilding the
+  file from the last commit before migration 080 was ever added
+  (`git show d2455ca:"docs/Week6 - SQL history.txt"`, which still has
+  migration 078's original, unmodified function and migration 079 in its
+  correct place) and re-appending migration 080's own header/function/
+  grants/verify block at the true end of the file, after migration 079 —
+  verified by diff that no content was lost or duplicated, only
+  relocated. The database itself was never at risk — Jim runs migrations
+  by copying the SQL he wants, not by replaying the file start to finish —
+  this was a documentation-integrity bug only. Separately, Jim asked to
+  start a new file for future migrations rather than keep extending
+  Week6 (which had already grown past 8,000 lines, migrations 029-080,
+  same way every earlier "WeekN" file outgrew its own literal week before
+  it). New `docs/Week7+ - SQL history.txt` — empty of any real migration
+  so far, with a header explaining the split and pointing back at Week6
+  for migrations 001-080 — is now where migration 081 and onward belong.
