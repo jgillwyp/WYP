@@ -5920,3 +5920,40 @@ link is built only after the stack is proven on Add Contact.
   store step is needed for this. iOS (`npx cap add ios`, a matching
   `ios/` project) is deliberately not started in this batch, per Jim's
   own "Android first" — nothing above blocks adding it later.
+- **Capacitor Android wrapper confirmed working end to end on real
+  hardware — a Samsung Galaxy S24+ (2026-10-16), same day as the
+  scaffolding above.** Jim built it himself in Android Studio (installed
+  fresh, no JDK/SDK present on it before this) and ran it directly on his
+  phone over USB rather than an emulator, after Windows' Memory
+  Integrity/Core Isolation feature kept nagging the Android Emulator about
+  a performance conflict — a known, harmless warning, not an error, but
+  sidestepped by testing on the real device instead, which is arguably the
+  more meaningful test anyway. Confirmed: the app installs as
+  `com.wouldyouplease.app` (verified via Android Studio's Device Explorer
+  → Processes, PID present and running independently of any USB/IDE
+  connection — a built app needs Android Studio only to *push* a new
+  version, never to launch an already-installed one), opens full-screen
+  with no browser chrome, loads the real landing page, and — using the
+  numeric sign-in **code** field rather than tapping the magic-link
+  itself, per this file's own 2026-09-29 iOS-standalone precedent, since a
+  native Android WebView has the identical storage-isolation problem a
+  home-screen icon has on iOS (a tapped link opens Chrome, not the app,
+  and the resulting session never reaches the app's own WebView storage)
+  — signed in successfully and landed on the real Main Screen.
+  **Two real native-wrapper gaps surfaced and flagged for later, not
+  blocking**: (1) **Printing doesn't work** — Jim told the difference
+  from a separate, pre-existing icon (the browser-installed PWA shortcut
+  from 2026-08-18's `beforeinstallprompt` work, which happens to share the
+  same name/icon artwork and is easy to tap by mistake) because that one
+  runs inside Chrome itself, which natively implements `window.print()`,
+  while Capacitor's own embedded WebView does not — printing from a
+  WebView needs the host Android app to explicitly wire up Android's
+  `PrintManager` (e.g. via `WebView.createPrintDocumentAdapter()` in a
+  custom native handler, or a dedicated Capacitor print plugin), which
+  this scaffolding batch didn't add. (2) **Native Add to Calendar** —
+  already item 4 in `WYP_Capacitor_Native_App_Strategy.md`'s own
+  recommended build order (replacing the client-side `.ics`-Blob-download
+  path, unreliable on Android per this project's own earlier
+  investigation, with a real native-calendar plugin), re-confirmed as
+  wanted. Both deferred, per Jim: "We can do it later." No code changed
+  in this entry — this is a verification/status log only.
