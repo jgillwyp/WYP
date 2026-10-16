@@ -6030,3 +6030,62 @@ link is built only after the stack is proven on Add Contact.
   built or tested** — same "written here, built and verified by Jim
   locally" posture as everything else in this Android effort; next step
   is pulling this batch and rebuilding in Android Studio.
+- **iOS Capacitor wrapper scaffolded (2026-10-16), per Jim's own "we should
+  probably do the iPhone Capacitor version next" — Jim has several active
+  iPhone testers vs. one Android one.** A real, Mac-only constraint
+  surfaced first: building an iOS app requires Xcode, which only runs on
+  macOS — confirmed Jim's own spare hardware (a 2012 Mac Mini, A1347, 4GB
+  RAM) can't do this, since it's officially capped at macOS Catalina
+  (2019) and current Xcode needs Sonoma or later. Researched cloud Mac
+  rental options at Jim's request (MacStadium, MacinCloud, AWS EC2 Mac,
+  Scaleway, Codemagic) via live web search — MacinCloud's prepaid-block/
+  hour-rounding billing and AWS's 24-hour-minimum-per-allocation (even a
+  2-hour session bills a full day, ~$15-16) look like the likely source of
+  the "expensive" Reddit reputation Jim had heard about; Scaleway came out
+  as the best fit for WYP's actual usage pattern (occasional native
+  changes, not constant) — confirmed directly against Scaleway's own
+  pricing/docs pages, not secondhand: a modern M4 Mac mini (16GB RAM,
+  10-core) at €0.22/hr or €149/mo, same 24-hour minimum lease as AWS but a
+  much gentler one (~€5.28/session vs. AWS's ~$15-16), and monthly
+  commitments can't be downgraded back to hourly (only the reverse), so
+  hourly is the safer starting choice given how infrequent native changes
+  have been so far.
+  **Scaffolding itself succeeded from this Windows sandbox** — generating
+  an Xcode project (`npx cap add ios`) needs no Mac/Xcode at all, only
+  actually opening/building/running it does, same split as Android's own
+  `npx cap add android` vs. Android Studio. New `ios/` — Capacitor 8.x
+  defaults to **Swift Package Manager**, not CocoaPods, for this project
+  (confirmed via the generated `ios/App/CapApp-SPM/` folder and
+  `Package.swift`) — a real simplification over the older CocoaPods-based
+  template: no separate Ruby/CocoaPods toolchain or `pod install` step
+  needed at all, Xcode resolves Swift Package dependencies itself the
+  moment the project is opened, the same "just open it and let the IDE
+  sync" experience Android Studio already gave. Confirmed `appId`/
+  `appName` from the existing `capacitor.config.ts` carried through
+  correctly (`com.wouldyouplease.app` in `project.pbxproj`, "Would You
+  Please" as `CFBundleDisplayName` in `Info.plist`) — same single config
+  file now drives both platforms. Real launcher icons and a splash screen
+  generated via `@capacitor/assets --ios` from the same `assets/icon.svg`
+  source Android's own icons already use — one shared brandmark, two
+  platforms. New `npm run cap:icons:ios`/`ios:open` scripts, mirroring
+  the Android ones. `eslint.config.mjs` gained an `ios/**` ignore
+  alongside the existing `android/**` one, pre-emptively (same reasoning
+  as that one — Swift/Xcode, not JS/TS). Confirmed via `git add -n` that
+  the generated `ios/.gitignore` (Capacitor's own template) already
+  correctly excludes `Pods/`, `DerivedData`, and `xcuserdata` (Xcode's own
+  local, machine-specific state, the direct equivalent of Android's
+  `local.properties`) — nothing machine-specific would be committed. `npx
+  tsc --noEmit`/`npm run lint` both clean. **Cannot be built, opened, or
+  tested from here at all** — no Mac exists in this workflow yet; next
+  step is Jim's own, once a Scaleway (or other) Mac session is actually
+  running: open `ios/App/App.xcodeproj` (or the `.xcworkspace`, if SPM
+  resolution creates one) in Xcode, let Swift Package Manager resolve,
+  connect an iPhone or use the Simulator, and Run — same shape of
+  first-run friction as Android (a code-signing/Apple ID prompt is the
+  likely iOS-specific equivalent of Android's JDK-selection dialogs) is
+  expected and not yet experienced firsthand. The native print/calendar
+  plugins just built for Android (`NativePrintPlugin.java`/
+  `NativeCalendarPlugin.java`) have **no iOS counterpart yet** — those
+  would need their own Swift implementations, not yet started, flagged as
+  the next real piece of native work once Mac access exists to build and
+  test one.

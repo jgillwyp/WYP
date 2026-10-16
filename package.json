@@ -10,11 +10,14 @@
     "prebuild": "node scripts/stamp-version.mjs",
     "cap:sync": "cap sync",
     "cap:icons": "capacitor-assets generate --android",
-    "android:open": "cap open android"
+    "cap:icons:ios": "capacitor-assets generate --ios",
+    "android:open": "cap open android",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
     "@fullcalendar/core": "^6.1.21",
     "@fullcalendar/daygrid": "^6.1.21",
     "@fullcalendar/interaction": "^6.1.21",

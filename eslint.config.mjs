@@ -12,12 +12,13 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // The native Android project (Capacitor, 2026-10-16) — Java/Gradle, not
-    // JS/TS, and its own build/ output under android/app/build/ ships a
-    // copy of Capacitor's bundled native-bridge.js runtime that this
-    // config's own "build/**" rule above doesn't reach (that only matches
-    // a top-level build/ directory, not a nested one).
+    // The native Android/iOS projects (Capacitor, 2026-10-16) — Java/
+    // Gradle and Swift/Xcode respectively, not JS/TS. Both ship a copy of
+    // Capacitor's own bundled native-bridge.js runtime once built
+    // (android/app/build/.../native-bridge.js, ios/App/App/public/...)
+    // that this config's own top-level "build/**" rule doesn't reach.
     "android/**",
+    "ios/**",
   ]),
 ]);
 
