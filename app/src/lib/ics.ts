@@ -311,16 +311,31 @@ export function cameFromCalendarLink(search: string): boolean {
 // plain VEVENT with no iTIP method at all — METHOD only has meaning for
 // scheduling messages exchanged between calendar systems, which a local
 // single-file download never is.
-export function buildIcsContent(
+// Shared date/title/description computation behind both the .ics builder
+// below (buildIcsContent) and the native Capacitor calendar plugin's own
+// event-creation call (NativeCalendarPlugin.java's addEvent, wired from
+// RequestResponseForm.tsx/ResponseDetailForm.tsx when
+// Capacitor.isNativePlatform() — 2026-10-16) — one computation, two
+// different output shapes: an RFC 5545 VEVENT string for the .ics/web path,
+// or plain JS Date/string values an Android Intent extra can carry
+// directly for the native path. Extracted out of buildIcsContent verbatim,
+// not rewritten — same field derivation either way.
+export type CalendarEventFields = {
+  title: string
+  description: string
+  start: Date
+  end: Date
+  allDay: boolean
+}
+
+export function buildCalendarEventFields(
   payload: IcsRequestFields,
   link: string,
   options?: {
     reminderSchedule?: ReminderSchedule | null
     kind?: 'request' | 'todo'
-    omitMethod?: boolean
-    alarms?: IcsAlarmOffset[]
   }
-): string {
+): CalendarEventFields {
   const kind = options?.kind ?? 'request'
   const [y, m, d] = (payload.due_date ?? todayISODate()).slice(0, 10).split('-').map(Number)
   const hasTime = payload.due_time != null && payload.due_time.trim() !== ''
@@ -332,33 +347,69 @@ export function buildIcsContent(
   // Request/ToDo, which was never a scheduled meeting with attendees to
   // begin with. A Due Time the sender actually set is unaffected and still
   // renders as a timed event; only the "no time given" case changes, to an
-  // all-day (VALUE=DATE) event instead of a fabricated 9:00 AM slot.
-  let dtstartLine: string
-  let dtendLine: string
+  // all-day event instead of a fabricated 9:00 AM slot.
+  let start: Date
+  let end: Date
   if (hasTime) {
     const [hh, mm] = payload.due_time!.split(':').map(Number)
-    const start = new Date(y, m - 1, d, hh, mm)
-    const end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000)
-    dtstartLine = `DTSTART:${formatIcsLocal(start)}`
-    dtendLine = `DTEND:${formatIcsLocal(end)}`
+    start = new Date(y, m - 1, d, hh, mm)
+    end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60000)
   } else {
     // DTEND is exclusive per RFC 5545 §3.6.1 — a single-day all-day event
-    // still needs DTEND one calendar day past DTSTART, not the same date.
-    dtstartLine = `DTSTART;VALUE=DATE:${formatIcsDateOnly(new Date(y, m - 1, d))}`
-    dtendLine = `DTEND;VALUE=DATE:${formatIcsDateOnly(new Date(y, m - 1, d + 1))}`
+    // still needs its end one calendar day past its start, not the same
+    // date; Android's own ACTION_INSERT all-day convention matches this
+    // same exclusive-end-date rule.
+    start = new Date(y, m - 1, d)
+    end = new Date(y, m - 1, d + 1)
   }
 
-  const summaryText = `${kind === 'todo' ? 'Would You Please ToDo' : 'Would You Please'}: ${truncate(payload.description, 60)}`
+  const title = `${kind === 'todo' ? 'Would You Please ToDo' : 'Would You Please'}: ${truncate(payload.description, 60)}`
+  const description =
+    kind === 'todo'
+      ? buildTodoIcsDescription(payload.description, calendarLinkFor(link), {
+          reminderSchedule: options?.reminderSchedule,
+          dueDate: payload.due_date,
+          dueTime: payload.due_time,
+        })
+      : buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, {
+          reminderSchedule: options?.reminderSchedule,
+          dueDate: payload.due_date,
+          dueTime: payload.due_time,
+          ownerName: payload.owner_name,
+        })
+
+  return { title, description, start, end, allDay: !hasTime }
+}
+
+export function buildIcsContent(
+  payload: IcsRequestFields,
+  link: string,
+  options?: {
+    reminderSchedule?: ReminderSchedule | null
+    kind?: 'request' | 'todo'
+    omitMethod?: boolean
+    alarms?: IcsAlarmOffset[]
+  }
+): string {
+  const kind = options?.kind ?? 'request'
+  const fields = buildCalendarEventFields(payload, link, { reminderSchedule: options?.reminderSchedule, kind })
+
+  const dtstartLine = fields.allDay
+    ? `DTSTART;VALUE=DATE:${formatIcsDateOnly(fields.start)}`
+    : `DTSTART:${formatIcsLocal(fields.start)}`
+  const dtendLine = fields.allDay
+    ? `DTEND;VALUE=DATE:${formatIcsDateOnly(fields.end)}`
+    : `DTEND:${formatIcsLocal(fields.end)}`
 
   // VALARM (2026-09-17) — see IcsAlarmOffset's own header comment above.
   // ACTION:DISPLAY's DESCRIPTION property is required per RFC 5545
-  // §3.8.6.3; reusing the same summaryText the event's own SUMMARY uses
-  // keeps whatever the OS notification shows consistent with the event
-  // itself, with no separate text to maintain.
+  // §3.8.6.3; reusing the same title the event's own SUMMARY uses keeps
+  // whatever the OS notification shows consistent with the event itself,
+  // with no separate text to maintain.
   const alarmLines = (options?.alarms ?? []).flatMap((offset) => [
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
-    `DESCRIPTION:${icsEscapeText(summaryText)}`,
+    `DESCRIPTION:${icsEscapeText(fields.title)}`,
     `TRIGGER:${ICS_ALARM_TRIGGER[offset]}`,
     'END:VALARM',
   ])
@@ -390,21 +441,8 @@ export function buildIcsContent(
     `DTSTAMP:${formatIcsUtc(new Date())}`,
     dtstartLine,
     dtendLine,
-    `SUMMARY:${icsEscapeText(summaryText)}`,
-    `DESCRIPTION:${icsEscapeText(
-      kind === 'todo'
-        ? buildTodoIcsDescription(payload.description, calendarLinkFor(link), {
-            reminderSchedule: options?.reminderSchedule,
-            dueDate: payload.due_date,
-            dueTime: payload.due_time,
-          })
-        : buildIcsDescription(payload.description, calendarLinkFor(link), new URL(link).origin, {
-            reminderSchedule: options?.reminderSchedule,
-            dueDate: payload.due_date,
-            dueTime: payload.due_time,
-            ownerName: payload.owner_name,
-          })
-    )}`,
+    `SUMMARY:${icsEscapeText(fields.title)}`,
+    `DESCRIPTION:${icsEscapeText(fields.description)}`,
     `URL:${calendarLinkFor(link)}`,
     ...alarmLines,
     'END:VEVENT',

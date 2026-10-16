@@ -9,12 +9,14 @@ import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
 import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
+import { Capacitor } from '@capacitor/core'
 import { supabase } from '@/lib/supabaseClient'
-import { buildIcsContent, cameFromCalendarLink, todayISODate, truncate, type IcsAlarmOffset } from '@/lib/ics'
+import { buildCalendarEventFields, buildIcsContent, cameFromCalendarLink, todayISODate, truncate, type IcsAlarmOffset } from '@/lib/ics'
 import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
+import NativeCalendar from '@/lib/nativeCalendar'
 
 /**
  * Response Detail (§6.28) — converted from
@@ -927,8 +929,26 @@ export default function ResponseDetailForm() {
   // below, called from the dialog's own onConfirm.
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false)
 
+  // 2026-10-16, first real-device Capacitor test — same native branch as
+  // RequestResponseForm.tsx's identical handler; see
+  // NativeCalendarPlugin.java's own header comment for why the alarm-offset
+  // dialog is skipped entirely on native.
   function handleAddToCalendar() {
     if (!data) return
+    if (Capacitor.isNativePlatform()) {
+      const link = window.location.href
+      const fields = buildCalendarEventFields(data, link)
+      NativeCalendar.addEvent({
+        title: fields.title,
+        description: fields.description,
+        startMillis: fields.start.getTime(),
+        endMillis: fields.end.getTime(),
+        allDay: fields.allDay,
+      }).catch(() => {
+        // Best effort — no fallback calendar path inside the native shell.
+      })
+      return
+    }
     setCalendarDialogOpen(true)
   }
 

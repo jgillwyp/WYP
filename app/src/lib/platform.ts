@@ -12,6 +12,10 @@
 // should only actually be called from a mount effect (after hydration),
 // matching the existing `voiceSupported` pattern elsewhere in this app.
 
+import { Capacitor } from '@capacitor/core'
+
+import NativePrint from './nativePrint'
+
 export function isIOSDevice(): boolean {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent
@@ -100,6 +104,30 @@ export function printWithExpandedWindow(): void {
   if (typeof window === 'undefined') {
     return
   }
+
+  // Added 2026-10-16, first real-device Capacitor test — a bare WebView
+  // has no window.print() of its own (unlike a full browser or the
+  // browser-installed PWA), so native Android needs a bridge to Android's
+  // own print system instead; see NativePrintPlugin.java's own header
+  // comment for the full reasoning, including why its Promise only
+  // resolves once Android's print framework is genuinely finished rather
+  // than the instant the dialog launches. Dispatching a synthetic
+  // 'afterprint' event once that settles keeps every existing call site's
+  // own `window.addEventListener('afterprint', ...)` reset logic working
+  // completely unmodified — none of those 9 screens needed any change.
+  if (Capacitor.isNativePlatform()) {
+    const jobName = document.title || 'Would You Please'
+    NativePrint.print({ jobName })
+      .catch(() => {
+        // Best effort — there is no fallback print path inside a native
+        // WebView if the native print dialog itself fails.
+      })
+      .finally(() => {
+        window.dispatchEvent(new Event('afterprint'))
+      })
+    return
+  }
+
   if (!isStandaloneDisplay()) {
     window.print()
     return

@@ -5957,3 +5957,76 @@ link is built only after the stack is proven on Add Contact.
   investigation, with a real native-calendar plugin), re-confirmed as
   wanted. Both deferred, per Jim: "We can do it later." No code changed
   in this entry — this is a verification/status log only.
+- **Native print and native Add to Calendar both built for the Android
+  wrapper (2026-10-16), closing the two gaps flagged the same day above.**
+  Jim also asked whether printer choice (e.g. defaulting to "Save as PDF"
+  when away from a home network printer) could be remembered for a
+  session, in either the wrapper or the vanilla PWA — answered directly:
+  that's OS/browser territory (Chrome's or Android's Print Spooler's own
+  "last destination" memory), not something this app's JS can control or
+  override in either path. Offered a real buildable alternative — a
+  separate "Export as PDF" action bypassing the destination picker
+  entirely — but via `AskUserQuestion` Jim chose the simpler, lower-risk
+  option: standard native printing only, accepting whatever Android's own
+  Print Spooler remembers or doesn't.
+  **Native print** — new `android/app/src/main/java/com/wouldyouplease/app/
+  NativePrintPlugin.java`, a local custom Capacitor plugin (not an npm
+  package) registered in `MainActivity.java`. Reuses Android's own
+  `WebView.createPrintDocumentAdapter()` (already knows how to render the
+  current page to PDF — no custom rendering needed) wrapped in a thin
+  delegating `PrintDocumentAdapter` whose only real job is learning the
+  moment Android's print framework calls `onFinish()` — the one reliable
+  "truly done" signal the framework gives an app, since
+  `PrintManager.print()` itself returns the instant the dialog launches,
+  well before the user has done anything with it. The plugin's own
+  `PluginCall` is deliberately held open (not resolved until `onFinish()`)
+  for exactly this reason: resolving early and immediately resetting the
+  calling screen's `showPrint`/`afterprint` state could unmount the live
+  `.print-report` DOM content Android's adapter is still asynchronously
+  reading from. On the TypeScript side, this required changing **exactly
+  one function** — `printWithExpandedWindow()` in `app/src/lib/platform.ts`,
+  the one shared helper all 9 Print-button screens (MainScreen, Archive,
+  Create Request, Request/ToDo Detail, Response Detail, Contacts, Private
+  Categories, Calendar View) already funnel through — gaining a
+  `Capacitor.isNativePlatform()` branch that calls the new plugin
+  (`app/src/lib/nativePrint.ts`) and, once its Promise resolves, dispatches
+  a synthetic `'afterprint'` DOM event so every one of those 9 screens'
+  own existing `window.addEventListener('afterprint', ...)` reset logic
+  keeps working completely unmodified. None of those 9 files needed any
+  change at all.
+  **Native Add to Calendar** — new `NativeCalendarPlugin.java`, same local-
+  plugin pattern, using `Intent.ACTION_INSERT` against
+  `CalendarContract.Events.CONTENT_URI` — the standard "hand off to the
+  user's own Calendar app" pattern, needing **no** `WRITE_CALENDAR`/
+  `READ_CALENDAR` runtime permission at all, since the Calendar app itself
+  performs the actual write once the person reviews and taps Save there.
+  Needed one new `AndroidManifest.xml` `<queries>` block (Android 11+
+  package-visibility rules otherwise silently hide even an installed
+  Calendar app from `Intent.resolveActivity()`). **Deliberate trade-off,
+  flagged rather than silently decided**: the existing
+  `AddToCalendarAlarmsDialog.tsx` (2026-09-17, lets a person pick RFC 5545
+  VALARM reminder offsets embedded in the `.ics`) has no equivalent on this
+  Intent — there's no public extra for pre-setting a reminder this way —
+  so all four Add-to-Calendar call sites (`RequestResponseForm.tsx`,
+  `ResponseDetailForm.tsx`, `TodoDetailForm.tsx`, and `CreateTodoForm.tsx`'s
+  more involved stage-then-Save flow) skip that dialog entirely on native
+  and call the plugin directly; whatever reminder the Calendar app itself
+  defaults to applies instead, and the person can still add one manually
+  before tapping Save there. New shared `buildCalendarEventFields()` in
+  `app/src/lib/ics.ts`, extracted verbatim out of `buildIcsContent`'s own
+  date/title/description computation (same derivation, two output shapes —
+  an RFC 5545 VEVENT string for the existing `.ics`/web path, or plain
+  JS `Date`/string values an Android Intent extra can carry directly for
+  the native path) — `buildIcsContent` itself now calls this shared
+  function rather than duplicating the logic, with byte-identical output
+  confirmed by inspection before and after the refactor.
+  **Also fixed in this batch**: `eslint.config.mjs` gained an
+  `android/**` ignore — ESLint was picking up a generated build artifact
+  (`android/app/build/.../native-bridge.js`, Capacitor's own bundled
+  runtime, copied there by Jim's own earlier Gradle build) and reporting
+  16 warnings against it; the native Android project is Java/Gradle, not
+  JS/TS, and was never meant to be linted by this config at all. `npx tsc
+  --noEmit`/`npm run lint` both clean across the whole batch. **Not yet
+  built or tested** — same "written here, built and verified by Jim
+  locally" posture as everything else in this Android effort; next step
+  is pulling this batch and rebuilding in Android Studio.

@@ -8,6 +8,7 @@ import RepeatControl from './RepeatControl'
 import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
+import { Capacitor } from '@capacitor/core'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import {
   MAX_ATTACHMENT_BYTES,
@@ -18,10 +19,11 @@ import {
   isBlockedFileType,
 } from '@/lib/attachments'
 import { isReminderEligible } from '@/lib/email'
-import { buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
+import { buildCalendarEventFields, buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
 import { type RepeatRule } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
+import NativeCalendar from '@/lib/nativeCalendar'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
@@ -829,7 +831,39 @@ export default function CreateTodoForm() {
     // from. Rather than download immediately, this opens
     // AddToCalendarAlarmsDialog and holds navigation until it resolves —
     // the actual download happens in that dialog's own onConfirm below.
+    //
+    // 2026-10-16, first real-device Capacitor test — on native, skip the
+    // dialog and go straight to a real calendar event via
+    // NativeCalendarPlugin.java (see its own header comment for why the
+    // alarm-offset choice can't be pre-set through that path), then
+    // navigate away immediately, matching the non-calendar branch below.
     if (addToCalendar) {
+      if (Capacitor.isNativePlatform()) {
+        const link = `${window.location.origin}/todos/${newTodo.id}`
+        const fields = buildCalendarEventFields(
+          {
+            id: newTodo.id,
+            description: form.description.trim(),
+            due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+            due_time: todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
+            owner_name: null,
+          },
+          link,
+          { kind: 'todo' }
+        )
+        NativeCalendar.addEvent({
+          title: fields.title,
+          description: fields.description,
+          startMillis: fields.start.getTime(),
+          endMillis: fields.end.getTime(),
+          allDay: fields.allDay,
+        }).catch(() => {
+          // Best effort — no fallback calendar path inside the native shell.
+        })
+        setSaving(false)
+        router.back()
+        return
+      }
       setPendingCalendarTodoId(newTodo.id)
       setCalendarDialogOpen(true)
       setSaving(false)

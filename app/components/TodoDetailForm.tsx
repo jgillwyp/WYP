@@ -10,12 +10,14 @@ import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
 import ConversionBanner from './ConversionBanner'
 import AddToCalendarAlarmsDialog from './AddToCalendarAlarmsDialog'
+import { Capacitor } from '@capacitor/core'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { isReminderEligible, hasStatsWorthyChange } from '@/lib/email'
-import { buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
+import { buildCalendarEventFields, buildIcsContent, type IcsAlarmOffset } from '@/lib/ics'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
+import NativeCalendar from '@/lib/nativeCalendar'
 
 /**
  * ToDo Detail (§9.4) — converted from
@@ -453,7 +455,35 @@ export default function TodoDetailForm() {
   // below, called from the dialog's own onConfirm.
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false)
 
+  // 2026-10-16, first real-device Capacitor test — same native branch as
+  // RequestResponseForm.tsx's/ResponseDetailForm.tsx's identical handlers;
+  // see NativeCalendarPlugin.java's own header comment for why the
+  // alarm-offset dialog is skipped entirely on native.
   function handleAddToCalendar() {
+    if (Capacitor.isNativePlatform()) {
+      const link = window.location.href
+      const fields = buildCalendarEventFields(
+        {
+          id: todoId,
+          description: form.description,
+          due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+          due_time: todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
+          owner_name: null,
+        },
+        link,
+        { kind: 'todo' }
+      )
+      NativeCalendar.addEvent({
+        title: fields.title,
+        description: fields.description,
+        startMillis: fields.start.getTime(),
+        endMillis: fields.end.getTime(),
+        allDay: fields.allDay,
+      }).catch(() => {
+        // Best effort — no fallback calendar path inside the native shell.
+      })
+      return
+    }
     setCalendarDialogOpen(true)
   }
 
