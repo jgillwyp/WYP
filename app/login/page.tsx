@@ -287,7 +287,20 @@ function LoginScreen() {
     setVerifying(false)
 
     if (verifyErr) {
-      setVerifyError(verifyErr.message)
+      // 2026-10-17 (tester-reported) — Supabase's own 'otp_expired' code
+      // covers two different real causes it can't itself tell apart: the
+      // code genuinely timed out, or it was already consumed by the *same*
+      // email's magic link being clicked elsewhere first (both the link and
+      // this code redeem one shared one-time challenge — using either one
+      // invalidates the other). The bare "Token has expired or is invalid"
+      // message left a tester who'd tried the link first, then came back
+      // and typed the code, with no idea why it failed. Name both real
+      // causes rather than overclaiming which one happened.
+      setVerifyError(
+        verifyErr.code === 'otp_expired'
+          ? 'This code is no longer valid. If you also clicked the link in that email, using either one uses up both — please request a new code or link below.'
+          : verifyErr.message
+      )
       return
     }
 

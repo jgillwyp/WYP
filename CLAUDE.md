@@ -6089,3 +6089,42 @@ link is built only after the stack is proven on Add Contact.
   would need their own Swift implementations, not yet started, flagged as
   the next real piece of native work once Mac access exists to build and
   test one.
+- **Sign-in code failure message clarified for a real, previously-unflagged
+  failure mode — John (private tester) reported it, 2026-10-17, no
+  migration.** John's email flow: signed out, signed back in, got a
+  sign-in email carrying both the magic link and the numeric code (same
+  email, two redundant ways to complete the same OTP challenge). He
+  tapped the **link** first (opened Chrome, same iOS link-vs-app-isolation
+  behavior already documented for the 2026-09-29 code-fallback feature),
+  then went back to the web app and typed the **code** — which failed with
+  a bare "Token has expired or is invalid." Root cause, confirmed against
+  Supabase's own `auth-js` error-codes source
+  (`node_modules/@supabase/auth-js/.../error-codes.ts`): the link and the
+  code both redeem one shared one-time challenge server-side — completing
+  sign-in via either one invalidates the other, and Supabase's own
+  `otp_expired` code/message doesn't distinguish "genuinely timed out"
+  from "already used by its own sibling." `app/login/page.tsx`'s
+  `handleVerifyCode` now checks `verifyErr.code === 'otp_expired'`
+  specifically and shows a message naming both real causes ("This code is
+  no longer valid. If you also clicked the link in that email, using
+  either one uses up both — please request a new code or link below.")
+  instead of the raw Supabase text — "below" correctly points at the
+  existing "send it again" button a few lines down in the same screen.
+  Any other `verifyOtp` error still shows Supabase's own message
+  unchanged. **Separately answered, not a code change**: John also asked
+  whether this was caused by the 2026-10-15 `getCurrentUser()` session-
+  refresh fix — confirmed no, that fix only wraps `getUser()`/`getSession()`
+  for an *already-established* session's token refresh, a completely
+  separate code path from `signInWithOtp`/`verifyOtp`'s own one-time
+  sign-in challenge. Also answered, not built: whether the Capacitor
+  native app would resolve John's other complaint (an emailed link opening
+  Chrome instead of "the app") — explained this needs its own deliberate
+  setup (iOS Universal Links: an `apple-app-site-association` file hosted
+  on the domain, plus the Associated Domains capability in Xcode, which
+  needs a real paid Apple Developer Program membership) rather than being
+  a side effect of the Capacitor wrapper merely existing, and even then
+  only helps someone who already has the app installed — a first-time
+  recipient with no account correctly falls through to Safari either way,
+  since `/r/[token]` is deliberately the anonymous, no-account-needed
+  path. `npx tsc --noEmit`/`npm run lint` clean. No mockup — this screen's
+  own static HTML has no error-state JS to update.
