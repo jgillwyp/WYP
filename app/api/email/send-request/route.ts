@@ -11,6 +11,7 @@ import {
   isReminderEligible,
   type ReminderSchedule,
 } from '@/lib/email'
+import { buildInitialRequestSmsBody, contactSmsNumber, sendSms } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls modules — not available on Next's Edge
 // runtime. Explicit rather than relying on the (currently correct) default,
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, description, due_date, due_time, reminder_enabled, reminder_day_of_enabled, overdue_reminder_enabled, reminder_minutes_before_enabled, reminder_minutes_before_value, receipt_confirmation_requested, receipt_confirmed_at, contacts(email)'
+      'id, description, due_date, due_time, reminder_enabled, reminder_day_of_enabled, overdue_reminder_enabled, reminder_minutes_before_enabled, reminder_minutes_before_value, receipt_confirmation_requested, receipt_confirmed_at, contacts(email, send_by, sms_consent_phone, sms_consent_given_at, sms_opted_out_at)'
     )
     .eq('id', requestId)
     .single()
@@ -149,7 +150,13 @@ export async function POST(request: Request) {
     reminder_minutes_before_value: number | null
     receipt_confirmation_requested: boolean
     receipt_confirmed_at: string | null
-    contacts: { email: string } | null
+    contacts: {
+      email: string
+      send_by: 'email' | 'text'
+      sms_consent_phone: string | null
+      sms_consent_given_at: string | null
+      sms_opted_out_at: string | null
+    } | null
   }
   const reqRow = reqRes as unknown as Row | null
 
@@ -231,6 +238,23 @@ export async function POST(request: Request) {
     owner_name: ownerName,
   }
   const icsContent = buildIcsContent(icsFields, link, { reminderSchedule })
+
+  // Request Texting (2026-10-19) — a Contact who's opted into Text replaces
+  // the email entirely for the Initial Request, rather than getting both;
+  // see app/src/lib/sms.ts's own header comment for the approved campaign
+  // this follows and the current first-pass scope (Initial Request +
+  // Reminders only).
+  const smsNumber = contactSmsNumber(reqRow.contacts)
+  if (smsNumber) {
+    const smsBody = buildInitialRequestSmsBody({
+      ownerName,
+      dueDate: reqRow.due_date,
+      dueTime: reqRow.due_time,
+      link,
+    })
+    const result = await sendSms(smsNumber, smsBody)
+    return Response.json(result, { status: 200 })
+  }
 
   const transporter = getSmtpTransport()
   if (!transporter) {

@@ -33,6 +33,7 @@ import {
   type DigestItem,
 } from '@/lib/email'
 import { addDaysISO, hasLocalDateTimePassed, localDateISO, localHour } from '@/lib/cronTime'
+import { buildReminderSmsBody, contactSmsNumber, sendSms } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -204,7 +205,15 @@ type ProfileRow = {
   storage_limit_override_bytes: number | null
 }
 
-type ContactInfo = { email: string; display_name: string | null; time_zone: string | null } | null
+type ContactInfo = {
+  email: string
+  display_name: string | null
+  time_zone: string | null
+  send_by: 'email' | 'text'
+  sms_consent_phone: string | null
+  sms_consent_given_at: string | null
+  sms_opted_out_at: string | null
+} | null
 
 // Phase E — Repeat generation (Jim's own recurrence-method design,
 // 2026-08-21). Deliberately its own row shape/query, not a subset of
@@ -316,7 +325,7 @@ async function handle(request: Request) {
   const { data: reqData, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, overdue_reminder_enabled, overdue_notified_at, receipt_confirmation_requested, receipt_confirmed_at, contacts(email, display_name, time_zone)'
+      'id, owner_id, contact_id, description, due_date, due_time, reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, overdue_reminder_enabled, overdue_notified_at, receipt_confirmation_requested, receipt_confirmed_at, contacts(email, display_name, time_zone, send_by, sms_consent_phone, sms_consent_given_at, sms_opted_out_at)'
     )
     .not('contact_id', 'is', null)
     .is('done_date', null)
@@ -519,17 +528,32 @@ async function handle(request: Request) {
     // before switches to the terse "confirm receipt" wording/subject for
     // this one state; otherwise keeps its own usual detailed body.
     const awaitingConfirmation = row.receipt_confirmation_requested && !row.receipt_confirmed_at
-    const sent = await sendMail({
-      to: row.contacts.email,
-      subject: awaitingConfirmation
-        ? buildReminderNoticeSubject('awaiting_confirmation', ownerName, row.due_date, row.due_time)
-        : buildRequestEmailSubject('reminder', ownerName, row.due_date, row.due_time),
-      html: awaitingConfirmation ? buildReminderNoticeHtml('awaiting_confirmation', bodyFields) : buildRequestEmailHtml(bodyFields),
-      text: awaitingConfirmation ? buildReminderNoticeText('awaiting_confirmation', bodyFields) : buildRequestEmailText(bodyFields),
-      fromName: buildRequestEmailFromName(ownerName),
-      replyTo: ownerEmail,
-      icsContent: buildIcsContent(icsFields, link),
-    })
+    // Request Texting (2026-10-19) — a Contact opted into Text gets the SMS
+    // wording instead of the email, except while awaiting Receipt
+    // Confirmation (no SMS wording built for that state in this first
+    // pass; see app/src/lib/sms.ts's own header comment).
+    const smsNumber = !awaitingConfirmation ? contactSmsNumber(row.contacts) : null
+    let sent: boolean
+    if (smsNumber) {
+      const result = await sendSms(
+        smsNumber,
+        buildReminderSmsBody({ kind: 'day_before', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
+      )
+      sent = result.sent
+      if (!sent) counts.errors += 1
+    } else {
+      sent = await sendMail({
+        to: row.contacts.email,
+        subject: awaitingConfirmation
+          ? buildReminderNoticeSubject('awaiting_confirmation', ownerName, row.due_date, row.due_time)
+          : buildRequestEmailSubject('reminder', ownerName, row.due_date, row.due_time),
+        html: awaitingConfirmation ? buildReminderNoticeHtml('awaiting_confirmation', bodyFields) : buildRequestEmailHtml(bodyFields),
+        text: awaitingConfirmation ? buildReminderNoticeText('awaiting_confirmation', bodyFields) : buildRequestEmailText(bodyFields),
+        fromName: buildRequestEmailFromName(ownerName),
+        replyTo: ownerEmail,
+        icsContent: buildIcsContent(icsFields, link),
+      })
+    }
 
     if (sent) {
       await sb.from('requests').update({ reminder_sent_at: now.toISOString() }).eq('id', row.id)
@@ -616,17 +640,29 @@ async function handle(request: Request) {
     // Awaiting Receipt Confirmation (2026-09-25, Jim's own spec) — same
     // override as Phase A1 above.
     const awaitingConfirmation = row.receipt_confirmation_requested && !row.receipt_confirmed_at
-    const sent = await sendMail({
-      to: row.contacts.email,
-      subject: awaitingConfirmation
-        ? buildReminderNoticeSubject('awaiting_confirmation', ownerName, row.due_date, row.due_time)
-        : buildRequestEmailSubject('reminder_day_of', ownerName, row.due_date, row.due_time),
-      html: awaitingConfirmation ? buildReminderNoticeHtml('awaiting_confirmation', bodyFields) : buildRequestEmailHtml(bodyFields),
-      text: awaitingConfirmation ? buildReminderNoticeText('awaiting_confirmation', bodyFields) : buildRequestEmailText(bodyFields),
-      fromName: buildRequestEmailFromName(ownerName),
-      replyTo: ownerEmail,
-      icsContent: buildIcsContent(icsFields, link),
-    })
+    // Request Texting (2026-10-19) — see Phase A1's identical comment.
+    const smsNumber = !awaitingConfirmation ? contactSmsNumber(row.contacts) : null
+    let sent: boolean
+    if (smsNumber) {
+      const result = await sendSms(
+        smsNumber,
+        buildReminderSmsBody({ kind: 'day_of', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
+      )
+      sent = result.sent
+      if (!sent) counts.errors += 1
+    } else {
+      sent = await sendMail({
+        to: row.contacts.email,
+        subject: awaitingConfirmation
+          ? buildReminderNoticeSubject('awaiting_confirmation', ownerName, row.due_date, row.due_time)
+          : buildRequestEmailSubject('reminder_day_of', ownerName, row.due_date, row.due_time),
+        html: awaitingConfirmation ? buildReminderNoticeHtml('awaiting_confirmation', bodyFields) : buildRequestEmailHtml(bodyFields),
+        text: awaitingConfirmation ? buildReminderNoticeText('awaiting_confirmation', bodyFields) : buildRequestEmailText(bodyFields),
+        fromName: buildRequestEmailFromName(ownerName),
+        replyTo: ownerEmail,
+        icsContent: buildIcsContent(icsFields, link),
+      })
+    }
 
     if (sent) {
       await sb.from('requests').update({ reminder_day_of_sent_at: now.toISOString() }).eq('id', row.id)
@@ -835,14 +871,26 @@ async function handle(request: Request) {
     // even though this phase only ever fires once genuinely overdue.
     const urgency = row.receipt_confirmation_requested && !row.receipt_confirmed_at ? 'awaiting_confirmation' : 'after_due'
 
-    const sent = await sendMail({
-      to: row.contacts.email,
-      subject: buildReminderNoticeSubject(urgency, ownerName, row.due_date, row.due_time),
-      html: buildReminderNoticeHtml(urgency, fields),
-      text: buildReminderNoticeText(urgency, fields),
-      fromName: buildRequestEmailFromName(ownerName),
-      replyTo: ownerEmail,
-    })
+    // Request Texting (2026-10-19) — see Phase A1's identical comment.
+    const smsNumber = urgency !== 'awaiting_confirmation' ? contactSmsNumber(row.contacts) : null
+    let sent: boolean
+    if (smsNumber) {
+      const result = await sendSms(
+        smsNumber,
+        buildReminderSmsBody({ kind: 'overdue', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
+      )
+      sent = result.sent
+      if (!sent) counts.errors += 1
+    } else {
+      sent = await sendMail({
+        to: row.contacts.email,
+        subject: buildReminderNoticeSubject(urgency, ownerName, row.due_date, row.due_time),
+        html: buildReminderNoticeHtml(urgency, fields),
+        text: buildReminderNoticeText(urgency, fields),
+        fromName: buildRequestEmailFromName(ownerName),
+        replyTo: ownerEmail,
+      })
+    }
 
     if (sent) {
       await sb.from('requests').update({ overdue_notified_at: now.toISOString() }).eq('id', row.id)

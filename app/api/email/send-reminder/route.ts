@@ -10,6 +10,7 @@ import {
   type ReminderUrgency,
 } from '@/lib/email'
 import { hasLocalDateTimePassed } from '@/lib/cronTime'
+import { buildReminderSmsBody, contactSmsNumber, sendSms } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
   const { data: reqRes, error: reqError } = await sb
     .from('requests')
     .select(
-      'id, description, due_date, due_time, done_date, archived_at, receipt_confirmation_requested, receipt_confirmed_at, contacts(email, time_zone)'
+      'id, description, due_date, due_time, done_date, archived_at, receipt_confirmation_requested, receipt_confirmed_at, contacts(email, time_zone, send_by, sms_consent_phone, sms_consent_given_at, sms_opted_out_at)'
     )
     .eq('id', requestId)
     .single()
@@ -138,7 +139,14 @@ export async function POST(request: Request) {
     archived_at: string | null
     receipt_confirmation_requested: boolean
     receipt_confirmed_at: string | null
-    contacts: { email: string; time_zone: string | null } | null
+    contacts: {
+      email: string
+      time_zone: string | null
+      send_by: 'email' | 'text'
+      sms_consent_phone: string | null
+      sms_consent_given_at: string | null
+      sms_opted_out_at: string | null
+    } | null
   }
   const reqRow = reqRes as unknown as Row | null
 
@@ -202,6 +210,27 @@ export async function POST(request: Request) {
       : hasLocalDateTimePassed(zone, reqRow.due_date, reqRow.due_time)
         ? 'after_due'
         : 'before_due'
+
+  // Request Texting (2026-10-19) — same channel-replacement rule as
+  // send-request/route.ts, with one deliberate carve-out: "awaiting
+  // Receipt Confirmation" stays email-only in this first pass (no SMS
+  // wording built for it yet), so a text-preferring Contact still gets the
+  // manual Reminder by email in that one state. before_due/after_due map
+  // onto the same day_before/overdue SMS wording cron/tick's Phase A1/B
+  // use, since this button has no day-before-vs-day-of distinction of its
+  // own to preserve.
+  const smsNumber = urgency !== 'awaiting_confirmation' ? contactSmsNumber(reqRow.contacts) : null
+  if (smsNumber) {
+    const smsBody = buildReminderSmsBody({
+      kind: urgency === 'after_due' ? 'overdue' : 'day_before',
+      ownerName,
+      dueDate: reqRow.due_date,
+      dueTime: reqRow.due_time,
+      link,
+    })
+    const result = await sendSms(smsNumber, smsBody)
+    return Response.json(result, { status: 200 })
+  }
 
   const transporter = getSmtpTransport()
   if (!transporter) {
