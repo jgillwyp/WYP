@@ -6128,3 +6128,18 @@ link is built only after the stack is proven on Add Contact.
   since `/r/[token]` is deliberately the anonymous, no-account-needed
   path. `npx tsc --noEmit`/`npm run lint` clean. No mockup — this screen's
   own static HTML has no error-state JS to update.
+- **Twilio A2P 10DLC campaign approved — confirmed by Jim, 2026-10-19,
+  unblocking the real outbound-SMS phase migration 079 (2026-10-13)
+  deliberately deferred.** Campaign status shows "Approved" in the Twilio
+  Console (Trust Hub → Registrations → A2P 10DLC Campaigns), use case "Low
+  Volume Mixed," Brand name "Would You Please." This is the same campaign
+  Jim finished registering himself via direct `curl` calls against
+  Twilio's API on 2026-10-14, after the registration UI's own bugs made
+  the web form unusable — see that entry above. **Nothing built yet** —
+  actually sending Request notifications via SMS instead of (or alongside)
+  email is real, unscoped work: which notifications go by text vs. email,
+  how a Contact's existing `send_by` preference interacts with it, the
+  Messaging Service SID's own env var wiring, and reusing (or not) the
+  existing `email.ts` template content for SMS's much shorter format are
+  all open questions, not yet discussed with Jim. Flagged as the next
+  real piece of Request Texting work, pending Jim's go-ahead on scope.
