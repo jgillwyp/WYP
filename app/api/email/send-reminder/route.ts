@@ -10,7 +10,7 @@ import {
   type ReminderUrgency,
 } from '@/lib/email'
 import { hasLocalDateTimePassed } from '@/lib/cronTime'
-import { buildReminderSmsBody, contactSmsNumber, sendSms } from '@/lib/sms'
+import { buildReminderSmsBody, contactSmsNumber, sendSms, shortenSmsLink } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -204,30 +204,32 @@ export async function POST(request: Request) {
   // REMINDER vs. OVERDUE. Zone: the Recipient's own, falling back to the
   // owner's own — same fallback chain cron/tick/route.ts's Phase A1/B use.
   const zone = reqRow.contacts?.time_zone ?? profile?.time_zone ?? null
+  const isPastDue = hasLocalDateTimePassed(zone, reqRow.due_date, reqRow.due_time)
   const urgency: ReminderUrgency =
     reqRow.receipt_confirmation_requested && !reqRow.receipt_confirmed_at
       ? 'awaiting_confirmation'
-      : hasLocalDateTimePassed(zone, reqRow.due_date, reqRow.due_time)
+      : isPastDue
         ? 'after_due'
         : 'before_due'
 
   // Request Texting (2026-10-19) — same channel-replacement rule as
-  // send-request/route.ts, with one deliberate carve-out: "awaiting
-  // Receipt Confirmation" stays email-only in this first pass (no SMS
-  // wording built for it yet), so a text-preferring Contact still gets the
-  // manual Reminder by email in that one state. before_due/after_due map
-  // onto the same day_before/overdue SMS wording cron/tick's Phase A1/B
-  // use, since this button has no day-before-vs-day-of distinction of its
-  // own to preserve. A failed SMS send falls through to email instead of
-  // just failing, same reasoning as send-request/route.ts.
-  const smsNumber = urgency !== 'awaiting_confirmation' ? contactSmsNumber(reqRow.contacts) : null
+  // send-request/route.ts. before_due/after_due map onto the same
+  // day_before/overdue SMS wording cron/tick's Phase A1/B use, since this
+  // button has no day-before-vs-day-of distinction of its own to preserve;
+  // isPastDue (not urgency) decides that, so awaiting-confirmation still
+  // gets the correct before/after wording via offerReceiptConfirmation's
+  // own added clause rather than losing that distinction. A failed SMS
+  // send falls through to email instead of just failing, same reasoning
+  // as send-request/route.ts.
+  const smsNumber = contactSmsNumber(reqRow.contacts)
   if (smsNumber) {
     const smsBody = buildReminderSmsBody({
-      kind: urgency === 'after_due' ? 'overdue' : 'day_before',
+      kind: isPastDue ? 'overdue' : 'day_before',
       ownerName,
       dueDate: reqRow.due_date,
       dueTime: reqRow.due_time,
-      link,
+      link: await shortenSmsLink(sb, link),
+      offerReceiptConfirmation: urgency === 'awaiting_confirmation',
     })
     const result = await sendSms(smsNumber, smsBody)
     if (result.sent) {

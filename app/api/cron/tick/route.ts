@@ -33,7 +33,7 @@ import {
   type DigestItem,
 } from '@/lib/email'
 import { addDaysISO, hasLocalDateTimePassed, localDateISO, localHour } from '@/lib/cronTime'
-import { buildReminderSmsBody, contactSmsNumber, sendSms } from '@/lib/sms'
+import { buildReminderSmsBody, contactSmsNumber, sendSms, shortenSmsLink } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -529,18 +529,25 @@ async function handle(request: Request) {
     // this one state; otherwise keeps its own usual detailed body.
     const awaitingConfirmation = row.receipt_confirmation_requested && !row.receipt_confirmed_at
     // Request Texting (2026-10-19) — a Contact opted into Text gets the SMS
-    // wording instead of the email, except while awaiting Receipt
-    // Confirmation (no SMS wording built for that state in this first
-    // pass; see app/src/lib/sms.ts's own header comment). A failed SMS
-    // send (bad number, Twilio outage, misconfigured env vars) falls
-    // through to email instead, so a text-preferring Contact never
-    // silently gets nothing.
-    const smsNumber = !awaitingConfirmation ? contactSmsNumber(row.contacts) : null
+    // wording instead of the email, including while awaiting Receipt
+    // Confirmation (reflected via offerReceiptConfirmation's own added
+    // clause, not a gate on sending SMS at all). A failed SMS send (bad
+    // number, Twilio outage, misconfigured env vars) falls through to
+    // email instead, so a text-preferring Contact never silently gets
+    // nothing.
+    const smsNumber = contactSmsNumber(row.contacts)
     let sent = false
     if (smsNumber) {
       const result = await sendSms(
         smsNumber,
-        buildReminderSmsBody({ kind: 'day_before', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
+        buildReminderSmsBody({
+          kind: 'day_before',
+          ownerName,
+          dueDate: row.due_date,
+          dueTime: row.due_time,
+          link: await shortenSmsLink(sb, link),
+          offerReceiptConfirmation: awaitingConfirmation,
+        })
       )
       sent = result.sent
     }
@@ -645,12 +652,19 @@ async function handle(request: Request) {
     const awaitingConfirmation = row.receipt_confirmation_requested && !row.receipt_confirmed_at
     // Request Texting (2026-10-19) — see Phase A1's identical comment,
     // including the email fallback on a failed SMS send.
-    const smsNumber = !awaitingConfirmation ? contactSmsNumber(row.contacts) : null
+    const smsNumber = contactSmsNumber(row.contacts)
     let sent = false
     if (smsNumber) {
       const result = await sendSms(
         smsNumber,
-        buildReminderSmsBody({ kind: 'day_of', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
+        buildReminderSmsBody({
+          kind: 'day_of',
+          ownerName,
+          dueDate: row.due_date,
+          dueTime: row.due_time,
+          link: await shortenSmsLink(sb, link),
+          offerReceiptConfirmation: awaitingConfirmation,
+        })
       )
       sent = result.sent
     }
@@ -877,12 +891,19 @@ async function handle(request: Request) {
 
     // Request Texting (2026-10-19) — see Phase A1's identical comment,
     // including the email fallback on a failed SMS send.
-    const smsNumber = urgency !== 'awaiting_confirmation' ? contactSmsNumber(row.contacts) : null
+    const smsNumber = contactSmsNumber(row.contacts)
     let sent = false
     if (smsNumber) {
       const result = await sendSms(
         smsNumber,
-        buildReminderSmsBody({ kind: 'overdue', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
+        buildReminderSmsBody({
+          kind: 'overdue',
+          ownerName,
+          dueDate: row.due_date,
+          dueTime: row.due_time,
+          link: await shortenSmsLink(sb, link),
+          offerReceiptConfirmation: urgency === 'awaiting_confirmation',
+        })
       )
       sent = result.sent
     }

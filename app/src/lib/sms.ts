@@ -44,16 +44,30 @@ function ownerClause(ownerName: string | null): string {
   return ownerName ? ` via ${ownerName}'s account` : ''
 }
 
+// Receipt Confirmation clause (2026-10-19, Jim's own suggested wording) —
+// appended to the Initial Request/Reminder SMS when the Request has it
+// requested and not yet confirmed, same gate (receipt_confirmation_requested
+// && !receipt_confirmed_at) every call site already computes for its own
+// email equivalent. One shared clause rather than a separate SMS template,
+// since the approved campaign's own "Receipt Confirmation" sample message
+// (#5) and its Initial Request/Reminder samples are all one declared
+// content category — this is a sentence within that category, not a new
+// message type.
+function confirmReceiptClause(offerReceiptConfirmation: boolean | undefined): string {
+  return offerReceiptConfirmation ? ' Please click to confirm receipt.' : ''
+}
+
 export function buildInitialRequestSmsBody(opts: {
   ownerName: string | null
   dueDate: string
   dueTime: string | null
   link: string
+  offerReceiptConfirmation?: boolean
 }): string {
   return `Would You Please: You have a new task Request${ownerClause(opts.ownerName)}, due ${dueClause(
     opts.dueDate,
     opts.dueTime
-  )}. ${opts.link} Reply STOP to opt out, HELP for help.`
+  )}.${confirmReceiptClause(opts.offerReceiptConfirmation)} ${opts.link} Reply STOP to opt out, HELP for help.`
 }
 
 export type ReminderSmsKind = 'day_before' | 'day_of' | 'overdue'
@@ -64,6 +78,7 @@ export function buildReminderSmsBody(opts: {
   dueDate: string
   dueTime: string | null
   link: string
+  offerReceiptConfirmation?: boolean
 }): string {
   const owner = ownerClause(opts.ownerName)
   const due = dueClause(opts.dueDate, opts.dueTime)
@@ -73,7 +88,7 @@ export function buildReminderSmsBody(opts: {
       : opts.kind === 'day_of'
         ? `Reminder - a task Request${owner} is due today, ${due}.`
         : `Reminder - a task Request${owner} is due tomorrow, ${due}.`
-  return `Would You Please: ${lead} ${opts.link} Reply STOP to opt out, HELP for help.`
+  return `Would You Please: ${lead}${confirmReceiptClause(opts.offerReceiptConfirmation)} ${opts.link} Reply STOP to opt out, HELP for help.`
 }
 
 // ----------------------------------------------------------------------------
@@ -112,6 +127,31 @@ export function contactSmsNumber(contact: SmsEligibleContact | null | undefined)
 // to someone who already successfully saved" posture.
 // ----------------------------------------------------------------------------
 export type SmsSendResult = { sent: boolean; reason?: string; detail?: string }
+
+// ----------------------------------------------------------------------------
+// shortenSmsLink — wraps a long /r/[token] link behind a short, first-party
+// /s/<code> redirect (migration 081), so an SMS has room left for its own
+// text after the link. First-party, not a third-party shortener (bit.ly,
+// etc.): the approved campaign's own "Embedded links sample" was reviewed
+// and approved showing a real wouldyouplease.com URL, and a generic
+// shortener domain is itself a well-known carrier spam-filter trigger.
+// Takes a Supabase client rather than creating its own, since this module
+// otherwise stays free of any particular env/client wiring — the caller
+// already has one. Never blocks the send over a failed shorten; falls back
+// to the original, full-length link.
+// ----------------------------------------------------------------------------
+export async function shortenSmsLink(
+  sb: { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> },
+  url: string
+): Promise<string> {
+  try {
+    const { data, error } = await sb.rpc('create_short_link', { p_target_url: url })
+    if (error || typeof data !== 'string') return url
+    return `${new URL(url).origin}/s/${data}`
+  } catch {
+    return url
+  }
+}
 
 export async function sendSms(to: string, body: string): Promise<SmsSendResult> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID

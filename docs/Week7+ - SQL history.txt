@@ -16,3 +16,110 @@
 -- reordered or rewritten after the fact; each entry records whether it has
 -- been confirmed run by Jim against the live database.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 081 (2026-10-19) -- DRAFTED, NOT YET CONFIRMED RUN.
+-- First-party URL shortener for Request Texting SMS links. Jim, after
+-- confirming SMS sending works end to end: "The URL shortening would be
+-- helpful" -- the real /r/[token] response link carries a 64-character hex
+-- token (https://www.wouldyouplease.com/r/<64 chars>, ~108 characters with
+-- the domain), which by itself already exceeds a single 160-character SMS
+-- segment before any message text is added, so every text sends as at
+-- least two billed segments.
+--
+-- Deliberately first-party (public.short_links + a redirect under this
+-- app's own domain, app/s/[code]/route.ts), not a third-party shortener
+-- (bit.ly, tinyurl, etc.): the approved A2P 10DLC campaign's own
+-- "Embedded links sample" field was reviewed and approved showing a real
+-- wouldyouplease.com/r/... URL -- introducing a generic third-party
+-- shortener domain afterward would both diverge from what carriers
+-- actually vetted and is a well-known trigger for carrier spam filtering
+-- on its own (an unrecognized redirect domain reads as more suspicious
+-- than a link under the sender's own, already-trusted domain).
+--
+-- Security trade-off, flagged rather than silently accepted: a /r/[token]
+-- link's 64 hex characters (256 bits) are intentionally that long because
+-- CLAUDE.md's own Database section treats it as a durable, unrevoked-by-
+-- default capability -- shortening it to a 12-character hex code (48
+-- bits) trades a large chunk of that margin for SMS usability. 48 bits is
+-- still well into the range generally considered acceptable for a
+-- brute-force-resistant short code (stronger than most commercial URL
+-- shorteners' own 6-7 character codes), and every short_links row only
+-- ever points at an already-sanctioned wouldyouplease.com URL -- enforced
+-- server-side in create_short_link() below, not left to whatever the
+-- caller supplies, which is what actually closes off an open-redirect
+-- risk regardless of code length. short_links rows are never deleted or
+-- expired by this migration -- same "don't drop structure, revisit later
+-- if it matters" posture this file's own history already takes elsewhere
+-- (e.g. last_overdue_nudge_at) -- a cleanup job for old rows is a
+-- reasonable future addition, not built here.
+--
+-- public.short_links is openly readable (anon + authenticated SELECT) --
+-- the mapping itself isn't sensitive, only reachable by someone who
+-- already has the short link, same exposure a real URL shortener service
+-- would have anyway -- but has NO insert/update/delete policy for either
+-- role. The only way to create a row is create_short_link(), a SECURITY
+-- DEFINER function granted to authenticated (the owner-session routes:
+-- send-request/route.ts, send-reminder/route.ts) and service_role (the
+-- cron route, which has no user session to run as) -- same two-grant
+-- pairing this file's history already uses for issue_request_link /
+-- cron_issue_request_link.
+-- ============================================================================
+
+create table public.short_links (
+  code text primary key,
+  target_url text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.short_links enable row level security;
+
+create policy "short_links: anyone can read"
+  on public.short_links for select
+  using (true);
+
+grant select on public.short_links to anon, authenticated;
+grant select, insert on public.short_links to service_role;
+
+create or replace function public.create_short_link(p_target_url text)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_code text;
+  v_prefix constant text := 'https://www.wouldyouplease.com/';
+  v_attempts int := 0;
+begin
+  if p_target_url is null or left(p_target_url, length(v_prefix)) <> v_prefix then
+    raise exception 'create_short_link: target_url must be a wouldyouplease.com URL';
+  end if;
+
+  loop
+    v_attempts := v_attempts + 1;
+    if v_attempts > 10 then
+      raise exception 'create_short_link: could not generate a unique code';
+    end if;
+    v_code := encode(gen_random_bytes(6), 'hex');
+    begin
+      insert into public.short_links (code, target_url) values (v_code, p_target_url);
+      exit;
+    exception when unique_violation then
+      -- extremely unlikely at 48 bits of entropy -- retry with a fresh code
+      null;
+    end;
+  end loop;
+
+  return v_code;
+end;
+$$;
+
+revoke all on function public.create_short_link(text) from public;
+grant execute on function public.create_short_link(text) to authenticated, service_role;
+
+-- Verify after running:
+--   select code, target_url, created_at from public.short_links limit 5;
+--   select create_short_link('https://www.wouldyouplease.com/r/' || repeat('a', 64));
+--   select create_short_link('https://evil.example.com/phish'); -- should raise an exception
+-- ============================================================================

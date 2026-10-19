@@ -11,7 +11,7 @@ import {
   isReminderEligible,
   type ReminderSchedule,
 } from '@/lib/email'
-import { buildInitialRequestSmsBody, contactSmsNumber, sendSms } from '@/lib/sms'
+import { buildInitialRequestSmsBody, contactSmsNumber, sendSms, shortenSmsLink } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls modules — not available on Next's Edge
 // runtime. Explicit rather than relying on the (currently correct) default,
@@ -252,7 +252,8 @@ export async function POST(request: Request) {
       ownerName,
       dueDate: reqRow.due_date,
       dueTime: reqRow.due_time,
-      link,
+      link: await shortenSmsLink(sb, link),
+      offerReceiptConfirmation: reqRow.receipt_confirmation_requested && !reqRow.receipt_confirmed_at,
     })
     const result = await sendSms(smsNumber, smsBody)
     if (result.sent) {
