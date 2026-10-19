@@ -218,7 +218,8 @@ export async function POST(request: Request) {
   // manual Reminder by email in that one state. before_due/after_due map
   // onto the same day_before/overdue SMS wording cron/tick's Phase A1/B
   // use, since this button has no day-before-vs-day-of distinction of its
-  // own to preserve.
+  // own to preserve. A failed SMS send falls through to email instead of
+  // just failing, same reasoning as send-request/route.ts.
   const smsNumber = urgency !== 'awaiting_confirmation' ? contactSmsNumber(reqRow.contacts) : null
   if (smsNumber) {
     const smsBody = buildReminderSmsBody({
@@ -229,7 +230,9 @@ export async function POST(request: Request) {
       link,
     })
     const result = await sendSms(smsNumber, smsBody)
-    return Response.json(result, { status: 200 })
+    if (result.sent) {
+      return Response.json(result, { status: 200 })
+    }
   }
 
   const transporter = getSmtpTransport()

@@ -531,17 +531,20 @@ async function handle(request: Request) {
     // Request Texting (2026-10-19) — a Contact opted into Text gets the SMS
     // wording instead of the email, except while awaiting Receipt
     // Confirmation (no SMS wording built for that state in this first
-    // pass; see app/src/lib/sms.ts's own header comment).
+    // pass; see app/src/lib/sms.ts's own header comment). A failed SMS
+    // send (bad number, Twilio outage, misconfigured env vars) falls
+    // through to email instead, so a text-preferring Contact never
+    // silently gets nothing.
     const smsNumber = !awaitingConfirmation ? contactSmsNumber(row.contacts) : null
-    let sent: boolean
+    let sent = false
     if (smsNumber) {
       const result = await sendSms(
         smsNumber,
         buildReminderSmsBody({ kind: 'day_before', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
       )
       sent = result.sent
-      if (!sent) counts.errors += 1
-    } else {
+    }
+    if (!sent) {
       sent = await sendMail({
         to: row.contacts.email,
         subject: awaitingConfirmation
@@ -640,17 +643,18 @@ async function handle(request: Request) {
     // Awaiting Receipt Confirmation (2026-09-25, Jim's own spec) — same
     // override as Phase A1 above.
     const awaitingConfirmation = row.receipt_confirmation_requested && !row.receipt_confirmed_at
-    // Request Texting (2026-10-19) — see Phase A1's identical comment.
+    // Request Texting (2026-10-19) — see Phase A1's identical comment,
+    // including the email fallback on a failed SMS send.
     const smsNumber = !awaitingConfirmation ? contactSmsNumber(row.contacts) : null
-    let sent: boolean
+    let sent = false
     if (smsNumber) {
       const result = await sendSms(
         smsNumber,
         buildReminderSmsBody({ kind: 'day_of', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
       )
       sent = result.sent
-      if (!sent) counts.errors += 1
-    } else {
+    }
+    if (!sent) {
       sent = await sendMail({
         to: row.contacts.email,
         subject: awaitingConfirmation
@@ -871,17 +875,18 @@ async function handle(request: Request) {
     // even though this phase only ever fires once genuinely overdue.
     const urgency = row.receipt_confirmation_requested && !row.receipt_confirmed_at ? 'awaiting_confirmation' : 'after_due'
 
-    // Request Texting (2026-10-19) — see Phase A1's identical comment.
+    // Request Texting (2026-10-19) — see Phase A1's identical comment,
+    // including the email fallback on a failed SMS send.
     const smsNumber = urgency !== 'awaiting_confirmation' ? contactSmsNumber(row.contacts) : null
-    let sent: boolean
+    let sent = false
     if (smsNumber) {
       const result = await sendSms(
         smsNumber,
         buildReminderSmsBody({ kind: 'overdue', ownerName, dueDate: row.due_date, dueTime: row.due_time, link })
       )
       sent = result.sent
-      if (!sent) counts.errors += 1
-    } else {
+    }
+    if (!sent) {
       sent = await sendMail({
         to: row.contacts.email,
         subject: buildReminderNoticeSubject(urgency, ownerName, row.due_date, row.due_time),

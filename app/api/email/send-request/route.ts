@@ -243,7 +243,9 @@ export async function POST(request: Request) {
   // the email entirely for the Initial Request, rather than getting both;
   // see app/src/lib/sms.ts's own header comment for the approved campaign
   // this follows and the current first-pass scope (Initial Request +
-  // Reminders only).
+  // Reminders only). A failed SMS send (bad number, Twilio outage,
+  // misconfigured env vars) falls through to email instead, so a
+  // text-preferring Contact never silently gets nothing.
   const smsNumber = contactSmsNumber(reqRow.contacts)
   if (smsNumber) {
     const smsBody = buildInitialRequestSmsBody({
@@ -253,7 +255,9 @@ export async function POST(request: Request) {
       link,
     })
     const result = await sendSms(smsNumber, smsBody)
-    return Response.json(result, { status: 200 })
+    if (result.sent) {
+      return Response.json(result, { status: 200 })
+    }
   }
 
   const transporter = getSmtpTransport()
