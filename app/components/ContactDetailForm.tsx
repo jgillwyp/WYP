@@ -77,6 +77,19 @@ export default function ContactDetailForm() {
   const [reloadTick, setReloadTick] = useState(0)
 
   const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', phoneExt: '', notes: '', timeZone: '' })
+  // Close/Cancel dirty-check (2026-10-20, owner request — "including the
+  // Text chip being clicked") — same load-time-snapshot idea
+  // RequestDetailForm.tsx/ResponseDetailForm.tsx/TodoDetailForm.tsx already
+  // use (2026-08-20), kept in useState rather than useRef (those files'
+  // own pattern) specifically because ESLint's react-hooks/refs rule
+  // flags a .current read inside this file's own hasChanges/JSX, even
+  // though it allows the identical shape elsewhere — a state snapshot
+  // behaves identically here (set once, at load) and sidesteps the rule
+  // entirely rather than fighting its heuristic. sendBy is included
+  // directly, so clicking Text's confirmation dialog (which sets it
+  // immediately, before Save) already counts as a change with no
+  // special-casing needed.
+  const [initialForm, setInitialForm] = useState<(ContactFormState & { sendBy: 'email' | 'text' }) | null>(null)
   // sendBy, SMS consent status (2026-10-13, migration 079) — Text unlocks
   // for subscribers (see the `tier` gate on the chip below); the chip
   // itself only stages the choice, same as every other field here. Save
@@ -222,7 +235,8 @@ export default function ContactDetailForm() {
         return
       }
 
-      setSendBy(data.send_by === 'text' ? 'text' : 'email')
+      const loadedSendBy = data.send_by === 'text' ? 'text' : 'email'
+      setSendBy(loadedSendBy)
       setSmsConsent({
         given_at: data.sms_consent_given_at,
         phone: data.sms_consent_phone,
@@ -230,45 +244,37 @@ export default function ContactDetailForm() {
         opted_out_at: data.sms_opted_out_at,
       })
 
-      if (data.time_zone) {
-        setForm({
-          name: data.display_name ?? '',
-          email: data.email ?? '',
-          phone: data.phone ?? '',
-          phoneExt: data.phone_ext ?? '',
-          notes: data.notes ?? '',
-          timeZone: data.time_zone,
-        })
-        setSelectedTimeZone(data.time_zone)
-        setLoading(false)
-        return
-      }
-
       // This contact predates migration 007 (or was never given one) — fall
       // back the same way AddContactForm.tsx does for a new contact: the
       // owner's own profiles.time_zone if set, else the browser's detected
       // zone, with the same sticky write-back to profiles.time_zone if it
       // had to fall all the way to detection.
-      const { data: profileData } = await supabase.from('profiles').select('time_zone').single()
-      if (cancelled) return
+      let resolvedZone = data.time_zone
+      let profileZone: string | null = null
+      if (!resolvedZone) {
+        const { data: profileData } = await supabase.from('profiles').select('time_zone').single()
+        if (cancelled) return
+        profileZone = profileData?.time_zone ?? null
+        resolvedZone = profileZone ?? detectBrowserTimeZone()
+      }
 
-      const fallbackZone = profileData?.time_zone ?? detectBrowserTimeZone()
-
-      setForm({
+      const loaded = {
         name: data.display_name ?? '',
         email: data.email ?? '',
         phone: data.phone ?? '',
         phoneExt: data.phone_ext ?? '',
         notes: data.notes ?? '',
-        timeZone: fallbackZone,
-      })
-      setSelectedTimeZone(fallbackZone)
+        timeZone: resolvedZone,
+      }
+      setForm(loaded)
+      setInitialForm({ ...loaded, sendBy: loadedSendBy })
+      setSelectedTimeZone(resolvedZone)
       setLoading(false)
 
-      if (!profileData?.time_zone) {
+      if (!data.time_zone && !profileZone) {
         const { data: userData } = await getCurrentUser()
         if (!cancelled && userData.user) {
-          await supabase.from('profiles').update({ time_zone: fallbackZone }).eq('id', userData.user.id)
+          await supabase.from('profiles').update({ time_zone: resolvedZone }).eq('id', userData.user.id)
         }
       }
     }
@@ -282,6 +288,16 @@ export default function ContactDetailForm() {
   function set<K extends keyof ContactFormState>(key: K, value: ContactFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
+
+  const hasChanges =
+    initialForm !== null &&
+    (form.name !== initialForm.name ||
+      form.email !== initialForm.email ||
+      form.phone !== initialForm.phone ||
+      form.phoneExt !== initialForm.phoneExt ||
+      form.notes !== initialForm.notes ||
+      form.timeZone !== initialForm.timeZone ||
+      sendBy !== initialForm.sendBy)
 
   const timeZoneQueryEmpty = form.timeZone.trim() === ''
 
@@ -451,7 +467,7 @@ export default function ContactDetailForm() {
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button className="btn-secondary" type="button" onClick={handleClose} disabled={saving}>
-              Close
+              {hasChanges ? 'Cancel' : 'Close'}
             </button>
           </span>
         </div>
