@@ -1774,7 +1774,13 @@ export default function MainScreen() {
                   </div>
                 )}
                 {!loading && !loadError && sent.length === 0 && (
-                  <div className="subempty">No Sent Requests yet.</div>
+                  <div className="subempty">
+                    No Sent Requests yet.
+                    <br />
+                    <button className="btn" type="button" onClick={() => router.push('/requests/new')} style={{ marginTop: 8 }}>
+                      Create your first Request
+                    </button>
+                  </div>
                 )}
                 {!loading && !loadError && sent.length > 0 && filteredSent.length === 0 && (
                   <div className="subempty">No Sent Requests match this filter.</div>
@@ -1898,7 +1904,13 @@ export default function MainScreen() {
                   </div>
                 )}
                 {!loading && !loadError && received.length === 0 && (
-                  <div className="subempty">No Received Requests yet.</div>
+                  <div className="subempty">
+                    No Received Requests yet. Requests others send you will appear here.
+                    <br />
+                    <button className="btn-secondary" type="button" onClick={() => router.push('/help/getting-started')} style={{ marginTop: 8 }}>
+                      See Getting Started
+                    </button>
+                  </div>
                 )}
                 {!loading && !loadError && received.length > 0 && filteredReceived.length === 0 && (
                   <div className="subempty">No Received Requests match this filter.</div>
@@ -2022,7 +2034,13 @@ export default function MainScreen() {
                   </div>
                 )}
                 {!loading && !loadError && todos.length === 0 && (
-                  <div className="subempty">No ToDos yet.</div>
+                  <div className="subempty">
+                    No ToDos yet.
+                    <br />
+                    <button className="btn" type="button" onClick={() => router.push('/todos/new')} style={{ marginTop: 8 }}>
+                      Create your first ToDo
+                    </button>
+                  </div>
                 )}
                 {!loading && !loadError && todos.length > 0 && filteredTodos.length === 0 && (
                   <div className="subempty">No ToDos match this filter.</div>

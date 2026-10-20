@@ -125,6 +125,33 @@ type Category = {
   name: string
 }
 
+// Add Contact round trip (2026-10-20, owner-reported data loss) — restores
+// everything this screen used to silently drop when the owner clicked Add
+// Contact mid-draft (Due Date, Due Time, Description, Reminders, staged
+// Dialog entries, Repeat) — Recipient and Category were already handled
+// separately (2026-08-11's ?newContactId mechanism, and the categories-list
+// match below). Same single-consumption sessionStorage pattern
+// ArchiveForm.tsx's ARCHIVE_ROUNDTRIP_KEY and MainScreen.tsx's
+// wyp.mainSearchRoundTrip already use. Staged Attachments (real File
+// objects) can't survive a sessionStorage round trip and are deliberately
+// NOT included — still a known, flagged limitation; the real §9.9.5
+// in-place interception dialog remains the full fix for that piece.
+const CREATE_REQUEST_ROUNDTRIP_KEY = 'wyp.createRequestRoundTrip'
+
+type CreateRequestRoundTrip = {
+  dueDate: string
+  dueTime: string
+  categoryName: string
+  description: string
+  reminderEnabled: boolean
+  reminderDayOfEnabled: boolean
+  overdueReminderEnabled: boolean
+  reminderMinutesBeforeEnabled: boolean
+  reminderMinutesBeforeValue: number
+  dialogEntries: { kind: 'question' | 'comment'; body: string }[]
+  repeatRule: RepeatRule | null
+}
+
 type RequestFormState = {
   recipientName: string
   dueDate: string
@@ -507,6 +534,43 @@ export default function CreateRequestForm() {
     // effect only ever runs client-side after mount, so window is safe here.
     const newContactId = new URLSearchParams(window.location.search).get('newContactId')
 
+    // Restore the round-trip snapshot (see CREATE_REQUEST_ROUNDTRIP_KEY's
+    // own comment above) — read and cleared once here, regardless of
+    // whether Add Contact ended in Save (?newContactId present) or Cancel
+    // (absent); either way the owner is back on this screen and whatever
+    // they'd already typed should come back.
+    let roundTrip: CreateRequestRoundTrip | null = null
+    try {
+      const raw = sessionStorage.getItem(CREATE_REQUEST_ROUNDTRIP_KEY)
+      if (raw) {
+        roundTrip = JSON.parse(raw) as CreateRequestRoundTrip
+        sessionStorage.removeItem(CREATE_REQUEST_ROUNDTRIP_KEY)
+      }
+    } catch {
+      roundTrip = null
+    }
+    if (roundTrip) {
+      const snap = roundTrip
+      // Deferred a tick — same react-hooks/set-state-in-effect fix as the
+      // pendingConversion effect above; there's no external event to key
+      // this off, so a microtask stands in for one.
+      queueMicrotask(() => {
+        setForm((f) => ({
+          ...f,
+          dueDate: snap.dueDate,
+          dueTime: snap.dueTime,
+          description: snap.description,
+          reminderEnabled: snap.reminderEnabled,
+          reminderDayOfEnabled: snap.reminderDayOfEnabled,
+          overdueReminderEnabled: snap.overdueReminderEnabled,
+          reminderMinutesBeforeEnabled: snap.reminderMinutesBeforeEnabled,
+          reminderMinutesBeforeValue: snap.reminderMinutesBeforeValue,
+        }))
+        setDialogEntries(snap.dialogEntries)
+        setRepeatRule(snap.repeatRule)
+      })
+    }
+
     // Alphabetical, not creation order (owner's rule, 2026-08-07) — applies
     // to every pull-down/lookup list in the app except the Housekeeping task
     // list's Log Out entry.
@@ -535,6 +599,10 @@ export default function CreateRequestForm() {
           const match = list.find(
             (c) => c.name.toLowerCase() === pendingConversion.categoryName!.toLowerCase()
           )
+          if (match) setSelectedCategory(match)
+        }
+        if (roundTrip?.categoryName) {
+          const match = list.find((c) => c.name.toLowerCase() === roundTrip!.categoryName.toLowerCase())
           if (match) setSelectedCategory(match)
         }
       })
@@ -1193,14 +1261,43 @@ export default function CreateRequestForm() {
                 </span>
                 {/* No in-place "no contact found" interception (§9.9.5) yet —
                     that dialog is designed but not converted (design/README.md).
-                    Add Contact still navigates away, and every other field
-                    typed on this screen is still lost, which remains a known
-                    limitation until that flow exists — but 2026-08-11, the
-                    round trip itself was fixed: ?from=create-request tells
-                    AddContactForm.tsx to send the owner back here (with the
-                    new contact selected) on Save, or back here empty-handed
-                    on Cancel, instead of always landing on the Contacts list. */}
-                <button className="btn" type="button" onClick={() => router.push('/contacts/new?from=create-request')}>
+                    Add Contact still navigates away, but 2026-08-11 fixed the
+                    round trip itself (?from=create-request tells
+                    AddContactForm.tsx to send the owner back here, with the
+                    new contact selected, on Save, or back here empty-handed
+                    on Cancel) and 2026-10-20 closed the remaining data-loss
+                    gap: every other field is now stashed into sessionStorage
+                    before navigating away and restored on return (see
+                    CREATE_REQUEST_ROUNDTRIP_KEY's own comment) — except
+                    staged Attachments, which can't survive that round trip
+                    as real File objects and are still lost, a known
+                    remaining limitation. */}
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    try {
+                      const snapshot: CreateRequestRoundTrip = {
+                        dueDate: form.dueDate,
+                        dueTime: form.dueTime,
+                        categoryName: form.categoryName,
+                        description: form.description,
+                        reminderEnabled: form.reminderEnabled,
+                        reminderDayOfEnabled: form.reminderDayOfEnabled,
+                        overdueReminderEnabled: form.overdueReminderEnabled,
+                        reminderMinutesBeforeEnabled: form.reminderMinutesBeforeEnabled,
+                        reminderMinutesBeforeValue: form.reminderMinutesBeforeValue,
+                        dialogEntries,
+                        repeatRule,
+                      }
+                      sessionStorage.setItem(CREATE_REQUEST_ROUNDTRIP_KEY, JSON.stringify(snapshot))
+                    } catch {
+                      // Best-effort — worst case the round trip loses these
+                      // fields again, same as before this fix.
+                    }
+                    router.push('/contacts/new?from=create-request')
+                  }}
+                >
                   Add Contact
                 </button>
 
