@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import { supabase } from '@/lib/supabaseClient'
 import {
   MAX_ATTACHMENT_BYTES,
@@ -107,12 +108,6 @@ function truncateDescription(text: string, max = 40): string {
   const trimmed = text.trim()
   if (trimmed.length <= max) return trimmed
   return `${trimmed.slice(0, max - 1)}…`
-}
-
-// Copyright-line year — see ContactDetailForm.tsx's identical helper for the
-// full reasoning; duplicated per file per this codebase's own convention.
-function losAngelesYear(): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
 }
 
 export default function StorageManagementForm() {
@@ -279,7 +274,7 @@ export default function StorageManagementForm() {
             <div className="sumnote">
               {formatBytes(availableBytes)} available &#8212; {tier === 'subscriber' ? 'your Subscriber' : 'free tier'}{' '}
               limit. Attachments count against the sender of the Request, including files added by the recipient.
-              Additional storage is available, see Subscription Features and Options below.
+              Additional storage is available, see Subscription Features below.
             </div>
           </div>
 
@@ -476,20 +471,7 @@ export default function StorageManagementForm() {
           </>
         )}
 
-        <div className="subbanner-row">
-          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
-            Subscription Features and Options
-          </button>
-          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
-            Privacy
-          </button>
-        </div>
-        <p className="subcopyright">{`© ${losAngelesYear()} Would You Please, Inc. All rights reserved.`}</p>
-        {tier !== 'subscriber' && (
-          <div className="adslot" aria-hidden="true">
-            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-          </div>
-        )}
+        <AppFooter tier={tier} />
       </div>
     </div>
   )

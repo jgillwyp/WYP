@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import RepeatControl from './RepeatControl'
 import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
@@ -194,14 +195,6 @@ function MicIcon() {
       <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
-}
-
-// Copyright-line year (2026-09-02, owner request) — computed live in
-// America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
-// never goes stale. Duplicated per file that renders the .subbanner-row
-// footer, matching this codebase's own small-helper convention.
-function losAngelesYear(): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
 }
 
 export default function CreateTodoForm() {
@@ -1370,22 +1363,7 @@ export default function CreateTodoForm() {
           </form>
         </div>
 
-        <div className="subbanner-row">
-          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
-            Subscription Features and Options
-          </button>
-          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
-            Privacy
-          </button>
-        </div>
-        <p className="subcopyright">
-          {`© ${losAngelesYear()} Would You Please, Inc. All rights reserved.`}
-        </p>
-        {tier !== 'subscriber' && (
-          <div className="adslot" aria-hidden="true">
-            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-          </div>
-        )}
+        <AppFooter tier={tier} />
 
         {addCategoryOpen && (
           <>

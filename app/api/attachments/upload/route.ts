@@ -146,7 +146,7 @@ export async function POST(request: Request) {
         error: 'storage_limit',
         detail:
           `This would exceed the account's ${formatBytes(limitBytes)} storage allowance. ` +
-          'Additional storage is available, see Subscription Features and Options below.',
+          'Additional storage is available, see Subscription Features below.',
       },
       { status: 400 }
     )

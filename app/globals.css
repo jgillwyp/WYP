@@ -212,8 +212,8 @@ body {
    button, both dropped since no lapse-and-auto-delete job exists yet
    (CLAUDE.md's own known-gaps section) and a fake "Subscribe" link would
    overstate what's built — this screen instead ends in the same
-   .subbanner-row (Subscription Features and Options / Privacy) every other
-   screen already uses. */
+   .subbanner-row (Subscription Features / Terms and Privacy Policy) every
+   other screen already uses, via the shared AppFooter.tsx component. */
 .sum {
   padding: 13px var(--pad) 14px;
   background: var(--row-tint);

@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import AttachmentsPanel from './AttachmentsPanel'
 import DateTimeField from './DateTimeField'
 import Linkified from './Linkified'
@@ -158,14 +159,6 @@ type ResponsePayload = {
   dialog: DialogEntry[]
 }
 
-// Copyright-line year (2026-09-02, owner request) — computed live in
-// America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
-// never goes stale. Duplicated per file that renders the .subbanner-row
-// footer, matching this codebase's own small-helper convention.
-function losAngelesYear(): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
-}
-
 // See CreateRequestForm.tsx's identical constant/comment.
 const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
 
@@ -242,7 +235,6 @@ function currentTimeHHMM(): string {
 export default function RequestResponseForm() {
   const params = useParams<{ token: string }>()
   const token = params.token
-  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -1233,32 +1225,18 @@ export default function RequestResponseForm() {
           </form>
         </div>
 
-        <div className="subbanner-row">
-          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
-            Subscription Features and Options
-          </button>
-          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
-            Privacy
-          </button>
-        </div>
-        <p className="subcopyright">
-          {`© ${losAngelesYear()} Would You Please, Inc. All rights reserved.`}
-        </p>
-        {/* Gated on data.owner_tier (2026-08-25), not a viewer tier — this
-            anonymous screen has no signed-in identity of its own for an
-            ad-free benefit to attach to (unlike ResponseDetailForm.tsx's
-            identical-looking gate, which uses the signed-in recipient's own
-            profiles.tier). Consistent with this screen's existing
-            Attachments/voice-dictation gates just above, both already keyed
-            off the Request's issuer per this file's own Entitlements
-            precedent — extended here on the same reasoning: if the issuer is
-            a subscriber, the response experience they've sent out is
+        {/* AppFooter's own tier prop is gated on data.owner_tier
+            (2026-08-25), not a viewer tier — this anonymous screen has no
+            signed-in identity of its own for an ad-free benefit to attach
+            to (unlike ResponseDetailForm.tsx's identical-looking gate,
+            which uses the signed-in recipient's own profiles.tier).
+            Consistent with this screen's existing Attachments/voice-
+            dictation gates just above, both already keyed off the
+            Request's issuer per this file's own Entitlements precedent —
+            extended here on the same reasoning: if the issuer is a
+            subscriber, the response experience they've sent out is
             ad-free too. */}
-        {data.owner_tier !== 'subscriber' && (
-          <div className="adslot" aria-hidden="true">
-            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-          </div>
-        )}
+        <AppFooter tier={data.owner_tier === 'subscriber' ? 'subscriber' : 'free'} />
 
         {dialogModalOpen && (
           <>

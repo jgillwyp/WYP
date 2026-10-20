@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 
@@ -75,14 +76,6 @@ const initialState: ContactFormState = {
   phoneExt: '',
   notes: '',
   timeZone: '',
-}
-
-// Copyright-line year (2026-09-02, owner request) — computed live in
-// America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
-// never goes stale. Duplicated per file that renders the .subbanner-row
-// footer, matching this codebase's own small-helper convention.
-function losAngelesYear(): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric' }).format(new Date())
 }
 
 export default function AddContactForm() {
@@ -688,22 +681,7 @@ export default function AddContactForm() {
           </div>
         </div>
 
-        <div className="subbanner-row">
-          <button className="btn-secondary" type="button" onClick={() => router.push('/account/subscription')}>
-            Subscription Features and Options
-          </button>
-          <button className="btn-secondary" type="button" onClick={() => router.push('/privacy')}>
-            Privacy
-          </button>
-        </div>
-        <p className="subcopyright">
-          {`© ${losAngelesYear()} Would You Please, Inc. All rights reserved.`}
-        </p>
-        {tier !== 'subscriber' && (
-          <div className="adslot" aria-hidden="true">
-            <span className="adbox">AD &#8212; 320&#215;50 RESERVED</span>
-          </div>
-        )}
+        <AppFooter tier={tier} />
       </div>
     </div>
   )
