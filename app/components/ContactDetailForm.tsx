@@ -71,6 +71,10 @@ export default function ContactDetailForm() {
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Bumped by the loadError block's own "Try Again" button (2026-10-20,
+  // porting MainScreen.tsx's 2026-08-18 / ContactsList.tsx's 2026-09-11
+  // fix here too) — re-triggers the load effect below.
+  const [reloadTick, setReloadTick] = useState(0)
 
   const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', phoneExt: '', notes: '', timeZone: '' })
   // sendBy, SMS consent status (2026-10-13, migration 079) — Text unlocks
@@ -171,18 +175,49 @@ export default function ContactDetailForm() {
       setLoading(true)
       setLoadError(null)
 
-      const { data, error: fetchError } = await supabase
-        .from('contacts')
-        .select(
-          'display_name, email, phone, phone_ext, notes, time_zone, send_by, sms_consent_given_at, sms_consent_phone, sms_consent_requested_at, sms_opted_out_at'
-        )
-        .eq('id', contactId)
-        .single()
+      // Retry-with-backoff (2026-10-20, porting MainScreen.tsx's
+      // 2026-08-18 / ContactsList.tsx's 2026-09-11 fix here too) — this
+      // screen's own load never had it, so a transient Supabase edge
+      // clock-skew error ("JWT issued at future," self-corrects within a
+      // second or two) was rendering as the literal raw error text, with
+      // just the header left on screen.
+      type ContactRow = {
+        display_name: string | null
+        email: string | null
+        phone: string | null
+        phone_ext: string | null
+        notes: string | null
+        time_zone: string | null
+        send_by: 'email' | 'text' | null
+        sms_consent_given_at: string | null
+        sms_consent_phone: string | null
+        sms_consent_requested_at: string | null
+        sms_opted_out_at: string | null
+      }
+      let data: ContactRow | null = null
+      const delaysMs = [0, 600, 1600]
+      for (let i = 0; i < delaysMs.length; i++) {
+        if (delaysMs[i] > 0) await new Promise((r) => setTimeout(r, delaysMs[i]))
+        if (cancelled) return
 
-      if (cancelled) return
+        const result = await supabase
+          .from('contacts')
+          .select(
+            'display_name, email, phone, phone_ext, notes, time_zone, send_by, sms_consent_given_at, sms_consent_phone, sms_consent_requested_at, sms_opted_out_at'
+          )
+          .eq('id', contactId)
+          .single()
+        if (cancelled) return
 
-      if (fetchError || !data) {
-        setLoadError(fetchError?.message ?? 'Could not load this Contact.')
+        if (!result.error && result.data) {
+          data = result.data
+          break
+        }
+        console.error(`Contact load attempt ${i + 1} failed:`, result.error?.message)
+      }
+
+      if (!data) {
+        setLoadError('Could not load this Contact. Check your connection and try again.')
         setLoading(false)
         return
       }
@@ -242,7 +277,7 @@ export default function ContactDetailForm() {
     return () => {
       cancelled = true
     }
-  }, [contactId])
+  }, [contactId, reloadTick])
 
   function set<K extends keyof ContactFormState>(key: K, value: ContactFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -392,7 +427,13 @@ export default function ContactDetailForm() {
       <div className="frame-none">
         <div className="app">
           <WypHeader />
-          <div className="subempty">{loadError}</div>
+          <div className="subempty">
+            {loadError}
+            <br />
+            <button className="btn-secondary" type="button" onClick={() => setReloadTick((t) => t + 1)} style={{ marginTop: 8 }}>
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     )
