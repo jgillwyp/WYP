@@ -57,6 +57,19 @@ function formatE164ForDisplay(e164: string | null): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
 }
 
+// Same E.164 normalizer as TextMessagingForm.tsx (duplicated per this
+// codebase's own small-helper convention) — US-only (+1). Used here
+// (2026-10-20) to detect a phone number edit on an already-approved
+// Contact: consent is tied to the specific number carriers were told
+// about, not the Contact more broadly, so a changed number needs its own
+// fresh approval. See the phoneChanged() check below.
+function normalizeUsPhoneToE164(input: string): string | null {
+  const digits = input.replace(/\D/g, '')
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  return null
+}
+
 export default function ContactDetailForm() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
@@ -98,6 +111,9 @@ export default function ContactDetailForm() {
     opted_out_at: string | null
   }>({ given_at: null, phone: null, requested_at: null, opted_out_at: null })
   const [smsDialogOpen, setSmsDialogOpen] = useState(false)
+  // Phone-number-change re-approval (2026-10-20) — see phoneChanged() and
+  // handleSubmit() below.
+  const [smsPhoneChangeDialogOpen, setSmsPhoneChangeDialogOpen] = useState(false)
   const [notifyOwner, setNotifyOwner] = useState(() => {
     try {
       return localStorage.getItem(SMS_NOTIFY_OWNER_KEY) === '1'
@@ -315,11 +331,36 @@ export default function ContactDetailForm() {
     return hasName && hasEmail && hasTimeZone
   }
 
+  // Phone-number-change re-approval (2026-10-20, owner's own carrier-
+  // consent research): approval is tied to the specific phone number, not
+  // the Contact more broadly, so editing the number on an already-approved
+  // text Contact needs a fresh approval for the new number — otherwise
+  // request_sms_consent's own sms_consent_given_at reset (migration 083)
+  // would silently flip a "Contact-verified" Contact back to "awaiting"
+  // with no explanation. Guarded on sendBy === 'text' at the call site
+  // (an email-only Contact's phone can change freely), and on
+  // !smsConsent.opted_out_at — an opted-out Contact has no current
+  // approval for a number change to invalidate.
+  function phoneChanged(): boolean {
+    if (!smsConsent.given_at || smsConsent.opted_out_at) return false
+    const normalized = normalizeUsPhoneToE164(form.phone)
+    return !!normalized && normalized !== smsConsent.phone
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     if (!validate()) return
 
+    if (sendBy === 'text' && phoneChanged()) {
+      setSmsPhoneChangeDialogOpen(true)
+      return
+    }
+
+    await performSave()
+  }
+
+  async function performSave() {
     setSaving(true)
 
     const { error: updateError } = await supabase
@@ -345,12 +386,15 @@ export default function ContactDetailForm() {
     // SMS consent-request email (migration 079, 2026-10-13) — best-effort,
     // fire-and-forget, same posture as CreateRequestForm.tsx's own Initial
     // Request email block: a failure here must never undo or block the
-    // Contact save that already succeeded above. Only fires the first time
-    // Text is chosen for this Contact (never requested before) — switching
-    // Email -> Text -> Email -> Text again on an already-pending or
-    // already-consented Contact doesn't re-send; there's no resend
-    // affordance yet, flagged as a follow-up if Jim wants one.
-    if (sendBy === 'text' && !smsConsent.given_at && !smsConsent.requested_at) {
+    // Contact save that already succeeded above. Fires the first time Text
+    // is chosen for this Contact (never requested before) — switching
+    // Email -> Text -> Email -> Text again on an already-pending Contact
+    // doesn't re-send, there's no resend affordance yet for that case —
+    // or (2026-10-20) when the phone number on an already-approved
+    // Contact changed, re-requesting approval for the new number; that
+    // path reaches here only via the phoneChanged() dialog above, which
+    // already confirmed the user wants to proceed.
+    if (sendBy === 'text' && ((!smsConsent.given_at && !smsConsent.requested_at) || phoneChanged())) {
       try {
         const { data: consentToken } = await supabase.rpc('request_sms_consent', {
           p_contact_id: contactId,
@@ -731,6 +775,57 @@ export default function ContactDetailForm() {
                       onClick={() => {
                         setSendBy('text')
                         setSmsDialogOpen(false)
+                      }}
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Phone-number-change re-approval (2026-10-20) — see
+                phoneChanged()'s own comment. Reworded from the dialog
+                above, which presumes first-time consent; this Contact is
+                already approved, just not at the number currently typed. */}
+            {smsPhoneChangeDialogOpen && (
+              <>
+                <div className="scrim" onClick={() => setSmsPhoneChangeDialogOpen(false)} />
+                <div className="modal" role="dialog" aria-modal="true" aria-labelledby="sms-phone-change-title">
+                  <p className="modal-title" id="sms-phone-change-title">
+                    Send Requests by Text
+                  </p>
+                  <p className="promo-p" style={{ margin: '0 0 12px' }}>
+                    This Contact must approve receiving text messages at this new phone number. Saving will
+                    email them a link to confirm the phone number and approve Text Messaging &mdash; until
+                    they approve, Requests will be sent by Email.
+                  </p>
+                  <label className="checkrow">
+                    <input
+                      type="checkbox"
+                      checked={notifyOwner}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setNotifyOwner(next)
+                        try {
+                          localStorage.setItem(SMS_NOTIFY_OWNER_KEY, next ? '1' : '0')
+                        } catch {
+                          // Best-effort — a missed sticky default costs nothing.
+                        }
+                      }}
+                    />
+                    <span className="checktext">Notify me when this is approved.</span>
+                  </label>
+                  <div className="modalacts">
+                    <button type="button" className="btn-secondary" onClick={() => setSmsPhoneChangeDialogOpen(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={async () => {
+                        setSmsPhoneChangeDialogOpen(false)
+                        await performSave()
                       }}
                     >
                       Continue

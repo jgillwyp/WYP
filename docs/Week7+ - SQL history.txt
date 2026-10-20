@@ -240,3 +240,119 @@ grant execute on function public.mark_sms_consent_notified(text) to anon, authen
 --   -- complete the /textmessaging?token=... opt-in as that Contact, and
 --   -- confirm an email arrives at your own account address.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 083 (2026-10-20) -- DRAFTED, NOT YET CONFIRMED RUN.
+-- Jim, after reviewing the carrier-consent model: approval is tied to the
+-- specific phone number, not the Contact more broadly. Editing an already-
+-- approved Contact's phone number on Contact Detail needs a fresh approval
+-- for the new number, worded differently from the original ask (the old
+-- wording presumes first-time consent). Two real bugs would exist without
+-- this migration, beyond the missing UI dialog (built separately in
+-- ContactDetailForm.tsx this same batch):
+--
+-- 1. request_sms_consent() never reset sms_consent_given_at. Re-calling it
+--    for an already-approved Contact (the new re-request path) would have
+--    left sms_consent_given_at still set to its old, now-stale value --
+--    contactSmsNumber()'s own eligibility check (app/src/lib/sms.ts) only
+--    looks at whether sms_consent_given_at is non-null, so texts would have
+--    kept silently going to the OLD approved number for as long as the new
+--    approval sat pending, while the UI claimed "awaiting approval." Fixed
+--    by setting sms_consent_given_at = null on every call -- a no-op for
+--    the existing first-time-request case (already null there), correct
+--    for the new re-request case.
+--
+-- 2. get_contact_for_sms_consent()'s own phone pre-fill coalesced
+--    sms_consent_phone (the OLD approved number) before contacts.phone (the
+--    number the owner just typed and is actually asking to be approved).
+--    For a re-request this showed the wrong number on the opt-in page --
+--    flipped to prefer the current phone column, falling back to
+--    sms_consent_phone only if that's somehow null. Harmless for the
+--    existing first-time-request case: set_sms_consent already keeps both
+--    columns in sync once approval completes, so they already match
+--    whenever this function is reached under the old logic's assumptions.
+--
+-- Same arg list and return type on both functions -- plain create or
+-- replace applies to each, no drop needed.
+-- ============================================================================
+
+create or replace function public.request_sms_consent(p_contact_id uuid, p_notify_owner boolean default false)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_token text;
+begin
+  select owner_id into v_owner from public.contacts where id = p_contact_id;
+
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  update public.contacts
+    set sms_consent_token_hash = digest(v_token, 'sha256'),
+        sms_consent_requested_at = now(),
+        sms_consent_notify_owner = p_notify_owner,
+        sms_consent_notified_at = null,
+        -- New (migration 083): clears a stale prior approval so a
+        -- re-request (phone number changed) actually goes back to
+        -- "awaiting" -- texts must stop going to the old number the
+        -- instant a new number is being asked about. No-op for the
+        -- existing first-time-request case, already null there.
+        sms_consent_given_at = null
+    where id = p_contact_id;
+
+  return v_token;
+end;
+$$;
+
+create or replace function public.get_contact_for_sms_consent(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_contact record;
+begin
+  select c.phone, c.sms_consent_given_at, c.sms_consent_phone,
+         c.sms_opted_out_at, p.display_name as owner_name
+    into v_contact
+    from public.contacts c
+    join public.profiles p on p.id = c.owner_id
+    where c.sms_consent_token_hash = v_hash;
+
+  if not found then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  return jsonb_build_object(
+    -- New (migration 083): prefer the CURRENT phone column -- the number
+    -- actually being asked about, which may be newer than whatever was
+    -- last approved -- falling back to sms_consent_phone only if phone is
+    -- somehow null. Was coalesce(sms_consent_phone, phone), the wrong
+    -- order for a re-request after a phone number change.
+    'phone', coalesce(v_contact.phone, v_contact.sms_consent_phone),
+    'owner_name', v_contact.owner_name,
+    'consent_given_at', v_contact.sms_consent_given_at,
+    'opted_out_at', v_contact.sms_opted_out_at
+  );
+end;
+$$;
+
+-- Verify after running:
+--   select proname, prosrc ilike '%sms_consent_given_at = null%' as resets_given_at
+--     from pg_proc where proname = 'request_sms_consent';
+--     -- resets_given_at should be true
+--   -- Then, live: on an already-approved text Contact, change the Phone
+--   -- field to a different number and Save -- confirm the new "must
+--   -- approve at this new phone number" dialog appears (built in
+--   -- ContactDetailForm.tsx), and that the Contact shows "awaiting
+--   -- approval" again afterward, not "Contact-verified."
+-- ============================================================================
