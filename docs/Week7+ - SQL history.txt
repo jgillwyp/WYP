@@ -123,3 +123,120 @@ grant execute on function public.create_short_link(text) to authenticated, servi
 --   select create_short_link('https://www.wouldyouplease.com/r/' || repeat('a', 64));
 --   select create_short_link('https://evil.example.com/phish'); -- should raise an exception
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 082 (2026-10-20) -- DRAFTED, NOT YET CONFIRMED RUN.
+-- Jim, after working with Request Texting live: better status feedback
+-- while a Contact's text-messaging approval is still pending -- a new
+-- opt-in "Notify me when this is approved" checkbox (shown when flipping a
+-- Contact to Text) that emails the owner once that Contact actually
+-- completes the /textmessaging opt-in form.
+--
+-- Two new columns on contacts, same 1:1-with-the-Contact posture every
+-- other sms_consent_* column already takes (migration 079):
+-- sms_consent_notify_owner (the owner's own checked/unchecked choice,
+-- captured at request time) and sms_consent_notified_at (idempotency --
+-- the notification email fires at most once per consent request, even if
+-- /textmessaging's own success path is somehow triggered more than once).
+--
+-- request_sms_consent(contact_id) gains a new trailing parameter,
+-- p_notify_owner boolean default false -- a genuine signature change, so
+-- this needs the drop-then-create treatment this file's own history
+-- already established for that (migrations 069/070/078, etc.), not a
+-- plain create or replace.
+--
+-- New function mark_sms_consent_notified(token) is the other half: called
+-- by the client (app/api/sms/notify-consent-approved/route.ts) right
+-- after a successful set_sms_consent call on the anonymous /textmessaging
+-- page. Does the eligibility check AND the idempotency mark in one atomic
+-- UPDATE ... RETURNING, so two near-simultaneous calls can't both see
+-- "not yet notified" and both report should_notify: true -- only the one
+-- that actually flips sms_consent_notified_at from null gets a non-null
+-- owner_id back. set_sms_consent itself is untouched -- a separate
+-- function here instead of growing that one's own return shape, so its
+-- existing return type (void) and every current caller stay as they are.
+-- ============================================================================
+
+alter table public.contacts
+  add column if not exists sms_consent_notify_owner boolean not null default false,
+  add column if not exists sms_consent_notified_at timestamptz;
+
+drop function if exists public.request_sms_consent(uuid);
+
+create function public.request_sms_consent(p_contact_id uuid, p_notify_owner boolean default false)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_token text;
+begin
+  select owner_id into v_owner from public.contacts where id = p_contact_id;
+
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  update public.contacts
+    set sms_consent_token_hash = digest(v_token, 'sha256'),
+        sms_consent_requested_at = now(),
+        sms_consent_notify_owner = p_notify_owner,
+        sms_consent_notified_at = null
+    where id = p_contact_id;
+
+  return v_token;
+end;
+$$;
+
+revoke all on function public.request_sms_consent(uuid, boolean) from public;
+grant execute on function public.request_sms_consent(uuid, boolean) to authenticated;
+
+create or replace function public.mark_sms_consent_notified(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_row record;
+begin
+  update public.contacts c
+    set sms_consent_notified_at = now()
+    where c.sms_consent_token_hash = v_hash
+      and c.sms_consent_notify_owner = true
+      and c.sms_consent_given_at is not null
+      and c.sms_consent_notified_at is null
+    returning c.id, c.owner_id, c.display_name into v_row;
+
+  if v_row.owner_id is null then
+    return jsonb_build_object('should_notify', false);
+  end if;
+
+  return jsonb_build_object(
+    'should_notify', true,
+    'owner_id', v_row.owner_id,
+    'contact_id', v_row.id,
+    'contact_name', v_row.display_name
+  );
+end;
+$$;
+
+revoke all on function public.mark_sms_consent_notified(text) from public;
+grant execute on function public.mark_sms_consent_notified(text) to anon, authenticated;
+
+-- Verify after running:
+--   select column_name from information_schema.columns
+--     where table_name = 'contacts' and column_name like 'sms_consent_notif%';
+--     -- should list both new columns
+--   select proname, pronargs from pg_proc
+--     where proname in ('request_sms_consent', 'mark_sms_consent_notified');
+--     -- request_sms_consent should show 2 args now, not 1
+--   -- Then, live: flip a Contact to Text with "Notify me..." checked, Save,
+--   -- complete the /textmessaging?token=... opt-in as that Contact, and
+--   -- confirm an email arrives at your own account address.
+-- ============================================================================

@@ -133,6 +133,19 @@ export default function TextMessagingForm() {
     // confirmation screen below reads data.phone.
     setData((d) => (d ? { ...d, phone: normalized } : d))
     setActivated(true)
+
+    // "Notify me when this is approved" (2026-10-20, migration 082) —
+    // fire-and-forget, never blocks or affects this screen's own success
+    // state. mark_sms_consent_notified does all the real eligibility/
+    // idempotency work server-side; this call either sends an email to the
+    // owner or quietly does nothing.
+    fetch('/api/sms/notify-consent-approved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    }).catch(() => {
+      // Best-effort — see comment above.
+    })
   }
 
   async function handleStop() {

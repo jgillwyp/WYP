@@ -34,6 +34,59 @@ type Contact = {
   send_by: 'email' | 'text'
   time_zone: string | null
   notes: string | null
+  sms_consent_given_at: string | null
+  sms_opted_out_at: string | null
+}
+
+// Send-by status icons (2026-10-20, Jim's own rough reference icons) —
+// replace the old "Text: "/"Email: " word prefix on each row. Same 48x48
+// viewBox/.iico sizing convention as DialogIcon/AttachmentIcon/
+// ReceiptAwaitingIcon/ReceiptConfirmedIcon (MainScreen.tsx) — duplicated
+// per this codebase's own small-icon convention, not imported. Text
+// approved/awaiting share one bubble-shaped glyph (built from DialogIcon's
+// own speech-bubble path, two internal lines standing in for a text
+// message), distinguished only by color — same "same shape, color tells
+// the state" rule ReceiptAwaitingIcon/ReceiptConfirmedIcon already use.
+function EmailIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Sends by Email</title>
+      <rect x="5" y="11" width="38" height="26" rx="3" stroke="currentColor" strokeWidth="3" />
+      <path d="M7,14 L24,27 L41,14" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function TextApprovedIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Text messaging approved</title>
+      <path
+        d="M11,8 H37 A5,5 0 0 1 42,13 V29 A5,5 0 0 1 37,34 H19 L10,42 L12,34 H11 A5,5 0 0 1 6,29 V13 A5,5 0 0 1 11,8 Z"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <line x1="14" y1="17" x2="34" y2="17" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <line x1="14" y1="25" x2="27" y2="25" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function TextAwaitingIcon() {
+  return (
+    <svg className="iico" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <title>Text messaging awaiting approval</title>
+      <path
+        d="M11,8 H37 A5,5 0 0 1 42,13 V29 A5,5 0 0 1 37,34 H19 L10,42 L12,34 H11 A5,5 0 0 1 6,29 V13 A5,5 0 0 1 11,8 Z"
+        stroke="var(--alert-red)"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <line x1="14" y1="17" x2="34" y2="17" stroke="var(--alert-red)" strokeWidth="3" strokeLinecap="round" />
+      <line x1="14" y1="25" x2="27" y2="25" stroke="var(--alert-red)" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 // phoneWithExt (2026-08-18) — owner: the extension should append to the
@@ -99,7 +152,9 @@ export default function ContactsList() {
 
         const { data, error } = await supabase
           .from('contacts')
-          .select('id, display_name, email, phone, phone_ext, send_by, time_zone, notes')
+          .select(
+            'id, display_name, email, phone, phone_ext, send_by, time_zone, notes, sms_consent_given_at, sms_opted_out_at'
+          )
           .order('display_name')
         if (cancelled) return
 
@@ -198,9 +253,12 @@ export default function ContactsList() {
           {!loading && !loadError && contacts.length > 0 && (
             <div className="hkrows">
               {contacts.map((c) => {
-                const note = c.send_by === 'text'
-                  ? `Text: ${c.phone ? phoneWithExt(c.phone, c.phone_ext) : '—'}`
-                  : `Email: ${c.email}`
+                const value = c.send_by === 'text'
+                  ? (c.phone ? phoneWithExt(c.phone, c.phone_ext) : '—')
+                  : c.email
+                const icon = c.send_by === 'text'
+                  ? (c.sms_consent_given_at && !c.sms_opted_out_at ? <TextApprovedIcon /> : <TextAwaitingIcon />)
+                  : <EmailIcon />
                 return (
                   <div
                     key={c.id}
@@ -212,7 +270,7 @@ export default function ContactsList() {
                   >
                     <span className="hktext">
                       <span className="hktitle">{c.display_name}</span>
-                      <span className="hknote"> — {note}</span>
+                      <span className="hknote"> — {icon} {value}</span>
                     </span>
                   </div>
                 )

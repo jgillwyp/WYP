@@ -55,6 +55,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // 2026-08-16).
 const NOTES_MAX = 500
 
+// "Notify me when this is approved" sticky default (2026-10-20, migration
+// 082) — see the state declaration below for the full reasoning.
+const SMS_NOTIFY_OWNER_KEY = 'wyp.smsNotifyOwnerDefault'
+
 type ContactFormState = {
   name: string
   email: string
@@ -91,6 +95,19 @@ export default function AddContactForm() {
   // verification email. Free tier still gets the original locked chip.
   const [sendBy, setSendBy] = useState<'email' | 'text'>('email')
   const [smsDialogOpen, setSmsDialogOpen] = useState(false)
+  // "Notify me when this is approved" (2026-10-20, migration 082) —
+  // defaults to whatever was last chosen in this browser (Jim's own
+  // instruction), not always-on or always-off. localStorage, not
+  // sessionStorage — this is a lasting preference across visits, same
+  // posture "Keep me signed in" already takes, not a within-session view
+  // state like Main Screen's filter chips.
+  const [notifyOwner, setNotifyOwner] = useState(() => {
+    try {
+      return localStorage.getItem(SMS_NOTIFY_OWNER_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
 
   const [nameInvalid, setNameInvalid] = useState(false)
   const [emailInvalid, setEmailInvalid] = useState(false)
@@ -258,6 +275,7 @@ export default function AddContactForm() {
       try {
         const { data: consentToken } = await supabase.rpc('request_sms_consent', {
           p_contact_id: inserted.id,
+          p_notify_owner: notifyOwner,
         })
         if (consentToken) {
           const { data: sessionData } = await supabase.auth.getSession()
@@ -607,6 +625,22 @@ export default function AddContactForm() {
                     email them a link to confirm their phone number and approve Text Messaging &mdash; until
                     they approve, Requests will keep going by Email.
                   </p>
+                  <label className="checkrow">
+                    <input
+                      type="checkbox"
+                      checked={notifyOwner}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setNotifyOwner(next)
+                        try {
+                          localStorage.setItem(SMS_NOTIFY_OWNER_KEY, next ? '1' : '0')
+                        } catch {
+                          // Best-effort — a missed sticky default costs nothing.
+                        }
+                      }}
+                    />
+                    <span className="checktext">Notify me when this is approved.</span>
+                  </label>
                   <div className="modalacts">
                     <button type="button" className="btn-secondary" onClick={() => setSmsDialogOpen(false)}>
                       Cancel

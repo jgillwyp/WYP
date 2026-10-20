@@ -1388,3 +1388,42 @@ export function buildSmsConsentEmailText(fields: SmsConsentEmailFields): string 
     `Approving is optional and only takes a moment. If you'd rather keep receiving email instead, you can simply ignore this message.`,
   ].join('\n')
 }
+
+// ----------------------------------------------------------------------------
+// SMS consent APPROVED notification, to the owner (2026-10-20, migration
+// 082). Opt-in — only sent when the owner checked "Notify me when this is
+// approved" at the moment they requested consent (sms_consent_notify_owner),
+// fired once by app/api/sms/notify-consent-approved/route.ts right after
+// the Contact completes the /textmessaging opt-in form. contactName is
+// required, not optional — mark_sms_consent_notified() only ever returns
+// should_notify: true alongside a real contacts.display_name, so there's
+// no null case for the route to pass through here.
+// ----------------------------------------------------------------------------
+type SmsConsentApprovedEmailFields = {
+  contactName: string
+  link: string
+  siteUrl: string
+}
+
+export function buildSmsConsentApprovedEmailSubject(contactName: string): string {
+  return `${contactName} approved text messaging`
+}
+
+export function buildSmsConsentApprovedEmailHtml(fields: SmsConsentApprovedEmailFields): string {
+  const body = [
+    `<p style="margin:0 0 18px;">${escapeHtml(
+      fields.contactName
+    )} just approved receiving Request texts from Would You Please. Their future Requests will now go by text instead of email.</p>`,
+    `<p style="margin:0;">${emailButton(fields.link, 'View Contact')}</p>`,
+  ].join('\n')
+  return wrapEmailHtml(fields.siteUrl, body)
+}
+
+export function buildSmsConsentApprovedEmailText(fields: SmsConsentApprovedEmailFields): string {
+  return [
+    `${fields.contactName} just approved receiving Request texts from Would You Please. Their future Requests will now go by text instead of email.`,
+    '',
+    'View Contact:',
+    fields.link,
+  ].join('\n')
+}

@@ -26,6 +26,11 @@ import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// "Notify me when this is approved" sticky default (2026-10-20, migration
+// 082) — see AddContactForm.tsx's identical constant/state for the full
+// reasoning.
+const SMS_NOTIFY_OWNER_KEY = 'wyp.smsNotifyOwnerDefault'
+
 // See CreateRequestForm.tsx's identical constant for the full reasoning
 // (globals.css's ftextarea-plain/.charcount comment; owner request
 // 2026-08-16).
@@ -83,6 +88,13 @@ export default function ContactDetailForm() {
     opted_out_at: string | null
   }>({ given_at: null, phone: null, requested_at: null, opted_out_at: null })
   const [smsDialogOpen, setSmsDialogOpen] = useState(false)
+  const [notifyOwner, setNotifyOwner] = useState(() => {
+    try {
+      return localStorage.getItem(SMS_NOTIFY_OWNER_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
 
   const [nameInvalid, setNameInvalid] = useState(false)
   const [emailInvalid, setEmailInvalid] = useState(false)
@@ -298,6 +310,7 @@ export default function ContactDetailForm() {
       try {
         const { data: consentToken } = await supabase.rpc('request_sms_consent', {
           p_contact_id: contactId,
+          p_notify_owner: notifyOwner,
         })
         if (consentToken) {
           const { data: sessionData } = await supabase.auth.getSession()
@@ -401,6 +414,19 @@ export default function ContactDetailForm() {
             </button>
           </span>
         </div>
+
+        {/* Status panel (2026-10-20, Jim's own mockup) — a prominent,
+            always-visible .noticeband (same component Request Detail's own
+            "Note: ..." banner uses) rather than the small inline .gatenote
+            line further down, which still covers every other
+            send-by-text state (opted out / already approved / not yet
+            requested). Only this one state gets promoted to a banner. */}
+        {tier === 'subscriber' && sendBy === 'text' && smsConsent.requested_at && !smsConsent.given_at && !smsConsent.opted_out_at && (
+          <div className="noticeband">
+            A text messaging approval request was sent on {new Date(smsConsent.requested_at).toLocaleDateString('en-US')}.
+            Until approved, Requests are sent by email.
+          </div>
+        )}
 
         <div className="scroll">
           <form className="form" id="contact-detail-form" onSubmit={handleSubmit} noValidate>
@@ -596,15 +622,17 @@ export default function ContactDetailForm() {
                   )}
                 </div>
                 {tier === 'subscriber' ? (
-                  sendBy === 'text' && (
+                  sendBy === 'text' &&
+                  // Awaiting approval has its own .noticeband above instead
+                  // of this inline note (2026-10-20) — null here, not a
+                  // duplicate message.
+                  !(smsConsent.requested_at && !smsConsent.given_at && !smsConsent.opted_out_at) && (
                     <div className="gatenote">
                       {smsConsent.opted_out_at
                         ? 'This Contact has opted out of text messaging.'
                         : smsConsent.given_at
                           ? `Contact-verified text-to number: ${formatE164ForDisplay(smsConsent.phone)}`
-                          : smsConsent.requested_at
-                            ? `Awaiting a text messaging approval for: ${form.phone || '(phone not yet given)'}`
-                            : 'Saving will email this Contact a link to approve text messaging.'}
+                          : 'Saving will email this Contact a link to approve text messaging.'}
                     </div>
                   )
                 ) : (
@@ -627,6 +655,22 @@ export default function ContactDetailForm() {
                     email them a link to confirm their phone number and approve Text Messaging &mdash; until
                     they approve, Requests will keep going by Email.
                   </p>
+                  <label className="checkrow">
+                    <input
+                      type="checkbox"
+                      checked={notifyOwner}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setNotifyOwner(next)
+                        try {
+                          localStorage.setItem(SMS_NOTIFY_OWNER_KEY, next ? '1' : '0')
+                        } catch {
+                          // Best-effort — a missed sticky default costs nothing.
+                        }
+                      }}
+                    />
+                    <span className="checktext">Notify me when this is approved.</span>
+                  </label>
                   <div className="modalacts">
                     <button type="button" className="btn-secondary" onClick={() => setSmsDialogOpen(false)}>
                       Cancel

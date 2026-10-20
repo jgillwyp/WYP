@@ -2967,6 +2967,17 @@ body {
   color: var(--ink);
 }
 
+/* Send-by status icon inline with .hknote's text (Contacts list, 2026-10-20)
+   — .iico is display:block everywhere else (wrapped in a .subicons flex
+   cluster), which would drop it to its own line inside this text-flow
+   span; inline-block + vertical-align keeps it sitting on the same line as
+   the value text beside it. */
+.hknote .iico {
+  display: inline-block;
+  vertical-align: text-bottom;
+  margin-right: 3px;
+}
+
 /* Search bar — Search Mode redesign, 2026-08-19 (see MainScreen.tsx's own
    file-header comment for the full reasoning). flex-wrap lets the Date
    Range fields and the Clear Search control drop to their own line on a
