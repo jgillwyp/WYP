@@ -9,6 +9,7 @@ import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
 import { printWithExpandedWindow } from '@/lib/platform'
+import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import {
   isIOSDevice,
   isMacOSDevice,
@@ -939,6 +940,21 @@ function CalendarIcon() {
   )
 }
 
+// Duplicated per-file, same convention as DialogIcon/AttachmentIcon above and
+// as every other screen's own MicIcon (RequestDetailForm.tsx etc.) — this
+// file had no Description-style voice dictation before the Private Tester
+// Feedback dialog (2026-10-21).
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function SearchIcon() {
   return (
     <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1001,6 +1017,11 @@ export default function MainScreen() {
   const [feedbackSending, setFeedbackSending] = useState(false)
   const [feedbackError, setFeedbackError] = useState<string | null>(null)
   const [feedbackSent, setFeedbackSent] = useState(false)
+  // No tier gate here, unlike Description's own voice dictation elsewhere
+  // (CreateRequestForm.tsx etc.) — this is a temporary tester-only channel,
+  // not a Subscriber feature, so it's offered to anyone whose browser
+  // supports it.
+  const feedbackDictation = useSpeechDictation(feedbackBody, setFeedbackBody)
 
   const [sentFilter, setSentFilter] = useState<FilterValue>(() =>
     readStoredChip(SENT_FILTER_KEY, FILTER_VALUES, 'all')
@@ -2996,13 +3017,26 @@ export default function MainScreen() {
               </select>
             </div>
             <div className="fgroup" style={{ marginTop: 10 }}>
-              <textarea
-                className="ftextarea ftextarea-plain"
-                placeholder="What happened? What did you expect instead?"
-                aria-label="Feedback message"
-                value={feedbackBody}
-                onChange={(e) => setFeedbackBody(e.target.value)}
-              />
+              <div className="descwrap">
+                <textarea
+                  className="ftextarea ftextarea-plain"
+                  placeholder="What happened? What did you expect instead?"
+                  aria-label="Feedback message"
+                  style={{ minHeight: 168 }}
+                  value={feedbackBody}
+                  onChange={(e) => setFeedbackBody(e.target.value)}
+                />
+                {feedbackDictation.supported && (
+                  <button
+                    type="button"
+                    className={`micbtn${feedbackDictation.dictating ? ' listening' : ''}`}
+                    aria-label={feedbackDictation.dictating ? 'Stop voice dictation' : 'Start voice dictation'}
+                    onClick={feedbackDictation.toggle}
+                  >
+                    <MicIcon />
+                  </button>
+                )}
+              </div>
             </div>
             {feedbackError && (
               <p className="ferror" role="alert">
