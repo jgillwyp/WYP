@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
+import { Capacitor } from '@capacitor/core'
+
 import WypHeader from '../components/WypHeader'
 import { supabase, setRememberMe } from '@/lib/supabaseClient'
 import { isIOSDevice, isStandaloneDisplay } from '@/lib/platform'
@@ -139,8 +141,17 @@ function LoginScreen() {
   // `voiceSupported`. Not security-relevant: a wrong guess only changes
   // which instructions are shown, never what verifyOtp() itself accepts.
   const [iosStandalone, setIosStandalone] = useState(false)
+  // Installed Android (Capacitor) app detection (2026-10-21, QC finding #8).
+  // The emailed link opens the device's regular browser, never this native
+  // WebView, for the exact same structural reason a tapped link can't reach
+  // an iOS home-screen icon's own storage — so this case needs its own
+  // wording naming the app explicitly, not the generic "Home Screen icon"
+  // phrasing written for the PWA case. Capacitor.isNativePlatform() is
+  // already used elsewhere (app/src/lib/platform.ts, nativePrint.ts).
+  const [isNativeApp, setIsNativeApp] = useState(false)
   useEffect(() => {
     queueMicrotask(() => {
+      setIsNativeApp(Capacitor.isNativePlatform())
       setIosStandalone(isIOSDevice() && isStandaloneDisplay())
     })
   }, [])
@@ -464,7 +475,13 @@ function LoginScreen() {
                 <br />
                 <span className="sent-addr">{email.trim()}</span>
               </p>
-              {iosStandalone ? (
+              {isNativeApp ? (
+                <p className="sent-p">
+                  Tapping the link in that email will open your regular browser instead
+                  of signing you in here in the app — enter the sign-in code from that
+                  same email below instead.
+                </p>
+              ) : iosStandalone ? (
                 <p className="sent-p">
                   Tapping the link in that email will open a separate browser tab instead
                   of signing you in here — enter the sign-in code from that same email
@@ -490,10 +507,14 @@ function LoginScreen() {
                   paragraph above already explains the link won't work here,
                   so this line drops the redundant "On a Home Screen icon and
                   the link doesn't sign you in?" framing and just asks for
-                  the code directly. */}
+                  the code directly. Extended 2026-10-21 (QC finding #8) with
+                  a third branch naming the installed Android app explicitly
+                  — the generic "Home Screen icon" wording never described
+                  that case, even though the same underlying link-vs-app-
+                  storage problem applies to it too. */}
               <form onSubmit={handleVerifyCode} noValidate>
                 <p className="sent-meta" style={{ marginTop: 4 }}>
-                  {iosStandalone
+                  {isNativeApp || iosStandalone
                     ? 'Enter the sign-in code from that email:'
                     : "On a Home Screen icon and the link doesn't sign you in? Enter the sign-in code from that same email instead:"}
                 </p>

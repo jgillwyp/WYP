@@ -170,6 +170,19 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               role="img"
               aria-label="A Would You Please dashboard showing tracked requests and their due dates"
             >
+              {/* aria-hidden on this wrapping group (2026-10-21, owner-
+                  reported QC finding) — role="img" on the <svg> above is
+                  meant to present the whole thing as one opaque image with
+                  the alt text as its only accessible content, but some
+                  browser/screen-reader combinations still expose the
+                  individual <text> elements inside as separately readable
+                  nodes (confirmed in this app's own accessibility tree) —
+                  narrating the mock dashboard data ("Prepare the June cash
+                  flow report," etc.) as if it were real, right after
+                  already reading the alt text. This group suppresses all
+                  of it from assistive tech explicitly, rather than relying
+                  on role="img" alone. */}
+              <g aria-hidden="true">
               <circle cx="392" cy="46" r="30" fill="#ffffff" opacity=".08" />
               <circle cx="34" cy="300" r="46" fill="#ffffff" opacity=".07" />
 
@@ -255,6 +268,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 <line x1="18" y1="16" x2="18" y2="11" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
                 <line x1="18" y1="16" x2="22" y2="18" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
                 <text x="34" y="20" fontFamily="Inter, sans-serif" fontSize="12" fontWeight="800" fill="#ffffff">Track It</text>
+              </g>
               </g>
             </svg>
           </div>
@@ -393,7 +407,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 <div className="lpanel soon">
                   <ul>
                     <li><b>Voice search</b> — dictate a search instead of typing it.</li>
-                    <li><b>Native apps</b> for iPhone, Android, and Windows, with push notifications.</li>
+                    <li><b>Native apps</b> — Android is in private testing now; iPhone and Windows are next, with push notifications planned for all three.</li>
                   </ul>
                   <div className="note">Start on the web today — your account, requests, and ToDos carry over automatically when new features and apps arrive.</div>
                 </div>

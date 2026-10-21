@@ -465,6 +465,8 @@ footer .wrap {
            composition ("Send It" / "Done"). viewBox scaling keeps this
            crisp from a small phone width up through desktop. -->
       <svg class="hero-art" viewBox="0 0 440 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A Would You Please dashboard showing tracked requests and their due dates">
+        <!-- aria-hidden group (2026-10-21) -- see LandingPage.tsx's identical comment: role="img" alone doesn't reliably suppress these child <text> elements from assistive tech in every browser. -->
+        <g aria-hidden="true">
         <circle cx="392" cy="46" r="30" fill="#ffffff" opacity=".08"/>
         <circle cx="34" cy="300" r="46" fill="#ffffff" opacity=".07"/>
 
@@ -547,6 +549,7 @@ footer .wrap {
           <line x1="18" y1="16" x2="18" y2="11" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
           <line x1="18" y1="16" x2="22" y2="18" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
           <text x="34" y="20" font-family="Inter, sans-serif" font-size="12" font-weight="800" fill="#ffffff">Track It</text>
+        </g>
         </g>
       </svg>
     </div>
@@ -694,7 +697,7 @@ footer .wrap {
           <div class="panel soon">
             <ul>
               <li><b>Voice search</b> — dictate a search instead of typing it.</li>
-              <li><b>Native apps</b> for iPhone, Android, and Windows, with push notifications.</li>
+              <li><b>Native apps</b> — Android is in private testing now; iPhone and Windows are next, with push notifications planned for all three.</li>
             </ul>
             <div class="note">Start on the web today — your account, requests, and ToDos carry over automatically when new features and apps arrive.</div>
           </div>
