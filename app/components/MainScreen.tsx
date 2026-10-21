@@ -992,6 +992,16 @@ export default function MainScreen() {
   )
   const [signingOut, setSigningOut] = useState(false)
 
+  // Private Tester Feedback (2026-10-21) — see openFeedbackDialog's own
+  // comment below.
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
+  const [feedbackEmail, setFeedbackEmail] = useState<string | null>(null)
+  const [feedbackSubject, setFeedbackSubject] = useState('Error')
+  const [feedbackBody, setFeedbackBody] = useState('')
+  const [feedbackSending, setFeedbackSending] = useState(false)
+  const [feedbackError, setFeedbackError] = useState<string | null>(null)
+  const [feedbackSent, setFeedbackSent] = useState(false)
+
   const [sentFilter, setSentFilter] = useState<FilterValue>(() =>
     readStoredChip(SENT_FILTER_KEY, FILTER_VALUES, 'all')
   )
@@ -1496,6 +1506,57 @@ export default function MainScreen() {
     setSigningOut(true)
     await supabase.auth.signOut()
     router.replace('/login')
+  }
+
+  // Private Tester Feedback (2026-10-21, owner's own mockup) — a
+  // deliberately temporary channel for the 12-tester/14-day Android
+  // closed-testing period, not a permanent feature; the dialog itself says
+  // so. Sends to feedback@wouldyouplease.com (forwarded to the owner's own
+  // address), Reply-To the tester's own email, via a new
+  // /api/feedback/send route — same forwarded-JWT posture as every other
+  // owner-session email route, never trusting the client for the sender's
+  // own address.
+  async function openFeedbackDialog() {
+    setFeedbackDialogOpen(true)
+    setFeedbackSent(false)
+    setFeedbackError(null)
+    if (!feedbackEmail) {
+      const { data } = await getCurrentUser()
+      setFeedbackEmail(data.user?.email ?? null)
+    }
+  }
+
+  async function handleSendFeedback() {
+    if (!feedbackBody.trim()) {
+      setFeedbackError('Enter a message before sending.')
+      return
+    }
+    setFeedbackSending(true)
+    setFeedbackError(null)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) {
+        setFeedbackError('Not signed in.')
+        return
+      }
+      const res = await fetch('/api/feedback/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ subject: feedbackSubject, body: feedbackBody }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { sent?: boolean }
+      if (json.sent) {
+        setFeedbackSent(true)
+        setFeedbackBody('')
+      } else {
+        setFeedbackError('Could not send feedback. Please try again.')
+      }
+    } catch {
+      setFeedbackError('Could not send feedback. Please try again.')
+    } finally {
+      setFeedbackSending(false)
+    }
   }
 
   const query = searchText.trim().toLowerCase()
@@ -2094,9 +2155,14 @@ export default function MainScreen() {
             <>
           <div className="band">
             <span className="glabel">Housekeeping</span>
-            <button className="btn-quiet" type="button" onClick={handleLogOut} disabled={signingOut}>
-              {signingOut ? 'Logging out…' : 'Log Out'}
-            </button>
+            <span className="bandcluster">
+              <button className="btn" type="button" onClick={openFeedbackDialog}>
+                Private Tester Feedback
+              </button>
+              <button className="btn-quiet" type="button" onClick={handleLogOut} disabled={signingOut}>
+                {signingOut ? 'Logging out…' : 'Log Out'}
+              </button>
+            </span>
           </div>
 
           <div className="subcard">
@@ -2885,6 +2951,74 @@ export default function MainScreen() {
               >
                 Got It
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Private Tester Feedback (2026-10-21, owner's own mockup) — see
+          openFeedbackDialog's own comment above. Same .scrim/.modal
+          pattern as the Install dialog just above. */}
+      {feedbackDialogOpen && (
+        <>
+          <div className="scrim" onClick={() => setFeedbackDialogOpen(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="feedback-dialog-title">
+            <div className="modalhead">
+              <p className="modal-title" id="feedback-dialog-title">
+                Private Tester Feedback
+              </p>
+            </div>
+            <p className="subnote" style={{ marginTop: 10 }}>
+              This is a temporary feedback channel for the private testing period only — it won&rsquo;t be part of
+              the finished app.
+            </p>
+            <div className="metarow" style={{ marginTop: 10 }}>
+              <b>From:</b>
+              <span>{feedbackEmail ?? 'Loading…'}</span>
+            </div>
+            <div className="fgroup" style={{ marginTop: 10 }}>
+              <label
+                htmlFor="fb-subject"
+                style={{ display: 'block', fontSize: 12.5, fontWeight: 700, marginBottom: 4, color: 'var(--ink)' }}
+              >
+                Subject
+              </label>
+              <select
+                id="fb-subject"
+                className="finput"
+                value={feedbackSubject}
+                onChange={(e) => setFeedbackSubject(e.target.value)}
+              >
+                <option value="Error">Error</option>
+                <option value="Something Awkward">Something Awkward</option>
+                <option value="Something Missing">Something Missing</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="fgroup" style={{ marginTop: 10 }}>
+              <textarea
+                className="ftextarea ftextarea-plain"
+                placeholder="What happened? What did you expect instead?"
+                aria-label="Feedback message"
+                value={feedbackBody}
+                onChange={(e) => setFeedbackBody(e.target.value)}
+              />
+            </div>
+            {feedbackError && (
+              <p className="ferror" role="alert">
+                {feedbackError}
+              </p>
+            )}
+            {feedbackSent && <p className="noticeband">Thanks — your feedback was sent.</p>}
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button type="button" className="btn-secondary" onClick={() => setFeedbackDialogOpen(false)}>
+                {feedbackSent ? 'Close' : 'Cancel'}
+              </button>
+              {!feedbackSent && (
+                <button type="button" className="btn" onClick={handleSendFeedback} disabled={feedbackSending}>
+                  {feedbackSending ? 'Sending…' : 'Send'}
+                </button>
+              )}
             </div>
           </div>
         </>

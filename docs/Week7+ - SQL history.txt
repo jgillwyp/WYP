@@ -356,3 +356,258 @@ $$;
 --   -- ContactDetailForm.tsx), and that the Contact shows "awaiting
 --   -- approval" again afterward, not "Contact-verified."
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 084 (2026-10-21) -- sms_consent_links: a Contact can now hold
+-- multiple simultaneously-valid text-messaging-consent tokens, instead of
+-- one. DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Jim, building the new Resend Approval Request button (ContactDetailForm.tsx,
+-- same batch): "I am worried about invalidating the prior approval request.
+-- Could there be more than one valid request?" -- exactly the right question,
+-- and the answer was yes: request_sms_consent (migration 079) has always
+-- overwritten the single contacts.sms_consent_token_hash column, silently
+-- killing whatever link was in every earlier-sent email the moment a later
+-- one needed a fresh token -- including a Resend, and including the
+-- phone-number-change re-request this same screen already does (migration
+-- 083). This is the identical bug request_links (migration 075) already
+-- fixed once for Request response links -- see that migration's own header
+-- comment, copied here almost verbatim with "Request"/"request_links"
+-- swapped for "Contact"/"sms_consent_links". That migration's own backfill-
+-- then-deprecate approach is mirrored exactly: nothing already working
+-- breaks the moment this runs, and the old column is marked deprecated
+-- rather than dropped in the same migration that changes behavior.
+--
+-- Unlike request_links, no expires_at/revoked_at columns -- the original
+-- design (migration 079's own header comment) already called this token
+-- "durable, reusable" with no expiry concept, and a second, later-approved
+-- token resolving to the same already-approved Contact causes no
+-- incorrectness (get_contact_for_sms_consent and set_sms_consent both key
+-- off the Contact's own shared sms_consent_given_at/sms_opted_out_at
+-- fields, not any per-token state) -- so there's nothing yet to revoke.
+-- Easy to add later if a real need for it shows up, same as request_links'
+-- own still-uncalled revoke_request_link.
+-- ============================================================================
+
+create table public.sms_consent_links (
+  id uuid primary key default gen_random_uuid(),
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  token_hash bytea not null,
+  created_at timestamptz not null default now()
+);
+
+create index sms_consent_links_contact_id_idx on public.sms_consent_links (contact_id);
+create unique index sms_consent_links_token_hash_idx on public.sms_consent_links (token_hash);
+
+alter table public.sms_consent_links enable row level security;
+-- No policies, and no anon/authenticated grant -- reachable only through
+-- the SECURITY DEFINER functions below, same reasoning request_links'
+-- own header comment already gives for that table.
+
+comment on table public.sms_consent_links is
+  'One row per text-messaging-consent token ever issued for a Contact (migration 084) -- replaces the single-slot contacts.sms_consent_token_hash (migration 079), which silently invalidated every earlier-sent email''s link each time a later one (a Resend, or a phone-number-change re-request) needed a fresh token. Multiple rows may be simultaneously valid for the same contact_id; get_contact_for_sms_consent/set_sms_consent/set_sms_opt_out/mark_sms_consent_notified now match against any of them, not a single column.';
+
+-- Backfill: preserve every currently-live token so nothing already working
+-- breaks the moment this migration runs.
+insert into public.sms_consent_links (contact_id, token_hash, created_at)
+  select id, sms_consent_token_hash, coalesce(sms_consent_requested_at, now())
+  from public.contacts
+  where sms_consent_token_hash is not null;
+
+comment on column public.contacts.sms_consent_token_hash is
+  'DEPRECATED (migration 084) -- superseded by sms_consent_links, which supports multiple simultaneously-valid tokens per Contact. No longer read or written by any function; left in place, unused, rather than dropped in the same migration that changes behavior.';
+
+-- ----------------------------------------------------------------------------
+-- request_sms_consent -- mints into sms_consent_links instead of overwriting
+-- the single contacts column. Signature and every other field it touches
+-- unchanged (including migration 083's sms_consent_given_at = null reset),
+-- so create-or-replace is safe -- every existing caller (AddContactForm.tsx,
+-- ContactDetailForm.tsx, including its new Resend button and its
+-- phone-change re-request) needs no change.
+-- ----------------------------------------------------------------------------
+create or replace function public.request_sms_consent(p_contact_id uuid, p_notify_owner boolean default false)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_token text;
+begin
+  select owner_id into v_owner from public.contacts where id = p_contact_id;
+
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  insert into public.sms_consent_links (contact_id, token_hash)
+    values (p_contact_id, digest(v_token, 'sha256'));
+
+  update public.contacts
+    set sms_consent_requested_at = now(),
+        sms_consent_notify_owner = p_notify_owner,
+        sms_consent_notified_at = null,
+        sms_consent_given_at = null
+    where id = p_contact_id;
+
+  return v_token;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- get_contact_for_sms_consent -- looks up through sms_consent_links now.
+-- Everything else (the phone coalesce order from migration 083, the
+-- returned fields) is otherwise unchanged. Signature unchanged, no drop
+-- needed.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_contact_for_sms_consent(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_contact record;
+begin
+  select c.phone, c.sms_consent_given_at, c.sms_consent_phone,
+         c.sms_opted_out_at, p.display_name as owner_name
+    into v_contact
+    from public.sms_consent_links scl
+    join public.contacts c on c.id = scl.contact_id
+    join public.profiles p on p.id = c.owner_id
+    where scl.token_hash = v_hash;
+
+  if not found then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  return jsonb_build_object(
+    'phone', coalesce(v_contact.phone, v_contact.sms_consent_phone),
+    'owner_name', v_contact.owner_name,
+    'consent_given_at', v_contact.sms_consent_given_at,
+    'opted_out_at', v_contact.sms_opted_out_at
+  );
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- set_sms_consent -- looks up through sms_consent_links now. p_phone must
+-- already be E.164-normalized by the caller (TextMessagingForm.tsx), same
+-- as before.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_sms_consent(p_token text, p_phone text)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_contact_id uuid;
+begin
+  select contact_id into v_contact_id from public.sms_consent_links
+    where token_hash = digest(p_token, 'sha256');
+
+  if v_contact_id is null then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.contacts
+    set sms_consent_given_at = now(),
+        sms_consent_phone = p_phone,
+        phone = p_phone,
+        sms_opted_out_at = null
+    where id = v_contact_id;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- set_sms_opt_out -- looks up through sms_consent_links now. Also reverts
+-- send_by to 'email', same as before.
+-- ----------------------------------------------------------------------------
+create or replace function public.set_sms_opt_out(p_token text)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_contact_id uuid;
+begin
+  select contact_id into v_contact_id from public.sms_consent_links
+    where token_hash = digest(p_token, 'sha256');
+
+  if v_contact_id is null then
+    raise exception 'This link is no longer valid.';
+  end if;
+
+  update public.contacts
+    set sms_opted_out_at = now(),
+        send_by = 'email'
+    where id = v_contact_id;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- mark_sms_consent_notified -- looks up through sms_consent_links now.
+-- Everything else (the atomic check-and-mark, the should_notify/owner_id/
+-- contact_id/contact_name payload) unchanged.
+-- ----------------------------------------------------------------------------
+create or replace function public.mark_sms_consent_notified(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash bytea := digest(p_token, 'sha256');
+  v_row record;
+begin
+  update public.contacts c
+    set sms_consent_notified_at = now()
+    where c.id = (select contact_id from public.sms_consent_links where token_hash = v_hash)
+      and c.sms_consent_notify_owner = true
+      and c.sms_consent_given_at is not null
+      and c.sms_consent_notified_at is null
+    returning c.id, c.owner_id, c.display_name into v_row;
+
+  if v_row.owner_id is null then
+    return jsonb_build_object('should_notify', false);
+  end if;
+
+  return jsonb_build_object(
+    'should_notify', true,
+    'owner_id', v_row.owner_id,
+    'contact_id', v_row.id,
+    'contact_name', v_row.display_name
+  );
+end;
+$$;
+
+-- Note: set_sms_opt_out_by_phone (the inbound-SMS-webhook STOP handler)
+-- is untouched -- it already matches on contacts.sms_consent_phone, never
+-- a token, so this migration doesn't affect it.
+
+-- Re-grant EXECUTE on every function touched above -- create or replace
+-- does NOT clear existing grants (only drop does), so this is a belt-
+-- and-suspenders confirmation, not a required step; harmless either way.
+grant execute on function public.request_sms_consent(uuid, boolean) to authenticated;
+grant execute on function public.get_contact_for_sms_consent(text) to anon, authenticated;
+grant execute on function public.set_sms_consent(text, text) to anon, authenticated;
+grant execute on function public.set_sms_opt_out(text) to anon, authenticated;
+grant execute on function public.mark_sms_consent_notified(text) to anon, authenticated;
+
+-- Verify after running:
+--   select count(*) from public.sms_consent_links;
+--     -- should be >= the number of contacts with a non-null
+--     -- sms_consent_token_hash before this ran
+--   -- Then, live: open an already-approved text Contact (Open -> edit
+--   -- phone back to its own current value so Save doesn't trigger the
+--   -- phone-change dialog -- or pick one still awaiting approval), click
+--   -- Resend Approval Request, and confirm BOTH the original emailed link
+--   -- and the newly resent one still work (open each, confirm neither
+--   -- says "no longer valid").
+-- ============================================================================

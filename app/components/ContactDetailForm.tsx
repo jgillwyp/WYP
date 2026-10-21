@@ -114,6 +114,10 @@ export default function ContactDetailForm() {
   // Phone-number-change re-approval (2026-10-20) — see phoneChanged() and
   // handleSubmit() below.
   const [smsPhoneChangeDialogOpen, setSmsPhoneChangeDialogOpen] = useState(false)
+  // Resend Approval Request (2026-10-21, owner-reported — a tester may not
+  // easily find the original email). See handleResendApproval() below.
+  const [resending, setResending] = useState(false)
+  const [resendMessage, setResendMessage] = useState<string | null>(null)
   const [notifyOwner, setNotifyOwner] = useState(() => {
     try {
       return localStorage.getItem(SMS_NOTIFY_OWNER_KEY) === '1'
@@ -428,6 +432,58 @@ export default function ContactDetailForm() {
     router.back()
   }
 
+  // Resend Approval Request (2026-10-21) — stays on this screen (unlike
+  // performSave, which navigates away), so the banner's own date and
+  // status need updating locally rather than relying on a fresh load.
+  // Mints a fresh token via the same request_sms_consent RPC the original
+  // request and the phone-change re-request both already use — this
+  // necessarily invalidates whatever link was in the earlier email (one
+  // token per Contact, overwritten on every call, same as that earlier
+  // flow), so the Contact needs to use the most recently emailed link.
+  async function handleResendApproval() {
+    setResending(true)
+    setResendMessage(null)
+
+    try {
+      const { data: consentToken, error: rpcError } = await supabase.rpc('request_sms_consent', {
+        p_contact_id: contactId,
+        p_notify_owner: notifyOwner,
+      })
+      if (rpcError || !consentToken) {
+        setResendMessage('Could not resend the approval request. Please try again.')
+        return
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) {
+        setResendMessage('Could not resend the approval request. Please try again.')
+        return
+      }
+
+      const res = await fetch('/api/sms/send-consent-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          contactId,
+          link: `${window.location.origin}/textmessaging?token=${consentToken}`,
+        }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { sent?: boolean }
+
+      if (json.sent) {
+        setSmsConsent((s) => ({ ...s, requested_at: new Date().toISOString() }))
+        setResendMessage('Approval request resent.')
+      } else {
+        setResendMessage('Could not resend the approval request. Please try again.')
+      }
+    } catch {
+      setResendMessage('Could not resend the approval request. Please try again.')
+    } finally {
+      setResending(false)
+    }
+  }
+
   function handleClose() {
     router.back()
   }
@@ -510,15 +566,31 @@ export default function ContactDetailForm() {
         </div>
 
         {/* Status panel (2026-10-20, Jim's own mockup) — a prominent,
-            always-visible .noticeband (same component Request Detail's own
-            "Note: ..." banner uses) rather than the small inline .gatenote
-            line further down, which still covers every other
+            always-visible band (same Strip background Request Detail's own
+            "Note: ..." .noticeband uses) rather than the small inline
+            .gatenote line further down, which still covers every other
             send-by-text state (opted out / already approved / not yet
-            requested). Only this one state gets promoted to a banner. */}
+            requested). Only this one state gets promoted to a banner.
+            .linkband, not .noticeband, for the flex layout (text + Resend
+            button) — same component the old Response Link band used,
+            already built for exactly this "Strip background, text plus a
+            button" shape. Resend added 2026-10-21, owner-reported: a
+            tester may not easily find the original email. */}
         {tier === 'subscriber' && sendBy === 'text' && smsConsent.requested_at && !smsConsent.given_at && !smsConsent.opted_out_at && (
-          <div className="noticeband">
-            A text messaging approval request was sent on {new Date(smsConsent.requested_at).toLocaleDateString('en-US')}.
-            Until approved, Requests are sent by email.
+          <div className="linkband">
+            <span style={{ flex: '1 1 220px', minWidth: 0 }}>
+              A text messaging approval request was sent on {new Date(smsConsent.requested_at).toLocaleDateString('en-US')}.
+              Until approved, Requests are sent by email.
+              {resendMessage && (
+                <>
+                  <br />
+                  <b>{resendMessage}</b>
+                </>
+              )}
+            </span>
+            <button className="btn" type="button" onClick={handleResendApproval} disabled={resending}>
+              {resending ? 'Resending…' : 'Resend Approval Request'}
+            </button>
           </div>
         )}
 
