@@ -33,6 +33,24 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Voice dictation (2026-10-21, owner-reported — the mic button
+         blinked red and returned to normal without ever listening,
+         then stopped responding at all). Capacitor's own default
+         WebChromeClient (BridgeWebChromeClient, wired in automatically
+         by Bridge.java — no custom Java code needed) already knows how
+         to request RECORD_AUDIO at runtime and grant the WebView's own
+         getUserMedia/SpeechRecognition permission request once the user
+         approves it. Without this manifest declaration, that runtime
+         request has nothing to ask Android for, so it fails silently
+         before any system permission dialog can appear — the web page's
+         SpeechRecognition call gets an instant denial instead, which
+         matches the reported blink-then-nothing behavior exactly.
+         MODIFY_AUDIO_SETTINGS is also requested by that same chrome
+         client for an audio-capture grant; it's a normal (non-dangerous)
+         permission, auto-granted once declared, no prompt involved. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <!-- Android 11+ (API 30+) package visibility — without this, Intent.
          resolveActivity()/startActivity() can silently fail to find an
          installed Calendar app even when one exists, since the OS hides
