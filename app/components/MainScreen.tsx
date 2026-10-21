@@ -2174,16 +2174,27 @@ export default function MainScreen() {
               or clear what's been typed. */}
           {!isSearching && (
             <>
-          <div className="band">
-            <span className="glabel">Housekeeping</span>
-            <span className="bandcluster">
-              <button className="btn" type="button" onClick={openFeedbackDialog}>
-                Private Tester Feedback
-              </button>
+          {/* Owner-reported, 2026-10-21: "Housekeeping" + both buttons
+              crammed onto one row overflowed a phone's width, pushing Log
+              Out off-screen with no way to scroll to it. Private Tester
+              Feedback (temporary, testing-period-only) now gets its own
+              second row, right-aligned, below the title/Log Out row — same
+              grey .band background throughout, same stacking idea as
+              Archive's .archsecband (2026-09-03), applied here with its own
+              scoped classes since this is two full button rows, not a
+              title+subtitle pair. */}
+          <div className="band hk-band">
+            <div className="hk-band-row">
+              <span className="glabel">Housekeeping</span>
               <button className="btn-quiet" type="button" onClick={handleLogOut} disabled={signingOut}>
                 {signingOut ? 'Logging out…' : 'Log Out'}
               </button>
-            </span>
+            </div>
+            <div className="hk-band-row hk-band-row-end">
+              <button className="btn" type="button" onClick={openFeedbackDialog}>
+                Private Tester Feedback
+              </button>
+            </div>
           </div>
 
           <div className="subcard">

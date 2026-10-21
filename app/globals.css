@@ -182,6 +182,30 @@ body {
   gap: 8px;
 }
 
+/* Housekeeping's own two-row band (MainScreen.tsx, 2026-10-21) — owner-
+   reported: "Housekeeping" + Log Out + Private Tester Feedback all on one
+   .band row overflowed a phone's width, pushing Log Out off-screen with no
+   way to scroll to it. .hk-band stacks two ordinary flex rows inside the
+   same grey .band background instead of widening a single row further;
+   .hk-band-row-end right-aligns the second row's lone button, matching the
+   owner's own "second line on the right" request. */
+.hk-band {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.hk-band-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hk-band-row-end {
+  justify-content: flex-end;
+}
+
 /* §6.48 PROPOSED — .archsecband/.archsecsub, 2026-09-03 (Archive screen).
    .band is normally a single centered row (align-items: center); a section
    that needs a second, smaller line under its own title stacks instead —
