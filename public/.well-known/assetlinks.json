@@ -4,7 +4,9 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.wouldyouplease.app",
-      "sha256_cert_fingerprints": []
+      "sha256_cert_fingerprints": [
+        "E2:23:B4:BC:E1:4D:00:82:F4:5C:1A:6C:35:0D:72:EF:0D:28:95:82:DD:5A:57:8E:F6:3C:3B:7B:F4:CA:7E:12"
+      ]
     }
   }
 ]
