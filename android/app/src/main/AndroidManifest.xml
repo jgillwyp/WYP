@@ -33,17 +33,31 @@
                  the app is already running reaches the existing instance
                  via onNewIntent rather than opening a second one.
                  PWAProvider.tsx's appUrlOpen listener is what then
-                 navigates to the actual tapped path. Both the www and bare
-                 apex hosts are declared since the apex 308-redirects to
-                 www at the Vercel domain level (see CLAUDE.md's
-                 2026-08-22 email-logo entry) — App Links interception
-                 happens before that redirect would ever fire. -->
+                 navigates to the actual tapped path.
+
+                 www.wouldyouplease.com ONLY — a same-day real-device test
+                 found the original version of this filter (www + the bare
+                 apex, on the theory that interception happens before any
+                 redirect could fire) verified as nothing at all. Root
+                 cause, confirmed via a live curl of both URLs: the apex
+                 host 308-redirects to www (Vercel's own domain-level
+                 redirect, see CLAUDE.md's 2026-08-22 email-logo entry) —
+                 but Android's Digital Asset Links check itself fetches
+                 assetlinks.json over a real HTTP request and explicitly
+                 requires a direct 200 with no redirect at all, per
+                 Google's own spec. One host in an autoVerify filter
+                 failing that check is enough to mark the WHOLE filter
+                 unverified, taking the otherwise-fine www host down with
+                 it. Every real link this app ever emits already uses
+                 www.wouldyouplease.com (see capacitor.config.ts's own
+                 comment on the same redirect), so the apex host added
+                 nothing but this failure mode — dropped outright rather
+                 than solved with a second filter. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="www.wouldyouplease.com" />
-                <data android:scheme="https" android:host="wouldyouplease.com" />
             </intent-filter>
         </activity>
 
