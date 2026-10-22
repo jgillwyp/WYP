@@ -1,6 +1,8 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { App as CapacitorApp } from '@capacitor/app'
 
 import { APP_VERSION } from '@/version'
 
@@ -134,6 +136,45 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  }, [])
+
+  // Android App Links deep-link handling (2026-10-21) — the manifest's own
+  // autoVerify intent-filter (AndroidManifest.xml) plus a hosted
+  // assetlinks.json are what make Android launch this app instead of a
+  // browser tab for a wouldyouplease.com link in the first place, but that
+  // alone only lands on this app's configured start page
+  // (capacitor.config.ts's server.url, the site root) — the actual tapped
+  // path (e.g. /contacts/<id> from a notification email) is carried
+  // separately on the launching Intent, and nothing reads it without this
+  // listener. @capacitor/app's appUrlOpen event fires with that full URL
+  // on both a cold start via the link and a already-running app receiving
+  // a new one (MainActivity's existing singleTask launchMode routes the
+  // latter through onNewIntent rather than a second instance). The
+  // WebView's own origin already IS https://www.wouldyouplease.com (same
+  // remote-content config comment above), so reassigning location straight
+  // to the intercepted URL is a same-origin navigation, not a cross-origin
+  // jump — simplest correct way to actually land on the right page, same
+  // as a normal browser following that link would. A target route's own
+  // RequireAuth (e.g. /contacts/[id]) still gates it exactly as it always
+  // has; this only changes which shell the link opens into, never what
+  // that page itself requires. No-ops entirely on web/desktop/iOS-without-
+  // this-wiring via the isNativePlatform() guard.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    const listenerPromise = CapacitorApp.addListener('appUrlOpen', (event) => {
+      if (!event.url) return
+      try {
+        window.location.href = event.url
+      } catch {
+        // Malformed or unexpected URL — nothing to navigate to; the app
+        // just stays wherever it already was.
+      }
+    })
+
+    return () => {
+      listenerPromise.then((handle) => handle.remove())
     }
   }, [])
 

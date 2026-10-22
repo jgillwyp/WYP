@@ -18,6 +18,33 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Android App Links (2026-10-21, owner-reported — an emailed
+                 wouldyouplease.com link opens the device's regular browser
+                 instead of this installed app). autoVerify="true" has
+                 Android check the hosted Digital Asset Links file
+                 (public/.well-known/assetlinks.json, served by the web app
+                 itself) against this app's own signing certificate at
+                 install time; only once that verification succeeds does a
+                 matching link open here instead of falling back to the
+                 browser the way it always has — an unverified device just
+                 keeps today's behavior, nothing regresses either way.
+                 singleTask (already set above) means a link tapped while
+                 the app is already running reaches the existing instance
+                 via onNewIntent rather than opening a second one.
+                 PWAProvider.tsx's appUrlOpen listener is what then
+                 navigates to the actual tapped path. Both the www and bare
+                 apex hosts are declared since the apex 308-redirects to
+                 www at the Vercel domain level (see CLAUDE.md's
+                 2026-08-22 email-logo entry) — App Links interception
+                 happens before that redirect would ever fire. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.wouldyouplease.com" />
+                <data android:scheme="https" android:host="wouldyouplease.com" />
+            </intent-filter>
         </activity>
 
         <provider
