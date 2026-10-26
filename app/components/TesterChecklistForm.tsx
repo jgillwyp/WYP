@@ -73,9 +73,10 @@ function detectPlatform(): Platform {
 }
 
 function buildItems(platform: Platform): ChecklistItem[] {
-  const items: ChecklistItem[] = [
-    { id: 'start-1', group: 'start', title: 'Sign in', detail: "Enter your email on the sign-in screen. You'll get an email with both a link and a numbered code. If tapping the link doesn't bring you back here, type the code instead." },
-  ]
+  // No "Sign in" item here (2026-10-26, owner-reported) — this screen is
+  // RequireAuth-wrapped, so reaching it at all already means the tester is
+  // signed in; walking them through signing in again would be redundant.
+  const items: ChecklistItem[] = []
 
   if (platform === 'android') {
     items.push({
