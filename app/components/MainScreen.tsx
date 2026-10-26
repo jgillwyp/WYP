@@ -1008,6 +1008,13 @@ export default function MainScreen() {
   )
   const [signingOut, setSigningOut] = useState(false)
 
+  // Private Tester menu (2026-10-26) — replaces the standalone "Private
+  // Tester Feedback" button with a small menu offering Feedback and the
+  // new in-app Checklist (app/testers/checklist), per Jim's own request to
+  // group both under one Housekeeping entry rather than growing the band
+  // with a second button.
+  const [testerMenuOpen, setTesterMenuOpen] = useState(false)
+
   // Private Tester Feedback (2026-10-21) — see openFeedbackDialog's own
   // comment below.
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
@@ -2191,8 +2198,8 @@ export default function MainScreen() {
               </button>
             </div>
             <div className="hk-band-row hk-band-row-end">
-              <button className="btn" type="button" onClick={openFeedbackDialog}>
-                Private Tester Feedback
+              <button className="btn" type="button" onClick={() => setTesterMenuOpen(true)}>
+                Private Tester
               </button>
             </div>
           </div>
@@ -2982,6 +2989,49 @@ export default function MainScreen() {
                 onClick={() => setInstallHelpOpen(false)}
               >
                 Got It
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Private Tester menu (2026-10-26) — see testerMenuOpen's own
+          comment above. A plain two-row choice, same .scrim/.modal pattern
+          as every other dialog on this screen. */}
+      {testerMenuOpen && (
+        <>
+          <div className="scrim" onClick={() => setTesterMenuOpen(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="tester-menu-title">
+            <div className="modalhead">
+              <p className="modal-title" id="tester-menu-title">
+                Private Tester
+              </p>
+            </div>
+            <div className="modalacts" style={{ marginTop: 12, flexDirection: 'column', alignItems: 'stretch' }}>
+              <button
+                type="button"
+                className="btn"
+                style={{ marginBottom: 8 }}
+                onClick={() => {
+                  setTesterMenuOpen(false)
+                  openFeedbackDialog()
+                }}
+              >
+                Feedback
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ marginBottom: 8 }}
+                onClick={() => {
+                  setTesterMenuOpen(false)
+                  router.push('/testers/checklist')
+                }}
+              >
+                Checklist
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setTesterMenuOpen(false)}>
+                Cancel
               </button>
             </div>
           </div>
