@@ -114,7 +114,7 @@ function buildItems(platform: Platform): ChecklistItem[] {
       id: 'feat-6',
       group: 'features',
       title: 'Set a Reminder',
-      detail: 'On a Request with a Due Date, try Day Before / Day Of / Time of / Day After under Reminders.',
+      detail: 'On a Request with a Due Date, try Day Before / Day Of / Minutes Before / Day After under Reminders.',
     },
     { id: 'feat-7', group: 'features', title: 'Try Repeat', detail: 'Set a Request or ToDo to repeat (e.g. weekly) and see the next one get created automatically.' },
     { id: 'feat-8', group: 'features', title: 'Look at Calendar View', detail: 'Your Requests and ToDos laid out by date.' },
