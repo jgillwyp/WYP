@@ -88,15 +88,43 @@ function buildItems(platform: Platform): ChecklistItem[] {
   }
 
   items.push(
-    { id: 'feat-1', group: 'features', title: 'Create a Request', detail: "Add a Contact if you don't have one yet, then send them a Request with a Due Date and a Description." },
-    { id: 'feat-2', group: 'features', title: 'Create a ToDo', detail: 'A ToDo is a Request to yourself — no Contact needed.' },
-    { id: 'feat-3', group: 'features', title: 'Respond to a Request', detail: 'If someone sends you one, find it under Received and mark it Done.' },
+    {
+      id: 'feat-1',
+      group: 'features',
+      title: 'Create a Request',
+      detail:
+        "Add a Contact if you don't have one yet, then send them a Request with a Due Date and a Description. You can add yourself as a contact to easily see both creating and receiving Requests.",
+    },
+    {
+      id: 'feat-2',
+      group: 'features',
+      title: 'Create a ToDo',
+      detail:
+        'A ToDo is a Request to yourself — no Contact needed. Dialogs work for both Requests and ToDos. For ToDos, they offer an ability to enter date-stamped progress history.',
+    },
+    {
+      id: 'feat-3',
+      group: 'features',
+      title: 'Respond to a Request',
+      detail: 'If you or someone else sends you one, find it under Received and mark it Done.',
+    },
     { id: 'feat-4', group: 'features', title: 'Add an Attachment', detail: 'A photo, PDF, or other file on a Request or ToDo.' },
     { id: 'feat-5', group: 'features', title: 'Try Voice Dictation', detail: 'Tap the microphone icon in a Description field and speak instead of typing.' },
-    { id: 'feat-6', group: 'features', title: 'Set a Reminder', detail: 'On a Request with a Due Date, try Day Before / Day Of / Day After under Reminders.' },
+    {
+      id: 'feat-6',
+      group: 'features',
+      title: 'Set a Reminder',
+      detail: 'On a Request with a Due Date, try Day Before / Day Of / Time of / Day After under Reminders.',
+    },
     { id: 'feat-7', group: 'features', title: 'Try Repeat', detail: 'Set a Request or ToDo to repeat (e.g. weekly) and see the next one get created automatically.' },
     { id: 'feat-8', group: 'features', title: 'Look at Calendar View', detail: 'Your Requests and ToDos laid out by date.' },
     { id: 'feat-9', group: 'features', title: 'Archive something, then find it again', detail: 'Archive a finished item from Housekeeping, then locate it in Archive.' },
+    {
+      id: 'feat-9b',
+      group: 'features',
+      title: 'Print something',
+      detail: 'All detail screens and lists can be printed. If you are not connected to a printer, select PDF to see the printout.',
+    },
     {
       id: 'feat-10',
       group: 'features',
