@@ -214,10 +214,18 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   // all — no error, just silently stuck. Reusing one long-lived
   // SpeechRecognition object across many start()/stop() cycles is a
   // documented source of exactly this kind of degraded, no-results
-  // behavior in WebKit's implementation. A brand-new instance — built the
-  // same way here for a user-initiated start and for every browser-forced
-  // short-pause restart — is the standard mitigation, and costs nothing
-  // on browsers where reuse was never a problem.
+  // behavior in WebKit's implementation.
+  //
+  // Only called from a toggle()-initiated start (attemptStart below), not
+  // from the much more frequent browser-forced short-pause restart inside
+  // onend — an earlier version of this fix also rebuilt the instance on
+  // every one of those (roughly once a second while actively talking),
+  // which owner-testing showed made things worse: every attempt after the
+  // first turned red for only a couple seconds and captured nothing,
+  // consistent with iOS's own audio engine not getting enough real
+  // teardown time between that many rapid rebuilds. A fresh instance only
+  // where the original stuck-after-one-cycle symptom was actually
+  // observed — at the start of a new session — avoids both problems.
   function createRecognition(): SpeechRecognitionLike | null {
     const Recognition = recognitionCtorRef.current
     if (!Recognition) return null
@@ -283,10 +291,26 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     // non-recoverable onerror doing the same, or the silence timer above
     // firing — that's the one case this actually finishes outright. Any
     // other time onend fires, it's just the browser ending the underlying
-    // session on its own short internal timeout; restart unconditionally
-    // (on a fresh instance — see createRecognition's own comment) and let
-    // the independent timer be the only thing that decides when enough
-    // real silence has actually passed.
+    // session on its own short internal timeout (typically every second
+    // or so while actively talking); restart unconditionally and let the
+    // independent timer be the only thing that decides when enough real
+    // silence has actually passed.
+    //
+    // 2026-10-28, same-day correction: an earlier version of this restart
+    // path built a brand-new recognizer instance here too, same as a
+    // genuinely new toggle()-initiated session — reasoned, at the time, as
+    // a mitigation for a stuck-after-one-cycle WebKit quirk (see
+    // createRecognition's own comment). Owner-reported this made things
+    // worse, not better: every attempt after the first now turned red for
+    // only a couple seconds regardless of actual speech length and
+    // captured nothing. Recreating the whole native audio pipeline on
+    // every one-second restart, rather than only when the user explicitly
+    // starts a new session, is the more likely explanation — iOS's own
+    // audio engine needs real teardown time that a restart this frequent
+    // doesn't give it. Reverted to reusing this same instance for a
+    // same-session restart; a fresh instance is still built for every
+    // toggle()-initiated start (attemptStart below), which is the much
+    // rarer case the original mitigation was actually aimed at.
     recognition.onend = () => {
       if (sessionRef.current === 0) {
         finishSession(true)
@@ -307,15 +331,8 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       // accumulated text) is untouched — only the per-session index
       // bookkeeping resets.
       finalizedIndexesRef.current.clear()
-
-      const next = createRecognition()
-      if (!next) {
-        finishSession(true)
-        return
-      }
-      recognitionRef.current = next
       try {
-        next.start()
+        recognition.start()
       } catch {
         finishSession(true)
       }
