@@ -65,6 +65,13 @@ public class NativeCalendarPlugin: CAPPlugin, CAPBridgedPlugin, EKEventEditViewD
             event.startDate = Date(timeIntervalSince1970: startMillis / 1000)
             event.endDate = Date(timeIntervalSince1970: endMillis / 1000)
             event.isAllDay = allDay
+            // 2026-10-29, first real-device iOS test (owner-reported): the
+            // edit sheet opened but tapping Add never actually created a
+            // calendar entry. Leaving `calendar` unset relies on
+            // EKEventEditViewController picking a default on its own,
+            // which isn't guaranteed — assigning it explicitly removes
+            // that as a possible cause of a save silently failing.
+            event.calendar = store.defaultCalendarForNewEvents
 
             let editViewController = EKEventEditViewController()
             editViewController.event = event
@@ -80,6 +87,12 @@ public class NativeCalendarPlugin: CAPPlugin, CAPBridgedPlugin, EKEventEditViewD
         _ controller: EKEventEditViewController,
         didCompleteWith action: EKEventEditViewAction
     ) {
+        // Temporary diagnostic (2026-10-29) — owner-reported the sheet
+        // opened but no event appeared in Calendar afterward. Logging the
+        // actual action (.saved/.canceled/.deleted) via NSLog, visible in
+        // Xcode's own console, confirms what actually happened rather than
+        // guessing. Remove once confirmed reliable.
+        NSLog("[NativeCalendarPlugin] eventEditViewController action: \(action.rawValue)")
         controller.dismiss(animated: true)
         // Resolved regardless of whether the person tapped Add or Cancel —
         // same fire-and-forget "handed off to the calendar flow" semantics

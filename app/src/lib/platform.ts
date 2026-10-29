@@ -118,9 +118,15 @@ export function printWithExpandedWindow(): void {
   if (Capacitor.isNativePlatform()) {
     const jobName = document.title || 'Would You Please'
     NativePrint.print({ jobName })
-      .catch(() => {
-        // Best effort — there is no fallback print path inside a native
-        // WebView if the native print dialog itself fails.
+      .catch((err) => {
+        // Temporary diagnostic (2026-10-29) — first real-device iOS test
+        // showed the print icon highlight briefly then nothing else, with
+        // no visible error. There is no fallback print path inside a
+        // native WebView if the native print dialog itself fails, so this
+        // is best-effort either way — but logging the actual rejection
+        // reason beats guessing. Remove once confirmed reliable.
+         
+        console.warn('[native-print] print failed:', err)
       })
       .finally(() => {
         window.dispatchEvent(new Event('afterprint'))

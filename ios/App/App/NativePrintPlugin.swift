@@ -28,20 +28,30 @@ public class NativePrintPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func print(_ call: CAPPluginCall) {
         let jobName = call.getString("jobName") ?? "Would You Please"
+        // Temporary diagnostic (2026-10-29) — first real-device iOS test
+        // showed the print icon highlight briefly then nothing else
+        // happened. Logging each step via NSLog, visible in Xcode's own
+        // console, confirms where this actually stops. Remove once
+        // confirmed reliable.
+        NSLog("[NativePrintPlugin] print() called, jobName=\(jobName)")
 
         DispatchQueue.main.async {
             guard let webView = self.bridge?.webView else {
+                NSLog("[NativePrintPlugin] no webView")
                 call.reject("No WebView available to print.")
                 return
             }
             guard let viewController = self.bridge?.viewController else {
+                NSLog("[NativePrintPlugin] no viewController")
                 call.reject("No view available to print from.")
                 return
             }
             guard UIPrintInteractionController.isPrintingAvailable else {
+                NSLog("[NativePrintPlugin] isPrintingAvailable is false")
                 call.reject("Printing is not available on this device.")
                 return
             }
+            NSLog("[NativePrintPlugin] about to present, idiom=\(UIDevice.current.userInterfaceIdiom.rawValue)")
 
             let printInfo = UIPrintInfo(dictionary: nil)
             printInfo.outputType = .general
@@ -51,7 +61,8 @@ public class NativePrintPlugin: CAPPlugin, CAPBridgedPlugin {
             printController.printInfo = printInfo
             printController.printFormatter = webView.viewPrintFormatter()
 
-            let completion: UIPrintInteractionController.CompletionHandler = { _, _, error in
+            let completion: UIPrintInteractionController.CompletionHandler = { _, completed, error in
+                NSLog("[NativePrintPlugin] completion: completed=\(completed), error=\(String(describing: error))")
                 if let error = error {
                     call.reject("Could not print.", nil, error)
                 } else {
@@ -72,6 +83,7 @@ public class NativePrintPlugin: CAPPlugin, CAPBridgedPlugin {
             } else {
                 printController.present(animated: true, completionHandler: completion)
             }
+            NSLog("[NativePrintPlugin] present() call returned")
         }
     }
 }
