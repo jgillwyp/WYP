@@ -24,6 +24,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Would You Please uses your microphone for Voice Dictation when filling in a Description.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Would You Please uses speech recognition to turn your spoken words into text for Voice Dictation.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
