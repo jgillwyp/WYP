@@ -164,6 +164,9 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       mergeFinal(lastInterimTextRef.current)
       lastInterimTextRef.current = ''
     }
+    // Temporary diagnostic (2026-10-28) — see onerror's own comment above.
+     
+    console.warn('[voice-dictation] finishing, committed so far:', JSON.stringify(committedTextRef.current))
     renderTranscript('')
     setDictating(false)
   }
@@ -242,6 +245,13 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     recognition.onresult = (event) => {
       if (sessionRef.current === 0) return
 
+      // Temporary diagnostic (2026-10-28) — see onerror's own comment
+      // above. Confirms whether any audio is reaching the recognizer at
+      // all, as distinct from it reaching the recognizer but coming back
+      // empty.
+       
+      console.warn('[voice-dictation] onresult fired, results:', event.results.length)
+
       // Any onresult event means the recognizer is actively hearing
       // something — re-arms the real 4-second stop timer.
       armSilenceTimer()
@@ -276,6 +286,16 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     }
 
     recognition.onerror = (event) => {
+      // Temporary diagnostic (2026-10-28) — the browser's own error code
+      // here (e.g. 'network', 'not-allowed', 'audio-capture',
+      // 'service-not-allowed') has never been surfaced anywhere, even
+      // though recoverable 'no-speech' aside, every other code means this
+      // session genuinely failed. Logging it is the fastest way to tell
+      // which failure this actually is on a device that isn't reproducing
+      // it for Claude directly. Safe to remove once iOS dictation
+      // reliability is confirmed.
+       
+      console.warn('[voice-dictation] recognition error:', event?.error)
       if (sessionRef.current !== 0 && isRecoverableError(event?.error)) return
       // A real error ('not-allowed', 'audio-capture', etc.) — zero
       // sessionRef before finishing, same signal a manual stop already
