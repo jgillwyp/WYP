@@ -62,9 +62,18 @@ function joinParts(...parts: string[]): string {
 // shorter internal pause timeout.
 const SILENCE_TIMEOUT_MS = 4000
 
+// A recoverable error (currently just 'no-speech') is deliberately a no-op
+// here — the onend that follows it is what actually decides to
+// restart-or-finish, so there's exactly one place making that call rather
+// than two paths that could disagree.
+function isRecoverableError(errorCode: string | undefined): boolean {
+  return errorCode === 'no-speech'
+}
+
 export function useSpeechDictation(value: string, setValue: (value: string) => void) {
   const valueRef = useRef(value)
   const setValueRef = useRef(setValue)
+  const recognitionCtorRef = useRef<SpeechRecognitionConstructor | null>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const baseTextRef = useRef('')
   // committedTextRef (2026-09-28, replaces the old per-index
@@ -76,15 +85,21 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   // instead of being merged again.
   const committedTextRef = useRef('')
   const finalizedIndexesRef = useRef(new Set<number>())
+  // Tracks whatever interim (not-yet-final) text was on screen as of the
+  // last onresult event. 2026-10-28 (first real-device iOS test,
+  // owner-reported): this used to be folded into committedTextRef only on
+  // a browser-imposed restart (handleEnd's "still dictating" branch), never
+  // on a genuine finish (manual stop, or the 4-second silence timer) — so
+  // stopping right after speaking, before iOS had finalized that last
+  // phrase on its own, silently discarded it instead of keeping it. Now
+  // folded in on every path that ends a session, not just a restart.
+  const lastInterimTextRef = useRef('')
   const sessionRef = useRef(0)
   // silenceTimerRef (2026-09-28, revised same day — see armSilenceTimer's
   // own comment below) drives the actual 4-second decision directly via a
   // real JS timer, rather than comparing elapsed time at whatever moment
-  // the browser's own onend happens to fire. armSilenceTimerRef exists
-  // purely so toggle() (outside the setup effect below, which is where
-  // the recognition instance itself lives) can arm the same timer.
+  // the browser's own onend happens to fire.
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const armSilenceTimerRef = useRef<(() => void) | null>(null)
   const [supported, setSupported] = useState(false)
   const [dictating, setDictating] = useState(false)
 
@@ -93,168 +108,128 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     setValueRef.current = setValue
   }, [value, setValue])
 
-  useEffect(() => {
-    const Recognition = getSpeechRecognition()
-    if (!Recognition) return
+  // mergeFinal folds a newly-finalized transcript into committedTextRef.
+  // Owner-reported, 2026-09-28: dictated text was coming out as a
+  // "staircase" — each new bit of speech re-appending everything already
+  // said, e.g. "Hello" -> "Hello Hello world" -> "Hello Hello world Hello
+  // world today". The previous version (per-index Map, blind join)
+  // assumed every browser reports each result index as its own
+  // self-contained incremental phrase; some report each new final result
+  // as the *whole growing transcript so far*, which the blind join then
+  // appends on top of everything already committed instead of replacing
+  // it. Checking for overlap first, in both directions, makes this safe
+  // regardless of which convention the browser actually uses, without
+  // needing to know which one it is:
+  //   - nothing committed yet -> just take it
+  //   - the new transcript already starts with everything committed ->
+  //     it's the cumulative case; replace, don't append
+  //   - what's committed already starts with the new transcript -> the
+  //     browser re-sent an old, shorter final; already accounted for,
+  //     drop it
+  //   - neither contains the other -> genuinely new incremental content;
+  //     append it
+  function mergeFinal(transcript: string): void {
+    const t = transcript.trim()
+    if (!t) return
+    const committed = committedTextRef.current
+    const tLower = t.toLowerCase()
+    const committedLower = committed.toLowerCase()
+    if (!committed) {
+      committedTextRef.current = t
+    } else if (tLower.startsWith(committedLower)) {
+      committedTextRef.current = t
+    } else if (committedLower.startsWith(tLower)) {
+      // already fully accounted for — nothing new to add
+    } else {
+      committedTextRef.current = joinParts(committed, t)
+    }
+  }
+
+  function renderTranscript(currentInterimText: string): void {
+    lastInterimTextRef.current = currentInterimText
+    setValueRef.current(joinParts(baseTextRef.current, committedTextRef.current, currentInterimText))
+  }
+
+  // foldInterim covers every path that ends a session outright (manual
+  // stop, the 4-second silence timer, a non-recoverable onerror, or a
+  // final onend with nothing left to restart into) — see
+  // lastInterimTextRef's own comment above for why this folding has to
+  // happen here now, not only on a mid-session restart.
+  function finishSession(foldInterim: boolean): void {
+    if (silenceTimerRef.current !== null) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+    if (foldInterim && lastInterimTextRef.current) {
+      mergeFinal(lastInterimTextRef.current)
+      lastInterimTextRef.current = ''
+    }
+    renderTranscript('')
+    setDictating(false)
+  }
+
+  // armSilenceTimer re-arms the real 4-second stop timer — called from
+  // onresult on every burst of speech (interim or final) and once when
+  // dictation first starts. Its own firing is the ONLY thing that sets
+  // sessionRef.current = 0 while still dictating (besides an explicit user
+  // stop or a fatal error) — everything else (a short browser-imposed
+  // onend) just restarts.
+  //
+  // Owner-reported, 2026-09-28: a brief hesitation (his own estimate,
+  // "only a 1 second hesitation") was turning dictation off entirely.
+  // Confirmed he likes the auto-turn-off itself, just wanted more grace
+  // before it fires — landed on 4 seconds (SILENCE_TIMEOUT_MS above). The
+  // Web Speech API gives no standard, cross-browser way to configure the
+  // browser's own internal pause threshold directly — it's the
+  // browser/OS's own speech endpointer, outside this codebase's control
+  // even with `continuous = true` set. What IS controllable is how this
+  // hook reacts to that short browser-imposed cutoff: restart listening
+  // every time, and let this independent timer be the only thing that
+  // decides when to actually stop.
+  function armSilenceTimer(): void {
+    if (silenceTimerRef.current !== null) clearTimeout(silenceTimerRef.current)
+    silenceTimerRef.current = setTimeout(() => {
+      silenceTimerRef.current = null
+      sessionRef.current = 0
+      const recognition = recognitionRef.current
+      if (!recognition) {
+        finishSession(true)
+        return
+      }
+      try {
+        recognition.stop()
+      } catch {
+        finishSession(true)
+      }
+    }, SILENCE_TIMEOUT_MS)
+  }
+
+  // createRecognition builds a fresh SpeechRecognition instance with its
+  // handlers attached, rather than this hook keeping one single instance
+  // for its whole lifetime and calling start()/stop() on it repeatedly.
+  //
+  // iOS-observed, 2026-10-28 (first real-device iOS test, owner-reported):
+  // after one full dictate-and-stop cycle, later attempts would show the
+  // mic turn red (listening) but never deliver any onresult events at
+  // all — no error, just silently stuck. Reusing one long-lived
+  // SpeechRecognition object across many start()/stop() cycles is a
+  // documented source of exactly this kind of degraded, no-results
+  // behavior in WebKit's implementation. A brand-new instance — built the
+  // same way here for a user-initiated start and for every browser-forced
+  // short-pause restart — is the standard mitigation, and costs nothing
+  // on browsers where reuse was never a problem.
+  function createRecognition(): SpeechRecognitionLike | null {
+    const Recognition = recognitionCtorRef.current
+    if (!Recognition) return null
 
     const recognition = new Recognition()
-    // continuous keeps listening across pauses instead of stopping after one
-    // phrase; interimResults is what makes words appear live as they're
-    // recognized, before the phrase finalizes. Both required for streaming.
+    // continuous keeps listening across pauses instead of stopping after
+    // one phrase; interimResults is what makes words appear live as
+    // they're recognized, before the phrase finalizes. Both required for
+    // streaming.
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'en-US'
-
-    // mergeFinal folds a newly-finalized transcript into committedTextRef.
-    // Owner-reported, 2026-09-28: dictated text was coming out as a
-    // "staircase" — each new bit of speech re-appending everything already
-    // said, e.g. "Hello" -> "Hello Hello world" -> "Hello Hello world Hello
-    // world today". The previous version (per-index Map, blind join)
-    // assumed every browser reports each result index as its own
-    // self-contained incremental phrase; some report each new final result
-    // as the *whole growing transcript so far*, which the blind join then
-    // appends on top of everything already committed instead of replacing
-    // it. Checking for overlap first, in both directions, makes this safe
-    // regardless of which convention the browser actually uses, without
-    // needing to know which one it is:
-    //   - nothing committed yet -> just take it
-    //   - the new transcript already starts with everything committed ->
-    //     it's the cumulative case; replace, don't append
-    //   - what's committed already starts with the new transcript -> the
-    //     browser re-sent an old, shorter final; already accounted for,
-    //     drop it
-    //   - neither contains the other -> genuinely new incremental content;
-    //     append it
-    function mergeFinal(transcript: string): void {
-      const t = transcript.trim()
-      if (!t) return
-      const committed = committedTextRef.current
-      const tLower = t.toLowerCase()
-      const committedLower = committed.toLowerCase()
-      if (!committed) {
-        committedTextRef.current = t
-      } else if (tLower.startsWith(committedLower)) {
-        committedTextRef.current = t
-      } else if (committedLower.startsWith(tLower)) {
-        // already fully accounted for — nothing new to add
-      } else {
-        committedTextRef.current = joinParts(committed, t)
-      }
-    }
-
-    // Tracks whatever interim (not-yet-final) text was on screen as of the
-    // last onresult event — read by handleEnd below so a restart (see its
-    // own comment) doesn't silently lose the last word or two the user was
-    // mid-saying exactly when the browser cut the session off.
-    let lastInterimText = ''
-
-    function renderTranscript(currentInterimText: string): void {
-      lastInterimText = currentInterimText
-      setValueRef.current(joinParts(baseTextRef.current, committedTextRef.current, currentInterimText))
-    }
-
-    function finishSession(): void {
-      if (silenceTimerRef.current !== null) {
-        clearTimeout(silenceTimerRef.current)
-        silenceTimerRef.current = null
-      }
-      renderTranscript('')
-      setDictating(false)
-    }
-
-    // Owner-reported, 2026-09-28 (same day as the staircase fix above, but
-    // unrelated to it — nothing above touches session timing): a brief
-    // hesitation (his own estimate, "only a 1 second hesitation") was
-    // turning dictation off entirely. Confirmed he likes the auto-turn-off
-    // itself, just wanted more grace before it fires — landed on 4 seconds
-    // (SILENCE_TIMEOUT_MS above). Revised again same day: an earlier
-    // version of this fix compared elapsed time only at whatever moment
-    // the browser's own onend happened to fire, which meant the real
-    // grace period depended on how many of the browser's own short
-    // restart cycles it took to reach 4 seconds — and how reliably each
-    // one actually restarted, which turned out not to be reliable enough
-    // (owner-reported: the delay was longer than before but stopping
-    // early, around 2 seconds). A real setTimeout, armed fresh on every
-    // burst of speech and re-armed by toggle() when dictation first
-    // starts, is authoritative regardless of how the browser itself
-    // behaves in between — it fires at exactly 4000ms of no qualifying
-    // reset, once, and that firing is what actually stops recognition
-    // (see armSilenceTimer below), not a check made only when onend
-    // happens to occur.
-    //
-    // The Web Speech API gives no standard, cross-browser way to
-    // configure the browser's own internal pause threshold directly —
-    // it's the browser/OS's own speech endpointer, outside this
-    // codebase's control even with `continuous = true` set (some
-    // implementations honor `continuous` loosely and end the underlying
-    // session on a pause anyway, most commonly signaled as an `onerror`
-    // with `error: 'no-speech'`, followed by `onend`). What IS
-    // controllable is how this hook reacts to that short browser-imposed
-    // cutoff: restart listening every time, and let the independent
-    // 4-second timer be the only thing that decides when to actually
-    // stop. baseTextRef/committedTextRef/finalizedIndexesRef are untouched
-    // by a restart (only toggle()'s own explicit-start path clears them),
-    // so whatever was already dictated stays exactly as rendered.
-    function isRecoverableError(errorCode: string | undefined): boolean {
-      return errorCode === 'no-speech'
-    }
-
-    // armSilenceTimer re-arms the real 4-second stop timer — called from
-    // onresult on every burst of speech (interim or final) and once from
-    // toggle() when dictation first starts, via armSilenceTimerRef. Its
-    // own firing is the ONLY thing that sets sessionRef.current = 0 while
-    // still dictating (besides an explicit user stop or a fatal error) —
-    // everything else (a short browser-imposed onend) just restarts.
-    function armSilenceTimer(): void {
-      if (silenceTimerRef.current !== null) clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = setTimeout(() => {
-        silenceTimerRef.current = null
-        sessionRef.current = 0
-        try {
-          recognition.stop()
-        } catch {
-          finishSession()
-        }
-      }, SILENCE_TIMEOUT_MS)
-    }
-    armSilenceTimerRef.current = armSilenceTimer
-
-    // sessionRef.current === 0 only when toggle()'s own stop path zeroed
-    // it first, a non-recoverable onerror doing the same, or the silence
-    // timer above firing — that's the one case this actually finishes
-    // outright. Any other time onend fires, it's just the browser ending
-    // the underlying session on its own short internal timeout; restart
-    // unconditionally and let the independent timer be the only thing
-    // that decides when enough real silence has actually passed. A
-    // start() that throws (e.g. called too soon after the previous
-    // instance tore down) falls back to finishing rather than risking a
-    // silently broken, visibly-still-on mic button.
-    function handleEnd(): void {
-      if (sessionRef.current === 0) {
-        finishSession()
-        return
-      }
-      // Fold in whatever was still interim (never finalized) at the exact
-      // moment the browser cut the session off — otherwise the next
-      // session's own first render would silently overwrite it, since
-      // renderTranscript always replaces the whole value from scratch.
-      if (lastInterimText) {
-        mergeFinal(lastInterimText)
-        lastInterimText = ''
-      }
-      // A restarted recognition instance numbers its own results from 0
-      // again — finalizedIndexesRef has to reset with it, or the new
-      // session's own index 0/1/2… reads as "already merged" and its real
-      // speech is silently dropped. committedTextRef (the actual
-      // accumulated text) is untouched — only the per-session index
-      // bookkeeping resets.
-      finalizedIndexesRef.current.clear()
-      try {
-        recognition.start()
-      } catch {
-        finishSession()
-      }
-    }
 
     recognition.onresult = (event) => {
       if (sessionRef.current === 0) return
@@ -264,9 +239,9 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       armSilenceTimer()
 
       // Scanned from 0, not event.resultIndex — a final result can in
-      // principle be reported again in a later event (see mergeFinal's own
-      // comment); finalizedIndexesRef is what actually prevents re-merging
-      // it, not the scan's own starting point.
+      // principle be reported again in a later event (see mergeFinal's
+      // own comment); finalizedIndexesRef is what actually prevents
+      // re-merging it, not the scan's own starting point.
       for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index]
         if (result.isFinal && !finalizedIndexesRef.current.has(index)) {
@@ -275,12 +250,13 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         }
       }
 
-      // Interim text is rebuilt from this event's full results snapshot every
-      // time — nothing interim is ever written to a ref/state, so a segment
-      // that just finalized has no leftover tail on this or any later render.
-      // Scanning the whole array (not just from resultIndex) is what keeps
-      // words streaming live: every onresult event re-derives whatever is
-      // still in progress right now, however many results are pending.
+      // Interim text is rebuilt from this event's full results snapshot
+      // every time — nothing interim is ever written to a ref/state, so a
+      // segment that just finalized has no leftover tail on this or any
+      // later render. Scanning the whole array (not just from
+      // resultIndex) is what keeps words streaming live: every onresult
+      // event re-derives whatever is still in progress right now, however
+      // many results are pending.
       const currentInterim: string[] = []
       for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index]
@@ -288,29 +264,70 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
           currentInterim.push((result[0]?.transcript ?? '').trim())
         }
       }
-      const interimText = joinParts(...currentInterim)
-
-      renderTranscript(interimText)
+      renderTranscript(joinParts(...currentInterim))
     }
+
     recognition.onerror = (event) => {
-      // A recoverable error (currently just 'no-speech') is deliberately
-      // left as a no-op here — the onend that follows it is what actually
-      // decides to restart-or-finish (handleEnd above), so there's exactly
-      // one place making that call rather than two paths that could
-      // disagree.
       if (sessionRef.current !== 0 && isRecoverableError(event?.error)) return
       // A real error ('not-allowed', 'audio-capture', etc.) — zero
-      // sessionRef before finishing, same signal toggle()'s own explicit
-      // stop path already sets, so the onend that follows this (browsers
-      // fire both) sees sessionRef.current === 0 and finishes cleanly too
-      // instead of trying to restart a recognizer that just failed for a
-      // reason a restart can't fix.
+      // sessionRef before finishing, same signal a manual stop already
+      // sets, so the onend that follows this (browsers fire both) sees
+      // sessionRef.current === 0 and finishes cleanly too instead of
+      // trying to restart a recognizer that just failed for a reason a
+      // restart can't fix.
       sessionRef.current = 0
-      finishSession()
+      finishSession(true)
     }
-    recognition.onend = handleEnd
-    recognitionRef.current = recognition
 
+    // sessionRef.current === 0 only when a manual stop zeroed it first, a
+    // non-recoverable onerror doing the same, or the silence timer above
+    // firing — that's the one case this actually finishes outright. Any
+    // other time onend fires, it's just the browser ending the underlying
+    // session on its own short internal timeout; restart unconditionally
+    // (on a fresh instance — see createRecognition's own comment) and let
+    // the independent timer be the only thing that decides when enough
+    // real silence has actually passed.
+    recognition.onend = () => {
+      if (sessionRef.current === 0) {
+        finishSession(true)
+        return
+      }
+      // Fold in whatever was still interim (never finalized) at the exact
+      // moment the browser cut the session off — otherwise the next
+      // session's own first render would silently overwrite it, since
+      // renderTranscript always replaces the whole value from scratch.
+      if (lastInterimTextRef.current) {
+        mergeFinal(lastInterimTextRef.current)
+        lastInterimTextRef.current = ''
+      }
+      // A restarted recognition instance numbers its own results from 0
+      // again — finalizedIndexesRef has to reset with it, or the new
+      // session's own index 0/1/2… reads as "already merged" and its real
+      // speech is silently dropped. committedTextRef (the actual
+      // accumulated text) is untouched — only the per-session index
+      // bookkeeping resets.
+      finalizedIndexesRef.current.clear()
+
+      const next = createRecognition()
+      if (!next) {
+        finishSession(true)
+        return
+      }
+      recognitionRef.current = next
+      try {
+        next.start()
+      } catch {
+        finishSession(true)
+      }
+    }
+
+    return recognition
+  }
+
+  useEffect(() => {
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) return
+    recognitionCtorRef.current = Recognition
     queueMicrotask(() => setSupported(true))
 
     return () => {
@@ -319,23 +336,32 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         clearTimeout(silenceTimerRef.current)
         silenceTimerRef.current = null
       }
-      recognition.stop()
+      recognitionRef.current?.stop()
       recognitionRef.current = null
     }
   }, [])
 
   function toggle(): void {
-    const recognition = recognitionRef.current
-    if (!recognition) return
-
     if (dictating) {
       sessionRef.current = 0
       if (silenceTimerRef.current !== null) {
         clearTimeout(silenceTimerRef.current)
         silenceTimerRef.current = null
       }
-      recognition.stop()
-      setDictating(false)
+      // Deliberately doesn't flip `dictating` or render here — stop()'s
+      // own onend (above) is the single place that both folds in any
+      // still-interim text and flips the UI off, so a manual stop and a
+      // natural silence-timeout finish the exact same way.
+      const recognition = recognitionRef.current
+      if (!recognition) {
+        finishSession(true)
+        return
+      }
+      try {
+        recognition.stop()
+      } catch {
+        finishSession(true)
+      }
       return
     }
 
@@ -344,23 +370,29 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     // synchronously (the mic icon never turns red at all) — iOS's speech
     // engine can briefly report itself still busy right after the last
     // session ended. One short, silent retry clears most of these without
-    // the user needing to notice or tap again; attemptStart's own session
-    // bookkeeping is safe to repeat, since nothing else runs in between.
+    // the user needing to notice or tap again.
     function attemptStart(isRetry: boolean): void {
-      if (!recognition) return
       baseTextRef.current = valueRef.current.trim()
       committedTextRef.current = ''
       finalizedIndexesRef.current.clear()
+      lastInterimTextRef.current = ''
       sessionRef.current += 1
+
+      const recognition = createRecognition()
+      if (!recognition) {
+        sessionRef.current = 0
+        return
+      }
+      recognitionRef.current = recognition
 
       try {
         recognition.start()
         setDictating(true)
         // Starts the real 4-second countdown immediately — otherwise a
-        // dictation session opened and then never spoken into at all would
-        // sit listening forever instead of timing out like every other
-        // silence does.
-        armSilenceTimerRef.current?.()
+        // dictation session opened and then never spoken into at all
+        // would sit listening forever instead of timing out like every
+        // other silence does.
+        armSilenceTimer()
       } catch {
         sessionRef.current = 0
         setDictating(false)
