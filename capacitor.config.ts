@@ -33,6 +33,15 @@ const config: CapacitorConfig = {
     url: 'https://www.wouldyouplease.com',
     androidScheme: 'https',
   },
+  // iOS-only (2026-10-28, first real-device iOS test): without this, the
+  // WKWebView ignores the status bar/notch safe area and renders content
+  // starting from the very top physical edge of the screen, pushing the
+  // app's own header up behind the status bar instead of below it.
+  // 'automatic' makes WKWebView inset its content the same way Safari
+  // does natively. Android is unaffected — this key only applies on iOS.
+  ios: {
+    contentInset: 'automatic',
+  },
 }
 
 export default config
