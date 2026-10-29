@@ -339,23 +339,38 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       return
     }
 
-    baseTextRef.current = valueRef.current.trim()
-    committedTextRef.current = ''
-    finalizedIndexesRef.current.clear()
-    sessionRef.current += 1
+    // iOS-observed, 2026-10-28, first real-device iOS test: a start()
+    // called shortly after a previous session's own teardown can throw
+    // synchronously (the mic icon never turns red at all) — iOS's speech
+    // engine can briefly report itself still busy right after the last
+    // session ended. One short, silent retry clears most of these without
+    // the user needing to notice or tap again; attemptStart's own session
+    // bookkeeping is safe to repeat, since nothing else runs in between.
+    function attemptStart(isRetry: boolean): void {
+      if (!recognition) return
+      baseTextRef.current = valueRef.current.trim()
+      committedTextRef.current = ''
+      finalizedIndexesRef.current.clear()
+      sessionRef.current += 1
 
-    try {
-      recognition.start()
-      setDictating(true)
-      // Starts the real 4-second countdown immediately — otherwise a
-      // dictation session opened and then never spoken into at all would
-      // sit listening forever instead of timing out like every other
-      // silence does.
-      armSilenceTimerRef.current?.()
-    } catch {
-      sessionRef.current = 0
-      setDictating(false)
+      try {
+        recognition.start()
+        setDictating(true)
+        // Starts the real 4-second countdown immediately — otherwise a
+        // dictation session opened and then never spoken into at all would
+        // sit listening forever instead of timing out like every other
+        // silence does.
+        armSilenceTimerRef.current?.()
+      } catch {
+        sessionRef.current = 0
+        setDictating(false)
+        if (!isRetry) {
+          setTimeout(() => attemptStart(true), 300)
+        }
+      }
     }
+
+    attemptStart(false)
   }
 
   return { supported, dictating, toggle }
