@@ -850,8 +850,11 @@ export default function CreateTodoForm() {
           startMillis: fields.start.getTime(),
           endMillis: fields.end.getTime(),
           allDay: fields.allDay,
-        }).catch(() => {
-          // Best effort — no fallback calendar path inside the native shell.
+        }).catch((err) => {
+          // Temporary diagnostic (2026-10-29) — see NativeCalendarPlugin.swift's
+          // own first real-device iOS test. Remove once confirmed reliable.
+           
+          console.warn('[add-to-calendar] native addEvent failed:', err)
         })
         setSaving(false)
         router.back()
