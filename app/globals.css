@@ -100,7 +100,15 @@ body {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 13px var(--pad) 12px;
+  /* Top padding grows to clear the status bar/notch via
+     env(safe-area-inset-top) wherever the browser/native shell actually
+     extends content under it (max() keeps the original 13px everywhere
+     else, since the env() value is 0 when there's no inset to clear) —
+     2026-10-29, first real-device iOS test of the Capacitor native app;
+     see layout.tsx's own viewportFit comment for why this is needed
+     there specifically, on top of (not instead of) the existing
+     PWA-only appleWebApp.statusBarStyle trick. */
+  padding: max(13px, env(safe-area-inset-top)) var(--pad) 12px;
   background: #fff;
 }
 

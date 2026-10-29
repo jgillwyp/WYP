@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import PWAProvider from "./components/PWAProvider";
@@ -40,6 +40,23 @@ export const metadata: Metadata = {
     title: "Would You Please",
     statusBarStyle: "default",
   },
+};
+
+// viewportFit: 'cover' (2026-10-29, first real-device iOS test of the
+// Capacitor native app) — this app's own appleWebApp.statusBarStyle
+// comment above explains the PWA path avoids safe-area padding entirely
+// by keeping Safari's status bar opaque, so content never renders under
+// it there. That trick is Safari-PWA-specific (an
+// apple-mobile-web-app-status-bar-style meta tag) and has no effect at
+// all inside the Capacitor native app, which uses its own native status
+// bar APIs — confirmed live: the header rendered partly behind the
+// status bar there, with iOS's own translucent blur drawn over the
+// hidden portion. 'cover' plus real env(safe-area-inset-top) padding on
+// the fixed header (globals.css's own .app rule) is the standard,
+// platform-agnostic fix, and doesn't change anything for the PWA/browser
+// case, which already avoids the overlap by other means.
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
