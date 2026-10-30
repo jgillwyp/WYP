@@ -1361,6 +1361,9 @@ export default function RequestResponseForm() {
                       <MicIcon />
                     </button>
                   )}
+                  {dialogDictation.captureFailed && (
+                    <span className="micnote">Didn&rsquo;t catch that — try again in a moment.</span>
+                  )}
                 </div>
                 <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
                   {dialogModalBody.length} / {DIALOG_MAX}

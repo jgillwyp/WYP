@@ -119,8 +119,39 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   // actually arrives (finishSession, below) and fires on its own, forcing
   // the session to finish, only if onend never shows up within 1.5s.
   const stopWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // captureFailedTimerRef (2026-10-30) — auto-clears captureFailed (below)
+  // a few seconds after it's set, so the hint doesn't linger indefinitely
+  // if the person doesn't immediately try again.
+  const captureFailedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [supported, setSupported] = useState(false)
   const [dictating, setDictating] = useState(false)
+  // captureFailed (2026-10-30) — owner-reported and confirmed over several
+  // live tests: the very first dictation attempt after a fresh app launch
+  // reliably works, but every attempt for a while after that aborts with
+  // zero speech ever recognized, then on its own — no restart, no code
+  // change — starts working again after a few minutes. That shape matches
+  // Apple's own documented behavior for the Speech framework (a
+  // recognition request can briefly fail outright while the on-device
+  // service is temporarily unavailable, e.g. after recent heavy use —
+  // see https://developer.apple.com/library/archive/qa/qa1951/_index.html
+  // and multiple developer forum reports of the same "fails fast, then
+  // recovers after a wait" pattern), not a bug in this app's own code or
+  // in WebKit's Web Speech API shim — nothing here can make Apple's own
+  // service respond faster. What this flag buys instead is turning a
+  // silent, confusing "nothing happened" into an explained one: true
+  // whenever a session ends having captured no text at all (whether that's
+  // this exact failure or simply genuine silence the whole time — telling
+  // those apart isn't possible from the browser's own generic error codes,
+  // and the hint is harmless either way).
+  const [captureFailed, setCaptureFailed] = useState(false)
+
+  function clearCaptureFailed(): void {
+    if (captureFailedTimerRef.current !== null) {
+      clearTimeout(captureFailedTimerRef.current)
+      captureFailedTimerRef.current = null
+    }
+    setCaptureFailed(false)
+  }
 
   useEffect(() => {
     valueRef.current = value
@@ -175,6 +206,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   // lastInterimTextRef's own comment above for why this folding has to
   // happen here now, not only on a mid-session restart.
   function finishSession(foldInterim: boolean): void {
+    const wasDictating = dictatingRef.current
     if (silenceTimerRef.current !== null) {
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = null
@@ -193,6 +225,17 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     renderTranscript('')
     dictatingRef.current = false
     setDictating(false)
+    // See captureFailed's own comment above — only flagged when a session
+    // genuinely ran (wasDictating) and came back with literally nothing,
+    // never for a stray stop() with no session active to begin with.
+    if (wasDictating && !committedTextRef.current) {
+      setCaptureFailed(true)
+      if (captureFailedTimerRef.current !== null) clearTimeout(captureFailedTimerRef.current)
+      captureFailedTimerRef.current = setTimeout(() => {
+        captureFailedTimerRef.current = null
+        setCaptureFailed(false)
+      }, 5000)
+    }
   }
 
   // armStopWatchdog — see stopWatchdogRef's own comment above. Called only
@@ -418,6 +461,10 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         clearTimeout(stopWatchdogRef.current)
         stopWatchdogRef.current = null
       }
+      if (captureFailedTimerRef.current !== null) {
+        clearTimeout(captureFailedTimerRef.current)
+        captureFailedTimerRef.current = null
+      }
       recognitionRef.current?.stop()
       recognitionRef.current = null
     }
@@ -462,6 +509,8 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       }
       return
     }
+
+    clearCaptureFailed()
 
     // iOS-observed, 2026-10-28, first real-device iOS test: a start()
     // called shortly after a previous session's own teardown can throw
@@ -525,5 +574,5 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     attemptStart()
   }
 
-  return { supported, dictating, toggle }
+  return { supported, dictating, toggle, captureFailed }
 }

@@ -3263,6 +3263,30 @@ body {
   color: #fff;
 }
 
+/* micnote (2026-10-30) — shown briefly when a Voice Dictation attempt ends
+   having captured no speech at all. See useSpeechDictation.ts's own
+   captureFailed comment for why this can happen (most likely Apple's own
+   speech service being briefly unavailable after recent heavy use, not a
+   bug in this app) and why the wording stays generic rather than naming a
+   cause we can't actually confirm from the browser's own error codes.
+   Anchored opposite the mic button (bottom-left vs. its bottom-right) so
+   the two never overlap; auto-clears on its own, so this never needs a
+   dismiss control. */
+.micnote {
+  position: absolute;
+  left: 8px;
+  bottom: 10px;
+  max-width: calc(100% - 56px);
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--alert-red);
+  background: #fff;
+  padding: 3px 7px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
 /* Archived badge — a matched row that is archived still renders in its own
    Sent/Received/ToDos section (never a separate list), tagged so it doesn't
    read as merely Done. Sits in .r2 alongside the Dialog/Attachments .ii
