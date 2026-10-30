@@ -922,14 +922,43 @@ export default function ResponseDetailForm() {
   // below, called from the dialog's own onConfirm.
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false)
 
+  // Holds the link the current Add to Calendar click resolved to, set by
+  // handleAddToCalendar before either branch (native/dialog) runs, so
+  // performAddToCalendarDownload doesn't need to re-derive or re-mint it.
+  const calendarLinkRef = useRef<string>(window.location.href)
+
+  // 2026-10-31, owner-reported ("Request not found" opening the saved
+  // event's link from a browser not already signed into the matching
+  // account) — this screen's link used to be window.location.href, the
+  // authenticated /requests/[id]/respond page, which only resolves for a
+  // browser already signed in as the matching Recipient. Now mints a real
+  // /r/[token] link instead, via issue_request_link_as_recipient (migration
+  // 085) — the same kind of durable, no-sign-in-required token the mailed
+  // link already uses, just gated by Contact-email match (the signed-in
+  // recipient's own) instead of owner match. Falls back to the old
+  // page-URL behavior if the mint fails (e.g. offline) rather than
+  // blocking Add to Calendar entirely.
+  async function resolveCalendarLink(): Promise<string> {
+    const fallback = window.location.href
+    const { data: token, error } = await supabase.rpc('issue_request_link_as_recipient', {
+      p_request_id: requestId,
+    })
+    if (error || !token) {
+      console.warn('[add-to-calendar] issue_request_link_as_recipient failed, falling back to page URL:', error)
+      return fallback
+    }
+    return `${window.location.origin}/r/${token}`
+  }
+
   // 2026-10-16, first real-device Capacitor test — same native branch as
   // RequestResponseForm.tsx's identical handler; see
   // NativeCalendarPlugin.java's own header comment for why the alarm-offset
   // dialog is skipped entirely on native.
-  function handleAddToCalendar() {
+  async function handleAddToCalendar() {
     if (!data) return
+    const link = await resolveCalendarLink()
+    calendarLinkRef.current = link
     if (Capacitor.isNativePlatform()) {
-      const link = window.location.href
       const fields = buildCalendarEventFields(data, link)
       NativeCalendar.addEvent({
         title: fields.title,
@@ -940,7 +969,7 @@ export default function ResponseDetailForm() {
       }).catch((err) => {
         // Temporary diagnostic (2026-10-29) — see NativeCalendarPlugin.swift's
         // own first real-device iOS test. Remove once confirmed reliable.
-         
+
         console.warn('[add-to-calendar] native addEvent failed:', err)
       })
       return
@@ -948,13 +977,12 @@ export default function ResponseDetailForm() {
     setCalendarDialogOpen(true)
   }
 
-  // Link is this page's own URL — a signed-in user re-opening this same
-  // /requests/[id]/respond page later still lands on the same event, unlike
-  // the token path's one-time-mailed link, but it's the closest equivalent
-  // available and matches what Request Response already does.
+  // Link was already resolved to a real /r/[token] response link (or, on
+  // mint failure, the old page-URL fallback) by handleAddToCalendar above,
+  // before this dialog was ever opened.
   function performAddToCalendarDownload(alarms: IcsAlarmOffset[]) {
     if (!data) return
-    const link = window.location.href
+    const link = calendarLinkRef.current
     // omitMethod (2026-09-16, owner-reported) — see buildIcsContent's own
     // header comment in ics.ts: METHOD:PUBLISH (needed for the *emailed*
     // .ics) silently fails to add on Android when opened from a local

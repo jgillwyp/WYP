@@ -611,3 +611,86 @@ grant execute on function public.mark_sms_consent_notified(text) to anon, authen
 --   -- and the newly resent one still work (open each, confirm neither
 --   -- says "no longer valid").
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 085 (2026-10-31) -- issue_request_link_as_recipient(): lets a
+-- signed-in Recipient mint their own durable /r/[token] response link, so
+-- Response Detail's own "Add to Calendar" can embed a link that works from
+-- ANY browser, not just one already signed into the matching account.
+-- DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Owner-reported, reproducing a limitation flagged (not fixed) in an
+-- earlier session: Response Detail's Add to Calendar embedded
+-- window.location.href -- the authenticated /requests/[id]/respond page --
+-- since that was "the closest equivalent available" at the time, Response
+-- Detail having no token of its own the way the mailed /r/[token] link
+-- does. Tapping that link from the saved calendar event hands off to a
+-- browser; unless that browser's signed-in session happens to be the exact
+-- matching Recipient account, get_received_request can't match it and
+-- raises "Request not found." -- reproduced live, 2026-10-31.
+--
+-- Same shape as issue_request_link (migration 008, mints for the owner,
+-- gated on auth.uid() = owner_id) and cron_issue_request_link (migration
+-- 075, mints for the cron job, no caller to gate on at all) -- this is the
+-- third variant, gated on the signed-in caller's own JWT email matching the
+-- Request's Contact email, the exact same match get_received_request
+-- itself already uses (migration 078). Mints into request_links (migration
+-- 075) with the same 30-day expiry, so it's indistinguishable from an
+-- owner-minted or cron-minted token to every downstream reader
+-- (get_request_by_token, set_response_done_by_token, add_dialog_by_token)
+-- -- a Recipient who reaches this link later gets the exact same anonymous,
+-- no-sign-in /r/[token] experience RequestResponseForm.tsx already gives a
+-- first-time Recipient.
+--
+-- Granted to authenticated only, never anon -- an anonymous visitor has no
+-- JWT email to match against, so there would be nothing for the check to
+-- gate on; this function only ever needs to run from ResponseDetailForm.tsx,
+-- which is itself RequireAuth-wrapped.
+-- ============================================================================
+
+create or replace function public.issue_request_link_as_recipient(p_request_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_contact_email text;
+  v_token text;
+begin
+  select lower(trim(c.email)) into v_contact_email
+    from public.requests r
+    join public.contacts c on c.id = r.contact_id
+    where r.id = p_request_id;
+
+  if v_contact_email is null or v_email = '' or v_contact_email <> v_email then
+    raise exception 'Not found.';
+  end if;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  insert into public.request_links (request_id, token_hash, expires_at)
+    values (p_request_id, digest(v_token, 'sha256'), now() + interval '30 days');
+
+  insert into public.events (actor_user, subject_type, subject_id, request_id, action, detail)
+    values (auth.uid(), 'link', p_request_id, p_request_id, 'issued', '{"via": "recipient"}'::jsonb);
+
+  return v_token;
+end;
+$$;
+
+revoke all on function public.issue_request_link_as_recipient(uuid) from public;
+grant execute on function public.issue_request_link_as_recipient(uuid) to authenticated;
+
+-- Verify after running:
+--   select proname from pg_proc where proname = 'issue_request_link_as_recipient';
+--   -- Then, live: open a Received Request's Response Detail screen, click
+--   -- Add to Calendar (web: through the alarm-offset dialog; iOS/Android
+--   -- app: straight into the native save), and confirm the saved event's
+--   -- own link now reads https://www.wouldyouplease.com/r/<64 hex chars>
+--   -- rather than .../requests/<id>/respond. Open that link from a
+--   -- different, signed-out browser (or a private/incognito window) and
+--   -- confirm it opens the Request directly instead of "Request not
+--   -- found."
+-- ============================================================================
