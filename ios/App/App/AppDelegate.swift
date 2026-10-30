@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import AVFoundation
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +8,26 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Voice Dictation (2026-10-30, owner-reported): the mic icon turned
+        // red for this app's own 4-second silence timeout on every attempt,
+        // then errored "aborted" with zero text captured -- console
+        // diagnostics confirmed onresult never fired at all, so the mic
+        // audio itself was never reaching the recognizer, not a permissions
+        // problem (the prompt had already been granted). WebKit's own
+        // speech recognition needs a compatible AVAudioSession to actually
+        // record from; Safari configures one for its own web content
+        // automatically, but a third-party app hosting WKWebView content
+        // (this app) has to do it itself, or the recognizer starts with no
+        // real audio behind it and aborts almost immediately -- matching
+        // what was observed. Configured once at launch, before any
+        // WebView content can ever ask to record.
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth])
+            try session.setActive(true)
+        } catch {
+            NSLog("[AppDelegate] AVAudioSession setup failed: \(error)")
+        }
         return true
     }
 
