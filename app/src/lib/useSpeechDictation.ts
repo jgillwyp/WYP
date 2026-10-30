@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+
+import NativeAudioSession from './nativeAudioSession'
 
 type SpeechRecognitionResultLike = {
   isFinal: boolean
@@ -421,6 +424,21 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   }, [])
 
   function toggle(): void {
+    // Owner-reported, 2026-10-30: tapping the mic button often scrolled
+    // the screen up to show the on-screen keyboard. The mic button never
+    // takes focus itself on iOS (a plain tap on a button doesn't move
+    // focus there), so whatever text field was focused beforehand — most
+    // often the very Description/Dialog textarea the mic sits inside the
+    // corner of — stayed focused and kept the keyboard open underneath,
+    // with the browser then scrolling that still-focused field into view
+    // as dictated text streamed in and grew it. Blurring here, before
+    // anything else, closes the keyboard the moment dictation is toggled
+    // either way, regardless of which field happened to be focused.
+    if (typeof document !== 'undefined') {
+      const active = document.activeElement
+      if (active instanceof HTMLElement) active.blur()
+    }
+
     if (dictating) {
       sessionRef.current = 0
       if (silenceTimerRef.current !== null) {
@@ -451,13 +469,9 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     // engine can briefly report itself still busy right after the last
     // session ended. One short, silent retry clears most of these without
     // the user needing to notice or tap again.
-    function attemptStart(isRetry: boolean): void {
-      baseTextRef.current = valueRef.current.trim()
-      committedTextRef.current = ''
-      finalizedIndexesRef.current.clear()
-      lastInterimTextRef.current = ''
-      sessionRef.current += 1
+    let isRetry = false
 
+    function beginRecognition(): void {
       const recognition = createRecognition()
       if (!recognition) {
         sessionRef.current = 0
@@ -479,12 +493,36 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         dictatingRef.current = false
         setDictating(false)
         if (!isRetry) {
-          setTimeout(() => attemptStart(true), 300)
+          isRetry = true
+          setTimeout(() => attemptStart(), 300)
         }
       }
     }
 
-    attemptStart(false)
+    function attemptStart(): void {
+      baseTextRef.current = valueRef.current.trim()
+      committedTextRef.current = ''
+      finalizedIndexesRef.current.clear()
+      lastInterimTextRef.current = ''
+      sessionRef.current += 1
+
+      // iOS-observed, 2026-10-30 — see nativeAudioSession.ts's own header
+      // comment for the full reasoning: re-assert the native audio session
+      // right before every single start(), not just once at app launch.
+      // Best-effort — dictation still attempts to start even if this
+      // rejects (e.g. on Android or in a plain browser, where this plugin
+      // was never registered at all).
+      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') {
+        NativeAudioSession.ensureActive()
+          .catch(() => {})
+          .finally(() => beginRecognition())
+        return
+      }
+
+      beginRecognition()
+    }
+
+    attemptStart()
   }
 
   return { supported, dictating, toggle }

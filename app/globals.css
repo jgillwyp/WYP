@@ -3206,13 +3206,23 @@ body {
    Description dictation on Create Request/Create ToDo (CreateRequestForm.tsx,
    CreateTodoForm.tsx). descwrap makes the textarea's own corner a valid
    anchor for the button without touching .ftextarea's box model; micbtn
-   itself is a small circular control absolutely positioned inside it,
-   independent of the textarea's resize handle (browsers reserve their own
-   bottom-right corner for that, so the button sits slightly inset). Rest
-   state uses --ink-soft, same muted-icon convention as .fclear; --alert-red
-   while actively listening is a deliberate reuse of the app's one
-   "something is happening, pay attention" color (Overdue rows, error text),
-   not a new token. */
+   itself is a circular control absolutely positioned inside it, independent
+   of the textarea's resize handle (browsers reserve their own bottom-right
+   corner for that, so the button sits slightly inset). Rest state uses
+   --ink-soft, same muted-icon convention as .fclear; --alert-red while
+   actively listening is a deliberate reuse of the app's one "something is
+   happening, pay attention" color (Overdue rows, error text), not a new
+   token.
+
+   Bumped 28px -> 36px (icon 16px -> 20px), 2026-10-30, owner-reported: the
+   original size sat right at the textarea's own bottom-right corner, small
+   enough that an imprecise tap often landed partly on the textarea
+   underneath instead, focusing it and popping the keyboard rather than
+   toggling dictation. A larger hit target reduces that; the toggle()
+   function itself (useSpeechDictation.ts) also now blurs whatever was
+   focused before doing anything else, so even a tap that only grazes the
+   textarea closes the keyboard immediately rather than leaving it open
+   (and the view scrolled to show it) for the whole dictation. */
 .descwrap {
   position: relative;
 }
@@ -3221,8 +3231,8 @@ body {
   position: absolute;
   right: 8px;
   bottom: 8px;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
   background: #fff;
@@ -3236,8 +3246,8 @@ body {
 }
 
 .micbtn svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 .micbtn.listening {
