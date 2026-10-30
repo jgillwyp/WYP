@@ -20,6 +20,7 @@
 		AA4444444444444444444444 /* NativeCalendarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3333333333333333333333 /* NativeCalendarPlugin.swift */; };
 		AA6666666666666666666666 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5555555555555555555555 /* MainViewController.swift */; };
 		AA8888888888888888888888 /* NativeAudioSessionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7777777777777777777777 /* NativeAudioSessionPlugin.swift */; };
+		AAAAAAAAAAAAAAAAAAAAAAAA /* NativeSpeechPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA9999999999999999999999 /* NativeSpeechPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +39,7 @@
 		AA3333333333333333333333 /* NativeCalendarPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCalendarPlugin.swift; sourceTree = "<group>"; };
 		AA5555555555555555555555 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		AA7777777777777777777777 /* NativeAudioSessionPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAudioSessionPlugin.swift; sourceTree = "<group>"; };
+		AA9999999999999999999999 /* NativeSpeechPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSpeechPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +81,7 @@
 				AA1111111111111111111111 /* NativePrintPlugin.swift */,
 				AA3333333333333333333333 /* NativeCalendarPlugin.swift */,
 				AA7777777777777777777777 /* NativeAudioSessionPlugin.swift */,
+				AA9999999999999999999999 /* NativeSpeechPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -176,6 +179,7 @@
 				AA4444444444444444444444 /* NativeCalendarPlugin.swift in Sources */,
 				AA6666666666666666666666 /* MainViewController.swift in Sources */,
 				AA8888888888888888888888 /* NativeAudioSessionPlugin.swift in Sources */,
+				AAAAAAAAAAAAAAAAAAAAAAAA /* NativeSpeechPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

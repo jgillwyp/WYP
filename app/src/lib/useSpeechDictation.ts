@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 
 import NativeAudioSession from './nativeAudioSession'
+import NativeSpeech from './nativeSpeech'
 
 type SpeechRecognitionResultLike = {
   isFinal: boolean
@@ -38,6 +39,113 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
     webkitSpeechRecognition?: SpeechRecognitionConstructor
   }
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+function isIOSNative(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios'
+}
+
+// NativeSpeechRecognitionAdapter (2026-10-31) — see nativeSpeech.ts's own
+// header comment for why this exists (on-device SFSpeechRecognizer in
+// place of the browser's own throttled Web Speech API). Implements the
+// exact same SpeechRecognitionLike shape createRecognition() already
+// builds against, so every other line in this file — mergeFinal,
+// armSilenceTimer, finishSession, dictationNote, toggle() — works
+// completely unmodified regardless of which engine is actually running
+// underneath; only getRecognitionConstructor() (below) and this class
+// know the difference exists.
+//
+// pushResult reconstructs a results array that grows the same way the
+// real Web Speech API's own event.results does — a still-interim entry
+// at the highest index gets replaced in place by the next update; once
+// it finalizes, the next update opens a new index — because the native
+// plugin only ever reports one transcript+isFinal pair at a time
+// (NativeSpeechPlugin.swift's own notifyListeners("result", ...)), not a
+// growing array of its own. Without this reconstruction,
+// finalizedIndexesRef's existing "don't re-merge an already-finalized
+// index" logic would treat every finalized phrase as index 0 and
+// silently drop every one after the first.
+class NativeSpeechRecognitionAdapter implements SpeechRecognitionLike {
+  continuous = true
+  interimResults = true
+  lang = 'en-US'
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null = null
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null = null
+  onend: (() => void) | null = null
+
+  private resultBuffer: Array<{ isFinal: boolean; transcript: string }> = []
+  private listenersAttached = false
+
+  // A brand new adapter instance is only ever constructed for a
+  // genuinely new toggle()-initiated session (createRecognition, below)
+  // — never for a same-instance mid-session restart, which calls start()
+  // again on this SAME object instead. That makes the constructor the
+  // one safe place to clear out whatever the *previous* session's own
+  // adapter instance left attached: doing this inside the 'end'/'error'
+  // handlers themselves would also strip this instance's own
+  // just-(re)used listeners during a same-instance restart, since that
+  // path calls start() -> attachListeners() (a no-op, already attached)
+  // on the very instance whose 'end' just fired — removing them there
+  // would leave the restarted session's own results with nothing to
+  // report through. A stray already-finished-session event between here
+  // and whatever the user does next is otherwise harmless either way —
+  // onresult already early-returns once sessionRef is zeroed.
+  constructor() {
+    void NativeSpeech.removeAllListeners()
+  }
+
+  start(): void {
+    this.resultBuffer = []
+    this.attachListeners()
+    NativeSpeech.start().catch(() => {
+      this.onerror?.({ error: 'aborted' })
+    })
+  }
+
+  stop(): void {
+    NativeSpeech.stop().catch(() => {
+      // Nothing more to do — a failed stop() call has no "end" coming
+      // either, so there's no further cleanup this adapter can trigger
+      // on its own; the caller's own stopWatchdogRef (useSpeechDictation
+      // itself) is what forces the session to finish regardless.
+    })
+  }
+
+  private attachListeners(): void {
+    if (this.listenersAttached) return
+    this.listenersAttached = true
+
+    void NativeSpeech.addListener('result', ({ transcript, isFinal }) => {
+      this.pushResult(transcript, isFinal)
+    })
+    void NativeSpeech.addListener('error', ({ code }) => {
+      this.onerror?.({ error: code })
+    })
+    void NativeSpeech.addListener('end', () => {
+      this.onend?.()
+    })
+  }
+
+  private pushResult(transcript: string, isFinal: boolean): void {
+    const lastIndex = this.resultBuffer.length - 1
+    if (lastIndex >= 0 && !this.resultBuffer[lastIndex].isFinal) {
+      this.resultBuffer[lastIndex] = { transcript, isFinal }
+    } else {
+      this.resultBuffer.push({ transcript, isFinal })
+    }
+
+    const results: SpeechRecognitionEventLike['results'] = { length: this.resultBuffer.length }
+    this.resultBuffer.forEach((entry, index) => {
+      results[index] = { isFinal: entry.isFinal, length: 1, 0: { transcript: entry.transcript } }
+    })
+
+    this.onresult?.({ resultIndex: this.resultBuffer.length - 1, results })
+  }
+}
+
+function getRecognitionConstructor(): SpeechRecognitionConstructor | null {
+  if (isIOSNative()) return NativeSpeechRecognitionAdapter
+  return getSpeechRecognition()
 }
 
 // Owner-reported, 2026-09-28: dictated text was landing glued directly onto
@@ -472,7 +580,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   }
 
   useEffect(() => {
-    const Recognition = getSpeechRecognition()
+    const Recognition = getRecognitionConstructor()
     if (!Recognition) return
     recognitionCtorRef.current = Recognition
     queueMicrotask(() => setSupported(true))
@@ -588,7 +696,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       // Best-effort — dictation still attempts to start even if this
       // rejects (e.g. on Android or in a plain browser, where this plugin
       // was never registered at all).
-      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') {
+      if (isIOSNative()) {
         NativeAudioSession.ensureActive()
           .catch(() => {})
           .finally(() => beginRecognition())
