@@ -3097,8 +3097,8 @@ export default function MainScreen() {
                     <MicIcon />
                   </button>
                 )}
-                {feedbackDictation.captureFailed && (
-                  <span className="micnote">Didn&rsquo;t catch that — try again in a moment.</span>
+                {feedbackDictation.dictationNote && (
+                  <span className="micnote">{feedbackDictation.dictationNote}</span>
                 )}
               </div>
             </div>

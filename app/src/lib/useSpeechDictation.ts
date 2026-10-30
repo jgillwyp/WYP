@@ -144,6 +144,29 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   // those apart isn't possible from the browser's own generic error codes,
   // and the hint is harmless either way).
   const [captureFailed, setCaptureFailed] = useState(false)
+  // awaitingFirstResult (2026-10-30, owner-reported) — true from the
+  // moment a session actually starts until the first onresult event of
+  // that session arrives, however long that takes. Apple's own speech
+  // service can have a real delay (or, per captureFailed's own comment
+  // above, simply be unavailable for a while) before the first word ever
+  // shows up — during that gap the only visible sign anything is
+  // happening was the mic icon turning red, which read as an "awkward"
+  // silence. dictationNote (below) surfaces this as a plain status line
+  // instead of leaving the person guessing.
+  const [awaitingFirstResult, setAwaitingFirstResult] = useState(false)
+
+  // dictationNote is the one thing every call site actually renders —
+  // centralizing the wording here (rather than duplicating the strings
+  // across all 11 mic-button call sites) means a future wording change
+  // only has to happen once. The two states are mutually exclusive in
+  // time: "capturing" only while a session is genuinely still running
+  // and hasn't produced anything yet; "didn't catch" only once a session
+  // has already ended with nothing to show.
+  const dictationNote: string | null = dictating && awaitingFirstResult
+    ? 'Your dictation is being captured, and will be displayed momentarily.'
+    : captureFailed
+      ? 'Didn’t catch that — try again in a moment.'
+      : null
 
   function clearCaptureFailed(): void {
     if (captureFailedTimerRef.current !== null) {
@@ -337,8 +360,11 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       console.warn('[voice-dictation] onresult fired, results:', event.results.length)
 
       // Any onresult event means the recognizer is actively hearing
-      // something — re-arms the real 4-second stop timer.
+      // something — re-arms the real 4-second stop timer, and clears the
+      // "being captured" status note (dictationNote above) now that
+      // there's real streamed text to look at instead.
       armSilenceTimer()
+      setAwaitingFirstResult(false)
 
       // Scanned from 0, not event.resultIndex — a final result can in
       // principle be reported again in a later event (see mergeFinal's
@@ -532,6 +558,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         recognition.start()
         dictatingRef.current = true
         setDictating(true)
+        setAwaitingFirstResult(true)
         // Starts the real 4-second countdown immediately — otherwise a
         // dictation session opened and then never spoken into at all
         // would sit listening forever instead of timing out like every
@@ -574,5 +601,5 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
     attemptStart()
   }
 
-  return { supported, dictating, toggle, captureFailed }
+  return { supported, dictating, toggle, dictationNote }
 }

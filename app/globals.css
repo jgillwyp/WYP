@@ -3263,15 +3263,20 @@ body {
   color: #fff;
 }
 
-/* micnote (2026-10-30) — shown briefly when a Voice Dictation attempt ends
-   having captured no speech at all. See useSpeechDictation.ts's own
-   captureFailed comment for why this can happen (most likely Apple's own
-   speech service being briefly unavailable after recent heavy use, not a
-   bug in this app) and why the wording stays generic rather than naming a
-   cause we can't actually confirm from the browser's own error codes.
-   Anchored opposite the mic button (bottom-left vs. its bottom-right) so
-   the two never overlap; auto-clears on its own, so this never needs a
-   dismiss control. */
+/* micnote (2026-10-30) — a small overlay note, not an HTML placeholder
+   (which would be invisible here anyway, since the field it sits over
+   often already holds real text — dictation is frequently appending to,
+   not replacing, existing content). See useSpeechDictation.ts's own
+   dictationNote for the two things it shows: "being captured" for as
+   long as a session is running but hasn't produced any text yet (so the
+   person isn't left watching a silently red mic with no feedback), then
+   "didn't catch that" if the session ends having captured nothing at all
+   — see captureFailed's own comment there for why that happens (most
+   likely Apple's own speech service being briefly unavailable after
+   recent heavy use, not a bug in this app). Anchored opposite the mic
+   button (bottom-left vs. its bottom-right) so the two never overlap;
+   both states auto-clear on their own, so this never needs a dismiss
+   control. */
 .micnote {
   position: absolute;
   left: 8px;

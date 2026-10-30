@@ -1522,8 +1522,8 @@ export default function CreateRequestForm() {
                     <MicIcon />
                   </button>
                 )}
-                {descriptionDictation.captureFailed && (
-                  <span className="micnote">Didn&rsquo;t catch that — try again in a moment.</span>
+                {descriptionDictation.dictationNote && (
+                  <span className="micnote">{descriptionDictation.dictationNote}</span>
                 )}
               </div>
               {descInvalid && <p className="ferror">Enter a Description.</p>}
@@ -1786,8 +1786,8 @@ export default function CreateRequestForm() {
                       <MicIcon />
                     </button>
                   )}
-                  {dialogDictation.captureFailed && (
-                    <span className="micnote">Didn&rsquo;t catch that — try again in a moment.</span>
+                  {dialogDictation.dictationNote && (
+                    <span className="micnote">{dialogDictation.dictationNote}</span>
                   )}
                 </div>
                 <p className={`charcount${dialogModalBody.length >= DIALOG_MAX ? ' limit' : ''}`}>
