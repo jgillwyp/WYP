@@ -100,6 +100,22 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
   // real JS timer, rather than comparing elapsed time at whatever moment
   // the browser's own onend happens to fire.
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // dictatingRef mirrors the `dictating` state into a ref so
+  // armStopWatchdog (below) can check it from inside a setTimeout callback
+  // without closing over a stale value of the state itself.
+  const dictatingRef = useRef(false)
+  // stopWatchdogRef (2026-10-30) — this app runs inside Capacitor's
+  // WKWebView, not full mobile Safari; WKWebView's own Web Speech support
+  // is newer and less mature, and a documented WebKit quirk is that
+  // recognition.stop() can silently fail to fire onend at all in some
+  // versions. Without this, that failure mode would leave the mic
+  // permanently "red"/dictating with no way out short of leaving the
+  // field — a plausible explanation for voice dictation reading as
+  // "inconsistent" specifically in this native-app context. Armed right
+  // after a deliberate stop() call succeeds; cancelled the moment onend
+  // actually arrives (finishSession, below) and fires on its own, forcing
+  // the session to finish, only if onend never shows up within 1.5s.
+  const stopWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [supported, setSupported] = useState(false)
   const [dictating, setDictating] = useState(false)
 
@@ -160,15 +176,36 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = null
     }
+    if (stopWatchdogRef.current !== null) {
+      clearTimeout(stopWatchdogRef.current)
+      stopWatchdogRef.current = null
+    }
     if (foldInterim && lastInterimTextRef.current) {
       mergeFinal(lastInterimTextRef.current)
       lastInterimTextRef.current = ''
     }
     // Temporary diagnostic (2026-10-28) — see onerror's own comment above.
-     
+
     console.warn('[voice-dictation] finishing, committed so far:', JSON.stringify(committedTextRef.current))
     renderTranscript('')
+    dictatingRef.current = false
     setDictating(false)
+  }
+
+  // armStopWatchdog — see stopWatchdogRef's own comment above. Called only
+  // right after a deliberate stop() call returns without throwing; a
+  // normal onend finishes the session (via finishSession, which cancels
+  // this) well before the 1.5s window, so this only ever actually fires
+  // in the stuck case it exists for.
+  function armStopWatchdog(): void {
+    if (stopWatchdogRef.current !== null) clearTimeout(stopWatchdogRef.current)
+    stopWatchdogRef.current = setTimeout(() => {
+      stopWatchdogRef.current = null
+      if (dictatingRef.current) {
+        console.warn('[voice-dictation] stop() watchdog fired — onend never arrived, forcing finish')
+        finishSession(true)
+      }
+    }, 1500)
   }
 
   // armSilenceTimer re-arms the real 4-second stop timer — called from
@@ -201,6 +238,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       }
       try {
         recognition.stop()
+        armStopWatchdog()
       } catch {
         finishSession(true)
       }
@@ -373,6 +411,10 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         clearTimeout(silenceTimerRef.current)
         silenceTimerRef.current = null
       }
+      if (stopWatchdogRef.current !== null) {
+        clearTimeout(stopWatchdogRef.current)
+        stopWatchdogRef.current = null
+      }
       recognitionRef.current?.stop()
       recognitionRef.current = null
     }
@@ -396,6 +438,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
       }
       try {
         recognition.stop()
+        armStopWatchdog()
       } catch {
         finishSession(true)
       }
@@ -424,6 +467,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
 
       try {
         recognition.start()
+        dictatingRef.current = true
         setDictating(true)
         // Starts the real 4-second countdown immediately — otherwise a
         // dictation session opened and then never spoken into at all
@@ -432,6 +476,7 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         armSilenceTimer()
       } catch {
         sessionRef.current = 0
+        dictatingRef.current = false
         setDictating(false)
         if (!isRetry) {
           setTimeout(() => attemptStart(true), 300)
