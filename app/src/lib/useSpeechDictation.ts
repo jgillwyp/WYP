@@ -97,7 +97,15 @@ class NativeSpeechRecognitionAdapter implements SpeechRecognitionLike {
   start(): void {
     this.resultBuffer = []
     this.attachListeners()
-    NativeSpeech.start().catch(() => {
+    NativeSpeech.start().catch((err) => {
+      // Temporary diagnostic (2026-10-31) — surfaces the real native
+      // rejection reason (permission denied, the plugin not actually
+      // registered, the recognizer reporting itself unavailable, etc.)
+      // instead of collapsing every cause to the same generic 'aborted'
+      // code, so a failed attempt actually says why. Remove once this
+      // path is confirmed reliable.
+
+      console.warn('[voice-dictation] native start() rejected:', err)
       this.onerror?.({ error: 'aborted' })
     })
   }
