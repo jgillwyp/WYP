@@ -20,6 +20,16 @@ const nextConfig: NextConfig = {
         source: '/manifest.webmanifest',
         headers: [{ key: 'Cache-Control', value: 'no-cache, must-revalidate' }],
       },
+      // iOS Universal Links (2026-10-31) — the file itself has no extension
+      // (Apple's own requirement), so Vercel's static-file serving can't
+      // reliably infer application/json for it the way it does for
+      // public/.well-known/assetlinks.json (Android's equivalent, which
+      // keeps its .json extension). Apple's own CDN fetcher expects this
+      // content type; forcing it here removes any ambiguity.
+      {
+        source: '/.well-known/apple-app-site-association',
+        headers: [{ key: 'Content-Type', value: 'application/json' }],
+      },
     ]
   },
 };
