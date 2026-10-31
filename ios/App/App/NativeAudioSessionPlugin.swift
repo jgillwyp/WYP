@@ -30,7 +30,7 @@ public class NativeAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func ensureActive(_ call: CAPPluginCall) {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth])
+            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
             call.resolve()
         } catch {
