@@ -149,6 +149,14 @@ function LoginScreen() {
   // phrasing written for the PWA case. Capacitor.isNativePlatform() is
   // already used elsewhere (app/src/lib/platform.ts, nativePrint.ts).
   const [isNativeApp, setIsNativeApp] = useState(false)
+  // Derived: true for any context where the emailed magic link is known to
+  // fail (it always opens a separate browser/tab, never this window/app) —
+  // 2026-11-01, owner request to stop even offering "the link" as a framing
+  // on this page for these cases, rather than just explaining why not to use
+  // it. The email itself still contains both the link and the code (that's
+  // Supabase's own Magic Link template, outside this codebase) — this only
+  // changes what this page's own copy emphasizes.
+  const preferCodeOnly = isNativeApp || iosStandalone
   useEffect(() => {
     queueMicrotask(() => {
       setIsNativeApp(Capacitor.isNativePlatform())
@@ -192,10 +200,17 @@ function LoginScreen() {
       window.localStorage.removeItem(LAST_EMAIL_KEY)
     }
 
+    // `?ctx=app` (2026-11-01) is read by app/api/auth/send-email/route.ts —
+    // the Supabase "Send Email" Auth Hook — via the redirect_to field it
+    // receives in its own payload, to decide whether to omit the sign-in
+    // email's clickable link entirely (see that route's header comment and
+    // email.ts's "Sign-in email" section for the full reasoning). This is
+    // the one place that decision gets made — preferCodeOnly is computed
+    // once, client-side, before this call.
     const { error: sendError } = await supabase.auth.signInWithOtp({
       email: address,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback${preferCodeOnly ? '?ctx=app' : ''}`,
       },
     })
 
@@ -435,14 +450,17 @@ function LoginScreen() {
               )}
 
               <button className="btn btn-block" type="submit" disabled={loading}>
-                {loading ? 'Sending…' : 'Email me a sign-in link'}
+                {loading ? 'Sending…' : preferCodeOnly ? 'Email me a sign-in code' : 'Email me a sign-in link'}
               </button>
             </form>
 
             <div className="minreq">
-              <b>No password needed</b>&nbsp; We email you a one-time link instead. If this
-              is your first time, entering your email creates your account &mdash; there is
-              no separate sign-up.
+              <b>No password needed</b>&nbsp;
+              {preferCodeOnly
+                ? " We'll email you a one-time code instead."
+                : ' We email you a one-time link instead.'}{' '}
+              If this is your first time, entering your email creates your account &mdash;
+              there is no separate sign-up.
             </div>
           </div>
         ) : (
@@ -471,22 +489,12 @@ function LoginScreen() {
 
               <h2 className="sent-h">Check your email</h2>
               <p className="sent-p">
-                We sent a sign-in link to
+                {preferCodeOnly ? 'We sent a sign-in code to' : 'We sent a sign-in link to'}
                 <br />
                 <span className="sent-addr">{email.trim()}</span>
               </p>
-              {isNativeApp ? (
-                <p className="sent-p">
-                  Tapping the link in that email will open your regular browser instead
-                  of signing you in here in the app — enter the sign-in code from that
-                  same email below instead.
-                </p>
-              ) : iosStandalone ? (
-                <p className="sent-p">
-                  Tapping the link in that email will open a separate browser tab instead
-                  of signing you in here — enter the sign-in code from that same email
-                  below instead.
-                </p>
+              {preferCodeOnly ? (
+                <p className="sent-p">Enter the code below to sign in.</p>
               ) : (
                 <p className="sent-p">
                   Open that email and click the link. You&rsquo;ll be signed in automatically.
@@ -503,21 +511,18 @@ function LoginScreen() {
                   code is 8 digits, not Supabase's documented 6-digit
                   default; the field now accepts 4-10 digits and lets
                   verifyOtp() itself be the authority on correctness.
-                  Same-day follow-up: on a detected iOS home-screen icon, the
-                  paragraph above already explains the link won't work here,
-                  so this line drops the redundant "On a Home Screen icon and
-                  the link doesn't sign you in?" framing and just asks for
-                  the code directly. Extended 2026-10-21 (QC finding #8) with
-                  a third branch naming the installed Android app explicitly
-                  — the generic "Home Screen icon" wording never described
-                  that case, even though the same underlying link-vs-app-
-                  storage problem applies to it too. */}
+                  2026-11-01: for a detected native app/iOS home-screen icon
+                  (preferCodeOnly), the page no longer mentions "the link" at
+                  all anywhere above this point, so the old link-framed
+                  sub-heading here is simply omitted rather than reworded —
+                  the code field is the only thing offered. */}
               <form onSubmit={handleVerifyCode} noValidate>
-                <p className="sent-meta" style={{ marginTop: 4 }}>
-                  {isNativeApp || iosStandalone
-                    ? 'Enter the sign-in code from that email:'
-                    : "On a Home Screen icon and the link doesn't sign you in? Enter the sign-in code from that same email instead:"}
-                </p>
+                {!preferCodeOnly && (
+                  <p className="sent-meta" style={{ marginTop: 4 }}>
+                    On a Home Screen icon and the link doesn&rsquo;t sign you in? Enter the
+                    sign-in code from that same email instead:
+                  </p>
+                )}
                 <div className={`fgroup ffloat${verifyError ? ' is-invalid' : ''}`} style={{ marginTop: 10 }}>
                   <input
                     className="finput"
@@ -559,7 +564,9 @@ function LoginScreen() {
               )}
 
               <p className="sent-meta">
-                The link expires in 1 hour and works once.
+                {preferCodeOnly
+                  ? 'The code expires in 1 hour and works once.'
+                  : 'The link expires in 1 hour and works once.'}
                 <br />
                 Nothing yet? Check spam,{' '}
                 {cooldown > 0 ? (

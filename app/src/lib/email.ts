@@ -1427,3 +1427,89 @@ export function buildSmsConsentApprovedEmailText(fields: SmsConsentApprovedEmail
     fields.link,
   ].join('\n')
 }
+
+// ----------------------------------------------------------------------------
+// Sign-in email (2026-11-01, Supabase "Send Email" Auth Hook) — owner request:
+// the magic-link sign-in email was offering a clickable link even in contexts
+// where it structurally cannot work (the native TestFlight/Capacitor app, and
+// an iOS home-screen icon — both have their own isolated storage, so a tapped
+// link always opens the device's regular browser instead of signing in where
+// the user actually is; see app/login/page.tsx's own iosStandalone/isNativeApp
+// history for the full diagnosis). /login's own copy already stopped
+// *mentioning* the link for those cases (2026-11-01, earlier same-day
+// change) — but the email itself, generated from Supabase's own built-in
+// Magic Link template, still always included a real clickable link
+// regardless, since that template has no way to know which device will
+// eventually open the message.
+//
+// This is the actual fix: app/api/auth/send-email/route.ts is registered in
+// the Supabase Dashboard (Authentication -> Hooks -> Send Email, HTTPS) as a
+// *replacement* for Supabase's own built-in mailer — once registered, every
+// auth email (in this app's case, only ever the sign-in one; there are no
+// password-reset/invite/signup-confirmation flows to worry about) routes
+// through this hook instead, and this module decides what the email actually
+// contains. The decision of whether to omit the link is made once, up front,
+// by the *client* (app/login/page.tsx appends `?ctx=app` to the
+// `emailRedirectTo` it passes to signInWithOtp whenever preferCodeOnly is
+// true) and carried through to the hook via Supabase's own `redirect_to`
+// field — this module itself has no access to the original request's
+// platform, only whatever the route handler passes it.
+//
+// This applies to every future sign-in from those contexts, not just today's
+// beta testers — the decision lives in the request itself, not in a
+// per-tester list.
+// ----------------------------------------------------------------------------
+type SignInEmailFields = {
+  code: string
+  // null specifically when the link is deliberately omitted (the contexts
+  // above) — not merely "unavailable." A missing token_hash/site_url from
+  // the hook payload is treated as a hard error by the route handler
+  // (app/api/auth/send-email/route.ts) rather than silently falling back to
+  // this null case, so a malformed payload never accidentally reads as "omit
+  // the link on purpose."
+  link: string | null
+  siteUrl: string
+}
+
+export function buildSignInEmailSubject(): string {
+  return 'Your Would You Please sign-in code'
+}
+
+function signInCodeBox(code: string): string {
+  return `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px; margin:0 0 18px; text-align:center;"><span style="font-size:30px; font-weight:700; letter-spacing:6px; color:${EMAIL_INK};">${escapeHtml(code)}</span></div>`
+}
+
+export function buildSignInEmailHtml(fields: SignInEmailFields): string {
+  const body = fields.link
+    ? [
+        `<p style="margin:0 0 18px;">Click the button below to sign in automatically.</p>`,
+        `<p style="margin:0 0 18px;">${emailButton(fields.link, 'Sign In')}</p>`,
+        `<p style="margin:0 0 10px;">Or enter this sign-in code instead:</p>`,
+        signInCodeBox(fields.code),
+      ].join('\n')
+    : [
+        `<p style="margin:0 0 18px;">You&rsquo;re signing in from the Would You Please app, so here&rsquo;s a code instead of a link &mdash; enter it on the sign-in screen:</p>`,
+        signInCodeBox(fields.code),
+      ].join('\n')
+
+  const footer = `<p style="margin:0; font-size:13px; color:${EMAIL_INK};">This code expires in 1 hour and can only be used once.</p>`
+
+  return wrapEmailHtml(fields.siteUrl, [body, footer].join('\n'))
+}
+
+export function buildSignInEmailText(fields: SignInEmailFields): string {
+  const lines = fields.link
+    ? [
+        'Click to sign in automatically:',
+        fields.link,
+        '',
+        'Or enter this sign-in code instead:',
+        fields.code,
+      ]
+    : [
+        "You're signing in from the Would You Please app, so here's a code instead of a link — enter it on the sign-in screen:",
+        '',
+        fields.code,
+      ]
+  return [...lines, '', 'This code expires in 1 hour and can only be used once.'].join('\n')
+}
