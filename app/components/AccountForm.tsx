@@ -689,7 +689,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Time</span> Show Due/Done Time
+                    <span className="checkword">Time —</span> Show Due/Done Time
                     <span className="checknote">
                       Adds a Due Time and Done Time next to a Request&rsquo;s Due Date and Done
                       Date, for you and whoever you send it to. Turn it on if you want to
@@ -708,7 +708,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Categories</span> Show Private Category
+                    <span className="checkword">Categories —</span> Show Private Category
                     <span className="checknote">
                       Adds an optional Category field to Requests sent, for your own private
                       labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
@@ -736,7 +736,7 @@ export default function AccountForm() {
                       }
                     />
                     <span className="checktext">
-                      <span className="checkword">Confirmation</span> Show optional Receipt
+                      <span className="checkword">Confirmation —</span> Show optional Receipt
                       Confirmation
                       <span className="checknote">
                         This will add a check box to each Create Request screen to allow the
@@ -762,7 +762,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Repeat</span> Show Add Repeat option
+                    <span className="checkword">Repeat —</span> Show Add Repeat option
                     <span className="checknote">
                       For each Create Request screen, this will show an optional Add Repeat
                       feature, available for setting a schedule for automatically created
@@ -781,7 +781,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Reminders</span> Show Reminders
+                    <span className="checkword">Reminders —</span> Show Reminders
                     <span className="checknote">
                       Adds a Reminders until Done panel to Create Requests and Request Detail
                       and to your Recipients&rsquo; response screen with choices to set or
@@ -989,7 +989,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Date</span> Show Due/Done Dates
+                    <span className="checkword">Date —</span> Show Due/Done Dates
                     <span className="checknote">
                       Adds Due Date and Done Date for creating and editing ToDos instead of
                       just a Status of Open and Done. Turn it on for more precise ToDo
@@ -1012,7 +1012,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Time</span> Show Due/Done Time
+                    <span className="checkword">Time —</span> Show Due/Done Time
                     <span className="checknote">
                       If &quot;Show Due/Done Dates&quot; above is checked, add a Due Time and
                       Done Time next to a ToDo&apos;s Due Date and Done Date. Turn it on if
@@ -1032,7 +1032,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Categories</span> Show Private Category
+                    <span className="checkword">Categories —</span> Show Private Category
                     <span className="checknote">
                       Adds an optional Category field to ToDos, for your own private
                       labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
@@ -1060,7 +1060,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Repeat</span> Show Add Repeat option
+                    <span className="checkword">Repeat —</span> Show Add Repeat option
                     <span className="checknote">
                       For each Create ToDo screen, this will show an optional Add Repeat
                       feature, available for setting a schedule for automatically created
@@ -1083,7 +1083,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    <span className="checkword">Reminders</span> Show Reminders
+                    <span className="checkword">Reminders —</span> Show Reminders
                     <span className="checknote">
                       Adds a Reminders until Done panel to Create ToDos and ToDo Detail to
                       offer choices for setting or changing (Day before / Day of / Day
