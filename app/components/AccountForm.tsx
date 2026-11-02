@@ -337,34 +337,48 @@ export default function AccountForm() {
   // removed 2026-09-30 — see the file-level comment; sectionHead() stays
   // reusable if a future setting needs a similar home.
   // Deep-link from the Features band's own "Housekeeping, Account Options"
-  // link (Create Request/Create ToDo, ?open=request / ?open=todo) — Jim:
-  // "it should force it open and reset the last Show/Hide state." Checked
-  // in each lazy initializer below (not a later effect) so the relevant
-  // section is already open on the very first render, no flash of
-  // collapsed-then-reopened. The matching mount effect further down
-  // persists the forced choice as the new last-used state and strips the
-  // query string once consumed.
-  const [requestOpen, setRequestOpen] = useState(
-    () => forcedOpenSection() === 'request' || readStoredOpen('wyp.acctRequestOpen', false)
-  )
-  const [todoOpen, setTodoOpen] = useState(
-    () => forcedOpenSection() === 'todo' || readStoredOpen('wyp.acctTodoOpen', false)
-  )
-  const [subscriberOpen, setSubscriberOpen] = useState(() => readStoredOpen('wyp.acctSubscriberOpen', false))
+  // link (Create Request/Create ToDo, ?open=request / ?open=todo) — Jim's
+  // own follow-up correction: forcing only the target section open wasn't
+  // enough, since whichever other section was last left open (independent,
+  // per-section sessionStorage) stayed open too — the target often wasn't
+  // even the first thing visible. "When either... is clicked, the other
+  // two sections are closed and the desired target is opened." So a forced
+  // open is now exclusive: when ?open= is present, it decides all three
+  // sections' state outright (target true, the other two false), not just
+  // the target. Checked in each lazy initializer below (not a later
+  // effect) so this is already correct on the very first render, no flash
+  // of multiple sections open before collapsing. The matching mount effect
+  // further down persists that exclusive state as the new last-used state
+  // for every section — "it can then be remembered for a normal menu path
+  // to the 3 sections" — and strips the query string once consumed.
+  const [requestOpen, setRequestOpen] = useState(() => {
+    const forced = forcedOpenSection()
+    return forced ? forced === 'request' : readStoredOpen('wyp.acctRequestOpen', false)
+  })
+  const [todoOpen, setTodoOpen] = useState(() => {
+    const forced = forcedOpenSection()
+    return forced ? forced === 'todo' : readStoredOpen('wyp.acctTodoOpen', false)
+  })
+  const [subscriberOpen, setSubscriberOpen] = useState(() => {
+    const forced = forcedOpenSection()
+    return forced ? false : readStoredOpen('wyp.acctSubscriberOpen', false)
+  })
 
   // Deep-link, continued — runs once on mount, after setRequestOpenAndStore/
-  // setTodoOpenAndStore are in scope (hoisted function declarations, so
-  // calling them from here before their own textual definition is safe).
-  // Persists the forced-open section as the new last-used sessionStorage
-  // value (not just a one-time visual override for this one visit) and
-  // strips ?open= from the URL once consumed, same "read once, clean up
-  // the query string" pattern CreateRequestForm.tsx's own ?newContactId
+  // setTodoOpenAndStore/setSubscriberOpenAndStore are in scope (hoisted
+  // function declarations, so calling them from here before their own
+  // textual definition is safe). Persists the exclusive forced state as
+  // the new last-used sessionStorage value for all three sections (not
+  // just a one-time visual override for this one visit) and strips
+  // ?open= from the URL once consumed, same "read once, clean up the
+  // query string" pattern CreateRequestForm.tsx's own ?newContactId
   // handling already uses.
   useEffect(() => {
     const forced = forcedOpenSection()
     if (!forced) return
-    if (forced === 'request') setRequestOpenAndStore(true)
-    if (forced === 'todo') setTodoOpenAndStore(true)
+    setRequestOpenAndStore(forced === 'request')
+    setTodoOpenAndStore(forced === 'todo')
+    setSubscriberOpenAndStore(false)
     router.replace('/account')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
