@@ -154,8 +154,11 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 Overdue, or Done — visible to both of you. Your personal ToDos live right
                 alongside, on one dashboard.
               </div>
-              <div className="reassure">No credit card. No App to install* — works right in your phone’s browser.</div>
-              <div className="reassure-note">* We offer the ability to add a Would You Please icon to your home screen.</div>
+              <div className="reassure">
+                No credit card needed for the free version. Use it right in your browser
+                today — native iOS and Android apps are in testing now.
+              </div>
+              <div className="reassure-note">Ask about joining the native app testing.</div>
             </div>
 
             {/* Hero illustration — hand-built SVG, not the AI placeholder photo;
