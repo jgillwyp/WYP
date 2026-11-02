@@ -109,10 +109,36 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
 
     document.addEventListener('visibilitychange', handleWake)
     window.addEventListener('focus', handleWake)
+
+    // Native app-foreground detection (2026-11-02, owner-reported: stuck 9
+    // commits behind, only fixed by a full force-quit-and-relaunch — never
+    // caught by an ordinary background/foreground cycle). Root cause:
+    // inside a Capacitor WKWebView, bringing the app back from the
+    // background via the Home button or app switcher does NOT reliably
+    // fire the page's own visibilitychange/focus DOM events the way
+    // backgrounding a browser tab does — the WebView is never literally
+    // hidden from the native view hierarchy the way a backgrounded browser
+    // tab is, so the DOM-level signal this effect otherwise relies on can
+    // simply never arrive. @capacitor/app's own appStateChange event is
+    // the correct, OS-level signal for exactly this transition — it fires
+    // whether or not the WebView's own DOM events do, which is the entire
+    // reason this plugin is already a dependency here (see the appUrlOpen
+    // effect below). No-ops on web/desktop via the isNativePlatform()
+    // guard, same convention as that effect.
+    let appStateListenerPromise: ReturnType<typeof CapacitorApp.addListener> | null = null
+    if (Capacitor.isNativePlatform()) {
+      appStateListenerPromise = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (!isActive) return
+        if (Date.now() - lastVersionCheckRef.current < VERSION_CHECK_MIN_INTERVAL_MS) return
+        checkForUpdate()
+      })
+    }
+
     return () => {
       cancelled = true
       document.removeEventListener('visibilitychange', handleWake)
       window.removeEventListener('focus', handleWake)
+      appStateListenerPromise?.then((handle) => handle.remove())
     }
   }, [])
 
