@@ -276,6 +276,9 @@ export default function TodoDetailForm() {
   // profiles.todo_time_enabled (migration 067, 2026-09-16) — see
   // AccountForm.tsx's identical gate.
   const [todoTimeEnabled, setTodoTimeEnabled] = useState(false)
+  // profiles.todo_repeat_enabled (migration 086, 2026-11-02) — see
+  // AccountForm.tsx's identical gate.
+  const [todoRepeatEnabled, setTodoRepeatEnabled] = useState(false)
   // profiles.todo_reminders_enabled (migration 041, 2026-08-22) — see
   // AccountForm.tsx's identical gate.
   const [todoRemindersEnabled, setTodoRemindersEnabled] = useState(false)
@@ -698,7 +701,7 @@ export default function TodoDetailForm() {
         supabase.from('categories').select('id, name').order('name'),
         supabase
           .from('profiles')
-          .select('display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier')
+          .select('display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_repeat_enabled, todo_reminders_enabled, tier')
           .single(),
         // Print (2026-08-15) — same reasoning as RequestDetailForm.tsx's
         // identical addition.
@@ -777,6 +780,7 @@ export default function TodoDetailForm() {
       setCategoriesEnabled(ownerRes.data?.todo_category_enabled ?? false)
       setTodoDatesEnabled(ownerRes.data?.todo_dates_enabled ?? false)
       setTodoTimeEnabled(ownerRes.data?.todo_time_enabled ?? false)
+      setTodoRepeatEnabled(ownerRes.data?.todo_repeat_enabled ?? false)
       setTodoRemindersEnabled(ownerRes.data?.todo_reminders_enabled ?? false)
       setReminderSentAt(row.reminder_sent_at)
       setReminderDayOfSentAt(row.reminder_day_of_sent_at)
@@ -1346,14 +1350,17 @@ export default function TodoDetailForm() {
                 </p>
               )}
 
-            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — available to every tier
-                as of 2026-08-27, still gated on Due/Done Dates being on
-                (no Due Date to anchor generation on otherwise), same as
-                CreateTodoForm.tsx's own counterpart. Free's own occurrence
-                cap is enforced server-side in cron Phase E, RepeatControl's
-                tier prop only adds an informational note. Greyed when
-                archived or before a Due Date has been entered. */}
-            {todoDatesEnabled && (
+            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — available to every tier,
+                still gated on Due/Done Dates being on (no Due Date to
+                anchor generation on otherwise) AND todoRepeatEnabled
+                (migration 086) — whether Repeat is offered at all on this
+                account — same as CreateTodoForm.tsx's own counterpart.
+                Free's own limit is now a cap on concurrently-active
+                Repeats, enforced and explained by RepeatControl itself
+                (redesigned 2026-11-02, see repeatRule.ts's own header
+                comment). Greyed when archived or before a Due Date has
+                been entered. */}
+            {todoDatesEnabled && todoRepeatEnabled && (
               <RepeatControl
                 rule={repeatRule}
                 dueDate={form.dueDate}

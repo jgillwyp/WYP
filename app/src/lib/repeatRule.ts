@@ -181,17 +181,51 @@ export function computeNextDueDate(currentDueDate: string, rule: RepeatRule): st
   }
 }
 
-/** Free-tier cap on automatic Repeat generation — Jim's own wording
- * (2026-08-27), expanding Repeat from subscriber-only to free-with-limits:
- * "Automatic Repeating — for Requests and ToDos. (up to 5 available, a
- * subscription is unlimited)." Checked by the cron job (app/api/cron/
- * tick/route.ts, Phase E) alongside — never instead of — the rule's own
- * shouldStopBeforeGenerating() below, since a Free-tier owner's chosen
- * Stop condition (e.g. "Never") would otherwise silently generate past
- * this limit with no warning. Kept out of shouldStopBeforeGenerating()'s
- * own signature deliberately — this function stays pure recurrence logic,
- * with no tier/account awareness of its own. */
-export const FREE_TIER_MAX_REPEAT_OCCURRENCES = 5
+/** Free-tier cap on Repeat itself — redesigned 2026-11-02. The original
+ * per-series occurrence cap (FREE_TIER_MAX_REPEAT_OCCURRENCES = 5,
+ * 2026-08-27) had a real gap Jim caught: a series with its own Stops
+ * Repeating set to "Never" hit the cap and silently stopped generating,
+ * with nothing telling the owner it had happened — the cap lived deep in
+ * the cron job's own generation loop, invisible until the 6th attempt
+ * quietly failed. Replaced outright with a cap on how many series can be
+ * concurrently active at once — "I only want free account users to
+ * 'experience it', not fulfil all of their needs." Once a series is
+ * admitted under this cap, it runs to its own Stops Repeating condition
+ * completely unconstrained — no more silent mid-series failure, since
+ * there's no longer anything to silently fail at. Enforced client-side in
+ * RepeatControl.tsx (the only place a NEW Repeat can be started), not in
+ * cron — an already-running series was already granted its slot and keeps
+ * running regardless of the owner's tier fluctuating afterward. Shared
+ * across Requests and ToDos combined, per Jim's own "3 things repeating at
+ * once." */
+export const FREE_TIER_MAX_CONCURRENT_REPEATS = 3
+
+interface ActiveRepeatRow {
+  id: string
+  repeat_occurrence_index: number | null
+  repeat_series_id: string | null
+}
+
+/** Reduces a set of currently-repeating rows (repeat_rule set, not
+ * archived — the caller's own query already filters to that) down to one
+ * "head" row per series: the most recently generated occurrence, which is
+ * the one that actually occupies a concurrent-Repeat slot. Mirrors
+ * MainScreen.tsx's own repeatingHeadIds() reduction (built first, for its
+ * "Repeating" filter chip, and left as its own copy there since it returns
+ * a Set of ids for a different purpose) — kept here as the one shared copy
+ * every FREE_TIER_MAX_CONCURRENT_REPEATS consumer needs, since this file
+ * is already the single home for Repeat's own pure logic. */
+export function activeRepeatHeads<T extends ActiveRepeatRow>(rows: T[]): T[] {
+  const heads = new Map<string, T>()
+  for (const r of rows) {
+    const key = r.repeat_series_id ?? r.id
+    const current = heads.get(key)
+    if (!current || (r.repeat_occurrence_index ?? 1) > (current.repeat_occurrence_index ?? 1)) {
+      heads.set(key, r)
+    }
+  }
+  return Array.from(heads.values())
+}
 
 /** nextOccurrenceIndex is 1-based and counts the *original* Request as 1 —
  * so the first generated successor is index 2. Checked by the cron job

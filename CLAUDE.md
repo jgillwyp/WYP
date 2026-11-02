@@ -6143,3 +6143,125 @@ link is built only after the stack is proven on Add Contact.
   existing `email.ts` template content for SMS's much shorter format are
   all open questions, not yet discussed with Jim. Flagged as the next
   real piece of Request Texting work, pending Jim's go-ahead on scope.
+- **"Features Exposure" Stage 1 built — Repeat redesigned to a 3-concurrent
+  cap, new "Show Add Repeat option" toggles for both Requests and ToDos,
+  Account Options reordered/relabeled with squint-test keyword prefixes
+  (2026-11-02) — migration 086 DRAFTED, NOT YET CONFIRMED RUN.** First of
+  the staged build plan agreed for Jim's own "Features Exposure" design
+  (per-Request/ToDo discoverability for optional features, discussed at
+  length before any of it was built): shared infrastructure first, both
+  Requests and ToDos at once, before the Features checkbox band itself
+  (Stage 2/3, not started this batch).
+  **Repeat's free-tier limit redesigned outright** — Jim, after being shown
+  the old per-series 5-occurrence cap's real gap (a series set to Stops
+  Repeating "Never" would silently stop generating at occurrence 6 with
+  nothing telling the owner it happened): "I think the limit based on
+  concurrent repeating Requests is sufficient, the repetition limit is not
+  needed... let's switch it to 3 concurrently repeating Requests. I only
+  want free account users to 'experience it', not fulfil all of their
+  needs." `FREE_TIER_MAX_REPEAT_OCCURRENCES` (2026-08-27) is gone;
+  `app/src/lib/repeatRule.ts` now exports `FREE_TIER_MAX_CONCURRENT_REPEATS
+  = 3` and a shared `activeRepeatHeads()` reducer (the same "most recent
+  occurrence per series" logic `MainScreen.tsx`'s own `repeatingHeadIds()`
+  already used for its "Repeating" filter chip — kept as a separate copy
+  there, consolidated here as the one shared home for every
+  concurrent-cap consumer). `app/api/cron/tick/route.ts`'s Phase E no
+  longer checks tier against an occurrence count at all — once admitted, a
+  series now runs to its own Stops Repeating condition completely
+  unconstrained. New behavior instead: when a series *does* reach its own
+  natural stop, the cron job now clears `repeat_rule`/
+  `repeat_occurrence_index` on that final row (same effect as the owner's
+  own manual Remove) — this is what keeps "repeat_rule IS NOT NULL" an
+  accurate signal of "still actively repeating" everywhere it's read,
+  without it a naturally-stopped series would occupy a free-tier
+  concurrent slot forever.
+  **Enforcement moved entirely into `RepeatControl.tsx` itself** — no prop
+  threading needed across any of the four call sites (Create Request,
+  Request Detail, Create ToDo, ToDo Detail): the component fetches its own
+  owner-scoped count (`requests` RLS already restricts reads to the
+  signed-in owner, no explicit filter needed) whenever `tier === 'free'`,
+  and greys its own Add Repeat button once at the cap — but only when
+  adding a *new* Repeat (`rule === null`); editing or removing an
+  already-repeating item never needs a free slot, it already has one. The
+  greyed state shows real, always-visible explanatory text now (Jim,
+  separately: "there is an explanatory text addition while the Add Repeat
+  is greyed") rather than only a title-attribute tooltip, unreachable on a
+  touch device — applies to every disabled reason (no Due Date yet,
+  archived, and the new at-cap case), not just the new one. The at-cap
+  note includes an underlined "Review/modify Repeats" link (`.linkbtn`)
+  opening a new two-step dialog, built entirely inside RepeatControl.tsx:
+  a list of the owner's 3 active series (type — Request or ToDo, derived
+  from `contact_id` — plus a truncated description) each with its own
+  Remove control, which opens a confirmation view (Jim's own spec: "a text
+  view in a dialog of Date, Recipient, Last Due Date, Last Done Date,
+  Description" — "Date" is the series' own `created_at`, "Last Due/Done
+  Date" are the currently-active occurrence's own values, "Recipient"
+  blank for a ToDo) before actually clearing that row's `repeat_rule`.
+  Confirming closes the dialog outright — Jim: "just close, allow them to
+  repeat the effort or move to something else" — no auto-continue into
+  whatever action they were originally trying to take.
+  **The already-live "Add Repeat requires a Contact" bug Jim reported
+  turned out not to exist** — read all four call sites' actual `disabled`
+  logic before touching anything; every one was already Date-only (plus
+  archived on Detail screens), no Contact dependency anywhere in the
+  current code. Flagged back rather than assumed and "fixed" blind.
+  **Migration 086** adds `profiles.request_repeat_enabled`/
+  `todo_repeat_enabled` (both off by default — Jim: "I expect that most
+  free accounts users will not use it," same reasoning the `todo_time_enabled`/
+  Private Category splits already used for a brand-new toggle), each with
+  its own per-column grant to `authenticated`. Both gate whether
+  `RepeatControl` renders at all on their respective Create/Detail
+  screens — same "whether a feature is offered at all" precedent
+  `request_category_enabled`/`todo_category_enabled` already established,
+  not yet wired to any Features-band checkbox since that doesn't exist
+  yet. All four call sites updated to read and gate on the new column
+  (ToDo's own gate is `todoDatesEnabled && todoRepeatEnabled`, matching
+  its existing Date dependency).
+  **`AccountForm.tsx` reordered and relabeled** to match the Features chip
+  order Jim's own mockups establish — Requests (sent): Time, Categories,
+  Confirmation, Repeat, Reminders (+ its own sub-settings, then the two
+  Notify Me toggles unchanged at the end); ToDos: Date, Time, Categories,
+  Repeat, Reminders. New `.checkword` CSS (brand-blue, bold, 13.5px) gives
+  each of the five primary toggle titles a single-word prefix matching its
+  Features chip exactly — Jim's own "squint test": "whether or not they
+  can squint and visually understand what is being presented." Only the
+  five primary toggles get this — a sub-setting within a feature (Always
+  show Send Reminder button, the Day Before/Of/After/Minutes-Before
+  defaults) has no Features chip of its own to match, so those stay plain
+  text, unprefixed. Confirmation's own title shortened to "Show optional
+  Receipt Confirmation" (from "Optionally add a Receipt Confirmation to a
+  Request") to fit on one line alongside its new prefix, per Jim's own
+  mockup — still Subscriber-gated, unchanged. The new Repeat toggles'
+  checknote text is adapted from Jim's own mockup wording to describe
+  today's actual behavior (gates whether the Add Repeat band renders at
+  all) rather than referencing the Features checkbox band directly, since
+  that doesn't exist yet — flagged as a wording detail likely worth
+  revisiting once Stage 2/3 actually builds the band.
+  **Every "up to 5 occurrences" reference to the old cap swept and
+  updated** to the new "up to 3 at once" / "up to 3 repeating at once"
+  phrasing across the app and every hand-synced marketing copy: both Help
+  topics (`CreatingRequestHelp.tsx`, `TodoFeaturesHelp.tsx`),
+  `SubscriptionPanels.tsx`'s `FREE_TIER_ADVANCED_FEATURES`/
+  `COMPARISON_ROWS` (the single source of truth Account Options, `/account/
+  subscription`, and the live landing page all read from), and the three
+  static files with no import path to that source
+  (`design/marketing/WYP_landing_page.html`, `docs/WYP onepager.html`,
+  `design/screens/WYP_about_palette1.html` — the retired
+  `docs/onepager_2 - RETIRED.html` deliberately left untouched, per its
+  own established "historical record" status).
+  **Not built this batch, per the agreed staged plan**: the Features
+  checkbox band itself on Create Request/Create ToDo (Stage 2/3 — build on
+  Create Request first, review the look on a real phone, then port to
+  Create ToDo); the Housekeeping-link deep-link-into-the-right-Account-
+  Options-section behavior (small, saved for last once both sections are
+  in their final shape); the retain/discard confirmation dialog for
+  unchecking a Features checkbox with data staged underneath (applies once
+  the band exists); and the website/landing-page "No App to install"
+  wording Jim flagged as now actively discouraging the kind of iOS/Android
+  native-app use the app now supports — deliberately deferred to the
+  iOS/Android distribution conversation itself, since the right wording
+  depends on what's actually publicly installable (TestFlight External
+  Testing is invite-only, no Play Store listing exists yet) at the time
+  it's written. `npx tsc --noEmit`/`npm run lint` both clean across the
+  whole batch. No mockup updated — this feature family has none beyond
+  Jim's own pasted Account Options/Create screen mockups.

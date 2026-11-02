@@ -337,6 +337,10 @@ export default function RequestDetailForm() {
   // (Due Date, Done Date), matching ToDo Detail's own combined-row pattern
   // exactly — owner's own stated goal for this feature.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
+  // Show Add Repeat option (migration 086, 2026-11-02) — whether
+  // RepeatControl renders at all; see AccountForm.tsx's identical gate.
+  // Off by default, same reasoning as requestCategoriesEnabled above.
+  const [requestRepeatEnabled, setRequestRepeatEnabled] = useState(false)
   // Show Reminders (migration 044, 2026-08-23) — standalone master toggle
   // for the Reminders-until-Done banner; see AccountForm.tsx and
   // CreateRequestForm.tsx's identical gate. Default flipped true -> false,
@@ -556,7 +560,7 @@ export default function RequestDetailForm() {
         supabase
           .from('profiles')
           .select(
-            'display_name, request_category_enabled, request_time_enabled, request_reminders_enabled, always_show_send_reminder, tier'
+            'display_name, request_category_enabled, request_time_enabled, request_repeat_enabled, request_reminders_enabled, always_show_send_reminder, tier'
           )
           .single(),
         // Print (2026-08-15) — same owner-scoped RLS access MainScreen.tsx's
@@ -663,6 +667,7 @@ export default function RequestDetailForm() {
       setOwnerName(ownerRes.data?.display_name ?? null)
       setCategoriesEnabled(ownerRes.data?.request_category_enabled ?? false)
       setRequestTimeEnabled(ownerRes.data?.request_time_enabled ?? true)
+      setRequestRepeatEnabled(ownerRes.data?.request_repeat_enabled ?? false)
       setRequestRemindersEnabled(ownerRes.data?.request_reminders_enabled ?? false)
       setAlwaysShowSendReminder(ownerRes.data?.always_show_send_reminder ?? false)
       setTier(ownerRes.data?.tier === 'subscriber' ? 'subscriber' : 'free')
@@ -1379,34 +1384,38 @@ export default function RequestDetailForm() {
               </p>
             )}
 
-            {/* Repeat (§6.42 PROPOSED) — available to every tier as of
-                2026-08-27 (Jim's own wording: "up to 5 available, a
-                subscription is unlimited"); Free's own occurrence cap is
-                enforced server-side in cron Phase E, RepeatControl's tier
-                prop only adds an informational note. Greyed until a Due
-                Date is entered, or when this Request is archived — Jim's
-                own spec. */}
-            <RepeatControl
-              rule={repeatRule}
-              dueDate={form.dueDate}
-              onSave={(rule) => {
-                setRepeatRule(rule)
-                setRepeatOccurrenceIndex((current) => current ?? 1)
-                // repeat_series_id (migration 068) — only ever generated
-                // once, the first time Repeat is added to a row that never
-                // had a series id; editing an already-repeating row's rule
-                // keeps whatever id it loaded with.
-                setRepeatSeriesId((current) => current ?? crypto.randomUUID())
-              }}
-              onRemove={() => setRepeatRule(null)}
-              disabled={form.dueDate.trim() === '' || archivedAt !== null}
-              disabledReason={
-                archivedAt !== null
-                  ? 'Repeats are not available for archived Requests.'
-                  : 'Please select a Due Date before adding a Repeat.'
-              }
-              tier={tier}
-            />
+            {/* Repeat (§6.42 PROPOSED) — available to every tier; Free's own
+                limit is now a cap on concurrently-active Repeats, enforced
+                and explained by RepeatControl itself (redesigned
+                2026-11-02, see repeatRule.ts's own header comment). Gated
+                on requestRepeatEnabled (migration 086) — whether Repeat is
+                offered at all on this account, same precedent as
+                categoriesEnabled just above. Greyed until a Due Date is
+                entered, or when this Request is archived — Jim's own
+                spec. */}
+            {requestRepeatEnabled && (
+              <RepeatControl
+                rule={repeatRule}
+                dueDate={form.dueDate}
+                onSave={(rule) => {
+                  setRepeatRule(rule)
+                  setRepeatOccurrenceIndex((current) => current ?? 1)
+                  // repeat_series_id (migration 068) — only ever generated
+                  // once, the first time Repeat is added to a row that never
+                  // had a series id; editing an already-repeating row's rule
+                  // keeps whatever id it loaded with.
+                  setRepeatSeriesId((current) => current ?? crypto.randomUUID())
+                }}
+                onRemove={() => setRepeatRule(null)}
+                disabled={form.dueDate.trim() === '' || archivedAt !== null}
+                disabledReason={
+                  archivedAt !== null
+                    ? 'Repeats are not available for archived Requests.'
+                    : 'Please select a Due Date before adding a Repeat.'
+                }
+                tier={tier}
+              />
+            )}
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). See

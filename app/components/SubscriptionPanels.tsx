@@ -93,7 +93,9 @@ export const SUBSCRIBER_FEATURES: { title: string; desc: string }[] = [
  * landing page's marketing copy from drifting out of sync with what's
  * actually enforced server-side (app/api/attachments/_shared.ts's
  * getOwnerStorageStatus(), app/src/lib/repeatRule.ts's
- * FREE_TIER_MAX_REPEAT_OCCURRENCES). File Attachments and storage merged
+ * FREE_TIER_MAX_CONCURRENT_REPEATS — redesigned 2026-11-02 from a
+ * per-series occurrence cap to a concurrent-series cap, see that
+ * constant's own header comment). File Attachments and storage merged
  * into one bullet the same day, matching SUBSCRIBER_FEATURES' own merge. */
 export const FREE_TIER_ADVANCED_FEATURES: { title: string; desc: string }[] = [
   {
@@ -102,7 +104,7 @@ export const FREE_TIER_ADVANCED_FEATURES: { title: string; desc: string }[] = [
   },
   {
     title: 'Automatic Repeating',
-    desc: 'for all Requests and ToDos — up to 5 occurrences; a subscription is unlimited.',
+    desc: 'for all Requests and ToDos — up to 3 repeating at once; a subscription is unlimited.',
   },
 ]
 
@@ -122,7 +124,7 @@ const COMPARISON_ROWS: { feature: string; free: string; subscribed: string }[] =
   { feature: 'Receipt Confirmation', free: 'Not available', subscribed: 'Available' },
   { feature: 'Voice Dictation', free: 'Not available', subscribed: 'Available' },
   { feature: 'File Attachments Storage', free: '100 MB', subscribed: '5 GB' },
-  { feature: 'Automatic Repeating', free: 'up to 5', subscribed: 'Unlimited' },
+  { feature: 'Automatic Repeating', free: 'up to 3 at once', subscribed: 'Unlimited' },
   { feature: 'Request Texting', free: 'Not available', subscribed: 'Available' },
   { feature: 'Ads', free: 'Shown', subscribed: 'Not shown' },
   { feature: 'Data Retention', free: '1 year', subscribed: 'Unlimited' },

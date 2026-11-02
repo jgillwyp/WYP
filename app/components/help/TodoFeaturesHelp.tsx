@@ -84,8 +84,8 @@ export default function TodoFeaturesHelp() {
         Reminder emails a Request does, sent to you. Turn on{' '}
         <b>Add Reminders (ToDos)</b>{' '}
         in Account Options to use them, and set your own defaults there too. <b>Repeat</b>{' '}
-        works on ToDos exactly like it does on Requests — up to 5 of the Requests and ToDos
-        free, unlimited for subscribers — handy for anything you do on a recurring basis
+        works on ToDos exactly like it does on Requests — up to 3 Requests and ToDos
+        repeating at once free, unlimited for subscribers — handy for anything you do on a recurring basis
         (watering plants, a weekly check-in).
       </p>
 

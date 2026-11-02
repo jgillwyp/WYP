@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
 
 import { buildIcsContent, type IcsRequestFields } from '@/lib/ics'
-import { type RepeatRule, FREE_TIER_MAX_REPEAT_OCCURRENCES, computeNextDueDate, shouldStopBeforeGenerating } from '@/lib/repeatRule'
+import { type RepeatRule, computeNextDueDate, shouldStopBeforeGenerating } from '@/lib/repeatRule'
 import { FREE_TIER_STORAGE_LIMIT_BYTES } from '@/lib/attachments'
 import {
   EMAIL_FROM_ADDRESS,
@@ -185,10 +185,10 @@ type ProfileRow = {
   todo_reminders_enabled: boolean
   //
   // tier (2026-08-27) — added when Repeat moved from subscriber-only to
-  // free-with-limits (Jim's own wording: "up to 5 available, a
-  // subscription is unlimited"). Read by Phase E to decide whether
-  // FREE_TIER_MAX_REPEAT_OCCURRENCES applies to a given owner's repeat
-  // generation. Not used by any other phase.
+  // free-with-limits. The free-tier occurrence cap this originally gated
+  // was removed 2026-11-02 (see repeatRule.ts's own header comment on
+  // FREE_TIER_MAX_CONCURRENT_REPEATS) — tier is still read here for the
+  // storage-quota safety net just below. Not used by any other phase.
   tier: string | null
   // subscription_storage_gb (2026-08-27, same batch) — Phase E's
   // attachment carry-forward duplicates real files onto every generated
@@ -1023,17 +1023,25 @@ async function handle(request: Request) {
     const nextOccurrenceIndex = (row.repeat_occurrence_index ?? 1) + 1
     const nextDueDate = computeNextDueDate(row.due_date, rule)
 
-    // Free-tier occurrence cap (2026-08-27) — Jim's own wording expanding
-    // Repeat to free-with-limits: "up to 5 available, a subscription is
-    // unlimited." Checked alongside — never instead of — the rule's own
-    // Stops Repeating choice, since a Free owner could otherwise pick
-    // "Never" (or a distant "On" date) and generate past this limit with
-    // no warning. A missing/unrecognized tier is treated as free, the same
-    // conservative default this file's other tier reads already use.
-    const freeTierCapped = profile?.tier !== 'subscriber' && nextOccurrenceIndex > FREE_TIER_MAX_REPEAT_OCCURRENCES
-
-    if (shouldStopBeforeGenerating(rule, nextOccurrenceIndex, nextDueDate) || freeTierCapped) {
-      await sb.from('requests').update({ repeat_next_generated_at: now.toISOString() }).eq('id', row.id)
+    // Free-tier occurrence cap removed 2026-11-02 (see repeatRule.ts's own
+    // header comment on FREE_TIER_MAX_CONCURRENT_REPEATS for the full
+    // redesign) — a series admitted under the new concurrent cap runs to
+    // its own Stops Repeating condition unconstrained, no tier check here.
+    if (shouldStopBeforeGenerating(rule, nextOccurrenceIndex, nextDueDate)) {
+      // The series has reached its own Stops Repeating condition for good
+      // — clear repeat_rule (and the now-meaningless occurrence index) on
+      // this, its own final row, same effect as the owner manually hitting
+      // Remove in RepeatControl.tsx (which already nulls both fields
+      // together on Save — see RequestDetailForm.tsx's own save payload).
+      // This is what keeps "repeat_rule IS NOT NULL" an accurate signal of
+      // "still actively repeating" everywhere it's read (Main Screen's own
+      // repeatingHeadIds(), and the new concurrent-cap count in
+      // RepeatControl.tsx) — without it, a naturally-stopped series would
+      // silently occupy a free-tier concurrent-Repeat slot forever.
+      await sb
+        .from('requests')
+        .update({ repeat_next_generated_at: now.toISOString(), repeat_rule: null, repeat_occurrence_index: null })
+        .eq('id', row.id)
       continue
     }
 

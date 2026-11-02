@@ -215,6 +215,10 @@ export default function CreateTodoForm() {
   // AccountForm.tsx's identical gate. Only meaningful alongside
   // todoDatesEnabled, same as todoRemindersEnabled below.
   const [todoTimeEnabled, setTodoTimeEnabled] = useState(false)
+  // profiles.todo_repeat_enabled (migration 086, 2026-11-02) — see
+  // AccountForm.tsx's identical gate. Only meaningful alongside
+  // todoDatesEnabled, same as todoTimeEnabled above.
+  const [todoRepeatEnabled, setTodoRepeatEnabled] = useState(false)
   // Add to Calendar (2026-09-16) — see the checkbox's own JSX comment below
   // for why this is a checkbox here rather than the button ToDo Detail
   // gets: no real id exists yet to build a link/UID from until Save
@@ -341,7 +345,7 @@ export default function CreateTodoForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, tier, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value'
+        'display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_repeat_enabled, todo_reminders_enabled, tier, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value'
       )
       .single()
       .then(({ data }) => {
@@ -349,6 +353,7 @@ export default function CreateTodoForm() {
         setCategoriesEnabled(data?.todo_category_enabled ?? false)
         setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
         setTodoTimeEnabled(data?.todo_time_enabled ?? false)
+        setTodoRepeatEnabled(data?.todo_repeat_enabled ?? false)
         setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
         setForm((f) => ({
@@ -1126,16 +1131,17 @@ export default function CreateTodoForm() {
               </div>
             )}
 
-            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — available to every tier
-                as of 2026-08-27; Free's own occurrence cap is enforced
-                server-side in cron Phase E, RepeatControl's tier prop only
-                adds an informational note. Still gated on todoDatesEnabled:
-                with Due/Done Dates turned off there's no Due Date field for
-                Repeat to anchor generation on (Jim's own confirmed rule —
-                "the Due Date should be the determinant"). Greyed with its
-                own reason once Due/Done Dates is on but no Due Date has
-                been entered yet. */}
-            {todoDatesEnabled && (
+            {/* Repeat (§6.42 PROPOSED, 2026-08-21) — available to every tier;
+                Free's own limit is now a cap on concurrently-active
+                Repeats, enforced and explained by RepeatControl itself
+                (redesigned 2026-11-02, see repeatRule.ts's own header
+                comment). Gated on todoRepeatEnabled (migration 086) AND
+                todoDatesEnabled: with Due/Done Dates turned off there's no
+                Due Date field for Repeat to anchor generation on (Jim's own
+                confirmed rule — "the Due Date should be the determinant").
+                Greyed with its own reason once Due/Done Dates is on but no
+                Due Date has been entered yet. */}
+            {todoDatesEnabled && todoRepeatEnabled && (
               <RepeatControl
                 rule={repeatRule}
                 dueDate={form.dueDate}

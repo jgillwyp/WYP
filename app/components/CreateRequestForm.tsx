@@ -367,6 +367,11 @@ export default function CreateRequestForm() {
   // pre-existing behavior being made optional, not a new feature starting
   // closed. When off, the Due row below collapses to just Due Date.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
+  // Show Add Repeat option — profiles.request_repeat_enabled (migration
+  // 086, 2026-11-02), whether RepeatControl renders at all. Off by default
+  // (false until the profiles read below resolves), same reasoning as
+  // categoriesEnabled above.
+  const [requestRepeatEnabled, setRequestRepeatEnabled] = useState(false)
   // Show Reminders — profiles.request_reminders_enabled (migration 044,
   // 2026-08-23), pure UI-visibility toggle for the Reminders-until-Done
   // banner. Default flipped true -> false, migration 045, 2026-08-25, per
@@ -618,13 +623,14 @@ export default function CreateRequestForm() {
     supabase
       .from('profiles')
       .select(
-        'display_name, request_category_enabled, request_time_enabled, request_reminders_enabled, offer_receipt_confirmation, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value'
+        'display_name, request_category_enabled, request_time_enabled, request_repeat_enabled, request_reminders_enabled, offer_receipt_confirmation, tier, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value'
       )
       .single()
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.request_category_enabled ?? false)
         setRequestTimeEnabled(data?.request_time_enabled ?? true)
+        setRequestRepeatEnabled(data?.request_repeat_enabled ?? false)
         setRequestRemindersEnabled(data?.request_reminders_enabled ?? false)
         setOfferReceiptConfirmation(data?.offer_receipt_confirmation ?? false)
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
@@ -1359,20 +1365,25 @@ export default function CreateRequestForm() {
             />
             {requestRemindersEnabled && reminderBanner()}
 
-            {/* Repeat (§6.42 PROPOSED) — available to every tier as of
-                2026-08-27; Free's own occurrence cap is enforced
-                server-side in cron Phase E, RepeatControl's tier prop only
-                adds an informational note. Greyed until a Due Date is
+            {/* Repeat (§6.42 PROPOSED) — available to every tier; Free's own
+                limit is now a cap on concurrently-active Repeats, enforced
+                and explained by RepeatControl itself (redesigned
+                2026-11-02, see repeatRule.ts's own header comment). Gated
+                on requestRepeatEnabled (migration 086) — whether Repeat is
+                offered at all on this account, same precedent as
+                categoriesEnabled above. Greyed until a Due Date is
                 entered — Jim's own spec. */}
-            <RepeatControl
-              rule={repeatRule}
-              dueDate={form.dueDate}
-              onSave={setRepeatRule}
-              onRemove={() => setRepeatRule(null)}
-              disabled={form.dueDate.trim() === ''}
-              disabledReason="Please select a Due Date before adding a Repeat."
-              tier={tier}
-            />
+            {requestRepeatEnabled && (
+              <RepeatControl
+                rule={repeatRule}
+                dueDate={form.dueDate}
+                onSave={setRepeatRule}
+                onRemove={() => setRepeatRule(null)}
+                disabled={form.dueDate.trim() === ''}
+                disabledReason="Please select a Due Date before adding a Repeat."
+                tier={tier}
+              />
+            )}
 
             {/* Category row — only when the account has turned Private
                 Category on (migration 018, 2026-08-13). Off by default:

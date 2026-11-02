@@ -694,3 +694,50 @@ grant execute on function public.issue_request_link_as_recipient(uuid) to authen
 --   -- confirm it opens the Request directly instead of "Request not
 --   -- found."
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 086 (2026-11-02) -- "Show Add Repeat option" Account Options
+-- toggles for Requests (sent) and ToDos, Stage 1 of Jim's own "Features
+-- Exposure" design (the per-Request/ToDo Features checkbox band it leads
+-- up to is a later stage, UI-only, no further migration needed for it).
+-- DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- profiles.request_repeat_enabled / todo_repeat_enabled -- whether
+-- RepeatControl (the Add Repeat band) is offered at all on Create Request/
+-- Request Detail and Create ToDo/ToDo Detail, same "one feature, two
+-- independently-gateable surfaces" shape already established by
+-- request_time_enabled/todo_time_enabled and request_category_enabled/
+-- todo_category_enabled. Off by default -- Jim's own call: "I expect that
+-- most free accounts users will not use it," same reasoning
+-- todo_time_enabled (migration 067) and the Private Category split
+-- (migration 073) already used for a brand-new, not-yet-relied-upon
+-- toggle. This is purely a visibility gate, independent of the separate
+-- app-code-only change (RepeatControl.tsx, repeatRule.ts,
+-- app/api/cron/tick/route.ts) replacing the old per-series 5-occurrence
+-- free-tier cap with a 3-concurrent-series cap -- see repeatRule.ts's own
+-- FREE_TIER_MAX_CONCURRENT_REPEATS header comment for that redesign's
+-- full reasoning (a real gap Jim caught: the old cap could silently stop
+-- a series with its own Stops Repeating set to "Never," with nothing
+-- telling the owner it had happened).
+-- ============================================================================
+
+alter table public.profiles
+  add column if not exists request_repeat_enabled boolean not null default false,
+  add column if not exists todo_repeat_enabled boolean not null default false;
+
+grant update (request_repeat_enabled) on public.profiles to authenticated;
+grant update (todo_repeat_enabled) on public.profiles to authenticated;
+
+-- Verify after running:
+--   select column_name, column_default, is_nullable from information_schema.columns
+--     where table_name = 'profiles' and column_name in ('request_repeat_enabled', 'todo_repeat_enabled');
+--     -- both should show default false, not nullable
+--   select grantee, privilege_type from information_schema.column_privileges
+--     where table_name = 'profiles' and column_name in ('request_repeat_enabled', 'todo_repeat_enabled')
+--       and grantee = 'authenticated';
+--     -- should show two UPDATE rows
+--   -- Then, live: open Account Options, confirm "Repeat — Show Add Repeat
+--   -- option" appears in both the Requests (sent) and ToDos sections (off
+--   -- by default), and that turning each on/off actually shows/hides the
+--   -- Add Repeat band on the matching Create/Detail screens.
+-- ============================================================================

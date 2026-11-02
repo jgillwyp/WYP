@@ -1632,6 +1632,54 @@ body {
   margin-top: 2px;
 }
 
+/* "Squint test" keyword prefix (§6.4x PROPOSED, 2026-11-02) — Account
+   Options' own Requests (sent)/ToDos toggle titles each lead with a
+   single-word prefix matching the corresponding Create-screen Features
+   chip exactly (Time/Categories/Confirmation/Repeat/Reminders, or
+   Date/Time/Categories/Repeat/Reminders for ToDos) — Jim's own wording:
+   "whether or not they can squint and visually understand what is being
+   presented." Same brand-blue/bold treatment .mlabel already uses
+   elsewhere, slightly larger than the 12.5px .checktext it sits inside.
+   Only the five primary toggle titles get this — a sub-setting within a
+   feature (Always show Send Reminder button, the Day Before/Of/After/
+   Minutes-Before defaults) has no Features chip of its own to match, so
+   those stay plain text. */
+.checkword {
+  color: var(--brand-blue);
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+/* Repeat band's own visible disabled-state text (2026-11-02) — replaces a
+   title-attribute tooltip, unreachable on touch, with real on-screen text.
+   repeatband-note reuses .checknote's own sizing/color; the embedded
+   Review/modify Repeats link is .linkbtn, already used for this exact
+   "underlined button inline with plain text" shape elsewhere. */
+.repeatband-note {
+  margin: 4px 0 14px;
+}
+
+/* Review/modify Repeats dialog's list rows (RepeatControl.tsx,
+   2026-11-02) — same Strip-background-row shape as a dozen other small
+   lists in this app, kept local since nothing else needs this exact
+   text-plus-Remove-button layout. */
+.repeatlistrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--strip);
+  border-radius: 9px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.repeatlistrow-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 /* "Minutes before" default stepper (migration 077, 2026-10-09,
    AccountForm.tsx, moved into the .checknote sentence itself 2026-10-09 —
    Jim's own feedback: a parenthetical in the title repeated the word

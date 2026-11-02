@@ -218,6 +218,13 @@ export default function AccountForm() {
   const [todoCategoriesEnabled, setTodoCategoriesEnabled] = useState(false)
   // Default flipped to false, migration 023 — see the file-level comment.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(false)
+  // profiles.request_repeat_enabled / todo_repeat_enabled (migration 086,
+  // 2026-11-02) — whether RepeatControl is offered at all on each side,
+  // same shape as the category/time splits above. Off by default — see
+  // the file-level comment on this batch's own "Features exposure" design
+  // thread for the full reasoning (most free-tier users won't use it).
+  const [requestRepeatEnabled, setRequestRepeatEnabled] = useState(false)
+  const [todoRepeatEnabled, setTodoRepeatEnabled] = useState(false)
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
   // profiles.todo_time_enabled (migration 067, 2026-09-16) — owner's own
   // request, mirroring request_time_enabled's identical role for Requests:
@@ -354,7 +361,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'request_category_enabled, todo_category_enabled, request_time_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
+          'request_category_enabled, todo_category_enabled, request_time_enabled, request_repeat_enabled, todo_repeat_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
         )
         .eq('id', userData.user.id)
         .single()
@@ -370,6 +377,8 @@ export default function AccountForm() {
       setRequestCategoriesEnabled(data?.request_category_enabled ?? false)
       setTodoCategoriesEnabled(data?.todo_category_enabled ?? false)
       setRequestTimeEnabled(data?.request_time_enabled ?? false)
+      setRequestRepeatEnabled(data?.request_repeat_enabled ?? false)
+      setTodoRepeatEnabled(data?.todo_repeat_enabled ?? false)
       setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
       setTodoTimeEnabled(data?.todo_time_enabled ?? false)
       setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
@@ -418,6 +427,8 @@ export default function AccountForm() {
       | 'request_category_enabled'
       | 'todo_category_enabled'
       | 'request_time_enabled'
+      | 'request_repeat_enabled'
+      | 'todo_repeat_enabled'
       | 'todo_dates_enabled'
       | 'todo_time_enabled'
       | 'todo_reminders_enabled'
@@ -663,26 +674,11 @@ export default function AccountForm() {
             {sectionHead('Requests (sent)', requestOpen, setRequestOpenAndStore)}
             {requestOpen && (
               <div className="subbody">
-                <label className="checkrow">
-                  <input
-                    type="checkbox"
-                    checked={requestCategoriesEnabled}
-                    disabled={saving}
-                    onChange={(e) =>
-                      handleToggle('request_category_enabled', e.target.checked, setRequestCategoriesEnabled)
-                    }
-                  />
-                  <span className="checktext">
-                    Show Private Category
-                    <span className="checknote">
-                      Adds an optional Category field to Requests sent, for your own private
-                      labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
-                      Categories you create are shared by Requests (sent) and ToDos. Off by
-                      default.
-                    </span>
-                  </span>
-                </label>
-
+                {/* Reordered + given squint-test keyword prefixes, 2026-11-02
+                    (Jim's own "Features Exposure" design) — matches the
+                    order of the Features checkboxes planned for the top of
+                    Create Request: Time, Categories, Confirmation, Repeat,
+                    Reminders. */}
                 <label className="checkrow">
                   <input
                     type="checkbox"
@@ -693,7 +689,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    Show Due/Done Time
+                    <span className="checkword">Time</span> Show Due/Done Time
                     <span className="checknote">
                       Adds a Due Time and Done Time next to a Request&rsquo;s Due Date and Done
                       Date, for you and whoever you send it to. Turn it on if you want to
@@ -702,11 +698,33 @@ export default function AccountForm() {
                   </span>
                 </label>
 
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestCategoriesEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('request_category_enabled', e.target.checked, setRequestCategoriesEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    <span className="checkword">Categories</span> Show Private Category
+                    <span className="checknote">
+                      Adds an optional Category field to Requests sent, for your own private
+                      labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
+                      Categories you create are shared by Requests (sent) and ToDos. Off by
+                      default.
+                    </span>
+                  </span>
+                </label>
+
                 {/* Subscriber-gated, 2026-09-30 — Jim: "the Receipt
                     Confirmation should be a Subscriber feature, not a Free
                     Account feature." Hidden entirely for Free, same
                     precedent as Repeat before its own free-tier expansion —
-                    see the file-level comment on migration 074. */}
+                    see the file-level comment on migration 074. Title
+                    shortened 2026-11-02 (Jim's own mockup) to fit on one
+                    line alongside its new checkword prefix. */}
                 {tier === 'subscriber' && (
                   <label className="checkrow">
                     <input
@@ -718,7 +736,8 @@ export default function AccountForm() {
                       }
                     />
                     <span className="checktext">
-                      Optionally add a Receipt Confirmation to a Request
+                      <span className="checkword">Confirmation</span> Show optional Receipt
+                      Confirmation
                       <span className="checknote">
                         This will add a check box to each Create Request screen to allow the
                         notification email or text to include a Receipt Confirmation. Off by
@@ -727,6 +746,51 @@ export default function AccountForm() {
                     </span>
                   </label>
                 )}
+
+                {/* Show Add Repeat option — profiles.request_repeat_enabled
+                    (migration 086, 2026-11-02, new). Whether RepeatControl
+                    is offered at all on Create Request/Request Detail — see
+                    those files' own identical gate. Off by default: "I
+                    expect that most free accounts users will not use it." */}
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestRepeatEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('request_repeat_enabled', e.target.checked, setRequestRepeatEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    <span className="checkword">Repeat</span> Show Add Repeat option
+                    <span className="checknote">
+                      For each Create Request screen, this will show an optional Add Repeat
+                      feature, available for setting a schedule for automatically created
+                      Requests. Off by default.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={requestRemindersEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('request_reminders_enabled', e.target.checked, setRequestRemindersEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    <span className="checkword">Reminders</span> Show Reminders
+                    <span className="checknote">
+                      Adds a Reminders until Done panel to Create Requests and Request Detail
+                      and to your Recipients&rsquo; response screen with choices to set or
+                      change (Day before / Day of / Day after) Reminders. Without regard to
+                      whether Reminders are shown, Reminders are sent as indicated with
+                      Default (Day before / Day of / Day after) settings. Off by default.
+                    </span>
+                  </span>
+                </label>
 
                 <label className="checkrow">
                   <input
@@ -743,27 +807,6 @@ export default function AccountForm() {
                       The Send Reminder button is shown on the Request Detail when a Request
                       is overdue. If this is checked, it is always shown on the Request
                       Detail. Off by default.
-                    </span>
-                  </span>
-                </label>
-
-                <label className="checkrow">
-                  <input
-                    type="checkbox"
-                    checked={requestRemindersEnabled}
-                    disabled={saving}
-                    onChange={(e) =>
-                      handleToggle('request_reminders_enabled', e.target.checked, setRequestRemindersEnabled)
-                    }
-                  />
-                  <span className="checktext">
-                    Show Reminders
-                    <span className="checknote">
-                      Adds a Reminders until Done panel to Create Requests and Request Detail
-                      and to your Recipients&rsquo; response screen with choices to set or
-                      change (Day before / Day of / Day after) Reminders. Without regard to
-                      whether Reminders are shown, Reminders are sent as indicated with
-                      Default (Day before / Day of / Day after) settings. Off by default.
                     </span>
                   </span>
                 </label>
@@ -932,26 +975,10 @@ export default function AccountForm() {
             {sectionHead('ToDos', todoOpen, setTodoOpenAndStore)}
             {todoOpen && (
               <div className="subbody">
-                <label className="checkrow">
-                  <input
-                    type="checkbox"
-                    checked={todoCategoriesEnabled}
-                    disabled={saving}
-                    onChange={(e) =>
-                      handleToggle('todo_category_enabled', e.target.checked, setTodoCategoriesEnabled)
-                    }
-                  />
-                  <span className="checktext">
-                    Show Private Category
-                    <span className="checknote">
-                      Adds an optional Category field to ToDos, for your own private
-                      labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
-                      Categories you create are shared by Requests (sent) and ToDos. Off by
-                      default.
-                    </span>
-                  </span>
-                </label>
-
+                {/* Reordered + given squint-test keyword prefixes, 2026-11-02
+                    — matches the order of the Features checkboxes planned
+                    for the top of Create ToDo: Date, Time, Categories,
+                    Repeat, Reminders. */}
                 <label className="checkrow">
                   <input
                     type="checkbox"
@@ -962,7 +989,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    Show Due/Done Dates
+                    <span className="checkword">Date</span> Show Due/Done Dates
                     <span className="checknote">
                       Adds Due Date and Done Date for creating and editing ToDos instead of
                       just a Status of Open and Done. Turn it on for more precise ToDo
@@ -985,12 +1012,60 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    Show Due/Done Time
+                    <span className="checkword">Time</span> Show Due/Done Time
                     <span className="checknote">
                       If &quot;Show Due/Done Dates&quot; above is checked, add a Due Time and
                       Done Time next to a ToDo&apos;s Due Date and Done Date. Turn it on if
                       you want to optionally set the Due/Done Times for a ToDo. Off by
                       default.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkrow">
+                  <input
+                    type="checkbox"
+                    checked={todoCategoriesEnabled}
+                    disabled={saving}
+                    onChange={(e) =>
+                      handleToggle('todo_category_enabled', e.target.checked, setTodoCategoriesEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    <span className="checkword">Categories</span> Show Private Category
+                    <span className="checknote">
+                      Adds an optional Category field to ToDos, for your own private
+                      labeling, e.g., &ldquo;Personal Fin&rdquo;, &ldquo;Future Dev&rdquo;. A single list of
+                      Categories you create are shared by Requests (sent) and ToDos. Off by
+                      default.
+                    </span>
+                  </span>
+                </label>
+
+                {/* Show Add Repeat option — profiles.todo_repeat_enabled
+                    (migration 086, 2026-11-02, new). Same Due-Date
+                    dependency as Time/Reminders above — Repeat has no Due
+                    Date to anchor generation on until Show Due/Done Dates
+                    is on. */}
+                <label
+                  className={`checkrow${!todoDatesEnabled ? ' checkrow-disabled' : ''}`}
+                  title={!todoDatesEnabled ? 'Please turn on Show Due/Done Dates first.' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={todoRepeatEnabled}
+                    disabled={saving || !todoDatesEnabled}
+                    onChange={(e) =>
+                      handleToggle('todo_repeat_enabled', e.target.checked, setTodoRepeatEnabled)
+                    }
+                  />
+                  <span className="checktext">
+                    <span className="checkword">Repeat</span> Show Add Repeat option
+                    <span className="checknote">
+                      For each Create ToDo screen, this will show an optional Add Repeat
+                      feature, available for setting a schedule for automatically created
+                      ToDos. Only available once Show Due/Done Dates above is turned on. Off
+                      by default.
                     </span>
                   </span>
                 </label>
@@ -1008,7 +1083,7 @@ export default function AccountForm() {
                     }
                   />
                   <span className="checktext">
-                    Show Reminders
+                    <span className="checkword">Reminders</span> Show Reminders
                     <span className="checknote">
                       Adds a Reminders until Done panel to Create ToDos and ToDo Detail to
                       offer choices for setting or changing (Day before / Day of / Day

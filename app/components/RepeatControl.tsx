@@ -24,17 +24,58 @@
 // descriptive-text builder every consumer (this band, the recipient's
 // read-only footnote, print reports) shares verbatim.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
 import {
   type RepeatRule,
   type RepeatType,
-  FREE_TIER_MAX_REPEAT_OCCURRENCES,
+  FREE_TIER_MAX_CONCURRENT_REPEATS,
+  activeRepeatHeads,
   clampInterval,
   defaultRepeatRule,
   describeRepeat,
   dueDateWeekday,
   monthChipOptions,
 } from '@/lib/repeatRule'
+
+// Local date helpers — duplicated per file, this codebase's own established
+// convention for small stateless helpers (see RequestDetailForm.tsx/
+// MainScreen.tsx's own identical copies). formatMDY is for a plain `date`
+// column (due_date/done_date); formatMDYFromTimestamp is for a real
+// timestamptz column (created_at) — slicing an ISO string for the latter
+// reads the wrong calendar day in a negative-UTC-offset zone once local
+// time has crossed midnight but UTC hasn't yet (fixed app-wide 2026-09-03).
+function formatMDY(value: string | null): string {
+  if (!value) return ''
+  const [y, m, d] = value.slice(0, 10).split('-')
+  return `${m}-${d}-${y.slice(2)}`
+}
+function formatMDYFromTimestamp(value: string | null): string {
+  if (!value) return ''
+  const d = new Date(value)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${m}-${day}-${String(y).slice(2)}`
+}
+
+// Active-repeats row shape for the free-tier concurrent-cap check and its
+// Review/modify Repeats dialog (2026-11-02 redesign — see
+// FREE_TIER_MAX_CONCURRENT_REPEATS's own header comment in repeatRule.ts).
+// contact_id null means a ToDo (same contact_id-null convention this whole
+// app already uses to tell a ToDo from a Request); contacts(display_name)
+// is only ever populated for a Request.
+type ActiveRepeatRow = {
+  id: string
+  contact_id: string | null
+  description: string
+  due_date: string | null
+  done_date: string | null
+  created_at: string
+  repeat_occurrence_index: number | null
+  repeat_series_id: string | null
+  contacts: { display_name: string } | null
+}
 
 type Props = {
   rule: RepeatRule | null
@@ -48,13 +89,14 @@ type Props = {
   disabled: boolean
   disabledReason?: string
   /** Added 2026-08-27 when Repeat moved from subscriber-only to
-   * free-with-limits. Free renders a note in the modal warning that
-   * generation stops automatically after FREE_TIER_MAX_REPEAT_OCCURRENCES
-   * occurrences regardless of the Stops Repeating choice below — the actual
-   * enforcement lives server-side in cron Phase E
-   * (app/api/cron/tick/route.ts), this is purely informational so a Free
-   * user isn't surprised later. Omit/undefined shows no note (used nowhere
-   * currently — every call site now passes a real tier). */
+   * free-with-limits. Redesigned 2026-11-02: Free is capped on how many
+   * Requests/ToDos can be repeating AT ONCE (FREE_TIER_MAX_CONCURRENT_
+   * REPEATS), not on how many occurrences one series can generate — this
+   * component fetches and enforces that count itself (owner-scoped via
+   * RLS, no extra prop needed) and shows its own greyed band + Review/
+   * modify Repeats dialog when a Free owner is at the cap. Omit/undefined
+   * disables the cap check entirely (used nowhere currently — every call
+   * site passes a real tier). */
   tier?: 'free' | 'subscriber'
 }
 
@@ -86,6 +128,67 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<RepeatRule>(rule ?? defaultRepeatRule())
 
+  // Free-tier concurrent-Repeat cap (2026-11-02) — null means "not yet
+  // loaded" (or not applicable, tier !== 'free'), so atCap below never
+  // falsely shows before the count is actually known. Fetched via a plain
+  // owner-scoped select — `requests` RLS already restricts reads to the
+  // signed-in owner's own rows, same as every other owner-scoped query in
+  // this app, so no explicit owner_id filter or prop is needed here.
+  const [activeRepeats, setActiveRepeats] = useState<ActiveRepeatRow[] | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [confirmRow, setConfirmRow] = useState<ActiveRepeatRow | null>(null)
+  const [removing, setRemoving] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  // Bumped after a successful Remove (from the Review/modify Repeats list)
+  // to re-trigger the fetch effect below — re-running the effect via a
+  // dependency change, rather than calling its own fetch function directly
+  // from the event handler, is what keeps the effect's async load() local
+  // to the effect itself (same shape AccountForm.tsx's own load() already
+  // uses) and satisfies react-hooks/set-state-in-effect.
+  const [refreshToken, setRefreshToken] = useState(0)
+
+  useEffect(() => {
+    if (tier !== 'free') return
+    let cancelled = false
+    async function load() {
+      const { data } = await supabase
+        .from('requests')
+        .select(
+          'id, contact_id, description, due_date, done_date, created_at, repeat_occurrence_index, repeat_series_id, contacts(display_name)'
+        )
+        .not('repeat_rule', 'is', null)
+        .is('archived_at', null)
+      if (!cancelled) setActiveRepeats(activeRepeatHeads((data ?? []) as unknown as ActiveRepeatRow[]))
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [tier, refreshToken])
+
+  // Only meaningful when adding a brand-new Repeat (rule === null) — editing
+  // or removing an already-repeating item never needs a free slot, it
+  // already has one. Stays false (never blocks) until the count actually
+  // loads, and always false for a Subscriber (no cap at all).
+  const atCap =
+    rule === null && tier === 'free' && activeRepeats !== null && activeRepeats.length >= FREE_TIER_MAX_CONCURRENT_REPEATS
+
+  async function handleRemoveFromList(row: ActiveRepeatRow) {
+    setRemoving(true)
+    setRemoveError(null)
+    const { error } = await supabase
+      .from('requests')
+      .update({ repeat_rule: null, repeat_occurrence_index: null })
+      .eq('id', row.id)
+    setRemoving(false)
+    if (error) {
+      setRemoveError(error.message)
+      return
+    }
+    setConfirmRow(null)
+    setRefreshToken((n) => n + 1)
+  }
+
   function openModal() {
     setDraft(rule ?? defaultRepeatRule())
     setOpen(true)
@@ -105,20 +208,115 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
   const buttonLabel = rule ? 'Edit Repeat' : 'Add Repeat'
   const monthOptions = dueDate ? monthChipOptions(dueDate) : { dayLabel: 'Day', weekdayLabel: 'Weekday' }
 
+  const bandDisabled = disabled || atCap
+
   return (
     <>
-      <div className={`repeatband${disabled ? ' is-disabled' : ''}`}>
+      <div className={`repeatband${bandDisabled ? ' is-disabled' : ''}`}>
         <span className="repeatband-text">{bandText}</span>
         <button
           className="btn"
           type="button"
-          disabled={disabled}
-          title={disabled ? disabledReason : undefined}
+          disabled={bandDisabled}
+          title={!atCap && disabled ? disabledReason : undefined}
           onClick={openModal}
         >
           {buttonLabel}
         </button>
       </div>
+
+      {/* Visible explanatory text while greyed (2026-11-02) — previously a
+          title-attribute tooltip only, unreachable on a touch device with
+          no hover. atCap gets its own note with a Review/modify Repeats
+          link; every other disabled reason (no Due Date yet, archived) now
+          shows disabledReason as real on-screen text instead. */}
+      {atCap && (
+        <p className="checknote repeatband-note">
+          Free accounts can have up to {FREE_TIER_MAX_CONCURRENT_REPEATS} Requests/ToDos repeating at
+          once.{' '}
+          <button type="button" className="linkbtn" onClick={() => setReviewOpen(true)}>
+            Review/modify Repeats
+          </button>{' '}
+          Subscribe for unlimited concurrent Repeats.
+        </p>
+      )}
+      {!atCap && disabled && disabledReason && <p className="checknote repeatband-note">{disabledReason}</p>}
+
+      {reviewOpen && !confirmRow && (
+        <>
+          <div className="scrim" onClick={() => setReviewOpen(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="review-repeats-title">
+            <div className="modalhead">
+              <p className="modal-title" id="review-repeats-title">
+                Active Repeats
+              </p>
+              <div className="modalacts">
+                <button className="btn-secondary" type="button" onClick={() => setReviewOpen(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+            {(activeRepeats ?? []).map((row) => (
+              <div key={row.id} className="repeatlistrow">
+                <span className="repeatlistrow-text">
+                  {row.contact_id ? 'Request' : 'ToDo'} &mdash;{' '}
+                  {row.description.length > 60 ? `${row.description.slice(0, 60)}…` : row.description}
+                </span>
+                <button className="btn-secondary" type="button" onClick={() => setConfirmRow(row)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {reviewOpen && confirmRow && (
+        <>
+          <div className="scrim" onClick={() => setConfirmRow(null)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-remove-repeat-title">
+            <div className="modalhead">
+              <p className="modal-title" id="confirm-remove-repeat-title">
+                Remove Repeat?
+              </p>
+              <div className="modalacts">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setConfirmRow(null)}
+                  disabled={removing}
+                >
+                  Cancel
+                </button>
+                <button className="btn" type="button" onClick={() => handleRemoveFromList(confirmRow)} disabled={removing}>
+                  {removing ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+            <div className="metarow">
+              <span className="mlabel">Date:</span>
+              <span className="mval">{formatMDYFromTimestamp(confirmRow.created_at)}</span>
+            </div>
+            <div className="metarow">
+              <span className="mlabel">Recipient:</span>
+              <span className="mval">{confirmRow.contacts?.display_name ?? ''}</span>
+            </div>
+            <div className="metarow">
+              <span className="mlabel">Last Due Date:</span>
+              <span className="mval">{confirmRow.due_date ? formatMDY(confirmRow.due_date) : '—'}</span>
+            </div>
+            <div className="metarow">
+              <span className="mlabel">Last Done Date:</span>
+              <span className="mval">{confirmRow.done_date ? formatMDY(confirmRow.done_date) : '—'}</span>
+            </div>
+            <div className="metarow">
+              <span className="mlabel">Description:</span>
+              <span className="mval">{confirmRow.description}</span>
+            </div>
+            {removeError && <p className="ferror">{removeError}</p>}
+          </div>
+        </>
+      )}
 
       {open && (
         <>
@@ -340,15 +538,6 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
               month that only has four), the closest earlier date is used
               instead &mdash; the 30th, or the 4th Wednesday.
             </p>
-
-            {tier === 'free' && (
-              <p className="checknote repeat-invalid-note">
-                <strong>Note:</strong> Free accounts stop Repeating
-                automatically after {FREE_TIER_MAX_REPEAT_OCCURRENCES}{' '}
-                occurrences, regardless of the Stops Repeating choice above.
-                Subscribe for unlimited Repeats.
-              </p>
-            )}
           </div>
         </>
       )}
