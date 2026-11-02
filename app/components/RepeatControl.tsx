@@ -213,7 +213,24 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
   return (
     <>
       <div className={`repeatband${bandDisabled ? ' is-disabled' : ''}`}>
-        <span className="repeatband-text">{bandText}</span>
+        {/* Visible explanatory text while greyed for the plain disabled
+            reasons (no Due Date yet, archived) — owner, 2026-11-02:
+            "shown in parenthesis to the left of the 'Add Repeat' button"
+            instead of the earlier below-the-band paragraph, which read
+            disconnected from the button it was explaining. Appended after
+            bandText (not a replacement for it) so an already-repeating,
+            now-archived item still shows both its own description and why
+            it can no longer be edited. atCap keeps its own separate,
+            longer note below — a full sentence with an embedded link
+            doesn't fit compactly inline next to the button. */}
+        <span className="repeatband-text">
+          {bandText}
+          {!atCap && disabled && disabledReason && (
+            <>
+              {bandText ? ' ' : ''}({disabledReason})
+            </>
+          )}
+        </span>
         <button
           className="btn"
           type="button"
@@ -225,11 +242,6 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
         </button>
       </div>
 
-      {/* Visible explanatory text while greyed (2026-11-02) — previously a
-          title-attribute tooltip only, unreachable on a touch device with
-          no hover. atCap gets its own note with a Review/modify Repeats
-          link; every other disabled reason (no Due Date yet, archived) now
-          shows disabledReason as real on-screen text instead. */}
       {atCap && (
         <p className="checknote repeatband-note">
           Free accounts can have up to {FREE_TIER_MAX_CONCURRENT_REPEATS} Requests/ToDos repeating at
@@ -240,7 +252,6 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
           Subscribe for unlimited concurrent Repeats.
         </p>
       )}
-      {!atCap && disabled && disabledReason && <p className="checknote repeatband-note">{disabledReason}</p>}
 
       {reviewOpen && !confirmRow && (
         <>
