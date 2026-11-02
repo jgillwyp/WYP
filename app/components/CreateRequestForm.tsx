@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
@@ -356,33 +357,31 @@ export default function CreateRequestForm() {
   const [showContactResults, setShowContactResults] = useState(false)
   const [contactBrowsing, setContactBrowsing] = useState(false)
 
-  // Private Category is now an opt-in account preference (migration 018,
-  // 2026-08-13), off by default — see AccountForm.tsx. false until the
-  // profiles read below resolves, same as every other gate in this app
-  // that starts closed and only opens once its real value is known.
+  // categoriesEnabled/requestTimeEnabled/requestRepeatEnabled/
+  // requestRemindersEnabled/offerReceiptConfirmation (below) are now the
+  // Features band's own live checked state (Stage 2, 2026-11-02) — NOT
+  // read-only account defaults the way they were through Stage 1. Each
+  // still starts from the matching profiles column once the profile load
+  // below resolves (so the band opens pre-checked/unchecked exactly as
+  // this account currently has it configured, matching Jim's own Note
+  // text: "Default settings for these and other Features are set in
+  // Housekeeping, Account Options"), but from that point on the Features
+  // band's own checkboxes are the only thing that changes these variables
+  // — they are this one Request's live per-item override, never written
+  // back to the account. Every existing gate reading them below (the
+  // Category section, DateTimeField's timeEnabled, RepeatControl, the
+  // Reminders banner, the Confirmation checkbox, both Print blocks) is
+  // therefore unchanged from Stage 1 — "is the account's feature on" and
+  // "is this Request's Features checkbox checked" collapse into the exact
+  // same question once the band exists, so no rendering logic needed to
+  // move. The one real consequence: the Send payload (doSubmit) now has to
+  // gate each field explicitly on these same variables too, since a
+  // "Retain" discard (see attemptUncheck below) can leave real data sitting
+  // in form state behind an unchecked, hidden checkbox — unchecked has to
+  // mean "not part of this Request" at Send time, not just "not shown."
   const [categoriesEnabled, setCategoriesEnabled] = useState(false)
-  // Due/Done Time is now an opt-in account preference too (migration 019,
-  // 2026-08-13) — see AccountForm.tsx. On by default (true until the
-  // profiles read below resolves), unlike Category, since this is
-  // pre-existing behavior being made optional, not a new feature starting
-  // closed. When off, the Due row below collapses to just Due Date.
   const [requestTimeEnabled, setRequestTimeEnabled] = useState(true)
-  // Show Add Repeat option — profiles.request_repeat_enabled (migration
-  // 086, 2026-11-02), whether RepeatControl renders at all. Off by default
-  // (false until the profiles read below resolves), same reasoning as
-  // categoriesEnabled above.
   const [requestRepeatEnabled, setRequestRepeatEnabled] = useState(false)
-  // Show Reminders — profiles.request_reminders_enabled (migration 044,
-  // 2026-08-23), pure UI-visibility toggle for the Reminders-until-Done
-  // banner. Default flipped true -> false, migration 045, 2026-08-25, per
-  // Jim's own rewritten AccountForm.tsx wording ("Off by default."; see
-  // that file's own header comment for the full write-up). Standalone,
-  // not gated on requestTimeEnabled. When off, the banner is hidden
-  // entirely but the per-item checkboxes still exist in form state at
-  // whatever their pre-filled default was (set unconditionally by the
-  // effect below, regardless of this flag) — cron/tick/route.ts's Phase
-  // A1/A1b/B read only those per-item columns, never this one, so sending
-  // is unaffected either way.
   const [requestRemindersEnabled, setRequestRemindersEnabled] = useState(false)
 
   // Request<->ToDo conversion (2026-08-26) — a pending payload from ToDo
@@ -443,11 +442,14 @@ export default function CreateRequestForm() {
   const [carryFileIndexes, setCarryFileIndexes] = useState<Set<number>>(new Set())
 
   // Receipt Confirmation (migration 069, 2026-09-24, owner's own PDF spec) —
-  // offerReceiptConfirmation is the Account Options gate
-  // (profiles.offer_receipt_confirmation, off by default) controlling
-  // whether the checkbox below even renders; receiptConfirmationRequested
-  // is the per-item value itself, written once at Send and never editable
-  // afterward (no mockup shows it on Request Detail).
+  // offerReceiptConfirmation is now the Features band's own "Confirmation"
+  // checked state (see the file-level comment above the other four), not a
+  // fixed account default — controls whether the checkbox below renders.
+  // Checking "Confirmation" in the band also pre-checks
+  // receiptConfirmationRequested directly (Jim: "I would set Confirmation
+  // as checked"); receiptConfirmationRequested is the per-item value
+  // itself, written once at Send and never editable afterward (no mockup
+  // shows it on Request Detail).
   const [offerReceiptConfirmation, setOfferReceiptConfirmation] = useState(false)
   const [receiptConfirmationRequested, setReceiptConfirmationRequested] = useState(false)
 
@@ -573,6 +575,22 @@ export default function CreateRequestForm() {
         }))
         setDialogEntries(snap.dialogEntries)
         setRepeatRule(snap.repeatRule)
+        // Features band (Stage 2, 2026-11-02) — a round trip restores real
+        // data into fields that are now hidden behind a Features checkbox;
+        // without this, restored Due Time/Reminders/Repeat would sit in
+        // form state but stay invisible (checkbox unchecked). Only ever
+        // turns a checkbox ON here, never off — an empty/false restored
+        // value just leaves whatever the profile-load default already set.
+        if (snap.dueTime.trim() !== '') setRequestTimeEnabled(true)
+        if (
+          snap.reminderEnabled ||
+          snap.reminderDayOfEnabled ||
+          snap.overdueReminderEnabled ||
+          snap.reminderMinutesBeforeEnabled
+        ) {
+          setRequestRemindersEnabled(true)
+        }
+        if (snap.repeatRule) setRequestRepeatEnabled(true)
       })
     }
 
@@ -604,11 +622,20 @@ export default function CreateRequestForm() {
           const match = list.find(
             (c) => c.name.toLowerCase() === pendingConversion.categoryName!.toLowerCase()
           )
-          if (match) setSelectedCategory(match)
+          // Features band (Stage 2, 2026-11-02) — same reasoning as the
+          // round-trip restore above: a restored category selection needs
+          // its checkbox checked too, or it'd be invisible.
+          if (match) {
+            setSelectedCategory(match)
+            setCategoriesEnabled(true)
+          }
         }
         if (roundTrip?.categoryName) {
           const match = list.find((c) => c.name.toLowerCase() === roundTrip!.categoryName.toLowerCase())
-          if (match) setSelectedCategory(match)
+          if (match) {
+            setSelectedCategory(match)
+            setCategoriesEnabled(true)
+          }
         }
       })
 
@@ -752,6 +779,41 @@ export default function CreateRequestForm() {
 
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  // Features band (Stage 2, 2026-11-02) — "Retain" on the discard dialog
+  // deliberately leaves real data sitting in component state behind an
+  // unchecked, hidden checkbox (so re-checking the box within this same
+  // visit brings it back). An unchecked Repeat checkbox therefore has to
+  // be re-enforced wherever repeatRule is actually used for something —
+  // Send's own insert payload, the carry-forward-Attachments prompt gate,
+  // and the Request Preview print line all read this instead of the raw
+  // repeatRule state directly.
+  const effectiveRepeatRule = requestRepeatEnabled ? repeatRule : null
+
+  // Features band — retain/discard confirm dialog (Stage 2, 2026-11-02,
+  // Jim's own design). Shared by all five checkboxes: unchecking one that
+  // has real data staged underneath it opens this dialog instead of
+  // hiding the section immediately — "a dialog asking them whether to
+  // retain or clear/erase the value they set – with a default of
+  // Clear/Erase." Reuses the app's existing .scrim/.modal pattern (§6.12)
+  // rather than a one-off. label is shown in the dialog's own title/body;
+  // onClear/onRetain are each feature's own pair of callbacks (set the
+  // checkbox false, and either reset or leave its underlying value alone).
+  const [discardPrompt, setDiscardPrompt] = useState<{
+    label: string
+    onClear: () => void
+    onRetain: () => void
+  } | null>(null)
+
+  function attemptFeatureUncheck(label: string, hasStagedData: boolean, onClear: () => void, onRetain: () => void) {
+    if (!hasStagedData) {
+      // Nothing to lose — Clear and Retain are equivalent here, so just
+      // hide the section without asking.
+      onClear()
+      return
+    }
+    setDiscardPrompt({ label, onClear, onRetain })
   }
 
   // Voice dictation toggle (2026-08-19) — starts/stops a single
@@ -1009,7 +1071,7 @@ export default function CreateRequestForm() {
     // straight to doSubmit in that case rather than showing an empty
     // picker). carryPromptOpen itself guards against re-showing the prompt
     // after the user has already confirmed a selection and re-clicked Send.
-    if (repeatRule && stagedFiles.length > 0 && !carryPromptOpen) {
+    if (effectiveRepeatRule && stagedFiles.length > 0 && !carryPromptOpen) {
       setCarryFileIndexes(new Set(stagedFiles.map((_, i) => i)))
       setCarryPromptOpen(true)
       return
@@ -1036,30 +1098,31 @@ export default function CreateRequestForm() {
       .insert({
         owner_id: userData.user.id,
         contact_id: selectedContact!.id,
-        category_id: selectedCategory?.id ?? null,
+        category_id: categoriesEnabled ? (selectedCategory?.id ?? null) : null,
         description: form.description.trim(),
         due_date: form.dueDate,
-        due_time: form.dueTime.trim() === '' ? null : form.dueTime,
-        reminder_enabled: form.reminderEnabled,
-        reminder_day_of_enabled: form.reminderDayOfEnabled,
-        overdue_reminder_enabled: form.overdueReminderEnabled,
-        // Re-gated on Due Time being actually set, not just the checkbox's
-        // own (disabled-when-ineligible) stored value — a value left
-        // checked from before Due Time was cleared shouldn't persist as
-        // active. The minutes value itself is always stored, harmless
-        // while the checkbox is off.
-        reminder_minutes_before_enabled: form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled,
+        due_time: requestTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
+        reminder_enabled: requestRemindersEnabled && form.reminderEnabled,
+        reminder_day_of_enabled: requestRemindersEnabled && form.reminderDayOfEnabled,
+        overdue_reminder_enabled: requestRemindersEnabled && form.overdueReminderEnabled,
+        // Re-gated on Reminders being checked AND Due Time being actually
+        // set, not just the checkbox's own (disabled-when-ineligible)
+        // stored value — a value left checked from before Due Time was
+        // cleared shouldn't persist as active. The minutes value itself is
+        // always stored, harmless while the checkbox is off.
+        reminder_minutes_before_enabled:
+          requestRemindersEnabled && form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled,
         reminder_minutes_before_value: form.reminderMinutesBeforeValue,
-        repeat_rule: repeatRule,
-        repeat_occurrence_index: repeatRule ? 1 : null,
+        repeat_rule: effectiveRepeatRule,
+        repeat_occurrence_index: effectiveRepeatRule ? 1 : null,
         // repeat_series_id (migration 068, 2026-09-23) — a brand-new item
         // can never have an existing series to preserve, so this is always
         // a fresh id when Repeat is set. Shared by every occurrence cron
         // Phase E later generates from this one; lets the "Repeating" chip
         // find the current head of the series instead of requiring this
         // exact row (occurrence 1) to still carry the rule forever.
-        repeat_series_id: repeatRule ? crypto.randomUUID() : null,
-        receipt_confirmation_requested: receiptConfirmationRequested,
+        repeat_series_id: effectiveRepeatRule ? crypto.randomUUID() : null,
+        receipt_confirmation_requested: offerReceiptConfirmation && receiptConfirmationRequested,
       })
       .select('id')
       .single()
@@ -1225,6 +1288,205 @@ export default function CreateRequestForm() {
 
         <div className="scroll">
           <form className="form" id="create-request-form" onSubmit={handleSubmit} noValidate>
+
+            {/* Features band (§6.4x PROPOSED, Stage 2, 2026-11-02) — Jim's
+                own "Features Exposure" design: a per-Request discovery
+                surface for Time/Categories/Confirmation/Repeat/Reminders,
+                so someone who's never visited Account Options still sees
+                these exist and can turn one on for just this Request.
+                Always shows all four non-Confirmation chips regardless of
+                the account's own default (Confirmation is the one
+                exception, tier-gated — Receipt Confirmation isn't offered
+                to Free accounts at all, so there's nothing to discover).
+                Each checkbox's checked state doubles as the existing
+                account-default variable (categoriesEnabled,
+                requestTimeEnabled, offerReceiptConfirmation,
+                requestRepeatEnabled, requestRemindersEnabled) — see the
+                file-level comment above those state declarations for why
+                no separate state was needed. Two explicit rows, never
+                organic wrap across all five, so a phone-width reflow can't
+                split mid-row. */}
+            <div className="featuresband">
+              <span className="featuresband-label">Features</span>
+              <div className="featuresband-row">
+                <label className="featurecheck">
+                  <input
+                    type="checkbox"
+                    checked={requestTimeEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setRequestTimeEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Time',
+                          form.dueTime.trim() !== '',
+                          () => {
+                            setRequestTimeEnabled(false)
+                            set('dueTime', '')
+                          },
+                          () => setRequestTimeEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Time</span>
+                </label>
+                <label className="featurecheck">
+                  <input
+                    type="checkbox"
+                    checked={categoriesEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setCategoriesEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Categories',
+                          selectedCategory !== null,
+                          () => {
+                            setCategoriesEnabled(false)
+                            setSelectedCategory(null)
+                            set('categoryName', '')
+                          },
+                          () => setCategoriesEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Categories</span>
+                </label>
+              </div>
+              <div className="featuresband-row">
+                {/* Tier-gated, not account-default-gated — Receipt
+                    Confirmation is Subscriber-only (migration 074), so a
+                    Free account never sees this chip at all, same as the
+                    revealed checkbox below has always worked. */}
+                {tier === 'subscriber' && (
+                  <label className="featurecheck">
+                    <input
+                      type="checkbox"
+                      checked={offerReceiptConfirmation}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setOfferReceiptConfirmation(true)
+                          // Jim: "I would set Confirmation as checked" —
+                          // pre-checks the revealed "Request a Receipt
+                          // Confirmation" box too, not just reveal it empty.
+                          setReceiptConfirmationRequested(true)
+                        } else {
+                          attemptFeatureUncheck(
+                            'Confirmation',
+                            receiptConfirmationRequested,
+                            () => {
+                              setOfferReceiptConfirmation(false)
+                              setReceiptConfirmationRequested(false)
+                            },
+                            () => setOfferReceiptConfirmation(false)
+                          )
+                        }
+                      }}
+                    />
+                    <span>Confirmation</span>
+                  </label>
+                )}
+                <label className="featurecheck">
+                  <input
+                    type="checkbox"
+                    checked={requestRepeatEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setRequestRepeatEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Repeat',
+                          repeatRule !== null,
+                          () => {
+                            setRequestRepeatEnabled(false)
+                            setRepeatRule(null)
+                          },
+                          () => setRequestRepeatEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Repeat</span>
+                </label>
+                <label className="featurecheck">
+                  <input
+                    type="checkbox"
+                    checked={requestRemindersEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setRequestRemindersEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Reminders',
+                          form.reminderEnabled ||
+                            form.reminderDayOfEnabled ||
+                            form.overdueReminderEnabled ||
+                            form.reminderMinutesBeforeEnabled,
+                          () => {
+                            setRequestRemindersEnabled(false)
+                            setForm((f) => ({
+                              ...f,
+                              reminderEnabled: false,
+                              reminderDayOfEnabled: false,
+                              overdueReminderEnabled: false,
+                              reminderMinutesBeforeEnabled: false,
+                            }))
+                          },
+                          () => setRequestRemindersEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Reminders</span>
+                </label>
+              </div>
+              <p className="featuresband-note">
+                <strong>Note:</strong> Defaults for Feature check boxes and values for
+                Reminders and other options are set in{' '}
+                <Link href="/account">Housekeeping, Account Options</Link>.
+              </p>
+            </div>
+
+            {discardPrompt && (
+              <>
+                <div className="scrim" onClick={() => setDiscardPrompt(null)} />
+                <div className="modal" role="dialog" aria-modal="true" aria-labelledby="discard-feature-title">
+                  <div className="modalhead">
+                    <p className="modal-title" id="discard-feature-title">
+                      Hide {discardPrompt.label}?
+                    </p>
+                  </div>
+                  <p className="checknote">
+                    You&rsquo;ve already set something for {discardPrompt.label}. Keep it in case
+                    you turn {discardPrompt.label} back on, or clear it now?
+                  </p>
+                  <div className="modalacts" style={{ marginTop: 14 }}>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={() => {
+                        discardPrompt.onRetain()
+                        setDiscardPrompt(null)
+                      }}
+                    >
+                      Retain
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => {
+                        discardPrompt.onClear()
+                        setDiscardPrompt(null)
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Recipient row (§9.2.2) — single Name lookup (2026-08-07,
                 merged from First/Last Name; matches Add Contact and reads
@@ -1907,7 +2169,7 @@ export default function CreateRequestForm() {
                   {form.description}
                 </span>
               </div>
-              <PrintRepeatLine rule={repeatRule} dueDate={form.dueDate} />
+              <PrintRepeatLine rule={effectiveRepeatRule} dueDate={form.dueDate} />
               <PrintDialogList entries={dialogEntries} />
               <PrintAttachmentList files={stagedFiles} />
             </div>

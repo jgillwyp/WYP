@@ -1680,6 +1680,77 @@ body {
   color: var(--ink);
 }
 
+/* ============================================================================
+   FEATURES BAND — §6.4x PROPOSED, Stage 2, 2026-11-02 (Create Request;
+   Create ToDo in a later stage). Jim's own "Features Exposure" design: a
+   per-Request discovery surface for optional features (Time/Categories/
+   Confirmation/Repeat/Reminders) that would otherwise be invisible to
+   anyone who's never visited Account Options. Two explicit rows (never
+   organic flex-wrap across all five at once) so a phone-width reflow never
+   splits mid-row in an awkward spot — row 1 is always Time+Categories, row
+   2 is whatever of Confirmation/Repeat/Reminders applies (Confirmation
+   omitted outright for Free tier, so row 2 can hold two or three). Each
+   checkbox's own checked state IS the account's own enabled/offer_*
+   column, now mutable per-item from this band rather than fixed read-only
+   from the profile load — see CreateRequestForm.tsx's own header comment
+   on this for the full reasoning. The Note text always sits in its own
+   full-width row below the grid, never beside it — no squeeze-prone
+   two-column layout to guard against in the first place. */
+.featuresband {
+  background: var(--strip);
+  border-radius: 9px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.featuresband-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-blue);
+  margin-bottom: 8px;
+}
+
+.featuresband-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 6px;
+}
+
+.featurecheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.featurecheck input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand-blue);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.featurecheck span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.featuresband-note {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
+}
+
+.featuresband-note a {
+  color: var(--brand-blue);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 /* "Minutes before" default stepper (migration 077, 2026-10-09,
    AccountForm.tsx, moved into the .checknote sentence itself 2026-10-09 —
    Jim's own feedback: a parenthetical in the title repeated the word
