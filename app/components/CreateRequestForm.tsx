@@ -426,6 +426,19 @@ export default function CreateRequestForm() {
   const [attachError, setAttachError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Features band (2026-11-02) — the Reminders section's own "has this
+  // actually been changed from its defaults" snapshot. A ref, not state:
+  // written once when the profile load resolves, read only inside an
+  // event handler (the Reminders checkbox's own uncheck), never something
+  // a render needs to react to.
+  const reminderDefaultsSnapshotRef = useRef<{
+    reminderEnabled: boolean
+    reminderDayOfEnabled: boolean
+    overdueReminderEnabled: boolean
+    reminderMinutesBeforeEnabled: boolean
+    reminderMinutesBeforeValue: number
+  } | null>(null)
+
   // Repeat (Jim's own recurrence-method design, 2026-08-21) — staged as a
   // plain RepeatRule | null, same "hold as client-side draft state until
   // Send produces a real id" pattern as dialogEntries/stagedFiles above.
@@ -676,6 +689,25 @@ export default function CreateRequestForm() {
           reminderMinutesBeforeEnabled: data?.request_reminder_default_minutes_before_enabled ?? f.reminderMinutesBeforeEnabled,
           reminderMinutesBeforeValue: data?.request_reminder_default_minutes_before_value ?? f.reminderMinutesBeforeValue,
         }))
+        // Features band (2026-11-02, owner-reported) — the four reminder
+        // fields above are pre-filled from the account's own defaults
+        // unconditionally, regardless of whether Reminders is checked, so
+        // "Day before" alone (the spam-conscious default) already reads as
+        // "staged data" the moment someone checks the Reminders chip, even
+        // though they haven't touched anything. Snapshotting the effective
+        // defaults here lets the Reminders uncheck handler compare against
+        // what was actually pre-filled, not just against "anything true at
+        // all" — the discard dialog should only appear once something was
+        // genuinely changed from that starting point.
+        reminderDefaultsSnapshotRef.current = {
+          reminderEnabled: data?.request_reminder_default_day_before ?? initialState.reminderEnabled,
+          reminderDayOfEnabled: data?.request_reminder_default_day_of ?? initialState.reminderDayOfEnabled,
+          overdueReminderEnabled: data?.request_reminder_default_day_after ?? initialState.overdueReminderEnabled,
+          reminderMinutesBeforeEnabled:
+            data?.request_reminder_default_minutes_before_enabled ?? initialState.reminderMinutesBeforeEnabled,
+          reminderMinutesBeforeValue:
+            data?.request_reminder_default_minutes_before_value ?? initialState.reminderMinutesBeforeValue,
+        }
       })
     // router is stable across renders (Next's useRouter()) and this effect
     // must run once on mount only, same as every other "load once" effect
@@ -1307,7 +1339,7 @@ export default function CreateRequestForm() {
                 organic wrap across all five, so a phone-width reflow can't
                 split mid-row. */}
             <div className="featuresband">
-              <span className="featuresband-label">Features</span>
+              <span className="featuresband-label">Features — for this Request</span>
               <div className="featuresband-row">
                 <label className="featurecheck">
                   <input
@@ -1418,20 +1450,43 @@ export default function CreateRequestForm() {
                       if (e.target.checked) {
                         setRequestRemindersEnabled(true)
                       } else {
-                        attemptFeatureUncheck(
-                          'Reminders',
-                          form.reminderEnabled ||
+                        // Owner-reported, 2026-11-02: the four reminder
+                        // fields are pre-filled from the account's own
+                        // defaults regardless of whether Reminders is
+                        // checked — comparing against the snapshot taken
+                        // when those defaults loaded (not just "is
+                        // anything true at all") means unchecking Reminders
+                        // without touching any of the four only prompts if
+                        // the snapshot itself failed to load.
+                        const snap = reminderDefaultsSnapshotRef.current
+                        const remindersChanged = snap
+                          ? form.reminderEnabled !== snap.reminderEnabled ||
+                            form.reminderDayOfEnabled !== snap.reminderDayOfEnabled ||
+                            form.overdueReminderEnabled !== snap.overdueReminderEnabled ||
+                            form.reminderMinutesBeforeEnabled !== snap.reminderMinutesBeforeEnabled ||
+                            form.reminderMinutesBeforeValue !== snap.reminderMinutesBeforeValue
+                          : form.reminderEnabled ||
                             form.reminderDayOfEnabled ||
                             form.overdueReminderEnabled ||
-                            form.reminderMinutesBeforeEnabled,
+                            form.reminderMinutesBeforeEnabled
+                        attemptFeatureUncheck(
+                          'Reminders',
+                          remindersChanged,
                           () => {
                             setRequestRemindersEnabled(false)
+                            // Clear reverts to the pristine defaults, not a
+                            // hardcoded all-off — "clear what I changed,"
+                            // not "clear what was never touched" (a
+                            // default of Day Before = true shouldn't get
+                            // turned off by Clear when it was never the
+                            // thing that changed).
                             setForm((f) => ({
                               ...f,
-                              reminderEnabled: false,
-                              reminderDayOfEnabled: false,
-                              overdueReminderEnabled: false,
-                              reminderMinutesBeforeEnabled: false,
+                              reminderEnabled: snap?.reminderEnabled ?? false,
+                              reminderDayOfEnabled: snap?.reminderDayOfEnabled ?? false,
+                              overdueReminderEnabled: snap?.overdueReminderEnabled ?? false,
+                              reminderMinutesBeforeEnabled: snap?.reminderMinutesBeforeEnabled ?? false,
+                              reminderMinutesBeforeValue: snap?.reminderMinutesBeforeValue ?? f.reminderMinutesBeforeValue,
                             }))
                           },
                           () => setRequestRemindersEnabled(false)
@@ -1621,6 +1676,7 @@ export default function CreateRequestForm() {
               timeValue={form.dueTime}
               onTimeChange={(v) => set('dueTime', v)}
               timeEnabled={requestTimeEnabled}
+              timeAlwaysExpanded
               required
               invalid={dueDateInvalid}
               errorMessage="Enter a Due Date."

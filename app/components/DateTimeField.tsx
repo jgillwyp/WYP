@@ -91,6 +91,7 @@ export default function DateTimeField({
   disabled = false,
   dateClassExtra = '',
   dateInputRef,
+  timeAlwaysExpanded = false,
 }: {
   idPrefix: string
   dateLabel: string
@@ -109,15 +110,28 @@ export default function DateTimeField({
   /** Access to the underlying date <input> DOM node — e.g. the quick-Done
    *  band's scrollIntoView() on Request Response/Response Detail. */
   dateInputRef?: React.RefObject<HTMLInputElement | null>
+  /** Skips the "+ Add Time" step entirely — the Time field renders
+   * directly, empty/greyed until filled, the moment timeEnabled is true.
+   * Added for Create Request's Features band (2026-11-02): Jim — checking
+   * "Time" there is already the opt-in step, so a second click just to
+   * reveal an empty field is redundant in that one context. Defaults
+   * false everywhere else (every Detail screen, Create ToDo, Request
+   * Response), which keeps the original "+ Add Time" behavior unchanged
+   * there — confirmed with Jim ("Leave Detail screens as they are now").
+   * Once expanded this way, Remove/clear never re-collapses the field
+   * back to "+ Add Time" — it only clears the value, so the field stays
+   * visible exactly as long as Time itself is checked. */
+  timeAlwaysExpanded?: boolean
 }) {
   // Starts expanded whenever a real Time value already exists (editing an
-  // existing Request/ToDo) — a lazy initializer alone would miss a value
-  // that arrives after an async load (Request Detail/ToDo Detail/etc. all
-  // fetch their record post-mount), so the effect below also expands on a
-  // later-arriving value. Only the explicit "+ Add Time" click opens the
-  // native picker (addedByUser), so loading an existing time never pops a
-  // picker open unprompted.
-  const [timeExpanded, setTimeExpanded] = useState(timeValue.trim() !== '')
+  // existing Request/ToDo) or timeAlwaysExpanded is set — a lazy
+  // initializer alone would miss a value that arrives after an async load
+  // (Request Detail/ToDo Detail/etc. all fetch their record post-mount),
+  // so the effect below also expands on a later-arriving value. Only the
+  // explicit "+ Add Time" click opens the native picker (addedByUser), so
+  // loading an existing time (or timeAlwaysExpanded) never pops a picker
+  // open unprompted.
+  const [timeExpanded, setTimeExpanded] = useState(timeAlwaysExpanded || timeValue.trim() !== '')
   const addedByUserRef = useRef(false)
   const timeInputRef = useRef<HTMLInputElement>(null)
 
@@ -148,7 +162,7 @@ export default function DateTimeField({
 
   function handleRemoveTime() {
     onTimeChange('')
-    setTimeExpanded(false)
+    if (!timeAlwaysExpanded) setTimeExpanded(false)
   }
 
   const dateId = `${idPrefix}-date`
