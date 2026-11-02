@@ -1514,8 +1514,8 @@ export default function CreateRequestForm() {
                     </p>
                   </div>
                   <p className="checknote">
-                    You&rsquo;ve already set something for {discardPrompt.label}. Keep it in case
-                    you turn {discardPrompt.label} back on, or clear it now?
+                    There is a value set for {discardPrompt.label}. Keep it in case you turn{' '}
+                    {discardPrompt.label} back on, or clear it now?
                   </p>
                   <div className="modalacts" style={{ marginTop: 14 }}>
                     <button
