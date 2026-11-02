@@ -1739,6 +1739,23 @@ body {
   color: var(--ink);
 }
 
+/* Create ToDo's Time/Repeat/Reminders chips (Stage 3, 2026-11-02) — greyed
+   whenever Date is unchecked, same dependency Account Options already
+   enforces for these same three toggles (checkrow-disabled's own
+   precedent). A title tooltip explains why, same as that existing
+   precedent — no separate visible note built for this, unlike
+   RepeatControl's own greyed-band treatment, which Jim specifically asked
+   for; nothing here asked for the same on these compact inline chips. */
+.featurecheck-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.featurecheck-disabled input,
+.featurecheck-disabled span {
+  cursor: not-allowed;
+}
+
 .featuresband-note {
   font-size: 12px;
   color: var(--ink-soft);

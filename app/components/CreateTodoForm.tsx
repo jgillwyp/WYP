@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
@@ -202,23 +203,45 @@ export default function CreateTodoForm() {
 
   const [form, setForm] = useState<TodoFormState>(initialState)
 
-  // Private Category is now an opt-in account preference (migration 018,
-  // 2026-08-13), off by default — see AccountForm.tsx and
-  // CreateRequestForm.tsx's identical gate.
+  // categoriesEnabled/todoDatesEnabled/todoTimeEnabled/todoRepeatEnabled/
+  // todoRemindersEnabled (below) are the Features band's own live checked
+  // state (Stage 3, 2026-11-02) — same repurposing as
+  // CreateRequestForm.tsx's identical five variables; see that file's own
+  // header comment above its matching declarations for the full
+  // reasoning. Each still starts from its matching profiles column once
+  // the load below resolves, then the Features band's own checkboxes are
+  // the only thing that changes these from then on — this one Request's
+  // live per-item override, never written back to the account. Every
+  // existing gate reading them below (the Status-vs-Dates mode switch,
+  // DateTimeField's timeEnabled props, RepeatControl, the Reminders
+  // banner, the Category section) is unchanged from Stage 1/2 — "is the
+  // account's feature on" and "is this ToDo's Features checkbox checked"
+  // collapse into the same question once the band exists.
+  //
+  // todoDatesEnabled is the one with real extra weight: unlike Request's
+  // five (each gates one independent field), unchecking Date here swaps
+  // the ENTIRE Priority-adjacent block from Due/Done Date+Time fields over
+  // to the simpler Open/Done Status chip pair (§6.35) — a pre-existing,
+  // already-built toggle, not something new this stage introduces. Time/
+  // Repeat/Reminders all structurally depend on Date already (none of them
+  // can render without it), so unchecking Date also force-unchecks those
+  // three — see the Features band's own Date onChange handler for the
+  // full cascade.
   const [categoriesEnabled, setCategoriesEnabled] = useState(false)
-  // §6.35 Status toggle (migration 022) — see the file-level comment. A
-  // brand-new ToDo always starts Open, matching form.doneDate's own empty
-  // initial state; there's no existing done_date to derive an initial
-  // 'done' status from here, unlike TodoDetailForm.tsx.
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
-  // profiles.todo_time_enabled (migration 067, 2026-09-16) — see
-  // AccountForm.tsx's identical gate. Only meaningful alongside
-  // todoDatesEnabled, same as todoRemindersEnabled below.
   const [todoTimeEnabled, setTodoTimeEnabled] = useState(false)
-  // profiles.todo_repeat_enabled (migration 086, 2026-11-02) — see
-  // AccountForm.tsx's identical gate. Only meaningful alongside
-  // todoDatesEnabled, same as todoTimeEnabled above.
   const [todoRepeatEnabled, setTodoRepeatEnabled] = useState(false)
+  // Done Date's own lazy reveal (Stage 3, 2026-11-02) — owner: "The Done
+  // information being available for entering finished ToDos is a nice,
+  // but probably rarely used feature. It could have a '+ Add Done Date'
+  // or '+ Add Done Date and Done Time' underlined text to add the one or
+  // two fields when desired." Unlike Due Date (always shown directly the
+  // moment Date is checked — see the DateTimeField usage below), Done
+  // Date stays collapsed behind its own link until clicked; the label
+  // itself says "...and Done Time" when todoTimeEnabled is also on, since
+  // clicking it then reveals both fields at once (Done Time uses the same
+  // timeAlwaysExpanded as Due Time, once Done Date itself is expanded).
+  const [doneDateExpanded, setDoneDateExpanded] = useState(false)
   // Add to Calendar (2026-09-16) — see the checkbox's own JSX comment below
   // for why this is a checkbox here rather than the button ToDo Detail
   // gets: no real id exists yet to build a link/UID from until Save
@@ -283,6 +306,17 @@ export default function CreateTodoForm() {
   const [attachError, setAttachError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Features band (Stage 3, 2026-11-02) — the Reminders section's own "has
+  // this actually been changed from its defaults" snapshot, same fix and
+  // same reasoning as CreateRequestForm.tsx's identical ref.
+  const reminderDefaultsSnapshotRef = useRef<{
+    reminderEnabled: boolean
+    reminderDayOfEnabled: boolean
+    overdueReminderEnabled: boolean
+    reminderMinutesBeforeEnabled: boolean
+    reminderMinutesBeforeValue: number
+  } | null>(null)
+
   // Repeat (Jim's own recurrence-method design, 2026-08-21) — same staged
   // pattern as CreateRequestForm.tsx's own copy. Gated on todoDatesEnabled
   // as well as tier — a ToDo with Due/Done Dates turned off has no Due Date
@@ -317,6 +351,9 @@ export default function CreateTodoForm() {
         description: pendingConversion.description,
         dueDate: pendingConversion.dueDate ?? f.dueDate,
       }))
+      // Features band (Stage 3, 2026-11-02) — a restored Due Date needs
+      // Date checked too, or it'd be hidden behind the Status chip mode.
+      if (pendingConversion.dueDate) setTodoDatesEnabled(true)
     })
   }, [pendingConversion])
 
@@ -351,10 +388,21 @@ export default function CreateTodoForm() {
       .then(({ data }) => {
         setOwnerName(data?.display_name ?? null)
         setCategoriesEnabled(data?.todo_category_enabled ?? false)
-        setTodoDatesEnabled(data?.todo_dates_enabled ?? false)
-        setTodoTimeEnabled(data?.todo_time_enabled ?? false)
-        setTodoRepeatEnabled(data?.todo_repeat_enabled ?? false)
-        setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
+        const datesEnabled = data?.todo_dates_enabled ?? false
+        setTodoDatesEnabled(datesEnabled)
+        // Features band (Stage 3, 2026-11-02) — Time/Repeat/Reminders are
+        // each independently stored on profiles, with nothing server-side
+        // keeping them false whenever todo_dates_enabled is false (Account
+        // Options only disables *toggling* them while Date is off, it
+        // doesn't retroactively clear a value set before Date was last
+        // turned off). Without this, an account with that real combination
+        // would load a Features chip that's checked AND disabled at once,
+        // and could render the Reminders banner with no Due Date for it to
+        // anchor on. Forced false here, on load only — never writes back
+        // to the account, same as every other Features-band variable.
+        setTodoTimeEnabled(datesEnabled && (data?.todo_time_enabled ?? false))
+        setTodoRepeatEnabled(datesEnabled && (data?.todo_repeat_enabled ?? false))
+        setTodoRemindersEnabled(datesEnabled && (data?.todo_reminders_enabled ?? false))
         setTier(data?.tier === 'subscriber' ? 'subscriber' : 'free')
         setForm((f) => ({
           ...f,
@@ -364,6 +412,19 @@ export default function CreateTodoForm() {
           reminderMinutesBeforeEnabled: data?.todo_reminder_default_minutes_before_enabled ?? f.reminderMinutesBeforeEnabled,
           reminderMinutesBeforeValue: data?.todo_reminder_default_minutes_before_value ?? f.reminderMinutesBeforeValue,
         }))
+        // Features band (Stage 3, 2026-11-02) — see CreateRequestForm.tsx's
+        // identical snapshot for the full reasoning (owner-reported: the
+        // pre-filled defaults alone were reading as "staged data" the
+        // moment Reminders was checked).
+        reminderDefaultsSnapshotRef.current = {
+          reminderEnabled: data?.todo_reminder_default_day_before ?? initialState.reminderEnabled,
+          reminderDayOfEnabled: data?.todo_reminder_default_day_of ?? initialState.reminderDayOfEnabled,
+          overdueReminderEnabled: data?.todo_reminder_default_day_after ?? initialState.overdueReminderEnabled,
+          reminderMinutesBeforeEnabled:
+            data?.todo_reminder_default_minutes_before_enabled ?? initialState.reminderMinutesBeforeEnabled,
+          reminderMinutesBeforeValue:
+            data?.todo_reminder_default_minutes_before_value ?? initialState.reminderMinutesBeforeValue,
+        }
       })
     // pendingConversion is a stable, set-once value from its own lazy
     // useState initializer (see above) and this effect must run once on
@@ -470,6 +531,30 @@ export default function CreateTodoForm() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  // Features band — retain/discard confirm dialog (Stage 3, 2026-11-02),
+  // same shape and same reasoning as CreateRequestForm.tsx's identical
+  // pair of declarations.
+  const [discardPrompt, setDiscardPrompt] = useState<{
+    label: string
+    onClear: () => void
+    onRetain: () => void
+  } | null>(null)
+
+  function attemptFeatureUncheck(label: string, hasStagedData: boolean, onClear: () => void, onRetain: () => void) {
+    if (!hasStagedData) {
+      onClear()
+      return
+    }
+    setDiscardPrompt({ label, onClear, onRetain })
+  }
+
+  // Features band (Stage 3, 2026-11-02) — same "Retain can leave real data
+  // sitting in state behind an unchecked, hidden checkbox" reasoning as
+  // CreateRequestForm.tsx's identical derived value; reads wherever
+  // repeatRule is used for something real (Send's own insert payload, the
+  // carry-forward-Attachments prompt gate).
+  const effectiveRepeatRule = todoDatesEnabled && todoRepeatEnabled ? repeatRule : null
+
   // Voice dictation toggle (2026-08-19) — see CreateRequestForm.tsx's
   // identical handler for the full reasoning.
   // Quick-Done band (2026-08-10) — same pattern as Request Response's
@@ -478,6 +563,11 @@ export default function CreateTodoForm() {
   // here — ToDos don't have one.
   function handleQuickDone() {
     set('doneDate', todayISODate())
+    // Features band (Stage 3, 2026-11-02) — Done Date now stays collapsed
+    // behind "+ Add Done Date" until expanded; filling it via the quick-
+    // Done button has to expand it too, or there'd be nothing to scroll to
+    // and the value that just got set would be invisible.
+    setDoneDateExpanded(true)
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
@@ -676,7 +766,7 @@ export default function CreateTodoForm() {
     // own copy. Only interrupts Save once, and only when there's something
     // to ask about; carryPromptOpen guards against re-showing after the
     // user has already confirmed a selection and re-clicked Save.
-    if (repeatRule && stagedFiles.length > 0 && !carryPromptOpen) {
+    if (effectiveRepeatRule && stagedFiles.length > 0 && !carryPromptOpen) {
       setCarryFileIndexes(new Set(stagedFiles.map((_, i) => i)))
       setCarryPromptOpen(true)
       return
@@ -704,15 +794,19 @@ export default function CreateTodoForm() {
       ? (form.doneDate.trim() === '' ? null : form.doneDate)
       : (todoStatus === 'done' ? (form.doneDate.trim() === '' ? todayISODate() : form.doneDate) : null)
 
+    // Features band (Stage 3, 2026-11-02) — same "Retain can leave real
+    // data sitting in state behind an unchecked checkbox" reasoning as
+    // CreateRequestForm.tsx: unchecked has to mean "not part of this
+    // ToDo" at Save time, not just "not shown."
     const { data: newTodo, error: insertError } = await supabase
       .from('requests')
       .insert({
         owner_id: userData.user.id,
         contact_id: null,
-        category_id: selectedCategory?.id ?? null,
+        category_id: categoriesEnabled ? (selectedCategory?.id ?? null) : null,
         description: form.description.trim(),
         priority: form.priority,
-        due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+        due_date: todoDatesEnabled && form.dueDate.trim() !== '' ? form.dueDate : null,
         // Due/Done Time (migration 067) — only ever written when the
         // account has both Due/Done Dates and Time on. See
         // TodoDetailForm.tsx's identical handling.
@@ -723,20 +817,25 @@ export default function CreateTodoForm() {
             }
           : {}),
         done_date: effectiveDoneDate,
-        reminder_enabled: form.reminderEnabled,
-        reminder_day_of_enabled: form.reminderDayOfEnabled,
-        overdue_reminder_enabled: form.overdueReminderEnabled,
-        // Re-gated on Due Time actually being set (and the Due/Done Time
-        // account toggle being on, same as the due_time field above) — not
-        // just the checkbox's own stored value.
+        reminder_enabled: todoDatesEnabled && todoRemindersEnabled && form.reminderEnabled,
+        reminder_day_of_enabled: todoDatesEnabled && todoRemindersEnabled && form.reminderDayOfEnabled,
+        overdue_reminder_enabled: todoDatesEnabled && todoRemindersEnabled && form.overdueReminderEnabled,
+        // Re-gated on Reminders being checked AND Due Time actually being
+        // set (and the Due/Done Time account toggle being on, same as the
+        // due_time field above) — not just the checkbox's own stored
+        // value.
         reminder_minutes_before_enabled:
-          todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled,
+          todoDatesEnabled &&
+          todoRemindersEnabled &&
+          todoTimeEnabled &&
+          form.dueTime.trim() !== '' &&
+          form.reminderMinutesBeforeEnabled,
         reminder_minutes_before_value: form.reminderMinutesBeforeValue,
-        repeat_rule: repeatRule,
-        repeat_occurrence_index: repeatRule ? 1 : null,
+        repeat_rule: effectiveRepeatRule,
+        repeat_occurrence_index: effectiveRepeatRule ? 1 : null,
         // repeat_series_id — see CreateRequestForm.tsx's identical comment
         // (migration 068, 2026-09-23).
-        repeat_series_id: repeatRule ? crypto.randomUUID() : null,
+        repeat_series_id: effectiveRepeatRule ? crypto.randomUUID() : null,
       })
       .select('id')
       .single()
@@ -842,7 +941,12 @@ export default function CreateTodoForm() {
           {
             id: newTodo.id,
             description: form.description.trim(),
-            due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+            // Features band (Stage 3, 2026-11-02) — gated the same way the
+            // insert payload above already is, so the calendar event never
+            // shows a Due Date the saved ToDo itself doesn't actually have
+            // (a Retain-ed value sitting hidden in state with Date
+            // unchecked).
+            due_date: todoDatesEnabled && form.dueDate.trim() !== '' ? form.dueDate : null,
             due_time: todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
             owner_name: null,
           },
@@ -898,7 +1002,9 @@ export default function CreateTodoForm() {
         {
           id: todoId,
           description: form.description.trim(),
-          due_date: form.dueDate.trim() === '' ? null : form.dueDate,
+          // Features band (Stage 3, 2026-11-02) — see the native-calendar
+          // branch's identical gate above for the full reasoning.
+          due_date: todoDatesEnabled && form.dueDate.trim() !== '' ? form.dueDate : null,
           due_time: todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== '' ? form.dueTime : null,
           owner_name: null,
         },
@@ -962,6 +1068,253 @@ export default function CreateTodoForm() {
 
         <div className="scroll">
           <form className="form" id="create-todo-form" onSubmit={handleSubmit} noValidate>
+
+            {/* Features band (§6.4x PROPOSED, Stage 3, 2026-11-02) — Jim's
+                own "Features Exposure" design, ported from Create Request
+                (Stage 2) with ToDo's own order (Date, Time, Categories,
+                Repeat, Reminders — no Confirmation, ToDos have no Receipt
+                Confirmation feature). Date always shows and is never
+                disabled; Time/Repeat/Reminders are greyed with a tooltip
+                whenever Date is unchecked, matching the identical
+                dependency Account Options already enforces for these same
+                three toggles. Unchecking Date cascades: it also force-
+                unchecks Time/Repeat/Reminders (none of the three can exist
+                without a Due Date to anchor on — see the state-declaration
+                comment above), through the SAME retain/discard choice
+                picked for Date's own Due/Done Date values, rather than a
+                separate prompt per feature. */}
+            <div className="featuresband">
+              <span className="featuresband-label">Features — for this ToDo</span>
+              <div className="featuresband-row">
+                <label className="featurecheck">
+                  <input
+                    type="checkbox"
+                    checked={todoDatesEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTodoDatesEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Date',
+                          form.dueDate.trim() !== '' || form.doneDate.trim() !== '',
+                          () => {
+                            // Clear — Date and everything that depends on
+                            // it (Time/Repeat/Reminders) all reset for
+                            // real, not just hidden.
+                            setTodoDatesEnabled(false)
+                            setTodoTimeEnabled(false)
+                            setTodoRepeatEnabled(false)
+                            setTodoRemindersEnabled(false)
+                            setDoneDateExpanded(false)
+                            setRepeatRule(null)
+                            setForm((f) => ({
+                              ...f,
+                              dueDate: '',
+                              dueTime: '',
+                              doneDate: '',
+                              doneTime: '',
+                              reminderEnabled: false,
+                              reminderDayOfEnabled: false,
+                              overdueReminderEnabled: false,
+                              reminderMinutesBeforeEnabled: false,
+                            }))
+                          },
+                          () => {
+                            // Retain — same cascade of unchecking Time/
+                            // Repeat/Reminders (they can't be checked with
+                            // Date off regardless), but their own
+                            // underlying values stay in state, hidden,
+                            // same as Date's own dueDate/doneDate.
+                            // Status mode has its own, separate Open/Done
+                            // representation (todoStatus) — synced here
+                            // from the retained Done Date so the Status
+                            // chip doesn't silently disagree with a
+                            // Done Date that's still sitting hidden in
+                            // state (effectiveDoneDate, in doSubmit, reads
+                            // todoStatus once Date is off, never
+                            // form.doneDate directly).
+                            setTodoDatesEnabled(false)
+                            setTodoTimeEnabled(false)
+                            setTodoRepeatEnabled(false)
+                            setTodoRemindersEnabled(false)
+                            setDoneDateExpanded(false)
+                            setTodoStatus(form.doneDate.trim() !== '' ? 'done' : 'open')
+                          }
+                        )
+                      }
+                    }}
+                  />
+                  <span>Date</span>
+                </label>
+                <label
+                  className={`featurecheck${!todoDatesEnabled ? ' featurecheck-disabled' : ''}`}
+                  title={!todoDatesEnabled ? 'Please turn on Date first.' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={todoTimeEnabled}
+                    disabled={!todoDatesEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTodoTimeEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Time',
+                          form.dueTime.trim() !== '' || form.doneTime.trim() !== '',
+                          () => {
+                            setTodoTimeEnabled(false)
+                            set('dueTime', '')
+                            set('doneTime', '')
+                          },
+                          () => setTodoTimeEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Time</span>
+                </label>
+              </div>
+              <div className="featuresband-row">
+                <label className="featurecheck">
+                  <input
+                    type="checkbox"
+                    checked={categoriesEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setCategoriesEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Categories',
+                          selectedCategory !== null,
+                          () => {
+                            setCategoriesEnabled(false)
+                            setSelectedCategory(null)
+                            set('categoryName', '')
+                          },
+                          () => setCategoriesEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Categories</span>
+                </label>
+                <label
+                  className={`featurecheck${!todoDatesEnabled ? ' featurecheck-disabled' : ''}`}
+                  title={!todoDatesEnabled ? 'Please turn on Date first.' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={todoRepeatEnabled}
+                    disabled={!todoDatesEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTodoRepeatEnabled(true)
+                      } else {
+                        attemptFeatureUncheck(
+                          'Repeat',
+                          repeatRule !== null,
+                          () => {
+                            setTodoRepeatEnabled(false)
+                            setRepeatRule(null)
+                          },
+                          () => setTodoRepeatEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Repeat</span>
+                </label>
+                <label
+                  className={`featurecheck${!todoDatesEnabled ? ' featurecheck-disabled' : ''}`}
+                  title={!todoDatesEnabled ? 'Please turn on Date first.' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={todoRemindersEnabled}
+                    disabled={!todoDatesEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTodoRemindersEnabled(true)
+                      } else {
+                        const snap = reminderDefaultsSnapshotRef.current
+                        const remindersChanged = snap
+                          ? form.reminderEnabled !== snap.reminderEnabled ||
+                            form.reminderDayOfEnabled !== snap.reminderDayOfEnabled ||
+                            form.overdueReminderEnabled !== snap.overdueReminderEnabled ||
+                            form.reminderMinutesBeforeEnabled !== snap.reminderMinutesBeforeEnabled ||
+                            form.reminderMinutesBeforeValue !== snap.reminderMinutesBeforeValue
+                          : form.reminderEnabled ||
+                            form.reminderDayOfEnabled ||
+                            form.overdueReminderEnabled ||
+                            form.reminderMinutesBeforeEnabled
+                        attemptFeatureUncheck(
+                          'Reminders',
+                          remindersChanged,
+                          () => {
+                            setTodoRemindersEnabled(false)
+                            setForm((f) => ({
+                              ...f,
+                              reminderEnabled: snap?.reminderEnabled ?? false,
+                              reminderDayOfEnabled: snap?.reminderDayOfEnabled ?? false,
+                              overdueReminderEnabled: snap?.overdueReminderEnabled ?? false,
+                              reminderMinutesBeforeEnabled: snap?.reminderMinutesBeforeEnabled ?? false,
+                              reminderMinutesBeforeValue: snap?.reminderMinutesBeforeValue ?? f.reminderMinutesBeforeValue,
+                            }))
+                          },
+                          () => setTodoRemindersEnabled(false)
+                        )
+                      }
+                    }}
+                  />
+                  <span>Reminders</span>
+                </label>
+              </div>
+              {/* No "and other options" phrase here — Jim: "For Create
+                  ToDos – there are currently no other options." */}
+              <p className="featuresband-note">
+                <strong>Note:</strong> Defaults for Feature check boxes and values for
+                Reminders are set in <Link href="/account">Housekeeping, Account Options</Link>.
+              </p>
+            </div>
+
+            {discardPrompt && (
+              <>
+                <div className="scrim" onClick={() => setDiscardPrompt(null)} />
+                <div className="modal" role="dialog" aria-modal="true" aria-labelledby="discard-feature-title">
+                  <div className="modalhead">
+                    <p className="modal-title" id="discard-feature-title">
+                      Hide {discardPrompt.label}?
+                    </p>
+                  </div>
+                  <p className="checknote">
+                    You&rsquo;ve already set something for {discardPrompt.label}. Keep it in case
+                    you turn {discardPrompt.label} back on, or clear it now?
+                  </p>
+                  <div className="modalacts" style={{ marginTop: 14 }}>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={() => {
+                        discardPrompt.onRetain()
+                        setDiscardPrompt(null)
+                      }}
+                    >
+                      Retain
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => {
+                        discardPrompt.onClear()
+                        setDiscardPrompt(null)
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Priority (§2.1 core object field — ToDo-only). */}
             <div className="fgroup">
@@ -1074,6 +1427,14 @@ export default function CreateTodoForm() {
                     purpose here: "the reason a Create ToDo should allow a
                     Done Date is to allow completed ToDos to be entered if
                     desired." */}
+                {/* Due Time direct-display (Stage 3, 2026-11-02) — Jim:
+                    Due Time should show as a greyed field once Time is
+                    checked, not require an extra "+ Add Due Time" click —
+                    same timeAlwaysExpanded flag Create Request's own Due
+                    Time already uses (Stage 2). Due Date itself is never
+                    behind its own lazy reveal — showing directly the
+                    moment Date is checked, same as Request's required Due
+                    Date, is what Date itself already is. */}
                 <DateTimeField
                   idPrefix="dd"
                   dateLabel="Due Date"
@@ -1083,18 +1444,38 @@ export default function CreateTodoForm() {
                   timeValue={form.dueTime}
                   onTimeChange={(v) => set('dueTime', v)}
                   timeEnabled={todoTimeEnabled}
+                  timeAlwaysExpanded
                 />
-                <DateTimeField
-                  idPrefix="dnd"
-                  dateLabel="Done Date"
-                  timeLabel="Done Time"
-                  dateValue={form.doneDate}
-                  onDateChange={(v) => set('doneDate', v)}
-                  timeValue={form.doneTime}
-                  onTimeChange={(v) => set('doneTime', v)}
-                  timeEnabled={todoTimeEnabled}
-                  dateInputRef={doneDateRef}
-                />
+                {/* Done Date's own lazy reveal (Stage 3, 2026-11-02) — see
+                    doneDateExpanded's own state-declaration comment for
+                    Jim's full wording. Once expanded, Done Time (if Time
+                    is checked) shows directly too — timeAlwaysExpanded —
+                    matching the single-click "+ Add Done Date and Done
+                    Time" label below rather than requiring a second
+                    "+ Add Done Time" click within it. */}
+                {doneDateExpanded ? (
+                  <DateTimeField
+                    idPrefix="dnd"
+                    dateLabel="Done Date"
+                    timeLabel="Done Time"
+                    dateValue={form.doneDate}
+                    onDateChange={(v) => set('doneDate', v)}
+                    timeValue={form.doneTime}
+                    onTimeChange={(v) => set('doneTime', v)}
+                    timeEnabled={todoTimeEnabled}
+                    timeAlwaysExpanded
+                    dateInputRef={doneDateRef}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="linkbtn"
+                    style={{ marginTop: 6, marginBottom: 14 }}
+                    onClick={() => setDoneDateExpanded(true)}
+                  >
+                    + Add Done Date{todoTimeEnabled ? ' and Done Time' : ''}
+                  </button>
+                )}
               </>
             ) : (
               /* §6.35 PROPOSED Status row (migration 022, 2026-08-14) — Due/Done
