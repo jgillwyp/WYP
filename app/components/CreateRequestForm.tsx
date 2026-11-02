@@ -1500,7 +1500,7 @@ export default function CreateRequestForm() {
               <p className="featuresband-note">
                 <strong>Note:</strong> Defaults for Feature check boxes and values for
                 Reminders and other options are set in{' '}
-                <Link href="/account">Housekeeping, Account Options</Link>.
+                <Link href="/account?open=request">Housekeeping, Account Options</Link>.
               </p>
             </div>
 

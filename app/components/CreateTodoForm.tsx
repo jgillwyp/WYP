@@ -1273,7 +1273,7 @@ export default function CreateTodoForm() {
                   ToDos – there are currently no other options." */}
               <p className="featuresband-note">
                 <strong>Note:</strong> Defaults for Feature check boxes and values for
-                Reminders are set in <Link href="/account">Housekeeping, Account Options</Link>.
+                Reminders are set in <Link href="/account?open=todo">Housekeeping, Account Options</Link>.
               </p>
             </div>
 

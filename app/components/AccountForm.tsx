@@ -336,9 +336,38 @@ export default function AccountForm() {
   // convention. The General section itself (previously defaulted open) was
   // removed 2026-09-30 — see the file-level comment; sectionHead() stays
   // reusable if a future setting needs a similar home.
-  const [requestOpen, setRequestOpen] = useState(() => readStoredOpen('wyp.acctRequestOpen', false))
-  const [todoOpen, setTodoOpen] = useState(() => readStoredOpen('wyp.acctTodoOpen', false))
+  // Deep-link from the Features band's own "Housekeeping, Account Options"
+  // link (Create Request/Create ToDo, ?open=request / ?open=todo) — Jim:
+  // "it should force it open and reset the last Show/Hide state." Checked
+  // in each lazy initializer below (not a later effect) so the relevant
+  // section is already open on the very first render, no flash of
+  // collapsed-then-reopened. The matching mount effect further down
+  // persists the forced choice as the new last-used state and strips the
+  // query string once consumed.
+  const [requestOpen, setRequestOpen] = useState(
+    () => forcedOpenSection() === 'request' || readStoredOpen('wyp.acctRequestOpen', false)
+  )
+  const [todoOpen, setTodoOpen] = useState(
+    () => forcedOpenSection() === 'todo' || readStoredOpen('wyp.acctTodoOpen', false)
+  )
   const [subscriberOpen, setSubscriberOpen] = useState(() => readStoredOpen('wyp.acctSubscriberOpen', false))
+
+  // Deep-link, continued — runs once on mount, after setRequestOpenAndStore/
+  // setTodoOpenAndStore are in scope (hoisted function declarations, so
+  // calling them from here before their own textual definition is safe).
+  // Persists the forced-open section as the new last-used sessionStorage
+  // value (not just a one-time visual override for this one visit) and
+  // strips ?open= from the URL once consumed, same "read once, clean up
+  // the query string" pattern CreateRequestForm.tsx's own ?newContactId
+  // handling already uses.
+  useEffect(() => {
+    const forced = forcedOpenSection()
+    if (!forced) return
+    if (forced === 'request') setRequestOpenAndStore(true)
+    if (forced === 'todo') setTodoOpenAndStore(true)
+    router.replace('/account')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1347,4 +1376,18 @@ function readStoredOpen(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') return fallback
   const v = window.sessionStorage.getItem(key)
   return v === '1' ? true : v === '0' ? false : fallback
+}
+
+// Deep-link query param (?open=request|todo) from the Features band's own
+// Housekeeping link — read via window.location.search, not
+// useSearchParams(), matching AddContactForm.tsx's/CreateRequestForm.tsx's
+// own established convention for a param that's only ever read once on
+// mount and immediately stripped: no Suspense-boundary requirement that
+// way, and this is always a fresh navigation to this screen, never a
+// client-side param-only transition onto an already-mounted instance (the
+// one case that convention doesn't cover — see /login's own history).
+function forcedOpenSection(): 'request' | 'todo' | null {
+  if (typeof window === 'undefined') return null
+  const open = new URLSearchParams(window.location.search).get('open')
+  return open === 'request' || open === 'todo' ? open : null
 }
