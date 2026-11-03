@@ -42,7 +42,8 @@ export default function AndroidDownloadPage() {
             </p>
 
             <div className="noticeband">
-              <b>Note:</b> If you ever added a Would You Please icon to your Home Screen
+              <b>Note:</b>{' '}
+              If you ever added a Would You Please icon to your Home Screen
               straight from Chrome, delete it first (press and hold it, then Remove) &mdash;
               this avoids ending up with two icons that look identical. No need to sign out
               first, and nothing is lost either way.
