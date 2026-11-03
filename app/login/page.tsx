@@ -3,11 +3,8 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-import { Capacitor } from '@capacitor/core'
-
 import WypHeader from '../components/WypHeader'
 import { supabase, setRememberMe } from '@/lib/supabaseClient'
-import { isIOSDevice, isStandaloneDisplay } from '@/lib/platform'
 
 /** Supabase allows one magic link per user per 60 seconds. */
 const RESEND_COOLDOWN_SECONDS = 60
@@ -147,40 +144,23 @@ function LoginScreen() {
   const [verifying, setVerifying] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
 
-  // iOS home-screen icon detection (2026-09-29, owner-reported follow-up —
-  // "is there a way to only offer the method that works to iPhone users").
-  // Standalone iOS is the one case diagnosed above where the mailed link is
-  // guaranteed to fail (it always opens the external browser, never this
-  // window) — every other context (a normal iOS Safari/Chrome tab, or any
-  // non-iOS platform) has the link working fine, so this is scoped exactly
-  // to the broken case rather than assuming "iPhone" broadly. Starts false
-  // on both server and first client render (no hydration mismatch), flips
-  // after mount — same pattern as CreateRequestForm.tsx's own
-  // `voiceSupported`. Not security-relevant: a wrong guess only changes
-  // which instructions are shown, never what verifyOtp() itself accepts.
-  const [iosStandalone, setIosStandalone] = useState(false)
-  // Installed Android (Capacitor) app detection (2026-10-21, QC finding #8).
-  // The emailed link opens the device's regular browser, never this native
-  // WebView, for the exact same structural reason a tapped link can't reach
-  // an iOS home-screen icon's own storage — so this case needs its own
-  // wording naming the app explicitly, not the generic "Home Screen icon"
-  // phrasing written for the PWA case. Capacitor.isNativePlatform() is
-  // already used elsewhere (app/src/lib/platform.ts, nativePrint.ts).
-  const [isNativeApp, setIsNativeApp] = useState(false)
-  // Derived: true for any context where the emailed magic link is known to
-  // fail (it always opens a separate browser/tab, never this window/app) —
-  // 2026-11-01, owner request to stop even offering "the link" as a framing
-  // on this page for these cases, rather than just explaining why not to use
-  // it. The email itself still contains both the link and the code (that's
-  // Supabase's own Magic Link template, outside this codebase) — this only
-  // changes what this page's own copy emphasizes.
-  const preferCodeOnly = isNativeApp || iosStandalone
-  useEffect(() => {
-    queueMicrotask(() => {
-      setIsNativeApp(Capacitor.isNativePlatform())
-      setIosStandalone(isIOSDevice() && isStandaloneDisplay())
-    })
-  }, [])
+  // Sign-in is code-only, every context, every platform (2026-11-03, owner
+  // request). This page used to auto-detect whether the emailed magic link
+  // was known to fail (a native app or an iOS home-screen icon, both with
+  // their own isolated storage a tapped link can never reach) and only show
+  // code-first copy in those cases, since a normal browser tab's link
+  // genuinely worked fine. That stopped being the deciding factor once the
+  // owner reported the code was just as fast even on a Windows PWA in
+  // Chrome — a context where the link was never broken at all — once the
+  // paste button below exists, the link's one remaining advantage (fewer
+  // keystrokes) is gone too. So the whole platform-detection branch (iOS
+  // home-screen-icon check, Capacitor native-app check, and the resulting
+  // preferCodeOnly split) is removed rather than just defaulted on, per
+  // this file's own "delete dead code" convention — nothing in this
+  // codebase computes "is the link going to work here" anymore, since the
+  // email this page triggers never includes one. See
+  // app/api/auth/send-email/route.ts and email.ts's own "Sign-in email"
+  // section for the matching server-side simplification.
 
   // "Use" half of the owner's copy/paste request (2026-11-03) — the
   // "presentation" half (a 📋 tap-and-hold hint on the code itself) lives in
@@ -188,9 +168,9 @@ function LoginScreen() {
   // here, where actual JS runs — email clients strip the script a clickable
   // copy button in the message body would need. Feature-detected in a mount
   // effect (never read during render) so server and first client render
-  // agree, same pattern as isNativeApp/iosStandalone above and
-  // CreateRequestForm.tsx's own voiceSupported. Hidden outright rather than
-  // shown-and-failing when the Clipboard API isn't present at all (e.g. a
+  // agree, same pattern as CreateRequestForm.tsx's own voiceSupported.
+  // Hidden outright rather than shown-and-failing when the Clipboard API
+  // isn't present at all (e.g. a
   // very old browser, or a non-HTTPS context, which this site never is) —
   // a denied *permission* at click time is a different, expected case,
   // handled inline in handlePasteCode below, not by hiding the button.
@@ -252,17 +232,16 @@ function LoginScreen() {
       window.localStorage.removeItem(LAST_EMAIL_KEY)
     }
 
-    // `?ctx=app` (2026-11-01) is read by app/api/auth/send-email/route.ts —
-    // the Supabase "Send Email" Auth Hook — via the redirect_to field it
-    // receives in its own payload, to decide whether to omit the sign-in
-    // email's clickable link entirely (see that route's header comment and
-    // email.ts's "Sign-in email" section for the full reasoning). This is
-    // the one place that decision gets made — preferCodeOnly is computed
-    // once, client-side, before this call.
+    // No `?ctx=app` param anymore (2026-11-03) — that used to flag a
+    // platform where the link was known to fail, so app/api/auth/send-email/
+    // route.ts (the Supabase "Send Email" Auth Hook) could omit it only
+    // there. The email is code-only unconditionally now (see that route's
+    // own header comment), so there's nothing left for a query param to
+    // signal.
     const { error: sendError } = await supabase.auth.signInWithOtp({
       email: address,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback${preferCodeOnly ? '?ctx=app' : ''}`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 
@@ -502,15 +481,13 @@ function LoginScreen() {
               )}
 
               <button className="btn btn-block" type="submit" disabled={loading}>
-                {loading ? 'Sending…' : preferCodeOnly ? 'Email me a sign-in code' : 'Email me a sign-in link'}
+                {loading ? 'Sending…' : 'Email me a sign-in code'}
               </button>
             </form>
 
             <div className="minreq">
               <b>No password needed</b>&nbsp;
-              {preferCodeOnly
-                ? " We'll email you a one-time code instead."
-                : ' We email you a one-time link instead.'}{' '}
+              We&rsquo;ll email you a one-time code instead.{' '}
               If this is your first time, entering your email creates your account &mdash;
               there is no separate sign-up.
             </div>
@@ -541,40 +518,20 @@ function LoginScreen() {
 
               <h2 className="sent-h">Check your email</h2>
               <p className="sent-p">
-                {preferCodeOnly ? 'We sent a sign-in code to' : 'We sent a sign-in link to'}
+                We sent a sign-in code to
                 <br />
                 <span className="sent-addr">{email.trim()}</span>
               </p>
-              {preferCodeOnly ? (
-                <p className="sent-p">Enter the code below to sign in.</p>
-              ) : (
-                <p className="sent-p">
-                  Open that email and click the link. You&rsquo;ll be signed in automatically.
-                </p>
-              )}
+              <p className="sent-p">Enter the code below to sign in.</p>
 
-              {/* Sign-in code fallback (2026-09-29) — see the state
-                  declarations above for the full iOS home-screen-icon
-                  reasoning. Requires the Supabase project's own Magic Link
-                  email template to actually include {{ .Token }} — a
-                  dashboard setting, not something this codebase controls.
+              {/* Sign-in code (2026-09-29, simplified to code-only
+                  2026-11-03 — see this file's own header comment above).
                   Deliberately not hardcoded to a specific digit count —
                   Jim's own account, 2026-09-29, showed this project's actual
                   code is 8 digits, not Supabase's documented 6-digit
                   default; the field now accepts 4-10 digits and lets
-                  verifyOtp() itself be the authority on correctness.
-                  2026-11-01: for a detected native app/iOS home-screen icon
-                  (preferCodeOnly), the page no longer mentions "the link" at
-                  all anywhere above this point, so the old link-framed
-                  sub-heading here is simply omitted rather than reworded —
-                  the code field is the only thing offered. */}
+                  verifyOtp() itself be the authority on correctness. */}
               <form onSubmit={handleVerifyCode} noValidate>
-                {!preferCodeOnly && (
-                  <p className="sent-meta" style={{ marginTop: 4 }}>
-                    On a Home Screen icon and the link doesn&rsquo;t sign you in? Enter the
-                    sign-in code from that same email instead:
-                  </p>
-                )}
                 <div className={`fgroup ffloat${verifyError ? ' is-invalid' : ''}`} style={{ marginTop: 10 }}>
                   <input
                     className={`finput${pasteSupported ? ' finput-paste' : ''}`}
@@ -626,9 +583,7 @@ function LoginScreen() {
               )}
 
               <p className="sent-meta">
-                {preferCodeOnly
-                  ? 'The code expires in 1 hour and works once.'
-                  : 'The link expires in 1 hour and works once.'}
+                The code expires in 1 hour and works once.
                 <br />
                 Nothing yet? Check spam,{' '}
                 {cooldown > 0 ? (

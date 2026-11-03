@@ -1429,45 +1429,32 @@ export function buildSmsConsentApprovedEmailText(fields: SmsConsentApprovedEmail
 }
 
 // ----------------------------------------------------------------------------
-// Sign-in email (2026-11-01, Supabase "Send Email" Auth Hook) — owner request:
-// the magic-link sign-in email was offering a clickable link even in contexts
-// where it structurally cannot work (the native TestFlight/Capacitor app, and
-// an iOS home-screen icon — both have their own isolated storage, so a tapped
-// link always opens the device's regular browser instead of signing in where
-// the user actually is; see app/login/page.tsx's own iosStandalone/isNativeApp
-// history for the full diagnosis). /login's own copy already stopped
-// *mentioning* the link for those cases (2026-11-01, earlier same-day
-// change) — but the email itself, generated from Supabase's own built-in
-// Magic Link template, still always included a real clickable link
-// regardless, since that template has no way to know which device will
-// eventually open the message.
+// Sign-in email (2026-11-01, Supabase "Send Email" Auth Hook; simplified to
+// code-only unconditionally 2026-11-03) — owner request: the magic-link
+// sign-in email was offering a clickable link even in contexts where it
+// structurally cannot work (the native TestFlight/Capacitor app, and an iOS
+// home-screen icon — both have their own isolated storage, so a tapped link
+// always opens the device's regular browser instead of signing in where the
+// user actually is). The original fix (2026-11-01) made that link
+// conditional — omitted only in those known-broken contexts, kept everywhere
+// else (a normal browser tab, a Windows PWA) on the reasoning that it
+// genuinely worked fine there. That reasoning held until the owner reported,
+// 2026-11-03, that the code was just as fast even on a Windows PWA in
+// Chrome — a context where the link was never broken — and once the same
+// day's paste button (app/login/page.tsx) removed the link's one remaining
+// edge (fewer keystrokes), there was no context left where the link was
+// worth keeping. So this is now unconditional: every sign-in email, every
+// platform, is the code box alone, no link, no button.
 //
-// This is the actual fix: app/api/auth/send-email/route.ts is registered in
-// the Supabase Dashboard (Authentication -> Hooks -> Send Email, HTTPS) as a
-// *replacement* for Supabase's own built-in mailer — once registered, every
-// auth email (in this app's case, only ever the sign-in one; there are no
-// password-reset/invite/signup-confirmation flows to worry about) routes
-// through this hook instead, and this module decides what the email actually
-// contains. The decision of whether to omit the link is made once, up front,
-// by the *client* (app/login/page.tsx appends `?ctx=app` to the
-// `emailRedirectTo` it passes to signInWithOtp whenever preferCodeOnly is
-// true) and carried through to the hook via Supabase's own `redirect_to`
-// field — this module itself has no access to the original request's
-// platform, only whatever the route handler passes it.
-//
-// This applies to every future sign-in from those contexts, not just today's
-// beta testers — the decision lives in the request itself, not in a
-// per-tester list.
+// app/api/auth/send-email/route.ts is registered in the Supabase Dashboard
+// (Authentication -> Hooks -> Send Email, HTTPS) as a *replacement* for
+// Supabase's own built-in mailer — once registered, every auth email (in
+// this app's case, only ever the sign-in one; there are no password-reset/
+// invite/signup-confirmation flows to worry about) routes through this hook
+// instead, and this module decides what the email actually contains.
 // ----------------------------------------------------------------------------
 type SignInEmailFields = {
   code: string
-  // null specifically when the link is deliberately omitted (the contexts
-  // above) — not merely "unavailable." A missing token_hash/site_url from
-  // the hook payload is treated as a hard error by the route handler
-  // (app/api/auth/send-email/route.ts) rather than silently falling back to
-  // this null case, so a malformed payload never accidentally reads as "omit
-  // the link on purpose."
-  link: string | null
   siteUrl: string
 }
 
@@ -1476,38 +1463,35 @@ export function buildSignInEmailSubject(): string {
 }
 
 // "Add a copy/paste icon to both the presentation and use of the code"
-// (2026-11-03, owner request, same conversation that asked whether the link
-// could be dropped entirely — see this section's own 2026-11-01 header for
-// why it already is, for the contexts where it can't work). A real clickable
-// copy-to-clipboard button needs JS, which virtually every email client
-// strips from the message body, so this is a plain-text 📋 hint rather than
-// a button — emoji render reliably across clients (Outlook desktop included)
-// where an inline SVG icon often doesn't. The code box's own large,
-// letter-spaced, bold styling already makes it easy to tap-and-hold-select
-// on a phone; this just tells the reader that's the intended move. The
-// "use" half of the request (a real paste button) lives in app/login/page.tsx,
-// next to the code input field, where an actual Clipboard API call works.
+// (2026-11-03, owner request). A real clickable copy-to-clipboard button
+// needs JS, which virtually every email client strips from the message
+// body, so this is a plain-text 📋 icon rather than a button — emoji render
+// reliably across clients (Outlook desktop included) where an inline SVG
+// icon often doesn't. Deliberately platform-neutral wording ("Copy this
+// code," not "Tap and hold to copy") — the owner's own correction: "tap and
+// hold" is a mobile-only gesture and doesn't even apply on a desktop email
+// client (select-and-Ctrl+C there instead), so naming one specific gesture
+// undercuts the reason he asked for an icon in the first place, which was
+// exactly to have something that reads the same regardless of device. The
+// icon signals "this is meant to be copied"; the code box's own large,
+// letter-spaced, bold styling is what actually makes selecting it easy,
+// on any input method. The "use" half of the request (a real paste button)
+// lives in app/login/page.tsx, next to the code input field, where an
+// actual Clipboard API call works.
 function signInCodeBox(code: string): string {
   return [
     `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px 10px; margin:0 0 18px; text-align:center;">`,
     `<span style="font-size:30px; font-weight:700; letter-spacing:6px; color:${EMAIL_INK};">${escapeHtml(code)}</span>`,
-    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Tap and hold to copy</p>`,
+    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Copy this code</p>`,
     `</div>`,
   ].join('')
 }
 
 export function buildSignInEmailHtml(fields: SignInEmailFields): string {
-  const body = fields.link
-    ? [
-        `<p style="margin:0 0 18px;">Click the button below to sign in automatically.</p>`,
-        `<p style="margin:0 0 18px;">${emailButton(fields.link, 'Sign In')}</p>`,
-        `<p style="margin:0 0 10px;">Or enter this sign-in code instead:</p>`,
-        signInCodeBox(fields.code),
-      ].join('\n')
-    : [
-        `<p style="margin:0 0 18px;">You&rsquo;re signing in from the Would You Please app, so here&rsquo;s a code instead of a link &mdash; enter it on the sign-in screen:</p>`,
-        signInCodeBox(fields.code),
-      ].join('\n')
+  const body = [
+    `<p style="margin:0 0 18px;">Enter this code on the sign-in screen:</p>`,
+    signInCodeBox(fields.code),
+  ].join('\n')
 
   const footer = `<p style="margin:0; font-size:13px; color:${EMAIL_INK};">This code expires in 1 hour and can only be used once.</p>`
 
@@ -1515,18 +1499,10 @@ export function buildSignInEmailHtml(fields: SignInEmailFields): string {
 }
 
 export function buildSignInEmailText(fields: SignInEmailFields): string {
-  const lines = fields.link
-    ? [
-        'Click to sign in automatically:',
-        fields.link,
-        '',
-        'Or enter this sign-in code instead (tap and hold to copy):',
-        fields.code,
-      ]
-    : [
-        "You're signing in from the Would You Please app, so here's a code instead of a link — enter it on the sign-in screen (tap and hold to copy):",
-        '',
-        fields.code,
-      ]
+  const lines = [
+    'Enter this code on the sign-in screen:',
+    '',
+    fields.code,
+  ]
   return [...lines, '', 'This code expires in 1 hour and can only be used once.'].join('\n')
 }

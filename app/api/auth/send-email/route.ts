@@ -14,7 +14,8 @@ import {
 export const runtime = 'nodejs'
 
 /**
- * POST /api/auth/send-email — Supabase "Send Email" Auth Hook (2026-11-01).
+ * POST /api/auth/send-email — Supabase "Send Email" Auth Hook (2026-11-01;
+ * simplified to always code-only, 2026-11-03).
  * Configure this route's full URL (NEXT_PUBLIC_SITE_URL + /api/auth/send-email)
  * in the Supabase Dashboard under Authentication -> Hooks -> Send Email,
  * type HTTPS. Once registered there, Supabase stops sending auth emails
@@ -25,18 +26,19 @@ export const runtime = 'nodejs'
  * a genuinely new/non-allowlisted email before signInWithOtp is ever called,
  * so this route never needs to reason about that gate itself).
  *
- * Exists specifically so the sign-in email can genuinely omit its clickable
- * link for a context where it's known not to work (the native TestFlight/
- * Capacitor app, or an iOS home-screen icon — both have their own isolated
- * storage, so a tapped link always opens the device's regular browser
- * instead of signing in where the user actually is). Supabase's own built-in
- * template has no way to make that decision, since it has no idea which
- * device will eventually open the email. See app/src/lib/email.ts's own
- * "Sign-in email" section header comment for the full reasoning, including
- * how the decision travels from app/login/page.tsx's client-side platform
- * detection through to this route (a `?ctx=app` query param appended to the
- * `emailRedirectTo` the client passes to signInWithOtp, which Supabase
- * threads through to this hook's own payload as `email_data.redirect_to`).
+ * Exists so this module controls the sign-in email's actual content instead
+ * of Supabase's own built-in Magic Link template. Originally built to
+ * conditionally omit the clickable link for a context where it's known not
+ * to work (the native TestFlight/Capacitor app, or an iOS home-screen icon —
+ * both have their own isolated storage, so a tapped link always opens the
+ * device's regular browser instead of signing in where the user actually
+ * is) — that condition is gone as of 2026-11-03: the owner found the code
+ * just as fast even where the link worked fine (a Windows PWA in Chrome),
+ * so the email is now code-only unconditionally, every platform, and this
+ * route no longer needs to know anything about the original request's
+ * context (no more `?ctx=app` query param to read off `redirect_to`). See
+ * app/src/lib/email.ts's own "Sign-in email" section header comment for the
+ * full history.
  *
  * Signature verification (standardwebhooks, the same "Standard Webhooks"
  * spec Supabase's own docs and example Edge Functions use) is mandatory —
@@ -85,10 +87,7 @@ type SendEmailHookPayload = {
   user?: { email?: string }
   email_data?: {
     token?: string
-    token_hash?: string
     redirect_to?: string
-    email_action_type?: string
-    site_url?: string
   }
 }
 
@@ -116,37 +115,19 @@ export async function POST(request: Request) {
 
   const email = payload.user?.email
   const emailData = payload.email_data
-  if (!email || !emailData?.token || !emailData?.token_hash || !emailData?.redirect_to) {
+  if (!email || !emailData?.token || !emailData?.redirect_to) {
     return failure(400, 'Malformed hook payload.')
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) {
-    return failure(500, 'Server misconfigured: NEXT_PUBLIC_SUPABASE_URL is not set.')
-  }
-
-  // The one decision this route makes: omit the clickable link when the
-  // client (app/login/page.tsx) flagged this request as coming from a
-  // context where the link cannot work. A missing/malformed redirect_to
-  // falls back to showing the link — never worse than Supabase's own prior
-  // built-in behavior.
-  let preferCodeOnly = false
-  try {
-    preferCodeOnly = new URL(emailData.redirect_to).searchParams.get('ctx') === 'app'
-  } catch {
-    // Leave preferCodeOnly false.
-  }
-
-  const actionType = emailData.email_action_type ?? 'magiclink'
-  const verifyUrl =
-    `${supabaseUrl}/auth/v1/verify?token=${encodeURIComponent(emailData.token_hash)}` +
-    `&type=${encodeURIComponent(actionType)}&redirect_to=${encodeURIComponent(emailData.redirect_to)}`
-
+  // redirect_to is only read here now for its origin, as a fallback if
+  // NEXT_PUBLIC_SITE_URL somehow isn't set — the email itself is code-only
+  // (see this route's own header comment), so there's no verify link left
+  // to build from token_hash/email_action_type, and nothing left to decide
+  // based on redirect_to's own query string either.
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(emailData.redirect_to).origin
 
   const fields = {
     code: emailData.token,
-    link: preferCodeOnly ? null : verifyUrl,
     siteUrl,
   }
 
