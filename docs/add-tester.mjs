@@ -40,6 +40,10 @@
 // provisioned_at back to null each time, so correcting a typo'd name or
 // time zone before the person has signed in yet re-queues cleanly instead
 // of being silently ignored).
+//
+// Companion script: docs/delete-tester.mjs removes everything this script
+// adds (allowlist/queue rows, optionally an already-granted Subscriber
+// tier) — it does not touch the person's account or any of their data.
 
 import { createClient } from '@supabase/supabase-js'
 import { createInterface } from 'node:readline/promises'
