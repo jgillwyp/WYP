@@ -68,6 +68,24 @@ function friendlyAuthErrorMessage(message: string): string {
 // already has, not a separate toggle — an unchecked box already means
 // "leave no trace on this device," so remembering the email too when it's
 // unchecked would contradict that promise on a shared/public computer.
+// Clipboard glyph for the sign-in code's paste button (2026-11-03) — stroke
+// uses currentColor so it inherits .fpaste's own color (--ink-soft at rest,
+// matching .fclear's established muted-icon convention), rather than a
+// hardcoded hex the way DateTimeField.tsx's CalendarGlyph/ClockGlyph do —
+// this one needs an :active color change (globals.css), which only works if
+// the SVG itself doesn't pin its own color.
+function PasteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="6" y="4" width="12" height="17" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="9" y="2.5" width="6" height="3.5" rx="1" fill="currentColor" />
+      <line x1="8.5" y1="10" x2="15.5" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <line x1="8.5" y1="13.5" x2="15.5" y2="13.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <line x1="8.5" y1="17" x2="12.5" y2="17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const LAST_EMAIL_KEY = 'wyp.lastEmail'
 
 function getLastEmail(): string {
@@ -163,6 +181,40 @@ function LoginScreen() {
       setIosStandalone(isIOSDevice() && isStandaloneDisplay())
     })
   }, [])
+
+  // "Use" half of the owner's copy/paste request (2026-11-03) — the
+  // "presentation" half (a 📋 tap-and-hold hint on the code itself) lives in
+  // email.ts's signInCodeBox(). A real one-tap paste button is only possible
+  // here, where actual JS runs — email clients strip the script a clickable
+  // copy button in the message body would need. Feature-detected in a mount
+  // effect (never read during render) so server and first client render
+  // agree, same pattern as isNativeApp/iosStandalone above and
+  // CreateRequestForm.tsx's own voiceSupported. Hidden outright rather than
+  // shown-and-failing when the Clipboard API isn't present at all (e.g. a
+  // very old browser, or a non-HTTPS context, which this site never is) —
+  // a denied *permission* at click time is a different, expected case,
+  // handled inline in handlePasteCode below, not by hiding the button.
+  const [pasteSupported, setPasteSupported] = useState(false)
+  useEffect(() => {
+    queueMicrotask(() => {
+      setPasteSupported(typeof navigator !== 'undefined' && typeof navigator.clipboard?.readText === 'function')
+    })
+  }, [])
+
+  async function handlePasteCode() {
+    try {
+      const text = await navigator.clipboard.readText()
+      const digits = text.replace(/\D/g, '').slice(0, 10)
+      if (digits) {
+        setCode(digits)
+        setVerifyError(null)
+      }
+    } catch {
+      // Permission denied, or nothing on the clipboard — the field is still
+      // right there to type into, so this just quietly does nothing rather
+      // than interrupting with an error for what's only ever a convenience.
+    }
+  }
 
   const emailRef = useRef<HTMLInputElement>(null)
 
@@ -525,7 +577,7 @@ function LoginScreen() {
                 )}
                 <div className={`fgroup ffloat${verifyError ? ' is-invalid' : ''}`} style={{ marginTop: 10 }}>
                   <input
-                    className="finput"
+                    className={`finput${pasteSupported ? ' finput-paste' : ''}`}
                     id="otp"
                     type="text"
                     inputMode="numeric"
@@ -541,6 +593,16 @@ function LoginScreen() {
                   <label className="flabel" htmlFor="otp">
                     Sign-in code
                   </label>
+                  {pasteSupported && (
+                    <button
+                      className="fpaste"
+                      type="button"
+                      aria-label="Paste code from clipboard"
+                      onClick={handlePasteCode}
+                    >
+                      <PasteIcon />
+                    </button>
+                  )}
                 </div>
                 {verifyError && (
                   <p className="ferror" role="alert">

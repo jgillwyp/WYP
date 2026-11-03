@@ -1475,8 +1475,25 @@ export function buildSignInEmailSubject(): string {
   return 'Your Would You Please sign-in code'
 }
 
+// "Add a copy/paste icon to both the presentation and use of the code"
+// (2026-11-03, owner request, same conversation that asked whether the link
+// could be dropped entirely — see this section's own 2026-11-01 header for
+// why it already is, for the contexts where it can't work). A real clickable
+// copy-to-clipboard button needs JS, which virtually every email client
+// strips from the message body, so this is a plain-text 📋 hint rather than
+// a button — emoji render reliably across clients (Outlook desktop included)
+// where an inline SVG icon often doesn't. The code box's own large,
+// letter-spaced, bold styling already makes it easy to tap-and-hold-select
+// on a phone; this just tells the reader that's the intended move. The
+// "use" half of the request (a real paste button) lives in app/login/page.tsx,
+// next to the code input field, where an actual Clipboard API call works.
 function signInCodeBox(code: string): string {
-  return `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px; margin:0 0 18px; text-align:center;"><span style="font-size:30px; font-weight:700; letter-spacing:6px; color:${EMAIL_INK};">${escapeHtml(code)}</span></div>`
+  return [
+    `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px 10px; margin:0 0 18px; text-align:center;">`,
+    `<span style="font-size:30px; font-weight:700; letter-spacing:6px; color:${EMAIL_INK};">${escapeHtml(code)}</span>`,
+    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Tap and hold to copy</p>`,
+    `</div>`,
+  ].join('')
 }
 
 export function buildSignInEmailHtml(fields: SignInEmailFields): string {
@@ -1503,11 +1520,11 @@ export function buildSignInEmailText(fields: SignInEmailFields): string {
         'Click to sign in automatically:',
         fields.link,
         '',
-        'Or enter this sign-in code instead:',
+        'Or enter this sign-in code instead (tap and hold to copy):',
         fields.code,
       ]
     : [
-        "You're signing in from the Would You Please app, so here's a code instead of a link — enter it on the sign-in screen:",
+        "You're signing in from the Would You Please app, so here's a code instead of a link — enter it on the sign-in screen (tap and hold to copy):",
         '',
         fields.code,
       ]

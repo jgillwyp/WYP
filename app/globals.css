@@ -919,6 +919,53 @@ body {
   outline-offset: 1px;
 }
 
+/* Paste-code button, /login's sign-in-code field (2026-11-03, owner request:
+   "add a copy/paste icon to both the presentation and use of the code") —
+   same absolute-positioned-inside-.ffloat convention as .fclear above, sized
+   up slightly (28px vs 24px) since this is the field's only action, not one
+   of a crowded pair. Active state uses --brand-blue rather than .fclear's
+   --alert-red — pasting isn't a destructive action the way clearing a field
+   is, so it gets the app's ordinary "something forward-moving just
+   happened" color instead (same token .updatebanner-reload's text already
+   uses). .finput-paste reserves room on the input itself so typed/pasted
+   digits never run under the button. */
+.fpaste {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.fpaste svg {
+  width: 18px;
+  height: 18px;
+}
+
+.fpaste:active {
+  background: var(--row-tint);
+  color: var(--brand-blue);
+}
+
+.fpaste:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 1px;
+}
+
+.finput-paste {
+  padding-right: 38px;
+}
+
 /* Close button (2026-09-17, owner-reported) — Chrome's own native Date
    picker dropdown offers "Clear" and "Today" text links, and clicking a
    date also closes the dropdown as a side effect; the native Time picker
@@ -4929,6 +4976,26 @@ body {
    living inside .frame-none/.app the way every other band in this app
    does. z-index 20 (above .modal's own 11) since it should stay visible
    even if a modal happens to be open when a new build is detected.
+
+   Bottom safe-area padding + tap-highlight reset (2026-11-02, owner-
+   reported: Reload took 5+ taps, misread as "Upload" at this size; the
+   iPhone screen "jumped left or right" and Android "shrank to a
+   multi-app view" while trying). Root cause: this is the only
+   position:fixed/bottom:0 element in the whole app, and it predates
+   layout.tsx's own 2026-10-29 viewport-fit:cover fix (added for the
+   header/status-bar overlap). Once the page draws edge-to-edge, a
+   bottom:0 element with no bottom inset sits IN the strip the OS
+   reserves for its own gestures — the iPhone's home-indicator swipe
+   zone, Android's gesture-nav bar — so a tap there is read as an OS
+   edge-swipe (iOS: back/forward, the "jump") or swipe-up-to-Recents
+   (Android: the shrunken multi-app overview) instead of reaching the
+   button. The "shaded area over half of Cancel" on a long-press is that
+   same OS gesture-hint overlay, not a CSS overlap between the two
+   buttons. padding-bottom now adds env(safe-area-inset-bottom) to clear
+   that zone; -webkit-tap-highlight-color/user-select/touch-action on
+   the buttons remove the platform's own default highlight/selection/
+   double-tap handling so nothing but an ordinary tap is left to
+   misinterpret.
    ========================================================================= */
 .updatebanner {
   position: fixed;
@@ -4943,7 +5010,7 @@ body {
   gap: 10px;
   background: var(--brand-blue);
   color: #fff;
-  padding: 10px var(--pad);
+  padding: 10px var(--pad) calc(10px + env(safe-area-inset-bottom));
   font-size: 13px;
   line-height: 1.3;
   box-shadow: 0 -2px 10px rgba(20, 30, 50, .18);
@@ -4951,7 +5018,7 @@ body {
 
 .updatebanner-acts {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -4960,8 +5027,12 @@ body {
   font-size: 13px;
   font-weight: 700;
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 8px 14px;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
 }
 
 .updatebanner-reload {
