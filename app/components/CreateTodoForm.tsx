@@ -533,11 +533,17 @@ export default function CreateTodoForm() {
 
   // Features band — retain/discard confirm dialog (Stage 3, 2026-11-02),
   // same shape and same reasoning as CreateRequestForm.tsx's identical
-  // pair of declarations.
+  // pair of declarations. body/retainLabel/clearLabel/extra (2026-11-03)
+  // added for Reminders' own richer dialog — see CreateRequestForm.tsx's
+  // identical declaration for the full reasoning.
   const [discardPrompt, setDiscardPrompt] = useState<{
     label: string
+    body?: string
+    retainLabel?: string
+    clearLabel?: string
     onClear: () => void
     onRetain: () => void
+    extra?: { label: string; onClick: () => void }
   } | null>(null)
 
   function attemptFeatureUncheck(label: string, hasStagedData: boolean, onClear: () => void, onRetain: () => void) {
@@ -1241,6 +1247,33 @@ export default function CreateTodoForm() {
                       if (e.target.checked) {
                         setTodoRemindersEnabled(true)
                       } else {
+                        // Reminders gets its own dialog, not the generic
+                        // attemptFeatureUncheck one (2026-11-03) — see
+                        // CreateRequestForm.tsx's identical block for the
+                        // full reasoning. Trigger is "is anything currently
+                        // on," not "did the user change anything," since
+                        // untouched account defaults can still have Day
+                        // Before etc. on.
+                        const anyReminderActive =
+                          form.reminderEnabled ||
+                          form.reminderDayOfEnabled ||
+                          form.overdueReminderEnabled ||
+                          form.reminderMinutesBeforeEnabled
+
+                        if (!anyReminderActive) {
+                          setTodoRemindersEnabled(false)
+                          return
+                        }
+
+                        const clearAllReminders = () =>
+                          setForm((f) => ({
+                            ...f,
+                            reminderEnabled: false,
+                            reminderDayOfEnabled: false,
+                            overdueReminderEnabled: false,
+                            reminderMinutesBeforeEnabled: false,
+                          }))
+
                         const snap = reminderDefaultsSnapshotRef.current
                         const remindersChanged = snap
                           ? form.reminderEnabled !== snap.reminderEnabled ||
@@ -1248,26 +1281,47 @@ export default function CreateTodoForm() {
                             form.overdueReminderEnabled !== snap.overdueReminderEnabled ||
                             form.reminderMinutesBeforeEnabled !== snap.reminderMinutesBeforeEnabled ||
                             form.reminderMinutesBeforeValue !== snap.reminderMinutesBeforeValue
-                          : form.reminderEnabled ||
-                            form.reminderDayOfEnabled ||
-                            form.overdueReminderEnabled ||
-                            form.reminderMinutesBeforeEnabled
-                        attemptFeatureUncheck(
-                          'Reminders',
-                          remindersChanged,
-                          () => {
-                            setTodoRemindersEnabled(false)
-                            setForm((f) => ({
-                              ...f,
-                              reminderEnabled: snap?.reminderEnabled ?? false,
-                              reminderDayOfEnabled: snap?.reminderDayOfEnabled ?? false,
-                              overdueReminderEnabled: snap?.overdueReminderEnabled ?? false,
-                              reminderMinutesBeforeEnabled: snap?.reminderMinutesBeforeEnabled ?? false,
-                              reminderMinutesBeforeValue: snap?.reminderMinutesBeforeValue ?? f.reminderMinutesBeforeValue,
-                            }))
-                          },
-                          () => setTodoRemindersEnabled(false)
-                        )
+                          : true
+
+                        if (!remindersChanged) {
+                          setDiscardPrompt({
+                            label: 'Reminders',
+                            body: 'There are default values set for Reminders.',
+                            retainLabel: 'Retain Defaults',
+                            clearLabel: 'Clear Defaults',
+                            onRetain: () => setTodoRemindersEnabled(false),
+                            onClear: () => {
+                              setTodoRemindersEnabled(false)
+                              clearAllReminders()
+                            },
+                          })
+                        } else {
+                          setDiscardPrompt({
+                            label: 'Reminders',
+                            body: 'There are default values set for Reminders.',
+                            retainLabel: 'Retain',
+                            clearLabel: 'Clear Changes',
+                            onRetain: () => setTodoRemindersEnabled(false),
+                            onClear: () => {
+                              setTodoRemindersEnabled(false)
+                              setForm((f) => ({
+                                ...f,
+                                reminderEnabled: snap?.reminderEnabled ?? false,
+                                reminderDayOfEnabled: snap?.reminderDayOfEnabled ?? false,
+                                overdueReminderEnabled: snap?.overdueReminderEnabled ?? false,
+                                reminderMinutesBeforeEnabled: snap?.reminderMinutesBeforeEnabled ?? false,
+                                reminderMinutesBeforeValue: snap?.reminderMinutesBeforeValue ?? f.reminderMinutesBeforeValue,
+                              }))
+                            },
+                            extra: {
+                              label: 'Clear All',
+                              onClick: () => {
+                                setTodoRemindersEnabled(false)
+                                clearAllReminders()
+                              },
+                            },
+                          })
+                        }
                       }
                     }}
                   />
@@ -1286,8 +1340,12 @@ export default function CreateTodoForm() {
                     </p>
                   </div>
                   <p className="checknote">
-                    There is a value set for {discardPrompt.label}. Keep it in case you turn{' '}
-                    {discardPrompt.label} back on, or clear it now?
+                    {discardPrompt.body ?? (
+                      <>
+                        There is a value set for {discardPrompt.label}. Keep it in case you turn{' '}
+                        {discardPrompt.label} back on, or clear it now?
+                      </>
+                    )}
                   </p>
                   <div className="modalacts" style={{ marginTop: 14 }}>
                     <button
@@ -1298,8 +1356,20 @@ export default function CreateTodoForm() {
                         setDiscardPrompt(null)
                       }}
                     >
-                      Retain
+                      {discardPrompt.retainLabel ?? 'Retain'}
                     </button>
+                    {discardPrompt.extra && (
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() => {
+                          discardPrompt.extra!.onClick()
+                          setDiscardPrompt(null)
+                        }}
+                      >
+                        {discardPrompt.extra.label}
+                      </button>
+                    )}
                     <button
                       className="btn"
                       type="button"
@@ -1308,7 +1378,7 @@ export default function CreateTodoForm() {
                         setDiscardPrompt(null)
                       }}
                     >
-                      Clear
+                      {discardPrompt.clearLabel ?? 'Clear'}
                     </button>
                   </div>
                 </div>

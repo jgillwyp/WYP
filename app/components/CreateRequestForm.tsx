@@ -829,13 +829,32 @@ export default function CreateRequestForm() {
   // hiding the section immediately — "a dialog asking them whether to
   // retain or clear/erase the value they set – with a default of
   // Clear/Erase." Reuses the app's existing .scrim/.modal pattern (§6.12)
-  // rather than a one-off. label is shown in the dialog's own title/body;
-  // onClear/onRetain are each feature's own pair of callbacks (set the
-  // checkbox false, and either reset or leave its underlying value alone).
+  // rather than a one-off. label is shown in the dialog's own title (and,
+  // for the four simple checkboxes, the default body text too); onClear/
+  // onRetain are each feature's own pair of callbacks (set the checkbox
+  // false, and either reset or leave its underlying value alone).
+  //
+  // body/retainLabel/clearLabel/extra (2026-11-03, Reminders-specific
+  // owner request) — Reminders needed a genuinely different dialog from
+  // the other four, not just different wording. Owner's own realization:
+  // Reminders fields are pre-filled from the account's own defaults
+  // regardless of whether the Reminders checkbox is shown, and hiding the
+  // checkbox never changes what actually gets sent (CLAUDE.md's own
+  // "Show Reminders... pure UI-visibility toggle" rule) — so a user who
+  // unchecks Reminders believing that stops the recipient's reminders is
+  // simply wrong unless the four underlying fields are actually forced
+  // off. The generic dialog's old body ("There is a value set for X...")
+  // and single Clear action don't convey or offer that. These four fields
+  // are optional, undefined for the four simple checkboxes, which render
+  // with their original body/"Retain"/"Clear" exactly as before.
   const [discardPrompt, setDiscardPrompt] = useState<{
     label: string
+    body?: string
+    retainLabel?: string
+    clearLabel?: string
     onClear: () => void
     onRetain: () => void
+    extra?: { label: string; onClick: () => void }
   } | null>(null)
 
   function attemptFeatureUncheck(label: string, hasStagedData: boolean, onClear: () => void, onRetain: () => void) {
@@ -1459,14 +1478,44 @@ export default function CreateRequestForm() {
                       if (e.target.checked) {
                         setRequestRemindersEnabled(true)
                       } else {
-                        // Owner-reported, 2026-11-02: the four reminder
-                        // fields are pre-filled from the account's own
-                        // defaults regardless of whether Reminders is
-                        // checked — comparing against the snapshot taken
-                        // when those defaults loaded (not just "is
-                        // anything true at all") means unchecking Reminders
-                        // without touching any of the four only prompts if
-                        // the snapshot itself failed to load.
+                        // Reminders gets its own dialog, not the generic
+                        // attemptFeatureUncheck one (2026-11-03, owner's own
+                        // realization): hiding this checkbox has never
+                        // actually stopped reminders from sending — the four
+                        // underlying fields keep whatever value they hold
+                        // regardless of whether this section is shown
+                        // (CLAUDE.md's own "Show Reminders... pure UI-
+                        // visibility toggle" rule) — so a user who unchecks
+                        // Reminders believing that silences the recipient is
+                        // simply wrong unless those four fields are actually
+                        // forced off. The trigger condition is therefore
+                        // "is anything currently on," not "did the user
+                        // change anything" — pristine, untouched account
+                        // defaults can still have Day Before etc. on, and
+                        // that's exactly the case that needs a dialog most.
+                        const anyReminderActive =
+                          form.reminderEnabled ||
+                          form.reminderDayOfEnabled ||
+                          form.overdueReminderEnabled ||
+                          form.reminderMinutesBeforeEnabled
+
+                        if (!anyReminderActive) {
+                          // Every field is already off — hiding the section
+                          // changes nothing real, so there's nothing to ask
+                          // about.
+                          setRequestRemindersEnabled(false)
+                          return
+                        }
+
+                        const clearAllReminders = () =>
+                          setForm((f) => ({
+                            ...f,
+                            reminderEnabled: false,
+                            reminderDayOfEnabled: false,
+                            overdueReminderEnabled: false,
+                            reminderMinutesBeforeEnabled: false,
+                          }))
+
                         const snap = reminderDefaultsSnapshotRef.current
                         const remindersChanged = snap
                           ? form.reminderEnabled !== snap.reminderEnabled ||
@@ -1474,32 +1523,56 @@ export default function CreateRequestForm() {
                             form.overdueReminderEnabled !== snap.overdueReminderEnabled ||
                             form.reminderMinutesBeforeEnabled !== snap.reminderMinutesBeforeEnabled ||
                             form.reminderMinutesBeforeValue !== snap.reminderMinutesBeforeValue
-                          : form.reminderEnabled ||
-                            form.reminderDayOfEnabled ||
-                            form.overdueReminderEnabled ||
-                            form.reminderMinutesBeforeEnabled
-                        attemptFeatureUncheck(
-                          'Reminders',
-                          remindersChanged,
-                          () => {
-                            setRequestRemindersEnabled(false)
-                            // Clear reverts to the pristine defaults, not a
-                            // hardcoded all-off — "clear what I changed,"
-                            // not "clear what was never touched" (a
-                            // default of Day Before = true shouldn't get
-                            // turned off by Clear when it was never the
-                            // thing that changed).
-                            setForm((f) => ({
-                              ...f,
-                              reminderEnabled: snap?.reminderEnabled ?? false,
-                              reminderDayOfEnabled: snap?.reminderDayOfEnabled ?? false,
-                              overdueReminderEnabled: snap?.overdueReminderEnabled ?? false,
-                              reminderMinutesBeforeEnabled: snap?.reminderMinutesBeforeEnabled ?? false,
-                              reminderMinutesBeforeValue: snap?.reminderMinutesBeforeValue ?? f.reminderMinutesBeforeValue,
-                            }))
-                          },
-                          () => setRequestRemindersEnabled(false)
-                        )
+                          : true
+
+                        if (!remindersChanged) {
+                          // Untouched account defaults — two buttons:
+                          // Retain Defaults (leave them exactly as they are)
+                          // or Clear Defaults (force all four off for real).
+                          setDiscardPrompt({
+                            label: 'Reminders',
+                            body: 'There are default values set for Reminders.',
+                            retainLabel: 'Retain Defaults',
+                            clearLabel: 'Clear Defaults',
+                            onRetain: () => setRequestRemindersEnabled(false),
+                            onClear: () => {
+                              setRequestRemindersEnabled(false)
+                              clearAllReminders()
+                            },
+                          })
+                        } else {
+                          // User has edited at least one field away from the
+                          // account defaults — three buttons: Retain (keep
+                          // the edits), Clear Changes (revert to the
+                          // pristine defaults, same as the old single Clear
+                          // action), or Clear All (force all four off,
+                          // regardless of what the defaults were).
+                          setDiscardPrompt({
+                            label: 'Reminders',
+                            body: 'There are default values set for Reminders.',
+                            retainLabel: 'Retain',
+                            clearLabel: 'Clear Changes',
+                            onRetain: () => setRequestRemindersEnabled(false),
+                            onClear: () => {
+                              setRequestRemindersEnabled(false)
+                              setForm((f) => ({
+                                ...f,
+                                reminderEnabled: snap?.reminderEnabled ?? false,
+                                reminderDayOfEnabled: snap?.reminderDayOfEnabled ?? false,
+                                overdueReminderEnabled: snap?.overdueReminderEnabled ?? false,
+                                reminderMinutesBeforeEnabled: snap?.reminderMinutesBeforeEnabled ?? false,
+                                reminderMinutesBeforeValue: snap?.reminderMinutesBeforeValue ?? f.reminderMinutesBeforeValue,
+                              }))
+                            },
+                            extra: {
+                              label: 'Clear All',
+                              onClick: () => {
+                                setRequestRemindersEnabled(false)
+                                clearAllReminders()
+                              },
+                            },
+                          })
+                        }
                       }
                     }}
                   />
@@ -1518,8 +1591,12 @@ export default function CreateRequestForm() {
                     </p>
                   </div>
                   <p className="checknote">
-                    There is a value set for {discardPrompt.label}. Keep it in case you turn{' '}
-                    {discardPrompt.label} back on, or clear it now?
+                    {discardPrompt.body ?? (
+                      <>
+                        There is a value set for {discardPrompt.label}. Keep it in case you turn{' '}
+                        {discardPrompt.label} back on, or clear it now?
+                      </>
+                    )}
                   </p>
                   <div className="modalacts" style={{ marginTop: 14 }}>
                     <button
@@ -1530,8 +1607,20 @@ export default function CreateRequestForm() {
                         setDiscardPrompt(null)
                       }}
                     >
-                      Retain
+                      {discardPrompt.retainLabel ?? 'Retain'}
                     </button>
+                    {discardPrompt.extra && (
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() => {
+                          discardPrompt.extra!.onClick()
+                          setDiscardPrompt(null)
+                        }}
+                      >
+                        {discardPrompt.extra.label}
+                      </button>
+                    )}
                     <button
                       className="btn"
                       type="button"
@@ -1540,7 +1629,7 @@ export default function CreateRequestForm() {
                         setDiscardPrompt(null)
                       }}
                     >
-                      Clear
+                      {discardPrompt.clearLabel ?? 'Clear'}
                     </button>
                   </div>
                 </div>
