@@ -1269,11 +1269,14 @@ export default function CreateTodoForm() {
                   <span>Reminders</span>
                 </label>
               </div>
-              {/* No "and other options" phrase here — Jim: "For Create
-                  ToDos – there are currently no other options." */}
+              {/* Collapsed from a full "Note: Defaults for..." sentence to
+                  just this link, 2026-11-03 — Jim: "too wordy... all of the
+                  explanation can be a single underlined link." Supersedes
+                  the earlier "no 'and other options' phrase here" wording
+                  difference from Create Request's own version — both
+                  screens now read identically. */}
               <p className="featuresband-note">
-                <strong>Note:</strong> Defaults for Feature check boxes and values for
-                Reminders are set in <Link href="/account?open=todo">Housekeeping, Account Options</Link>.
+                <Link href="/account?open=todo">Manage Feature defaults</Link>
               </p>
             </div>
 
