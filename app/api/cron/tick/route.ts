@@ -311,6 +311,7 @@ async function handle(request: Request) {
     reminderDigests: 0,
     overdueDigests: 0,
     repeatsGenerated: 0,
+    testersProvisioned: 0,
     errors: 0,
   }
 
@@ -1183,6 +1184,32 @@ async function handle(request: Request) {
 
     await sb.from('requests').update({ repeat_next_generated_at: now.toISOString() }).eq('id', row.id)
     counts.repeatsGenerated += 1
+  }
+
+  // Phase F — pending private-tester provisioning (2026-11-03, migration
+  // 087). Owner: "could we just make a modified version of this run against
+  // the whole database of testers every hour?" — replaces the old manual
+  // "run docs/add-private-tester.sql again after they sign in" step.
+  // add-tester.mjs queues a row in pending_tester_setup the moment Jim adds
+  // someone; provision_pending_testers() (the SQL function itself, not
+  // duplicated here) finds any row whose email now has a matching
+  // auth.users account and backfills profiles.display_name/time_zone (and
+  // tier/subscription_renewal_date, if the tester was queued for Subscriber
+  // access) in one atomic pass, same values set_tier_for_testing('subscriber')
+  // itself writes. One RPC call, not a client-side loop — querying
+  // auth.users needs a SECURITY DEFINER function regardless (the auth
+  // schema isn't reachable through the ordinary REST client), so the whole
+  // per-row loop belongs there rather than half in SQL and half here.
+  // Deliberately runs after the SMTP-configured early-return above, same as
+  // every other phase in this route — this phase sends no email itself, but
+  // SMTP being configured is already this app's working assumption for
+  // every live deployment, so there's no real-world case where that early
+  // return would delay a tester's own provisioning.
+  const { data: provisionedCount, error: provisionError } = await sb.rpc('provision_pending_testers')
+  if (provisionError) {
+    counts.errors += 1
+  } else {
+    counts.testersProvisioned = provisionedCount ?? 0
   }
 
   return Response.json({ ok: true, counts }, { status: 200 })

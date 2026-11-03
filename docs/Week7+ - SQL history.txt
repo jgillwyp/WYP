@@ -741,3 +741,130 @@ grant update (todo_repeat_enabled) on public.profiles to authenticated;
 --   -- by default), and that turning each on/off actually shows/hides the
 --   -- Add Repeat band on the matching Create/Detail screens.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 087 (2026-11-03) -- Automates the "run before AND after sign-up"
+-- private-tester setup (docs/add-private-tester.sql) so Jim no longer has to
+-- remember the second half. DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Jim: "Is there any reason we couldn't just make a modified version of this
+-- run against the whole database of testers every hour? And create a
+-- prompted version to make it easier for me to add testers." Two pieces:
+--
+-- 1. public.pending_tester_setup -- one row per tester Jim has added but
+--    whose profiles row doesn't exist yet (no auth.users row until their
+--    first sign-in, same reason the old script's own profiles UPDATEs
+--    silently affected zero rows if run too early). provisioned_at is null
+--    until the backfill below actually completes for that email -- a
+--    second add-tester.mjs run for the same email resets it back to null
+--    (see that script), so correcting a typo'd name before someone has
+--    signed in yet re-queues cleanly rather than being silently ignored.
+--    No RLS policies, no anon/authenticated grant -- same deny-all posture
+--    as beta_allowlist/tier_toggle_allowlist/app_settings, reachable only
+--    through the function below (service_role) and add-tester.mjs itself
+--    (also service_role).
+--
+-- 2. provision_pending_testers() -- does the "after sign-up" half of the old
+--    four-statement script in one atomic pass: for every still-unprovisioned
+--    row, look up auth.users by email (same auth-schema-join pattern
+--    get_contact_request_counts/can_create_account already use), and if a
+--    match now exists, set profiles.display_name/time_zone, and -- per
+--    Jim's own choice when asked ("Auto-grant Subscriber tier") -- tier and
+--    subscription_renewal_date too when grant_subscriber is true, matching
+--    exactly what set_tier_for_testing('subscriber') itself writes
+--    (migration 047's own version), so a provisioned tester is
+--    indistinguishable from one who flipped the Account Options checkbox
+--    themselves. service_role-only grant -- this never runs as a signed-in
+--    user, only from the cron route (Phase F, app/api/cron/tick/route.ts)
+--    and conceivably by hand from the SQL editor for a manual catch-up.
+--
+-- Deliberately does NOT touch beta_allowlist/tier_toggle_allowlist itself --
+-- those inserts work immediately (no auth.users row needed) and now live in
+-- add-tester.mjs's own "before sign-up" half, run once, same moment as
+-- queuing this table's own row. Nothing about docs/add-private-tester.sql
+-- is removed -- it's still the fallback if add-tester.mjs can't be run for
+-- some reason (e.g. no Node available), just no longer the primary path.
+--
+-- time_zone is coalesced against the existing value (not overwritten blindly)
+-- in case a tester somehow already has one by the time this runs -- mirrors
+-- the same defensive coalesce every other owner-initiated time_zone write in
+-- this app already uses (Add Contact/Contact Detail's own browser-detection
+-- fallback).
+-- ============================================================================
+
+create table public.pending_tester_setup (
+  email text primary key,
+  display_name text not null,
+  time_zone text,
+  grant_subscriber boolean not null default true,
+  requested_at timestamptz not null default now(),
+  provisioned_at timestamptz
+);
+
+alter table public.pending_tester_setup enable row level security;
+-- No policies -- service_role only (the cron route and add-tester.mjs),
+-- same deny-all pattern as beta_allowlist/tier_toggle_allowlist/app_settings.
+
+create or replace function public.provision_pending_testers()
+returns integer
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_provisioned integer := 0;
+  v_row record;
+  v_user_id uuid;
+begin
+  for v_row in
+    select email, display_name, time_zone, grant_subscriber
+    from public.pending_tester_setup
+    where provisioned_at is null
+  loop
+    select id into v_user_id from auth.users where lower(email) = v_row.email;
+
+    if v_user_id is not null then
+      if v_row.grant_subscriber then
+        update public.profiles
+          set display_name = v_row.display_name,
+              time_zone = coalesce(v_row.time_zone, time_zone),
+              tier = 'subscriber',
+              subscription_renewal_date = current_date + interval '365 days'
+          where id = v_user_id;
+      else
+        update public.profiles
+          set display_name = v_row.display_name,
+              time_zone = coalesce(v_row.time_zone, time_zone)
+          where id = v_user_id;
+      end if;
+
+      update public.pending_tester_setup
+        set provisioned_at = now()
+        where email = v_row.email;
+
+      v_provisioned := v_provisioned + 1;
+    end if;
+  end loop;
+
+  return v_provisioned;
+end;
+$$;
+
+revoke all on function public.provision_pending_testers() from public;
+grant execute on function public.provision_pending_testers() to service_role;
+
+-- Verify after running:
+--   select column_name from information_schema.columns
+--     where table_name = 'pending_tester_setup';
+--     -- should list email, display_name, time_zone, grant_subscriber,
+--     -- requested_at, provisioned_at
+--   select proname from pg_proc where proname = 'provision_pending_testers';
+--   -- Then, live: add a test row by hand --
+--   --   insert into public.pending_tester_setup (email, display_name, time_zone)
+--   --     values ('you+test@example.com', 'Test Name', 'America/Los_Angeles');
+--   -- -- run select public.provision_pending_testers(); directly (as
+--   -- yourself, not service_role) -- should return 0 and leave
+--   -- provisioned_at null, since no matching auth.users row exists yet.
+--   -- Then delete that test row:
+--   --   delete from public.pending_tester_setup where email = 'you+test@example.com';
+-- ============================================================================
