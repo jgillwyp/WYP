@@ -1084,7 +1084,12 @@ export default function CreateTodoForm() {
                 picked for Date's own Due/Done Date values, rather than a
                 separate prompt per feature. */}
             <div className="featuresband">
-              <span className="featuresband-label">Features — for this ToDo</span>
+              {/* "Features - Manage default settings" on one line,
+                  2026-11-03 — see CreateRequestForm.tsx's identical comment
+                  for the full reasoning. */}
+              <span className="featuresband-label">
+                Features - <Link href="/account?open=todo" className="featuresband-link">Manage default settings</Link>
+              </span>
               <div className="featuresband-row">
                 <label className="featurecheck">
                   <input
@@ -1269,15 +1274,6 @@ export default function CreateTodoForm() {
                   <span>Reminders</span>
                 </label>
               </div>
-              {/* Collapsed from a full "Note: Defaults for..." sentence to
-                  just this link, 2026-11-03 — Jim: "too wordy... all of the
-                  explanation can be a single underlined link." Supersedes
-                  the earlier "no 'and other options' phrase here" wording
-                  difference from Create Request's own version — both
-                  screens now read identically. */}
-              <p className="featuresband-note">
-                <Link href="/account?open=todo">Manage Feature defaults</Link>
-              </p>
             </div>
 
             {discardPrompt && (

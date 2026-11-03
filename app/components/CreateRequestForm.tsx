@@ -1339,7 +1339,16 @@ export default function CreateRequestForm() {
                 organic wrap across all five, so a phone-width reflow can't
                 split mid-row. */}
             <div className="featuresband">
-              <span className="featuresband-label">Features — for this Request</span>
+              {/* "Features - Manage default settings" on one line,
+                  2026-11-03 — Jim: saves another line of vertical space
+                  versus the separate note paragraph this replaces.
+                  "Features -" stays black/bold to match the checkbox
+                  labels next to it (.featurecheck span); the link is
+                  intentionally non-bold so it doesn't compete with that as
+                  the first thing read in the band. */}
+              <span className="featuresband-label">
+                Features - <Link href="/account?open=request" className="featuresband-link">Manage default settings</Link>
+              </span>
               <div className="featuresband-row">
                 <label className="featurecheck">
                   <input
@@ -1497,12 +1506,6 @@ export default function CreateRequestForm() {
                   <span>Reminders</span>
                 </label>
               </div>
-              {/* Collapsed from a full "Note: Defaults for..." sentence to
-                  just this link, 2026-11-03 — Jim: "too wordy... all of the
-                  explanation can be a single underlined link." */}
-              <p className="featuresband-note">
-                <Link href="/account?open=request">Manage Feature defaults</Link>
-              </p>
             </div>
 
             {discardPrompt && (

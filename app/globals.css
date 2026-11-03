@@ -1750,12 +1750,27 @@ body {
   margin-bottom: 14px;
 }
 
+/* Combined "Features - Manage default settings" onto one line, 2026-11-03
+   (was a standalone "Features — for this Request/ToDo" label plus a
+   separate .featuresband-note paragraph below the checkbox rows — Jim:
+   saves another line of vertical height). color switched from
+   --brand-blue to --ink here too, same request — "Features -" now matches
+   .featurecheck span's own black/bold styling instead of standing out in
+   blue; .featuresband-link (nested inside this element) carries the blue
+   underline instead, deliberately non-bold so it doesn't compete with
+   "Features" as the first thing read. */
 .featuresband-label {
   display: block;
   font-size: 13px;
   font-weight: 700;
-  color: var(--brand-blue);
+  color: var(--ink);
   margin-bottom: 8px;
+}
+
+.featuresband-link {
+  font-weight: 400;
+  color: var(--brand-blue);
+  text-decoration: underline;
 }
 
 .featuresband-row {
@@ -1801,18 +1816,6 @@ body {
 .featurecheck-disabled input,
 .featurecheck-disabled span {
   cursor: not-allowed;
-}
-
-.featuresband-note {
-  font-size: 12px;
-  color: var(--ink-soft);
-  margin: 8px 0 0;
-}
-
-.featuresband-note a {
-  color: var(--brand-blue);
-  font-weight: 700;
-  text-decoration: underline;
 }
 
 /* "Minutes before" default stepper (migration 077, 2026-10-09,
