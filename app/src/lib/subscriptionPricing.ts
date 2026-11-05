@@ -31,18 +31,34 @@ export function parseIsoDate(iso: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1)
 }
 
-// Buy-Add'l pricing rule, confirmed with Jim: less than 6 months remaining
-// until the Renewal Date -> $5 per 5 GB block (discounted); otherwise $10
-// per 5 GB block. No known Renewal Date reads as the normal, undiscounted
-// rate.
-export function isWithinSixMonths(renewalDate: string | null): boolean {
-  if (!renewalDate) return false
-  const sixMonthsOut = new Date()
-  sixMonthsOut.setMonth(sixMonthsOut.getMonth() + 6)
-  return parseIsoDate(renewalDate).getTime() <= sixMonthsOut.getTime()
+// Additional storage, redesigned 2026-11-04 from a one-time purchase into a
+// genuine recurring add-on: it rides the SAME Stripe Subscription and
+// billing cycle as the base plan (a second subscription item), rather than
+// a separate payment. Jim's own design: "it is offered at $1/mo for each
+// incremental 5GBs... [or] Annual additional $12/5GB... That way the period
+// doesn't matter and there are no periodic incremental charges - there is
+// just a higher rate." The old "$6 if <6 months remain" wrinkle is handled
+// by Stripe's own native day-by-day proration when a block is added
+// mid-cycle (Jim's confirmed choice over hand-rolling a flat 2-tier rate),
+// not by any logic here.
+export const STORAGE_BLOCK_GB = 5
+export const STORAGE_MONTHLY_RATE_PER_BLOCK = 1
+export const STORAGE_ANNUAL_RATE_PER_BLOCK = 12
+
+export type SubscriptionCadence = 'annual' | 'monthly'
+
+export function storageRatePerBlock(cadence: SubscriptionCadence): number {
+  return cadence === 'annual' ? STORAGE_ANNUAL_RATE_PER_BLOCK : STORAGE_MONTHLY_RATE_PER_BLOCK
 }
 
-export function computeAddlStoragePrice(renewalDate: string | null, targetGb: 5 | 10): number {
-  const perBlock = isWithinSixMonths(renewalDate) ? 5 : 10
-  return (targetGb / 5) * perBlock
+// A reduction is allowed, per Jim, but never below whatever is actually
+// occupied right now — rounds usage up to the next whole 5 GB block, floored
+// at the base 5 GB every account already has. GB_BYTES matches
+// getOwnerStorageStatus()'s own 1024-based unit (app/api/attachments/
+// _shared.ts) so the two never disagree on where the line falls.
+const GB_BYTES = 1024 * 1024 * 1024
+
+export function minAllowedStorageGb(usedBytes: number): number {
+  const usedBlocks = Math.ceil(usedBytes / (STORAGE_BLOCK_GB * GB_BYTES))
+  return Math.max(STORAGE_BLOCK_GB, usedBlocks * STORAGE_BLOCK_GB)
 }

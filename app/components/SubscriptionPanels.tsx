@@ -1,14 +1,17 @@
 'use client'
 
-import { type CSSProperties, useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 
 import { supabase } from '@/lib/supabaseClient'
 import {
   ANNUAL_FIRST_YEAR_PRICE,
   ANNUAL_RENEWAL_PRICE,
   MONTHLY_PRICE,
+  STORAGE_ANNUAL_RATE_PER_BLOCK,
+  STORAGE_BLOCK_GB,
+  STORAGE_MONTHLY_RATE_PER_BLOCK,
   TESTER_FIRST_YEAR_PRICE,
-  computeAddlStoragePrice,
+  minAllowedStorageGb,
   parseIsoDate,
   type SubscriptionPlan,
 } from '@/lib/subscriptionPricing'
@@ -130,7 +133,7 @@ export const SUBSCRIBER_FEATURES: { title: string; desc: string }[] = [
   },
   {
     title: 'File Attachments Storage (expanded to 5 GB)',
-    desc: 'send and receive documents, photos, and PDFs with your Requests and Responses (additional storage available at $10 per 5 GB per year).',
+    desc: 'send and receive documents, photos, and PDFs with your Requests and Responses (additional storage available at $1/mo or $12/yr per 5 GB, matching your plan).',
   },
   {
     title: 'Automatic Repeating (expanded to unlimited)',
@@ -426,30 +429,116 @@ function RenewalDatePanel({ renewalDate }: { renewalDate: string | null }) {
   )
 }
 
+// Redesigned 2026-11-04 from a one-time purchase into an in-place target-
+// storage stepper riding the subscription's own recurring price (Jim's own
+// design — see update-storage/route.ts's header comment). A reduction is
+// allowed, but never below minGb — whatever's actually in use right now,
+// per Jim's own follow-up instruction; the server re-validates this
+// regardless of what the stepper shows, so a stale/unfetched minGb here is
+// never a security gap, only a slightly late error message.
 function AttachmentStoragePanel({
-  renewalDate,
   storageGb,
+  onStorageUpdated,
 }: {
-  renewalDate: string | null
   storageGb: number
+  onStorageUpdated: (newStorageGb: number) => void
 }) {
-  const [targetGb, setTargetGb] = useState<5 | 10>(5)
+  const [target, setTarget] = useState(storageGb)
+  const [minGb, setMinGb] = useState(STORAGE_BLOCK_GB)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const price = computeAddlStoragePrice(renewalDate, targetGb)
+  const [confirmation, setConfirmation] = useState<string | null>(null)
 
-  async function handleBuy() {
+  useEffect(() => {
+    let cancelled = false
+    async function loadUsage() {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) return
+      try {
+        const res = await fetch('/api/attachments/usage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        })
+        const json: { usedBytes?: number } = await res.json()
+        if (!cancelled && typeof json.usedBytes === 'number') {
+          setMinGb(minAllowedStorageGb(json.usedBytes))
+        }
+      } catch {
+        // Floor just stays at the base block — the server re-validates the
+        // real floor on Update Storage regardless.
+      }
+    }
+    loadUsage()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function handleUpdate() {
     setBusy(true)
     setError(null)
-    // The server independently recomputes this exact price from the
-    // account's own renewalDate/targetGb — never trusts the dollar amount
-    // shown here, only the targetGb choice.
-    const result = await startStripeFlow('/api/stripe/create-storage-checkout-session', { targetGb })
-    if (!result.ok) {
-      setError(result.message)
+    setConfirmation(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setError('Your sign-in has expired — please sign in again and retry.')
       setBusy(false)
+      return
     }
+
+    let res: Response
+    try {
+      res = await fetch('/api/stripe/update-storage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ targetTotalGb: target }),
+      })
+    } catch {
+      setError('Could not reach the server — check your connection and try again.')
+      setBusy(false)
+      return
+    }
+
+    let json: {
+      ok?: boolean
+      newStorageGb?: number
+      cadence?: 'annual' | 'monthly'
+      newRecurringTotal?: number
+      error?: string
+      detail?: string
+    }
+    try {
+      json = await res.json()
+    } catch {
+      json = {}
+    }
+
+    if (!res.ok || !json.ok) {
+      setError(
+        json.detail ??
+          (json.error === 'no_subscription'
+            ? 'No active subscription was found on this account.'
+            : 'Something went wrong — please try again.')
+      )
+      setBusy(false)
+      return
+    }
+
+    const unit = json.cadence === 'annual' ? '/yr' : '/mo'
+    const planLabel = json.cadence === 'annual' ? 'Annual' : 'Monthly'
+    setConfirmation(
+      `Storage updated to ${json.newStorageGb} GB. Your ${planLabel} subscription is now $${json.newRecurringTotal}${unit}.`
+    )
+    if (typeof json.newStorageGb === 'number') {
+      setTarget(json.newStorageGb)
+      onStorageUpdated(json.newStorageGb)
+    }
+    setBusy(false)
   }
+
+  const changed = target !== storageGb
 
   return (
     <>
@@ -460,31 +549,48 @@ function AttachmentStoragePanel({
         Current: <strong>{storageGb} Gigabytes</strong>
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <div className="chips" role="group" aria-label="Additional storage size">
-          <button
-            type="button"
-            className={`chip${targetGb === 5 ? ' sel' : ''}`}
-            onClick={() => setTargetGb(5)}
-          >
-            5 GB
-          </button>
-          <button
-            type="button"
-            className={`chip${targetGb === 10 ? ' sel' : ''}`}
-            onClick={() => setTargetGb(10)}
-          >
-            10 GB
-          </button>
-        </div>
-        <button type="button" className="btn" style={{ marginLeft: 'auto' }} onClick={handleBuy} disabled={busy}>
-          {busy ? 'Starting checkout…' : `Buy Add'l ($${price})`}
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setTarget((t) => Math.max(minGb, t - STORAGE_BLOCK_GB))}
+          disabled={busy || target <= minGb}
+        >
+          − {STORAGE_BLOCK_GB} GB
+        </button>
+        <span style={{ minWidth: 64, textAlign: 'center' }}>
+          <strong>{target} GB</strong>
+        </span>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setTarget((t) => t + STORAGE_BLOCK_GB)}
+          disabled={busy}
+        >
+          + {STORAGE_BLOCK_GB} GB
+        </button>
+        <button
+          type="button"
+          className="btn"
+          style={{ marginLeft: 'auto' }}
+          onClick={handleUpdate}
+          disabled={busy || !changed}
+        >
+          {busy ? 'Updating…' : 'Update Storage'}
         </button>
       </div>
       <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        If less than 6 months remain until your Renewal Date, Additional Storage is
-        discounted to $5 per 5 GB for that period; otherwise it&rsquo;s $10 per 5 GB, added
-        to your annual subscription renewal cost.
+        Billed as part of your subscription, at the same cadence it already renews on —{' '}
+        <strong>${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo</strong> per {STORAGE_BLOCK_GB} GB on a
+        Monthly plan, or <strong>${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr</strong> per{' '}
+        {STORAGE_BLOCK_GB} GB on an Annual plan (prorated for the remainder of your current
+        year if added mid-cycle). No separate charges — the rate simply changes, and a
+        reduction can&rsquo;t go below what&rsquo;s already in use ({minGb} GB right now).
       </p>
+      {confirmation && (
+        <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--brand-blue)' }}>
+          {confirmation}
+        </p>
+      )}
       {error && (
         <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--alert-red)' }}>
           {error}
@@ -546,10 +652,12 @@ export function MySubscriptionSummary({
   variant,
   renewalDate,
   storageGb,
+  onStorageUpdated,
 }: {
   variant: Variant
   renewalDate: string | null
   storageGb: number
+  onStorageUpdated: (newStorageGb: number) => void
 }) {
   return (
     <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
@@ -561,7 +669,7 @@ export function MySubscriptionSummary({
       </p>
 
       <RenewalDatePanel renewalDate={renewalDate} />
-      <AttachmentStoragePanel renewalDate={renewalDate} storageGb={storageGb} />
+      <AttachmentStoragePanel storageGb={storageGb} onStorageUpdated={onStorageUpdated} />
       <PlanSummaryPanel />
     </div>
   )

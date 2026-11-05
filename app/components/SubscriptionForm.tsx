@@ -226,7 +226,12 @@ export default function SubscriptionForm() {
           )}
 
           {tier === 'subscriber' ? (
-            <MySubscriptionSummary variant="full" renewalDate={renewalDate} storageGb={storageGb} />
+            <MySubscriptionSummary
+              variant="full"
+              renewalDate={renewalDate}
+              storageGb={storageGb}
+              onStorageUpdated={setStorageGb}
+            />
           ) : (
             <BecomeSubscriberPitch variant="full" isTester={isTester} />
           )}

@@ -55,6 +55,8 @@ const PRICE_ANNUAL_KEY = 'wyp_price_annual_v1'
 const PRICE_MONTHLY_KEY = 'wyp_price_monthly_v1'
 const COUPON_FIRST_YEAR_KEY = 'wyp_coupon_first_year_v1'
 const COUPON_TESTER_FIRST_YEAR_KEY = 'wyp_coupon_tester_first_year_v1'
+const PRICE_STORAGE_MONTHLY_KEY = 'wyp_price_storage_monthly_v1'
+const PRICE_STORAGE_ANNUAL_KEY = 'wyp_price_storage_annual_v1'
 
 async function findByMetadata(list, key, value) {
   for await (const item of list) {
@@ -163,6 +165,54 @@ async function main() {
     console.log(`[stripe-setup] Reusing existing Coupon ${couponTester.id}`)
   }
 
+  // 6. Additional Storage — monthly increment, $1/mo per 5 GB block. Recurs
+  // on the SAME subscription/billing cycle as whichever base plan the
+  // account already has (see app/api/stripe/update-storage/route.ts) —
+  // this is not a separate purchase or a separate billing cadence of its
+  // own, just a second subscription item.
+  let priceStorageMonthly = await findByMetadata(
+    stripe.prices.list({ limit: 100, product: product.id }),
+    'wyp_setup_key',
+    PRICE_STORAGE_MONTHLY_KEY
+  )
+  if (!priceStorageMonthly) {
+    priceStorageMonthly = await stripe.prices.create({
+      product: product.id,
+      currency: 'usd',
+      unit_amount: 100,
+      recurring: { interval: 'month' },
+      nickname: 'Additional Storage (per 5 GB, monthly)',
+      metadata: { wyp_setup_key: PRICE_STORAGE_MONTHLY_KEY },
+    })
+    console.log(`[stripe-setup] Created monthly storage Price ${priceStorageMonthly.id} ($1.00/mo per 5 GB)`)
+  } else {
+    console.log(`[stripe-setup] Reusing existing monthly storage Price ${priceStorageMonthly.id}`)
+  }
+
+  // 7. Additional Storage — annual increment, $12/yr per 5 GB block. Jim's
+  // own design deliberately relies on Stripe's native day-by-day proration
+  // for a mid-cycle add (e.g. ~$6 with 6 months left) rather than a second,
+  // separate "reduced rate" Price — recommended over hand-rolling that math,
+  // and confirmed with Jim, 2026-11-04.
+  let priceStorageAnnual = await findByMetadata(
+    stripe.prices.list({ limit: 100, product: product.id }),
+    'wyp_setup_key',
+    PRICE_STORAGE_ANNUAL_KEY
+  )
+  if (!priceStorageAnnual) {
+    priceStorageAnnual = await stripe.prices.create({
+      product: product.id,
+      currency: 'usd',
+      unit_amount: 1200,
+      recurring: { interval: 'year' },
+      nickname: 'Additional Storage (per 5 GB, annual)',
+      metadata: { wyp_setup_key: PRICE_STORAGE_ANNUAL_KEY },
+    })
+    console.log(`[stripe-setup] Created annual storage Price ${priceStorageAnnual.id} ($12.00/yr per 5 GB)`)
+  } else {
+    console.log(`[stripe-setup] Reusing existing annual storage Price ${priceStorageAnnual.id}`)
+  }
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://wouldyouplease.com'
 
   console.log('\n[stripe-setup] Done. Add these to .env.local (and, once ready, Vercel):\n')
@@ -170,6 +220,8 @@ async function main() {
   console.log(`STRIPE_PRICE_MONTHLY=${priceMonthly.id}`)
   console.log(`STRIPE_COUPON_FIRST_YEAR=${couponFirstYear.id}`)
   console.log(`STRIPE_COUPON_TESTER_FIRST_YEAR=${couponTester.id}`)
+  console.log(`STRIPE_PRICE_STORAGE_MONTHLY=${priceStorageMonthly.id}`)
+  console.log(`STRIPE_PRICE_STORAGE_ANNUAL=${priceStorageAnnual.id}`)
 
   console.log('\n[stripe-setup] One more manual step — Stripe only shows a webhook signing')
   console.log('secret once, in the Dashboard, so this script cannot create it for you:')

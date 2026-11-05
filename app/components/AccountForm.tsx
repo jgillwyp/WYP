@@ -1276,7 +1276,12 @@ export default function AccountForm() {
             {subscriberOpen && (
               <div className="subbody">
                 {tier === 'subscriber' ? (
-                  <MySubscriptionSummary variant="embedded" renewalDate={renewalDate} storageGb={storageGb} />
+                  <MySubscriptionSummary
+                    variant="embedded"
+                    renewalDate={renewalDate}
+                    storageGb={storageGb}
+                    onStorageUpdated={setStorageGb}
+                  />
                 ) : (
                   <BecomeSubscriberPitch variant="embedded" isTester={isTester} />
                 )}

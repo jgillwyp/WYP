@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
 
-import { getStripeClient } from '@/lib/stripe'
+import { getStorageAnnualPriceId, getStorageMonthlyPriceId, getStripeClient } from '@/lib/stripe'
+import { STORAGE_BLOCK_GB } from '@/lib/subscriptionPricing'
 
 export const runtime = 'nodejs'
 
@@ -77,6 +78,40 @@ async function handleSubscriptionUpsert(
   const periodEndItem = subscription.items.data[0]?.current_period_end
   const currentPeriodEnd = periodEndItem ?? null
 
+  // Resync subscription_storage_gb from the subscription's own live
+  // Additional Storage item quantity (update-storage/route.ts's own doing,
+  // most of the time — but this also catches a change made directly in the
+  // Stripe Dashboard). Deliberately MAX'd against whatever is already
+  // stored, never simply overwritten: a passive event like this must never
+  // claw back a value an account holder reached some other way (e.g. a
+  // historical one-time storage grant with no subscription item behind it
+  // at all). An explicit reduction through update-storage/route.ts already
+  // writes the lower value directly and synchronously — by the time this
+  // webhook event arrives, the stored value already matches what's computed
+  // here, so maxing the two is a no-op for that case, not a fight against it.
+  // Env-var lookups are wrapped, not called via the throwing must()-backed
+  // getters directly — a webhook event (tier/renewal-date updates included)
+  // must never fail outright just because the newer storage price ids
+  // haven't been added to the environment yet.
+  let storageGbFromItems = STORAGE_BLOCK_GB
+  try {
+    const storageMonthlyId = getStorageMonthlyPriceId()
+    const storageAnnualId = getStorageAnnualPriceId()
+    const storageItem = subscription.items.data.find(
+      (item) => item.price.id === storageMonthlyId || item.price.id === storageAnnualId
+    )
+    storageGbFromItems += (storageItem?.quantity ?? 0) * STORAGE_BLOCK_GB
+  } catch (err) {
+    console.error('[stripe/webhook] Storage price ids not configured — skipping storage resync', err)
+  }
+
+  const { data: currentProfile } = await sb
+    .from('profiles')
+    .select('subscription_storage_gb')
+    .eq('id', userId)
+    .single()
+  const resolvedStorageGb = Math.max(currentProfile?.subscription_storage_gb ?? STORAGE_BLOCK_GB, storageGbFromItems)
+
   await sb
     .from('profiles')
     .update({
@@ -85,6 +120,7 @@ async function handleSubscriptionUpsert(
       stripe_cancel_at_period_end: subscription.cancel_at_period_end,
       ...(currentPeriodEnd ? { subscription_renewal_date: toIsoDate(currentPeriodEnd) } : {}),
       tier: activeLike ? 'subscriber' : 'free',
+      subscription_storage_gb: resolvedStorageGb,
     })
     .eq('id', userId)
 }
@@ -107,30 +143,14 @@ async function handleSubscriptionDeleted(sb: SupabaseAdmin, subscription: Stripe
 }
 
 async function handleCheckoutSessionCompleted(sb: SupabaseAdmin, stripe: Stripe, session: Stripe.Checkout.Session) {
-  if (session.mode === 'subscription') {
-    if (!session.subscription) return
-    const subscriptionId =
-      typeof session.subscription === 'string' ? session.subscription : session.subscription.id
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-    await handleSubscriptionUpsert(sb, subscription, session.customer as string | null)
-    return
-  }
-
-  if (session.mode === 'payment' && session.metadata?.kind === 'storage_addon') {
-    const userId = await resolveUserId(sb, session.metadata, session.customer as string | null)
-    const targetGb = Number(session.metadata.target_gb)
-    if (!userId || !targetGb) {
-      console.error('[stripe/webhook] storage_addon session missing user/target_gb', session.id)
-      return
-    }
-
-    const { data: profile } = await sb.from('profiles').select('subscription_storage_gb').eq('id', userId).single()
-    const currentGb = profile?.subscription_storage_gb ?? 5
-    await sb
-      .from('profiles')
-      .update({ subscription_storage_gb: currentGb + targetGb })
-      .eq('id', userId)
-  }
+  // Additional Storage no longer goes through Checkout at all (2026-11-04)
+  // — it's a direct subscription-item change via
+  // app/api/stripe/update-storage/route.ts, so the only mode this webhook
+  // still needs to handle here is 'subscription' (Sign Up).
+  if (session.mode !== 'subscription' || !session.subscription) return
+  const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+  await handleSubscriptionUpsert(sb, subscription, session.customer as string | null)
 }
 
 export async function POST(request: Request) {

@@ -6386,3 +6386,111 @@ link is built only after the stack is proven on Add Contact.
   to anything but a `server_misconfigured` error. `npx tsc --noEmit`/`npm
   run lint` both clean across the whole batch. No mockup — none of the
   three touched components has ever had one.
+
+- **Additional Storage redesigned from a one-time purchase into a genuine
+  recurring add-on (2026-11-04), same day Jim first tested the Stripe
+  integration live.** Jim bought Monthly + storage and correctly noted
+  there was no practical way to verify future billing would actually
+  recur — investigation confirmed his instinct was right for the wrong
+  reason: the "Buy Add'l" button built that morning was a one-time
+  `mode: 'payment'` Checkout charge, permanently granting the GB with
+  **no** recurring mechanism at all, while the live UI copy claimed it was
+  "added to your annual subscription renewal cost" — a real discrepancy,
+  not just a missing disclosure (and doubly wrong for a Monthly
+  subscriber, who has no "annual renewal" to add to). A dialog explaining
+  future billing would have described a charge that was never going to
+  happen.
+  Resolved via two rounds of `AskUserQuestion` into a real restructure,
+  not a copy fix: storage is now a **second Stripe Subscription Item**
+  riding the same subscription and billing cycle as the base plan —
+  $1/mo per 5 GB block on a Monthly plan, $12/yr per 5 GB block on
+  Annual — rather than a separate purchase. Jim's own words: "That way
+  the period doesn't matter and there are no periodic incremental
+  charges - there is just a higher rate." For the old "$6 if ≤6 months
+  remain" wrinkle, Jim chose **Stripe's own native day-by-day proration**
+  over hand-rolling a flat 2-tier rate — simpler to build correctly and
+  more accurate. His own just-completed one-time purchase was left alone
+  as a permanent bonus (his choice), never reconciled into the new model.
+  Mid-build, Jim added one more requirement via a mid-turn message:
+  **reduction is allowed, but never below whatever storage is actually in
+  use** — so this shipped as a full "target total" stepper (both grow and
+  shrink), not a one-directional increment, superseding the initial
+  "growing-only for now" scope from the first round of questions.
+  Two new recurring Stripe Prices (`STRIPE_PRICE_STORAGE_MONTHLY` $1/mo,
+  `STRIPE_PRICE_STORAGE_ANNUAL` $12/yr, both per 5 GB unit) added to
+  `docs/stripe-setup.mjs`, same product, same idempotent-by-metadata
+  pattern as the two base plan prices — **not yet run by Jim**, so these
+  two env vars don't exist yet; `app/src/lib/stripe.ts` gained
+  `getStorageMonthlyPriceId()`/`getStorageAnnualPriceId()`.
+  `app/api/stripe/create-storage-checkout-session/route.ts` (that
+  morning's one-time-Checkout route) is deleted outright, replaced by
+  `app/api/stripe/update-storage/route.ts` — no Checkout redirect at all,
+  since the customer already has a payment method on the existing
+  subscription: it reads the live subscription via
+  `stripe.subscriptions.retrieve()`, identifies cadence by which base
+  price (`STRIPE_PRICE_ANNUAL`/`_MONTHLY`) the subscription's own item is
+  on, then creates/updates/deletes the storage item via
+  `stripe.subscriptions.update()` with `proration_behavior:
+  'always_invoice'` (charges or credits the proration immediately,
+  rather than deferring it to the next regular invoice) and
+  `payment_behavior: 'error_if_incomplete'` (a declined card fails the
+  call synchronously — no async/incomplete-payment state to poll for).
+  The floor for a reduction — `minAllowedStorageGb()`, new in
+  `subscriptionPricing.ts` — rounds the account's real
+  `getOwnerStorageStatus().usedBytes` (the same function `upload/
+  route.ts`'s own quota check already reads) up to the next whole 5 GB
+  block, never trusted from the client; a new lightweight
+  `app/api/attachments/usage/route.ts` lets the UI show that floor
+  before the account tries a reduction, deliberately separate from the
+  heavier `owner-summary` route (which also returns `usedBytes`, but
+  additionally lists every attachment with signed URLs — wasted work
+  just to show one number on a screen that renders every time Account
+  Options does).
+  `webhook/route.ts`'s `handleSubscriptionUpsert` now also resyncs
+  `subscription_storage_gb` from the subscription's own live item
+  quantity on every `customer.subscription.updated` event (catches a
+  change made directly in the Stripe Dashboard, not just through the
+  app) — but only ever **raises** the stored value, never lowers it
+  (`Math.max` against what's already there), specifically so this
+  passive resync can never claw back Jim's historical one-time bonus;
+  an explicit reduction through `update-storage/route.ts` already wrote
+  the lower value directly and synchronously, so by the time this event
+  arrives the two numbers already agree. The storage-price-id lookup is
+  wrapped in its own try/catch (not the throwing `must()`-backed getters
+  directly) so a webhook event — tier/renewal-date updates included —
+  can never fail outright just because the two new price ids aren't in
+  the environment yet. The now-dead one-time `storage_addon` Checkout
+  branch is removed from `handleCheckoutSessionCompleted` outright, not
+  left as unreachable code.
+  `AttachmentStoragePanel` (`SubscriptionPanels.tsx`) rebuilt as a −/+
+  5 GB stepper + "Update Storage" button (replacing the old "5 GB / 10
+  GB" chip pair + "Buy Add'l ($price)" one-time button), with a
+  confirmation line stating the actual new recurring total ("Storage
+  updated to 15 GB. Your Monthly subscription is now $7/mo.") — directly
+  answering Jim's original ask for a way to verify what he'll actually be
+  billed. Gained a new `onStorageUpdated` callback prop, threaded up
+  through `MySubscriptionSummary` to both call sites' own existing
+  `setStorageGb` (`AccountForm.tsx`, `SubscriptionForm.tsx`) — keeps
+  "Current: X Gigabytes" in sync immediately after a successful update
+  without a page reload, and was also the fix for a real
+  `react-hooks/set-state-in-effect` lint failure the first draft hit (an
+  effect re-syncing local `target` state from the `storageGb` prop on
+  every change) — same lint rule this file's history already hit
+  several times before (`CreateRequestForm.tsx`'s `voiceSupported`,
+  `MainScreen.tsx`'s `installGuidance`). Pricing copy
+  ("$10 per 5 GB per year") corrected to "$1/mo or $12/yr per 5 GB,
+  matching your plan" everywhere it appeared — `SUBSCRIBER_FEATURES` (the
+  single source of truth for Account Options/`/account/subscription`/the
+  live landing page) plus the three hand-synced static files with no
+  import path to it (`docs/WYP onepager.html`, `design/marketing/
+  WYP_landing_page.html`, `design/screens/WYP_subscribe_palette1.html`)
+  — `docs/onepager_2 - RETIRED.html` deliberately left untouched, per its
+  own established retired-file status. No schema change — everything
+  derives from the existing `subscription_storage_gb` column and live
+  Stripe subscription state, so no new migration. `npx tsc --noEmit`/
+  `npm run lint` both clean across the whole batch. No mockup — this
+  feature has never had one. **Not yet committed, not yet tested
+  end-to-end** — the two new storage Price env vars don't exist in
+  Stripe or Vercel yet; a real test (increase, decrease toward the usage
+  floor, and a decrease attempt below it) still needs to happen once
+  they're added.

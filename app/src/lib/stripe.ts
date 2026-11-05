@@ -39,6 +39,19 @@ export function getMonthlyPriceId(): string {
   return must('STRIPE_PRICE_MONTHLY')
 }
 
+/** Additional-storage price ids (2026-11-04) — each a recurring, per-unit
+ * ("per 5 GB block") price riding the SAME subscription and billing cycle
+ * as the base plan, rather than a separate one-time purchase. Which one
+ * applies is determined by which base price the caller's own subscription
+ * item is on (see update-storage/route.ts), never by anything the client
+ * sends. */
+export function getStorageMonthlyPriceId(): string {
+  return must('STRIPE_PRICE_STORAGE_MONTHLY')
+}
+export function getStorageAnnualPriceId(): string {
+  return must('STRIPE_PRICE_STORAGE_ANNUAL')
+}
+
 /** Coupon ids, both duration:'once' so each only discounts the very first
  * invoice of a new annual subscription — every renewal after that bills
  * the plain $49/yr price with no coupon involved. */
