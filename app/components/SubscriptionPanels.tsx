@@ -602,9 +602,10 @@ function AttachmentStoragePanel({
       </div>
       {realPurchaseDisabled ? (
         <p className="promo-p" style={{ margin: '8px 0 0' }}>
-          Real storage purchases are disabled for testing accounts. Use{' '}
-          <strong>Test Storage Cap (MB, testing only)</strong> below to simulate a different
-          storage cap without affecting real billing.
+          Real storage purchases are disabled for testing accounts — no Stripe billing
+          applies. Use <strong>Test Storage Cap (MB, testing only)</strong> below to simulate a
+          different storage cap instead. See Plan Summary below for the same reason this
+          account has no real plan to show either.
         </p>
       ) : (
         <p className="promo-p" style={{ margin: '8px 0 0' }}>
@@ -630,11 +631,43 @@ function AttachmentStoragePanel({
   )
 }
 
+// Testing-only fallback (2026-11-05) — a tester (can_toggle_tier()) who
+// checked "Subscribed? (testing only)" with no real Stripe subscription on
+// file was falling through to GenericPlanOptionsPanel below, which still
+// reads as a sales pitch ("billed today $39") even though the account is
+// already shown as Subscribed and the Attachment Storage Space note right
+// above it already explains real purchases are disabled for testing — a
+// leftover mismatch from before the cadence-aware redesign existed. Jim:
+// "it was done to the prior format of that area... missing the more recent
+// wording changes to storage space and plan summary." This matches that
+// newer tone (heading + subtitle, no price-pitch rows) instead.
+function TestingPlanSummaryPanel({ heading }: { heading: string }) {
+  return (
+    <>
+      <div className="promo-sub" style={{ marginTop: 12 }}>
+        {heading}
+        <span className="plan-sub" style={{ display: 'block', fontWeight: 400 }}>
+          testing only — no real subscription on file
+        </span>
+      </div>
+      <p className="promo-p" style={{ margin: '4px 0 0' }}>
+        Your account is set to the Subscriber tier for testing, via the{' '}
+        <strong>Subscribed? (testing only)</strong> checkbox above — not through a real
+        subscription, so there&rsquo;s no real plan or billing to summarize here. Uncheck it to
+        return to Free, or use the real Sign Up button once testing ends.
+      </p>
+
+      <SubscriberFeatureList heading="What's included" />
+    </>
+  )
+}
+
 // The three-row reference list every non-subscriber pitch already shows
 // (Annual 1st-year / Renews-at / Monthly) — kept as GenericPlanOptionsPanel,
 // the fallback for an already-subscribed account whose real cadence can't be
-// determined (e.g. a testing-toggle "subscriber" with no real Stripe
-// subscription on file at all, so there's no one real plan to single out).
+// determined for some other reason (Stripe unreachable, a subscription id on
+// file that Stripe no longer recognizes, etc.) — genuinely rare, unlike the
+// tester case above, which now has its own fallback instead of landing here.
 function GenericPlanOptionsPanel({ heading }: { heading: string }) {
   return (
     <>
@@ -684,9 +717,15 @@ function GenericPlanOptionsPanel({ heading }: { heading: string }) {
 export function PlanSummaryPanel({
   storageGb,
   heading = 'Your Plan Summary',
+  testingOnly = false,
 }: {
   storageGb: number
   heading?: string
+  // can_toggle_tier() — same flag AttachmentStoragePanel's realPurchaseDisabled
+  // already uses — so a tester with no real Stripe cadence gets the
+  // testing-appropriate fallback above instead of GenericPlanOptionsPanel's
+  // sales-pitch wording. See TestingPlanSummaryPanel's own comment.
+  testingOnly?: boolean
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -728,7 +767,11 @@ export function PlanSummaryPanel({
   }
 
   if (!cadence) {
-    return <GenericPlanOptionsPanel heading={heading} />
+    return testingOnly ? (
+      <TestingPlanSummaryPanel heading={heading} />
+    ) : (
+      <GenericPlanOptionsPanel heading={heading} />
+    )
   }
 
   const extraGb = storageGb - STORAGE_BLOCK_GB
@@ -808,7 +851,7 @@ export function MySubscriptionSummary({
         onStorageUpdated={onStorageUpdated}
         realPurchaseDisabled={realStoragePurchaseDisabled}
       />
-      <PlanSummaryPanel storageGb={storageGb} />
+      <PlanSummaryPanel storageGb={storageGb} testingOnly={realStoragePurchaseDisabled} />
     </div>
   )
 }

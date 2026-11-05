@@ -6625,3 +6625,25 @@ link is built only after the stack is proven on Add Contact.
   that's a one-time, cosmetic Stripe Dashboard artifact, not something
   this app's own data depends on. `npx tsc --noEmit`/`npm run lint` both
   clean.
+- **Plan Summary's tester fallback brought up to the current wording
+  (2026-11-05, `SubscriptionPanels.tsx`), no migration.** Jim: the
+  "additional storage is disabled for testing accounts" note was written
+  against "the prior format of that area," now "missing the more recent
+  wording changes to storage space and plan summary." Real gap: a tester
+  (`can_toggle_tier()`) with no real Stripe subscription on file has no
+  cadence for `PlanSummaryPanel` to resolve, so it fell back to
+  `GenericPlanOptionsPanel` — the pre-redesign 3-row sales pitch ("Subscriber
+  — 1st year... billed today $39") — even though that same tester's account
+  already reads as Subscribed via the testing checkbox, and the Storage
+  Space note right above it already explains real billing doesn't apply.
+  New `TestingPlanSummaryPanel`, shown instead whenever a new `testingOnly`
+  prop (threaded from `MySubscriptionSummary`'s existing
+  `realStoragePurchaseDisabled`, the same flag `AttachmentStoragePanel`
+  already uses) is true and no real cadence resolved — matches the current
+  heading+subtitle tone instead of price-pitch rows, states plainly there's
+  no real plan/billing to summarize, and still shows "What's included."
+  `GenericPlanOptionsPanel` now only fires for a genuinely rare case (a
+  *real* subscriber whose cadence Stripe couldn't resolve for some other
+  reason). The storage-disabled note itself also now points at Plan Summary
+  explicitly, closing the loop between the two. `npx tsc --noEmit`/`npm run
+  lint` both clean.
