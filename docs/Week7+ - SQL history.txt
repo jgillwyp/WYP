@@ -868,3 +868,122 @@ grant execute on function public.provision_pending_testers() to service_role;
 --   -- Then delete that test row:
 --   --   delete from public.pending_tester_setup where email = 'you+test@example.com';
 -- ============================================================================
+
+-- Migration 088 (2026-11-04) -- Real Stripe billing. DRAFTED, NOT YET
+-- CONFIRMED RUN. Jim: "perhaps we could hook it up completely" -- Sign Up
+-- (annual + monthly), Cancel Renewal (via Stripe's own Billing Portal), and
+-- Buy Add'l Storage, all wired to a real Stripe account (CA C-Corp, bank
+-- account already in place; no Stripe account existed yet as of this
+-- writing -- Jim still needs to create one at stripe.com and run
+-- docs/stripe-setup.mjs before any of this can be tested end to end, since
+-- this sandbox has no network route to Stripe's API). Also adds the $19
+-- tester-only 1st-year rate (vs. the general public's $39), shown to
+-- anyone on beta_allowlist directly on the Subscribe screen -- Jim's own
+-- confirmed scope, no separate "testing is wrapping up" trigger.
+--
+-- Four new profiles columns. Three of them (subscription status/id/
+-- cancel-at-period-end) get NO authenticated grant at all, by design --
+-- same "only the gated RPC may write it" posture migration 035 already
+-- established for `tier` itself (migration 024's own blanket grant was
+-- revoked there for exactly this reason: an unconditional column grant lets
+-- a client UPDATE its own subscription state directly, bypassing whatever
+-- gate the app's UI shows). Only the webhook (service_role, which bypasses
+-- RLS/grants entirely) ever writes these three. stripe_customer_id is
+-- different: it's written by the create-checkout-session/create-storage-
+-- checkout-session routes running as the caller's own forwarded JWT, but
+-- always with a value that came back from Stripe's own API in that same
+-- request -- never client-supplied -- so it goes through a narrow
+-- SECURITY DEFINER function (set_stripe_customer_id) instead of a raw
+-- column grant, both for defense in depth and so it can refuse to ever
+-- overwrite an already-linked customer id.
+alter table public.profiles
+  add column if not exists stripe_customer_id text,
+  add column if not exists stripe_subscription_id text,
+  add column if not exists stripe_subscription_status text,
+  add column if not exists stripe_cancel_at_period_end boolean not null default false;
+
+-- A customer id, once set, should never collide across two accounts --
+-- defensive; nothing in this app's own code would ever attempt that, but a
+-- unique index makes it structurally impossible rather than just unlikely.
+create unique index if not exists profiles_stripe_customer_id_idx
+  on public.profiles (stripe_customer_id)
+  where stripe_customer_id is not null;
+
+create or replace function public.set_stripe_customer_id(p_customer_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  update public.profiles
+    set stripe_customer_id = p_customer_id
+    where id = auth.uid()
+      and stripe_customer_id is null;
+end;
+$$;
+
+revoke all on function public.set_stripe_customer_id(text) from public;
+grant execute on function public.set_stripe_customer_id(text) to authenticated;
+
+-- is_beta_tester() -- read-only, same auth.uid() -> email -> allowlist-
+-- membership shape as can_toggle_tier() (migration 035), just checking
+-- beta_allowlist (every private tester, add-tester.mjs) rather than
+-- tier_toggle_allowlist (Jim's own much narrower testing-only cohort for
+-- the Subscribed? checkbox). Drives the Subscribe screen's $19-vs-$39
+-- 1st-year price -- the ONLY thing it's used for; it grants no other
+-- capability on its own.
+create or replace function public.is_beta_tester()
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_email text;
+begin
+  select lower(trim(email)) into v_email from auth.users where id = auth.uid();
+
+  if v_email is null then
+    return false;
+  end if;
+
+  return exists(select 1 from public.beta_allowlist where lower(email) = v_email);
+end;
+$$;
+
+revoke all on function public.is_beta_tester() from public;
+grant execute on function public.is_beta_tester() to authenticated;
+
+-- Webhook idempotency -- Stripe can and does redeliver the same event more
+-- than once (retries on a slow/5xx response, or a dashboard-triggered
+-- resend). Without this, a redelivered checkout.session.completed for a
+-- Buy Add'l Storage purchase would double-credit the storage grant. One row
+-- per event id, inserted before any side effect runs; service_role only
+-- (the webhook route is the only caller, and it never goes near the
+-- browser -- same posture as every other service_role-only table in this
+-- app).
+create table if not exists public.stripe_webhook_events (
+  event_id text primary key,
+  event_type text not null,
+  processed_at timestamptz not null default now()
+);
+alter table public.stripe_webhook_events enable row level security;
+-- No policies -- service_role only.
+
+-- Verify after running:
+--   select column_name from information_schema.columns
+--     where table_name = 'profiles' and column_name like 'stripe_%';
+--   select indexname from pg_indexes
+--     where tablename = 'profiles' and indexname = 'profiles_stripe_customer_id_idx';
+--   select proname from pg_proc
+--     where proname in ('set_stripe_customer_id', 'is_beta_tester');
+--   select has_column_privilege('authenticated', 'profiles', 'stripe_subscription_status', 'update');
+--     -- must be false -- only service_role may ever write it
+--   select has_column_privilege('authenticated', 'profiles', 'stripe_customer_id', 'update');
+--     -- must also be false -- that column is written only through
+--     -- set_stripe_customer_id(), never a direct UPDATE
+--   select table_name from information_schema.tables
+--     where table_name = 'stripe_webhook_events';
+-- ============================================================================
+-- ============================================================================

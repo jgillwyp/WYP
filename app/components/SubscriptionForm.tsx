@@ -37,8 +37,25 @@ export default function SubscriptionForm() {
   const [renewalDate, setRenewalDate] = useState<string | null>(null)
   const [storageGb, setStorageGb] = useState(5)
   const [canToggleTier, setCanToggleTier] = useState(false)
+  const [isTester, setIsTester] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Stripe Checkout/Billing Portal both redirect back here with
+  // ?checkout=success|cancelled (create-checkout-session/create-portal-
+  // session route.ts's own success_url/cancel_url/return_url). Read via
+  // window.location.search directly rather than useSearchParams(), same
+  // precedent AddContactForm.tsx's own ?from=create-request already
+  // established — safe here because this redirect is a real top-level
+  // browser navigation (Stripe's hosted page sending the browser back),
+  // never a same-instance client-router reuse, so there's no staleness
+  // risk the way /login's own ?intent=signup once had.
+  const [checkoutStatus] = useState<'success' | 'cancelled' | null>(() => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    const value = params.get('checkout')
+    return value === 'success' || value === 'cancelled' ? value : null
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -81,6 +98,11 @@ export default function SubscriptionForm() {
       const { data: canToggle } = await supabase.rpc('can_toggle_tier')
       if (!cancelled) setCanToggleTier(canToggle === true)
 
+      // is_beta_tester() (migration 088) — drives the $19-vs-$39 1st-year
+      // price shown below; same "failure reads as not a tester" posture.
+      const { data: tester } = await supabase.rpc('is_beta_tester')
+      if (!cancelled) setIsTester(tester === true)
+
       setLoading(false)
     }
 
@@ -88,6 +110,16 @@ export default function SubscriptionForm() {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    if (checkoutStatus) {
+      router.replace('/account/subscription')
+    }
+    // Strip the ?checkout= query string once, right after reading it —
+    // deliberately excludes checkoutStatus/router from deps so this never
+    // re-fires.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Same shape as AccountForm.tsx's own handleTierToggle — goes through
@@ -161,6 +193,18 @@ export default function SubscriptionForm() {
         </div>
 
         <div className="scroll">
+          {checkoutStatus === 'success' && (
+            <div className="noticeband" style={{ margin: '4px var(--pad) 14px' }}>
+              Thanks — your payment was received. This can take a few seconds to show
+              below; refresh if it still shows Free after a moment.
+            </div>
+          )}
+          {checkoutStatus === 'cancelled' && (
+            <div className="noticeband" style={{ margin: '4px var(--pad) 14px' }}>
+              Checkout was cancelled — nothing was charged.
+            </div>
+          )}
+
           {canToggleTier && (
             <label className="checkrow" style={{ margin: '4px var(--pad) 14px' }}>
               <input
@@ -184,7 +228,7 @@ export default function SubscriptionForm() {
           {tier === 'subscriber' ? (
             <MySubscriptionSummary variant="full" renewalDate={renewalDate} storageGb={storageGb} />
           ) : (
-            <BecomeSubscriberPitch variant="full" />
+            <BecomeSubscriberPitch variant="full" isTester={isTester} />
           )}
 
           {saveError && (

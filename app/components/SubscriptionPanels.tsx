@@ -2,6 +2,72 @@
 
 import { type CSSProperties, useState } from 'react'
 
+import { supabase } from '@/lib/supabaseClient'
+import {
+  ANNUAL_FIRST_YEAR_PRICE,
+  ANNUAL_RENEWAL_PRICE,
+  MONTHLY_PRICE,
+  TESTER_FIRST_YEAR_PRICE,
+  computeAddlStoragePrice,
+  parseIsoDate,
+  type SubscriptionPlan,
+} from '@/lib/subscriptionPricing'
+
+/**
+ * Real Stripe checkout wiring, 2026-11-04 (migration 088,
+ * app/api/stripe/*) — supersedes every "checkout isn't available yet"
+ * stub below. Each of the three write actions (Sign Up, Cancel Renewal,
+ * Buy Add'l) POSTs to its own route under the caller's own access token
+ * and redirects to the URL it returns (a real Stripe Checkout or Billing
+ * Portal page) — no Stripe.js/publishable key needed client-side at all,
+ * since every Checkout Session is created server-side and handed back as
+ * a plain redirect URL.
+ */
+async function startStripeFlow(
+  path: string,
+  body: Record<string, unknown>
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) {
+    return { ok: false, message: 'Your sign-in has expired — please sign in again and retry.' }
+  }
+
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    return { ok: false, message: 'Could not reach the server — check your connection and try again.' }
+  }
+
+  let json: { url?: string; error?: string; detail?: string }
+  try {
+    json = await res.json()
+  } catch {
+    json = {}
+  }
+
+  if (!res.ok || !json.url) {
+    const message =
+      json.detail ??
+      (json.error === 'server_misconfigured'
+        ? 'Billing isn’t fully set up yet — check back soon.'
+        : json.error === 'not_subscriber'
+          ? 'This is a Subscriber-only option.'
+          : json.error === 'no_subscription'
+            ? 'No active subscription was found on this account.'
+            : 'Something went wrong — please try again.')
+    return { ok: false, message }
+  }
+
+  window.location.href = json.url
+  return { ok: true }
+}
+
 /**
  * Shared Subscriber content (2026-08-26) — one source for the "Subscriber
  * Features" / "What's included" bullet list, the Renewal Date / Attachment
@@ -154,27 +220,40 @@ export function SubscriberComparisonTable() {
 }
 
 export function SubscriptionCheckoutButton({
+  plan,
+  label,
   className = 'btn',
   style,
 }: {
+  plan: SubscriptionPlan
+  label?: string
   className?: string
   style?: CSSProperties
 }) {
-  const [clicked, setClicked] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleClick() {
+    setBusy(true)
+    setError(null)
+    const result = await startStripeFlow('/api/stripe/create-checkout-session', { plan })
+    if (!result.ok) {
+      setError(result.message)
+      setBusy(false)
+    }
+    // On success the page is already navigating away — leave busy=true so
+    // the button stays disabled rather than flashing back to clickable
+    // during the redirect.
+  }
 
   return (
     <>
-      <button
-        type="button"
-        className={className}
-        style={style}
-        onClick={() => setClicked(true)}
-      >
-        Sign up for a 1st year discount
+      <button type="button" className={className} style={style} onClick={handleClick} disabled={busy}>
+        {busy ? 'Starting checkout…' : label ?? 'Sign up for a 1st year discount'}
       </button>
-      {clicked && (
-        <p className="promo-p" style={{ margin: '8px 0 0' }}>
-          Subscription checkout isn&rsquo;t available yet — check back soon.
+      {error && (
+        <p className="promo-p" style={{ margin: '8px 0 0', color: 'var(--alert-red)' }}>
+          {error}
         </p>
       )}
     </>
@@ -216,7 +295,7 @@ function SubscriberFeatureList({ heading }: { heading?: string }) {
 // regardless of which view is showing — his own explicit design goal,
 // so the sign-up button and cancel-anytime note don't jump position when
 // the person switches views.
-export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
+export function BecomeSubscriberPitch({ variant, isTester = false }: { variant: Variant; isTester?: boolean }) {
   const [view, setView] = useState<'features' | 'comparison'>('features')
 
   return (
@@ -256,9 +335,10 @@ export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
           Jim's identified preferred spelling — see this file's other
           "cancelled" fix at the note below and in PlanSummaryPanel. */}
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        1st year — 20% discount, only <strong>$39</strong>
+        1st year — {isTester ? 'private tester rate' : '20% discount'}, only{' '}
+        <strong>${isTester ? TESTER_FIRST_YEAR_PRICE : ANNUAL_FIRST_YEAR_PRICE}</strong>
         <br />
-        Per year — <strong>$49</strong>, renews each year until canceled
+        Per year — <strong>${ANNUAL_RENEWAL_PRICE}</strong>, renews each year until canceled
         <br />
         {/* Monthly option added 2026-08-27, Jim's own drafted addition —
             no discount attaches to it (unlike the annual plan's 1st-year
@@ -266,10 +346,30 @@ export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
             a cheaper path to the same year of service. Price repriced
             2026-10-13 alongside the annual figures — Jim's own confirmed
             $5/mo flat (not a 49/12 division or a ratio match). */}
-        Monthly — <strong>$5/mo</strong>, renews each month until canceled
+        Monthly — <strong>${MONTHLY_PRICE}/mo</strong>, renews each month until canceled
       </p>
 
-      <SubscriptionCheckoutButton style={{ width: '100%', marginTop: 12 }} />
+      {isTester && (
+        // Tester-only visible text (2026-11-04), per Jim's own ask —
+        // explains why this account sees $19 rather than $39, so it never
+        // reads as a pricing mistake. Shown directly on the Subscribe
+        // screen itself, not gated behind any "testing complete" moment —
+        // Jim's own confirmed scope: every private tester (beta_allowlist)
+        // sees this any time they're on this screen during testing.
+        <p className="promo-p" style={{ margin: '6px 0 0', fontStyle: 'italic' }}>
+          Private tester rate — thank you for testing Would You Please. This $
+          {TESTER_FIRST_YEAR_PRICE} 1st-year rate is available to private testers only.
+        </p>
+      )}
+
+      <SubscriptionCheckoutButton plan="annual" style={{ width: '100%', marginTop: 12 }} />
+      <div style={{ textAlign: 'center', marginTop: 8 }}>
+        <SubscriptionCheckoutButton
+          plan="monthly"
+          label="Or sign up monthly instead"
+          className="btn-quiet"
+        />
+      </div>
 
       <p className="promo-p" style={{ margin: '8px 0 0' }}>
         Cancel anytime — your Subscriber features stay active through the end of the
@@ -277,15 +377,6 @@ export function BecomeSubscriberPitch({ variant }: { variant: Variant }) {
       </p>
     </div>
   )
-}
-
-// Parses a plain YYYY-MM-DD as a local calendar date, not a UTC instant, so
-// the displayed day never shifts a day earlier/later depending on the
-// viewer's own time zone — same reasoning as every other bare "date" field
-// in this app (Due Date, Done Date, Before Done Date).
-function parseIsoDate(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, (m ?? 1) - 1, d ?? 1)
 }
 
 function formatRenewalDate(iso: string | null): string {
@@ -298,25 +389,23 @@ function formatRenewalDate(iso: string | null): string {
   })
 }
 
-// Buy-Add'l pricing rule, confirmed with Jim: less than 6 months remaining
-// until the Renewal Date -> $5 per 5 GB block (discounted); otherwise $10
-// per 5 GB block. No known Renewal Date (shouldn't normally happen once
-// migration 047 is backfilling it, but defensive) reads as the normal,
-// undiscounted rate.
-function isWithinSixMonths(renewalDate: string | null): boolean {
-  if (!renewalDate) return false
-  const sixMonthsOut = new Date()
-  sixMonthsOut.setMonth(sixMonthsOut.getMonth() + 6)
-  return parseIsoDate(renewalDate).getTime() <= sixMonthsOut.getTime()
-}
-
-function computeAddlStoragePrice(renewalDate: string | null, targetGb: 5 | 10): number {
-  const perBlock = isWithinSixMonths(renewalDate) ? 5 : 10
-  return (targetGb / 5) * perBlock
-}
-
 function RenewalDatePanel({ renewalDate }: { renewalDate: string | null }) {
-  const [clicked, setClicked] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCancelRenewal() {
+    setBusy(true)
+    setError(null)
+    // Redirects to Stripe's own hosted Billing Portal — it already shows
+    // this same renewal date and offers Cancel there, so there's nothing
+    // further to build here beyond starting that session.
+    const result = await startStripeFlow('/api/stripe/create-portal-session', {})
+    if (!result.ok) {
+      setError(result.message)
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       <div className="promo-sub" style={{ marginTop: 12 }}>
@@ -324,13 +413,13 @@ function RenewalDatePanel({ renewalDate }: { renewalDate: string | null }) {
       </div>
       <div className="donerow" style={{ margin: '4px 0 0' }}>
         <span className="donenote">{formatRenewalDate(renewalDate)}</span>
-        <button type="button" className="btn" onClick={() => setClicked(true)}>
-          Cancel Renewal
+        <button type="button" className="btn" onClick={handleCancelRenewal} disabled={busy}>
+          {busy ? 'Opening…' : 'Cancel Renewal'}
         </button>
       </div>
-      {clicked && (
-        <p className="promo-p" style={{ margin: '6px 0 0' }}>
-          Subscription changes aren&rsquo;t available yet — check back soon.
+      {error && (
+        <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--alert-red)' }}>
+          {error}
         </p>
       )}
     </>
@@ -345,8 +434,22 @@ function AttachmentStoragePanel({
   storageGb: number
 }) {
   const [targetGb, setTargetGb] = useState<5 | 10>(5)
-  const [clicked, setClicked] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const price = computeAddlStoragePrice(renewalDate, targetGb)
+
+  async function handleBuy() {
+    setBusy(true)
+    setError(null)
+    // The server independently recomputes this exact price from the
+    // account's own renewalDate/targetGb — never trusts the dollar amount
+    // shown here, only the targetGb choice.
+    const result = await startStripeFlow('/api/stripe/create-storage-checkout-session', { targetGb })
+    if (!result.ok) {
+      setError(result.message)
+      setBusy(false)
+    }
+  }
 
   return (
     <>
@@ -373,13 +476,8 @@ function AttachmentStoragePanel({
             10 GB
           </button>
         </div>
-        <button
-          type="button"
-          className="btn"
-          style={{ marginLeft: 'auto' }}
-          onClick={() => setClicked(true)}
-        >
-          Buy Add&rsquo;l (${price})
+        <button type="button" className="btn" style={{ marginLeft: 'auto' }} onClick={handleBuy} disabled={busy}>
+          {busy ? 'Starting checkout…' : `Buy Add'l ($${price})`}
         </button>
       </div>
       <p className="promo-p" style={{ margin: '8px 0 0' }}>
@@ -387,9 +485,9 @@ function AttachmentStoragePanel({
         discounted to $5 per 5 GB for that period; otherwise it&rsquo;s $10 per 5 GB, added
         to your annual subscription renewal cost.
       </p>
-      {clicked && (
-        <p className="promo-p" style={{ margin: '6px 0 0' }}>
-          Subscription checkout isn&rsquo;t available yet — check back soon.
+      {error && (
+        <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--alert-red)' }}>
+          {error}
         </p>
       )}
     </>
@@ -407,25 +505,25 @@ export function PlanSummaryPanel({ heading = 'Plan Summary' }: { heading?: strin
           Subscriber — 1st year
           <span className="plan-sub">20% discount, billed today</span>
         </span>
-        <span className="plan-price">$39</span>
+        <span className="plan-price">${ANNUAL_FIRST_YEAR_PRICE}</span>
       </div>
       <div className="planrow">
         <span className="plan-name">
           Renews at
           <span className="plan-sub">automatically, each year thereafter</span>
         </span>
-        <span className="plan-price">$49/yr</span>
+        <span className="plan-price">${ANNUAL_RENEWAL_PRICE}/yr</span>
       </div>
       {/* Monthly option added 2026-08-27, Jim's own drafted addition — an
-          alternative plan shown for reference alongside the annual one,
-          not a live plan switch (no checkout path exists for either yet).
-          Repriced 2026-10-13 alongside the annual figures. */}
+          alternative plan shown for reference alongside the annual one.
+          Wired to a real checkout 2026-11-04 (migration 088). Repriced
+          2026-10-13 alongside the annual figures. */}
       <div className="planrow">
         <span className="plan-name">
           Monthly
           <span className="plan-sub">renews each month until canceled</span>
         </span>
-        <span className="plan-price">$5/mo</span>
+        <span className="plan-price">${MONTHLY_PRICE}/mo</span>
       </div>
 
       <SubscriberFeatureList heading="What's included" />

@@ -313,6 +313,7 @@ export default function AccountForm() {
   // Defaults false so there is no flash of the section before
   // can_toggle_tier() resolves.
   const [canToggleTier, setCanToggleTier] = useState(false)
+  const [isTester, setIsTester] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -455,6 +456,11 @@ export default function AccountForm() {
       // either way, and this section staying hidden is the safe default.
       const { data: canToggle } = await supabase.rpc('can_toggle_tier')
       if (!cancelled) setCanToggleTier(canToggle === true)
+
+      // is_beta_tester() (migration 088) — drives the $19-vs-$39 1st-year
+      // price shown in BecomeSubscriberPitch below.
+      const { data: tester } = await supabase.rpc('is_beta_tester')
+      if (!cancelled) setIsTester(tester === true)
 
       setLoading(false)
     }
@@ -1272,7 +1278,7 @@ export default function AccountForm() {
                 {tier === 'subscriber' ? (
                   <MySubscriptionSummary variant="embedded" renewalDate={renewalDate} storageGb={storageGb} />
                 ) : (
-                  <BecomeSubscriberPitch variant="embedded" />
+                  <BecomeSubscriberPitch variant="embedded" isTester={isTester} />
                 )}
 
                 {/* Storage Management (2026-09-03) — reachable regardless of

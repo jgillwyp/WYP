@@ -6265,3 +6265,124 @@ link is built only after the stack is proven on Add Contact.
   it's written. `npx tsc --noEmit`/`npm run lint` both clean across the
   whole batch. No mockup updated — this feature family has none beyond
   Jim's own pasted Account Options/Create screen mockups.
+- **Real Stripe billing — Sign Up, Cancel Renewal, and Buy Add'l Storage
+  all wired end to end; a $19 private-tester 1st-year rate — migration 088
+  CONFIRMED RUN by Jim, 2026-11-04. New `stripe` npm dependency (zero new
+  vulnerable packages, checked via `npm audit`).** Jim: "perhaps we could
+  hook up [the subscribe process] completely. The subscription should be a
+  reduced rate — only $19.00 for testers — for the 1st year. some 'testor
+  only' visible text explanation could be offered." Every prior "checkout
+  isn't available yet" stub (`SubscriptionCheckoutButton`, Cancel Renewal,
+  Buy Add'l — all since 2026-08-24/25) is now a real Stripe call. **Scoped
+  via `AskUserQuestion` before building**: Jim had no Stripe account yet
+  (though his CA C-Corp and bank account are already in place — nothing
+  blocking him from creating one), so nothing in this batch could be
+  tested end to end against a live key in this sandbox (no network route
+  to Stripe's API, same limitation as every other external-service
+  integration here); the $19 tester rate applies to anyone on
+  `beta_allowlist`, shown directly on the Subscribe screen itself any time
+  during testing — no separate "testing is wrapping up" trigger, Jim's own
+  confirmed scope; and build-everything-at-once was confirmed only after
+  Jim asked whether it costs more in Stripe fees — researched live
+  (`WebSearch`, since fee schedules change and this is a real financial
+  decision): Cancel Renewal has **zero** incremental cost (no transaction
+  occurs), and Buy Add'l Storage bills at the exact same 2.9% + $0.30/charge
+  rate Sign Up itself already pays, with Stripe Billing's 0.7%-of-recurring-
+  volume cut already incurred by having any recurring subscription at all —
+  so "Everything" introduces no new fee tier over "Sign Up only."
+  **Pricing mechanism**: not two separate Price objects for "$39 1st
+  year"/"$49 renewal" — one real recurring Price ($49/yr) plus a
+  `duration: 'once'` Coupon that only ever discounts the very first
+  invoice (`amount_off: 1000` = $10 off = $39.00 for the general public;
+  a second coupon, `amount_off: 3000` = $30 off = $19.00, applied instead
+  whenever the caller is a tester). Every renewal after the first bills
+  the plain $49 with no coupon involved — Stripe's own standard "intro
+  price" pattern, needing no cron job or scheduled price-switch on this
+  app's side. Monthly ($5/mo) is a second, separate flat recurring Price
+  with no discount ever, matching its existing "low-commitment
+  alternative, not a cheaper path" framing. New `app/src/lib/
+  subscriptionPricing.ts` — the dollar figures and the Buy Add'l six-
+  months-out pricing rule, moved out of `SubscriptionPanels.tsx` (a 'use
+  client' file, unimportable from a route handler) into a plain, import-
+  anywhere module, so the price the UI *shows* and the price Checkout
+  *charges* can never drift apart — the storage-addon route recomputes it
+  server-side from the account's own `subscription_renewal_date`, never
+  trusting a client-supplied dollar amount.
+  **New `app/src/lib/stripe.ts`** (server-only — never imported from a
+  'use client' file) wraps the Stripe SDK client plus `must()`-style env-var
+  getters for the Price/Coupon ids `docs/stripe-setup.mjs` produces.
+  **Four new routes under `app/api/stripe/`**: `create-checkout-session`
+  (forwarded-JWT, decides the $19-vs-$39 coupon itself via `is_beta_tester()`
+  — never trusts the client's own belief about tester status, same "the
+  locked button is a courtesy" posture every other gated write in this app
+  already takes), `create-storage-checkout-session` (forwarded-JWT, re-
+  checks `tier === 'subscriber'` server-side), `create-portal-session`
+  (forwarded-JWT — Cancel Renewal redirects to Stripe's own hosted Billing
+  Portal rather than a custom cancellation screen: it already shows the
+  renewal date, offers Cancel-at-period-end, payment-method update, and
+  invoice history, all for free, so nothing custom needed building), and
+  `webhook` (service_role — the one place profiles.tier/
+  subscription_renewal_date/stripe_subscription_* actually get written for
+  a real subscription; verifies Stripe's own signature over the **raw**
+  request body before trusting anything in it). All three forwarded-JWT
+  routes create-or-reuse a Stripe Customer per account, persisting the id
+  back via a new narrow `set_stripe_customer_id()` RPC rather than a raw
+  column UPDATE — deliberate, since the value happens to always be
+  server-computed in this app's own code today, but a direct grant would
+  make that an unenforced assumption instead of a structural guarantee.
+  **Migration 088**: four new `profiles` columns
+  (`stripe_customer_id`/`stripe_subscription_id`/
+  `stripe_subscription_status`/`stripe_cancel_at_period_end`) — **three of
+  them get no `authenticated` grant at all**, by design, matching the
+  exact reasoning migration 035 already gave for revoking migration 024's
+  own blanket `tier` grant: an unconditional column grant would let a
+  client UPDATE its own subscription status directly, bypassing every gate
+  the UI shows. Only the webhook (service_role, bypasses grants entirely)
+  ever writes those three; `stripe_customer_id` goes through
+  `set_stripe_customer_id()` instead of a grant, and that function itself
+  refuses to ever overwrite an already-linked customer id. New
+  `is_beta_tester()` (same `auth.uid()` → email → allowlist-membership
+  shape as `can_toggle_tier()`, migration 035, just checking
+  `beta_allowlist` instead of the narrower `tier_toggle_allowlist`) is the
+  **only** thing that decides the $19 rate — granted to `authenticated`,
+  since it's read-only and grants no capability beyond "which price do you
+  see." New `stripe_webhook_events` table (service_role only) guards
+  webhook idempotency — Stripe both can and does redeliver the same event
+  (retries, dashboard resend), and without this a redelivered Buy Add'l
+  Storage purchase would double-credit the storage grant.
+  **Client wiring** (`SubscriptionPanels.tsx`, `SubscriptionForm.tsx`,
+  `AccountForm.tsx`): `BecomeSubscriberPitch` gained an `isTester` prop
+  (both call sites fetch it the same way they already fetch
+  `canToggleTier`) and now shows the $19 price plus the tester-only
+  explanatory italic note Jim asked for whenever it's true; a new, second
+  "Or sign up monthly instead" link sits under the primary annual Sign Up
+  button, since the Monthly plan is real now too. Every click (Sign Up,
+  Cancel Renewal, Buy Add'l) goes through one shared `startStripeFlow()`
+  helper — gets the caller's own access token, POSTs, and redirects the
+  whole page to the URL the route returns; no Stripe.js or publishable key
+  needed client-side at all, since every Checkout/Portal Session is
+  created server-side. `/account/subscription` reads back
+  `?checkout=success|cancelled` (Stripe's own `success_url`/`cancel_url`
+  redirect targets) via `window.location.search` directly rather than
+  `useSearchParams()` — safe here, unlike `/login`'s own earlier
+  `?intent=signup` staleness bug, because this redirect is always a real
+  top-level browser navigation from Stripe's hosted page, never a
+  same-instance client-router reuse.
+  **New `docs/stripe-setup.mjs`** — same "written here, run by Jim on his
+  own machine" posture as `add-tester.mjs`/`seed-test-attachments.mjs`
+  (this sandbox has no network route to Stripe's API at all): idempotently
+  creates the Product, both real Prices, and both Coupons, then prints the
+  six env vars (`STRIPE_PRICE_ANNUAL`/`STRIPE_PRICE_MONTHLY`/
+  `STRIPE_COUPON_FIRST_YEAR`/`STRIPE_COUPON_TESTER_FIRST_YEAR`, plus
+  `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` which the script itself
+  can't produce — the webhook signing secret is only ever shown once, in
+  the Dashboard's own Add Endpoint flow) to paste into `.env.local` and
+  Vercel. Recommends starting in Stripe's test mode (card `4242 4242 4242
+  4242`) and clicking through a real Sign Up before ever switching to live
+  keys. **None of this is live yet** — migration 088 is run, but Jim still
+  needs to actually create the Stripe account, run this script, register
+  the webhook endpoint in the Dashboard, and add all six env vars to
+  `.env.local`/Vercel before any Sign Up/Cancel/Buy Add'l click resolves
+  to anything but a `server_misconfigured` error. `npx tsc --noEmit`/`npm
+  run lint` both clean across the whole batch. No mockup — none of the
+  three touched components has ever had one.
