@@ -6606,3 +6606,22 @@ link is built only after the stack is proven on Add Contact.
   matching migration 052's own discipline of keeping the copy and the real
   default in sync. `npx tsc --noEmit`/`npm run lint` both clean. **Migration 089
   confirmed run by Jim, 2026-11-05.**
+- **Testing reset also detaches duplicated test payment methods
+  (2026-11-05, `app/api/stripe/testing-downgrade/route.ts`), no migration.**
+  Jim: the test `4242` card listed 5 times in Stripe's own Payment Methods
+  for his test customer. Root cause: a Stripe Checkout Session in
+  subscription mode attaches a *new* PaymentMethod to the Customer on every
+  completion, even for an identical card number — Checkout has no way to
+  know "this is the same card as last time" unless it's picked from the
+  customer's own saved list, and repeated Sign-Up/reset test cycles each
+  attached one more while canceling the subscription never detached the
+  card it was billed on. The "Subscribed? (testing only)" uncheck reset
+  (built earlier the same day, 2026-11-05) already cancels every
+  subscription as a "full reset" — extended to also list and detach every
+  `type: 'card'` payment method on the customer, wrapped in its own
+  try/catch so a detach failure (unlikely) never blocks the rest of the
+  reset. Best-effort cleanup only; a real customer who genuinely
+  resubscribes after canceling would see the same minor duplication, but
+  that's a one-time, cosmetic Stripe Dashboard artifact, not something
+  this app's own data depends on. `npx tsc --noEmit`/`npm run lint` both
+  clean.

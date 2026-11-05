@@ -23,6 +23,14 @@ export const runtime = 'nodejs'
  * that direction never touches Stripe): canceling a subscription needs the
  * Stripe API, which SQL can't reach.
  *
+ * Also detaches every payment method left on the customer (2026-11-05,
+ * same conversation — Jim noticed the 4242 test card listed 5 times in
+ * Stripe's Payment Methods: each test Sign Up's Checkout session attaches a
+ * new PaymentMethod even for an identical card number, and canceling a
+ * subscription never detaches the card it was billed on) — best-effort,
+ * logged but never fails the request, since this is cosmetic cleanup, not
+ * something a real reset should block on.
+ *
  * Also enforces Jim's own described guard: a tester with more than the
  * Free-tier 100 MB actually in use can't downgrade blind into being over
  * their new cap — refused with a message pointing at Storage Management,
@@ -99,6 +107,21 @@ export async function POST(request: Request) {
     } catch (err) {
       console.error('[stripe/testing-downgrade] subscription cleanup failed', err)
       return Response.json({ error: 'stripe_error' }, { status: 502 })
+    }
+
+    // Each test Sign Up's Checkout session attaches a fresh PaymentMethod to
+    // the customer even when it's the identical 4242 test card — Checkout has
+    // no way to know it's "the same card" unless it's picked from the
+    // customer's own saved list. Repeated test cycles pile these up with no
+    // subscription left pointing at any of them, so detach them all here too
+    // — a best-effort cleanup, never worth failing the whole reset over.
+    try {
+      const paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 100 })
+      for (const pm of paymentMethods.data) {
+        await stripe.paymentMethods.detach(pm.id)
+      }
+    } catch (err) {
+      console.error('[stripe/testing-downgrade] payment method cleanup failed', err)
     }
   }
 
