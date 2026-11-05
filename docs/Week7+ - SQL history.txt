@@ -986,4 +986,58 @@ alter table public.stripe_webhook_events enable row level security;
 --   select table_name from information_schema.tables
 --     where table_name = 'stripe_webhook_events';
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 089 (2026-11-05) -- profiles.tier default reverted to 'free'
+--
+-- Jim: "We could even turn it on for testers since going in and out of
+-- subscription mode is so easy. The email could explain that." -- reverses
+-- migration 052's own "On by default" change (2026-09-06), which flipped
+-- the column default to 'subscriber' specifically "for testing" -- a
+-- convenience that, as raised the same day this migration was drafted, has
+-- no way to tell a real future public signup apart from a tester: the
+-- Private Testing signup gate (app_settings.signup_gate_enabled) is the
+-- only thing currently preventing a real stranger from also getting free
+-- Subscriber-tier access the instant they sign in, since neither
+-- handle_new_user() nor CreateFreeAccountForm.tsx ever writes tier
+-- explicitly -- every new profiles row has always just inherited whatever
+-- the column default happened to be. Rather than wait until opening public
+-- signup to revert this, Jim chose to do it now -- testers can trivially
+-- re-grant themselves Subscriber access via the existing "Subscribed?
+-- (testing only)" checkbox whenever they actually want to test a paid
+-- feature, so there's no real cost to them starting Free like every future
+-- real signup will.
+--
+-- Only changes the column default for accounts created FROM NOW ON -- same
+-- non-destructive posture migration 052 itself used; no existing row's
+-- tier is touched by this migration.
+--
+-- provision_pending_testers() (migration 087) needs no change: when
+-- add-tester.mjs's grant_subscriber flag is true (its own default), that
+-- function already explicitly sets tier = 'subscriber' on provisioning,
+-- independent of whatever the column default is -- a tester added that way
+-- still ends up Subscribed automatically once the hourly cron runs, same as
+-- before, just without the extra (and, it turns out, premature) head start
+-- the stale 'subscriber' column default was giving them in the gap between
+-- sign-in and that cron tick. One real side effect, previously silently
+-- broken: a tester added with grant_subscriber = false is, for the first
+-- time, actually left on Free -- that function's own else branch never
+-- touches tier at all, so such a tester had always inherited whatever the
+-- column default was regardless; with that default now 'free',
+-- grant_subscriber = false finally means what its name says.
+--
+-- The checkbox's own "On by default." help text (AccountForm.tsx) is
+-- reverted to "Off by default." in the same commit as this migration, so
+-- the copy and the actual behavior stay in sync -- same discipline
+-- migration 052 itself followed in the other direction.
+-- ============================================================================
+
+alter table public.profiles
+  alter column tier set default 'free';
+
+-- Verify (superuser -- proves the default changed, not that RLS/grants
+-- still behave; those are unaffected by this migration):
+--
+--   select column_default from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'tier';
 -- ============================================================================

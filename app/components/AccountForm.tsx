@@ -1368,7 +1368,8 @@ export default function AccountForm() {
                           like Attachments can be tested. This status only lasts for the
                           testing period — once testing ends, this checkbox goes away and you
                           would subscribe for real, through the button below. New accounts start
-                          Subscribed (On by default); uncheck to test the free tier instead.
+                          Free (Off by default); check this whenever you want to test Subscriber
+                          features.
                         </span>
                       </span>
                     </label>

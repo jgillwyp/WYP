@@ -6566,6 +6566,43 @@ link is built only after the stack is proven on Add Contact.
   row's `marginTop: tier === 'subscriber' ? 0 : 14` predated the Manage
   Storage button now sitting above it; collapsed to a flat `marginTop: 14`
   regardless of tier. `npx tsc --noEmit`/`npm run lint` both clean across
-  the whole batch. **Not yet committed or tested** — awaiting Jim's
-  go-ahead, same posture as every other Stripe-touching change this
-  session.
+  the whole batch. Committed and pushed (`7a9780b`) at Jim's request —
+  confirmed live.
+
+- **`profiles.tier`'s column default reverted from `'subscriber'` back to
+  `'free'` — migration 089, DRAFTED, NOT YET CONFIRMED RUN (2026-11-05).**
+  Surfaced while answering a plain question about Statistics' tester count:
+  asked what state a brand-new tester's account is in before the hourly
+  provisioning cron runs, the honest answer was "already Subscriber tier,
+  immediately" — because migration 052 (2026-09-06, "Please change the
+  Subscribed (for testing) to be 'On' by default") made that the column
+  default for every new profile row, and neither `handle_new_user()` nor
+  `CreateFreeAccountForm.tsx` ever writes `tier` explicitly, so the column
+  default is the only thing deciding it. Flagged directly to Jim: this
+  default doesn't distinguish a tester from a future real public signup —
+  only the Private Testing signup gate (`app_settings.signup_gate_enabled`)
+  currently prevents a real stranger from also getting free Subscriber
+  access the instant they sign in. Jim's own call, rather than wait until
+  opening public signup to fix it: "We could even turn it on for testers
+  since going in and out of subscription mode is so easy. The email could
+  explain that" — testers can trivially re-grant themselves Subscriber
+  access via the existing "Subscribed? (testing only)" checkbox whenever
+  they actually want to test a paid feature, so starting Free costs them
+  nothing. Non-destructive, same posture migration 052 itself used — only
+  changes the default for accounts created from now on, no existing row's
+  `tier` touched. `provision_pending_testers()` (migration 087) needs no
+  code change: it already explicitly sets `tier = 'subscriber'` itself when
+  `add-tester.mjs`'s `grant_subscriber` flag is true, independent of the
+  column default, so a tester added that way still ends up Subscribed once
+  the hourly cron runs — just without the extra (premature) head start the
+  stale default was giving them in the gap before that tick. **Real side
+  effect, previously silently broken, now fixed as a byproduct**: a tester
+  added with `grant_subscriber = false` had always still ended up
+  `'subscriber'` anyway, since that function's own `else` branch never
+  touches `tier` at all and so just inherited whatever the column default
+  was; with the default now `'free'`, `grant_subscriber = false` finally
+  does what its name says. `AccountForm.tsx`'s own checkbox help text
+  flipped in the same commit ("New accounts start Free (Off by default)"),
+  matching migration 052's own discipline of keeping the copy and the real
+  default in sync. `npx tsc --noEmit`/`npm run lint` both clean. **Migration 089
+  confirmed run by Jim, 2026-11-05.**
