@@ -6494,3 +6494,78 @@ link is built only after the stack is proven on Add Contact.
   Stripe or Vercel yet; a real test (increase, decrease toward the usage
   floor, and a decrease attempt below it) still needs to happen once
   they're added.
+
+- **Six fixes from Jim's first live Stripe test (2026-11-05), no migration.**
+  Jim confirmed the storage redesign worked end to end (real proration on a
+  Monthly subscription), then reported six real problems from using it.
+  (1) **Testers blocked from real storage purchases outright** — Jim's own
+  mid-fix redirect: "maybe the testers should not have access to additional
+  storage - and only allow them to set the MBs instead (and just grey the
+  5GB out)." `AttachmentStoragePanel` gained a `realPurchaseDisabled` prop
+  (both call sites pass their already-fetched `canToggleTier`) that greys
+  the −/+/Update Storage controls and swaps the explanatory paragraph for
+  one pointing at the existing "Test Storage Cap (MB, testing only)" field
+  instead — `update-storage/route.ts` independently refuses the same
+  request server-side via `can_toggle_tier()`, never trusting the greyed
+  button alone. (2) **Duplicate real Stripe subscriptions** —
+  root-caused: unchecking "Subscribed? (testing only)" only ever flipped
+  the local tier flag, so the real Sign Up button reappeared and nothing
+  stopped a second (or third) real Checkout from creating another live
+  subscription alongside whichever one was already there, while the app
+  only ever tracks one `stripe_subscription_id` — explains both the
+  orphaned subscriptions in Jim's own Stripe Dashboard screenshot and the
+  "cancellation doesn't seem to stick" report (he was likely canceling one
+  while others stayed live). Fixed at the root in
+  `create-checkout-session/route.ts`: before creating a Checkout session,
+  lists the customer's active/trialing subscriptions and refuses with
+  `already_subscribed` if any already exist, directing the account to
+  Cancel Renewal instead. (3) **"Subscribed? (testing only)" now does a
+  real reset when unchecked** — new `app/api/stripe/testing-downgrade/
+  route.ts` (re-verifies `can_toggle_tier()` server-side), called from both
+  `AccountForm.tsx`'s and `SubscriptionForm.tsx`'s `handleTierToggle` in
+  place of the plain `set_tier_for_testing` RPC on the uncheck direction
+  only (checking it back on is still pure local state, no Stripe
+  involved): cancels *every* active/trialing/past_due/unpaid subscription
+  for the account's Stripe customer immediately (not at period end — this
+  is testing cleanup, not a real customer's own choice), and resets
+  `subscription_storage_gb`/`subscription_renewal_date`/
+  `stripe_subscription_id`/`stripe_subscription_status`/
+  `stripe_cancel_at_period_end` to a clean slate. Also implements Jim's own
+  described guard: if real usage exceeds the 100 MB Free cap, the downgrade
+  is refused outright with a message pointing at Storage Management, rather
+  than silently leaving the account over its new limit. **This same route
+  is what cleans up the handful of orphaned subscriptions already sitting
+  in Jim's own Stripe Dashboard** — no separate one-off script needed,
+  unchecking the box once more now sweeps all of them. (4) **Navigation
+  loop after returning from Stripe** — root cause: a Stripe Checkout/
+  Billing Portal redirect is a real top-level browser navigation, breaking
+  the history continuity `router.back()` depends on; `/account/
+  subscription`'s Close button could land back on a blank or timed-out
+  Stripe page instead of the app. Fixed narrowly: `checkoutStatus` (already
+  captured once at mount, before the existing `router.replace()` strips the
+  query string) now also drives `handleClose` — if set, Close pushes to `/`
+  instead of calling `back()`; the normal in-app-entry case is unchanged.
+  (5) **Plan Summary simplified for an already-subscribed account** — Jim's
+  own pasted mockup, explicitly inviting a redesign ("I haven't come up
+  with a redesign but would like to make the presentation... easier"): the
+  old `PlanSummaryPanel` unconditionally listed all three plan options
+  (Annual 1st-year/Renews-at/Monthly) even once already subscribed to one
+  of them. New `app/api/stripe/plan-summary/route.ts` (+ a small shared
+  `resolveSubscriptionCadence()` helper in `app/api/stripe/_shared.ts`,
+  factored out of `update-storage/route.ts`'s own identical lookup rather
+  than duplicated a third time) reads which base plan the account's real
+  subscription is actually on; `PlanSummaryPanel` now shows just that one
+  plan's real price plus a real storage-add-on line (only when extra GB is
+  actually purchased), falling back to the old three-row list only when no
+  real subscription is on file at all (the common case for a pure
+  testing-toggle "subscriber"). Also fixed in the same batch: the storage
+  stepper's current-value line now breaks down "(5 GB included, N GB
+  additional)" when extra storage is owned, and the "− 5 GB" button reads
+  "N/A" instead of staying labeled as a disabled action once target
+  reaches the usage floor. (6) **Vertical spacing bug** — the checkbox
+  row's `marginTop: tier === 'subscriber' ? 0 : 14` predated the Manage
+  Storage button now sitting above it; collapsed to a flat `marginTop: 14`
+  regardless of tier. `npx tsc --noEmit`/`npm run lint` both clean across
+  the whole batch. **Not yet committed or tested** — awaiting Jim's
+  go-ahead, same posture as every other Stripe-touching change this
+  session.

@@ -13,6 +13,8 @@ import {
   TESTER_FIRST_YEAR_PRICE,
   minAllowedStorageGb,
   parseIsoDate,
+  storageRatePerBlock,
+  type SubscriptionCadence,
   type SubscriptionPlan,
 } from '@/lib/subscriptionPricing'
 
@@ -439,9 +441,21 @@ function RenewalDatePanel({ renewalDate }: { renewalDate: string | null }) {
 function AttachmentStoragePanel({
   storageGb,
   onStorageUpdated,
+  realPurchaseDisabled = false,
 }: {
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
+  // Testing accounts (can_toggle_tier()) use the separate "Test Storage Cap
+  // (MB, testing only)" override field instead of touching real recurring
+  // billing — Jim's own call, 2026-11-05, after testing the real feature
+  // surfaced several real-Stripe side effects (orphaned subscriptions from
+  // repeated Sign Up tests) that a testing account shouldn't be creating in
+  // the first place. The controls stay visible, just disabled — never
+  // hidden — so "Current: X Gigabytes" is still legible. The server
+  // (update-storage/route.ts) independently refuses the same request
+  // regardless of this prop, same "the locked button is a courtesy" rule
+  // this app already applies everywhere else.
+  realPurchaseDisabled?: boolean
 }) {
   const [target, setTarget] = useState(storageGb)
   const [minGb, setMinGb] = useState(STORAGE_BLOCK_GB)
@@ -450,6 +464,7 @@ function AttachmentStoragePanel({
   const [confirmation, setConfirmation] = useState<string | null>(null)
 
   useEffect(() => {
+    if (realPurchaseDisabled) return
     let cancelled = false
     async function loadUsage() {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -473,9 +488,10 @@ function AttachmentStoragePanel({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [realPurchaseDisabled])
 
   async function handleUpdate() {
+    if (realPurchaseDisabled) return
     setBusy(true)
     setError(null)
     setConfirmation(null)
@@ -539,6 +555,9 @@ function AttachmentStoragePanel({
   }
 
   const changed = target !== storageGb
+  const extraGb = storageGb - STORAGE_BLOCK_GB
+  const atFloor = target <= minGb
+  const controlsDisabled = realPurchaseDisabled || busy
 
   return (
     <>
@@ -547,15 +566,18 @@ function AttachmentStoragePanel({
       </div>
       <p className="promo-p" style={{ margin: '4px 0 8px' }}>
         Current: <strong>{storageGb} Gigabytes</strong>
+        {extraGb > 0 && (
+          <> ({STORAGE_BLOCK_GB} GB included, {extraGb} GB additional)</>
+        )}
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <button
           type="button"
           className="btn-secondary"
           onClick={() => setTarget((t) => Math.max(minGb, t - STORAGE_BLOCK_GB))}
-          disabled={busy || target <= minGb}
+          disabled={controlsDisabled || atFloor}
         >
-          − {STORAGE_BLOCK_GB} GB
+          {atFloor ? 'N/A' : `− ${STORAGE_BLOCK_GB} GB`}
         </button>
         <span style={{ minWidth: 64, textAlign: 'center' }}>
           <strong>{target} GB</strong>
@@ -564,7 +586,7 @@ function AttachmentStoragePanel({
           type="button"
           className="btn-secondary"
           onClick={() => setTarget((t) => t + STORAGE_BLOCK_GB)}
-          disabled={busy}
+          disabled={controlsDisabled}
         >
           + {STORAGE_BLOCK_GB} GB
         </button>
@@ -573,19 +595,27 @@ function AttachmentStoragePanel({
           className="btn"
           style={{ marginLeft: 'auto' }}
           onClick={handleUpdate}
-          disabled={busy || !changed}
+          disabled={controlsDisabled || !changed}
         >
           {busy ? 'Updating…' : 'Update Storage'}
         </button>
       </div>
-      <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        Billed as part of your subscription, at the same cadence it already renews on —{' '}
-        <strong>${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo</strong> per {STORAGE_BLOCK_GB} GB on a
-        Monthly plan, or <strong>${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr</strong> per{' '}
-        {STORAGE_BLOCK_GB} GB on an Annual plan (prorated for the remainder of your current
-        year if added mid-cycle). No separate charges — the rate simply changes, and a
-        reduction can&rsquo;t go below what&rsquo;s already in use ({minGb} GB right now).
-      </p>
+      {realPurchaseDisabled ? (
+        <p className="promo-p" style={{ margin: '8px 0 0' }}>
+          Real storage purchases are disabled for testing accounts. Use{' '}
+          <strong>Test Storage Cap (MB, testing only)</strong> below to simulate a different
+          storage cap without affecting real billing.
+        </p>
+      ) : (
+        <p className="promo-p" style={{ margin: '8px 0 0' }}>
+          Billed as part of your subscription, at the same cadence it already renews on —{' '}
+          <strong>${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo</strong> per {STORAGE_BLOCK_GB} GB on a
+          Monthly plan, or <strong>${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr</strong> per{' '}
+          {STORAGE_BLOCK_GB} GB on an Annual plan (prorated for the remainder of your current
+          year if added mid-cycle). No separate charges — the rate simply changes, and a
+          reduction can&rsquo;t go below what&rsquo;s already in use ({minGb} GB right now).
+        </p>
+      )}
       {confirmation && (
         <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--brand-blue)' }}>
           {confirmation}
@@ -600,7 +630,12 @@ function AttachmentStoragePanel({
   )
 }
 
-export function PlanSummaryPanel({ heading = 'Plan Summary' }: { heading?: string }) {
+// The three-row reference list every non-subscriber pitch already shows
+// (Annual 1st-year / Renews-at / Monthly) — kept as GenericPlanOptionsPanel,
+// the fallback for an already-subscribed account whose real cadence can't be
+// determined (e.g. a testing-toggle "subscriber" with no real Stripe
+// subscription on file at all, so there's no one real plan to single out).
+function GenericPlanOptionsPanel({ heading }: { heading: string }) {
   return (
     <>
       <div className="promo-sub" style={{ marginTop: 12 }}>
@@ -620,10 +655,6 @@ export function PlanSummaryPanel({ heading = 'Plan Summary' }: { heading?: strin
         </span>
         <span className="plan-price">${ANNUAL_RENEWAL_PRICE}/yr</span>
       </div>
-      {/* Monthly option added 2026-08-27, Jim's own drafted addition — an
-          alternative plan shown for reference alongside the annual one.
-          Wired to a real checkout 2026-11-04 (migration 088). Repriced
-          2026-10-13 alongside the annual figures. */}
       <div className="planrow">
         <span className="plan-name">
           Monthly
@@ -631,6 +662,107 @@ export function PlanSummaryPanel({ heading = 'Plan Summary' }: { heading?: strin
         </span>
         <span className="plan-price">${MONTHLY_PRICE}/mo</span>
       </div>
+
+      <SubscriberFeatureList heading="What's included" />
+
+      <p className="promo-p" style={{ margin: '8px 0 0' }}>
+        Cancel anytime — your Subscriber features stay active through the end of the
+        period you&rsquo;ve already paid for.
+      </p>
+    </>
+  )
+}
+
+// Redesigned 2026-11-05, Jim's own request: an already-subscribed account
+// doesn't need every plan option listed — just its own real plan and its
+// own real storage add-on cost, each in the cadence it's actually billed
+// on. Fetches which cadence (Annual/Monthly) the account's real Stripe
+// subscription is on from plan-summary/route.ts; falls back to the generic
+// three-row list above when that comes back null (no real subscription on
+// file — the common case for a testing-toggle "subscriber" who never went
+// through real Sign Up).
+export function PlanSummaryPanel({
+  storageGb,
+  heading = 'Your Plan Summary',
+}: {
+  storageGb: number
+  heading?: string
+}) {
+  const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) {
+        if (!cancelled) setLoaded(true)
+        return
+      }
+      try {
+        const res = await fetch('/api/stripe/plan-summary', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const json: { cadence?: SubscriptionCadence | null } = await res.json()
+        if (!cancelled) setCadence(json.cadence ?? null)
+      } catch {
+        // cadence stays null — falls back to the generic list below.
+      } finally {
+        if (!cancelled) setLoaded(true)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!loaded) {
+    return (
+      <div className="promo-sub" style={{ marginTop: 12 }}>
+        {heading}
+      </div>
+    )
+  }
+
+  if (!cadence) {
+    return <GenericPlanOptionsPanel heading={heading} />
+  }
+
+  const extraGb = storageGb - STORAGE_BLOCK_GB
+  const ratePerBlock = storageRatePerBlock(cadence)
+  const storageCost = (extraGb / STORAGE_BLOCK_GB) * ratePerBlock
+  const unit = cadence === 'annual' ? '/yr' : '/mo'
+
+  return (
+    <>
+      <div className="promo-sub" style={{ marginTop: 12 }}>
+        {heading}
+        <span className="plan-sub" style={{ display: 'block', fontWeight: 400 }}>
+          renews until canceled
+        </span>
+      </div>
+      <div className="planrow">
+        <span className="plan-name">{cadence === 'annual' ? 'Annual Subscription' : 'Monthly Subscription'}</span>
+        <span className="plan-price">
+          {cadence === 'annual'
+            ? `$${ANNUAL_FIRST_YEAR_PRICE} 1st year, $${ANNUAL_RENEWAL_PRICE} thereafter`
+            : `$${MONTHLY_PRICE}${unit}`}
+        </span>
+      </div>
+      {extraGb > 0 && (
+        <div className="planrow">
+          <span className="plan-name">
+            Attachment Storage Space ({storageGb}GB)
+          </span>
+          <span className="plan-price">
+            ${storageCost}
+            {unit}
+          </span>
+        </div>
+      )}
 
       <SubscriberFeatureList heading="What's included" />
 
@@ -653,11 +785,13 @@ export function MySubscriptionSummary({
   renewalDate,
   storageGb,
   onStorageUpdated,
+  realStoragePurchaseDisabled = false,
 }: {
   variant: Variant
   renewalDate: string | null
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
+  realStoragePurchaseDisabled?: boolean
 }) {
   return (
     <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
@@ -669,8 +803,12 @@ export function MySubscriptionSummary({
       </p>
 
       <RenewalDatePanel renewalDate={renewalDate} />
-      <AttachmentStoragePanel storageGb={storageGb} onStorageUpdated={onStorageUpdated} />
-      <PlanSummaryPanel />
+      <AttachmentStoragePanel
+        storageGb={storageGb}
+        onStorageUpdated={onStorageUpdated}
+        realPurchaseDisabled={realStoragePurchaseDisabled}
+      />
+      <PlanSummaryPanel storageGb={storageGb} />
     </div>
   )
 }

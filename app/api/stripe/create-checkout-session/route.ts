@@ -98,6 +98,34 @@ export async function POST(request: Request) {
     // here since we just confirmed the column was null, but keeps every
     // caller of this function honest the same way regardless.
     await sb.rpc('set_stripe_customer_id', { p_customer_id: customerId })
+  } else {
+    // Guard against a second, concurrent real Stripe subscription for the
+    // same customer (2026-11-05, Jim-reported — repeated Sign Up testing,
+    // crossed with the "Subscribed? (testing only)" checkbox flipping tier
+    // back to 'free' without canceling the real one underneath, left
+    // several live orphaned subscriptions in the Stripe Dashboard). This
+    // app only ever tracks ONE stripe_subscription_id per profile, so a
+    // second live subscription is never something this account can
+    // correctly manage afterward — refused outright rather than created.
+    try {
+      const existing = await stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 1 })
+      if (existing.data.length === 0) {
+        const trialing = await stripe.subscriptions.list({ customer: customerId, status: 'trialing', limit: 1 })
+        existing.data.push(...trialing.data)
+      }
+      if (existing.data.length > 0) {
+        return Response.json(
+          {
+            error: 'already_subscribed',
+            detail: 'You already have an active subscription — use Cancel Renewal to manage it instead.',
+          },
+          { status: 409 }
+        )
+      }
+    } catch (err) {
+      console.error('[stripe/create-checkout-session] subscriptions.list check failed', err)
+      return Response.json({ error: 'stripe_error' }, { status: 502 })
+    }
   }
 
   const siteUrl = getSiteUrl()

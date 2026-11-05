@@ -554,15 +554,60 @@ export default function AccountForm() {
   // .from('profiles').update() would fail regardless now.
   async function handleTierToggle(next: boolean) {
     if (!userId) return
-    const nextTier: 'free' | 'subscriber' = next ? 'subscriber' : 'free'
-    setTier(nextTier)
     setSaving(true)
     setSaveError(null)
 
-    const { error: updateError } = await supabase.rpc('set_tier_for_testing', { p_tier: nextTier })
+    if (!next) {
+      // Unchecking — goes through /api/stripe/testing-downgrade, not the
+      // plain RPC, so any real Stripe subscription(s) this testing account
+      // picked up along the way get canceled too, and storage resets to the
+      // base 5 GB. See that route's own header comment.
+      setTier('free')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) {
+        setTier('subscriber')
+        setSaveError('Your sign-in has expired — please sign in again and retry.')
+        setSaving(false)
+        return
+      }
+      let res: Response
+      try {
+        res = await fetch('/api/stripe/testing-downgrade', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      } catch {
+        setTier('subscriber')
+        setSaveError('Could not reach the server — check your connection and try again.')
+        setSaving(false)
+        return
+      }
+      let json: { ok?: boolean; detail?: string; error?: string } = {}
+      try {
+        json = await res.json()
+      } catch {
+        json = {}
+      }
+      if (!res.ok || !json.ok) {
+        setTier('subscriber')
+        setSaveError(json.detail ?? 'Something went wrong — please try again.')
+        setSaving(false)
+        return
+      }
+      setRenewalDate(null)
+      setStorageGb(5)
+      setSaving(false)
+      return
+    }
+
+    // Checking — purely local testing state, no Stripe involved.
+    setTier('subscriber')
+
+    const { error: updateError } = await supabase.rpc('set_tier_for_testing', { p_tier: 'subscriber' })
 
     if (updateError) {
-      setTier(next ? 'free' : 'subscriber')
+      setTier('free')
       setSaveError(updateError.message)
       setSaving(false)
       return
@@ -1281,6 +1326,7 @@ export default function AccountForm() {
                     renewalDate={renewalDate}
                     storageGb={storageGb}
                     onStorageUpdated={setStorageGb}
+                    realStoragePurchaseDisabled={canToggleTier}
                   />
                 ) : (
                   <BecomeSubscriberPitch variant="embedded" isTester={isTester} />
@@ -1303,7 +1349,12 @@ export default function AccountForm() {
 
                 {canToggleTier && (
                   <>
-                    <label className="checkrow" style={{ marginTop: tier === 'subscriber' ? 0 : 14 }}>
+                    {/* Fixed margin, 2026-11-05 — the conditional 0/14 split
+                        predates the Manage Storage button above now sitting
+                        between MySubscriptionSummary and this checkbox;
+                        Jim-reported, the space collapsed whenever Subscribed
+                        was checked. */}
+                    <label className="checkrow" style={{ marginTop: 14 }}>
                       <input
                         type="checkbox"
                         checked={tier === 'subscriber'}

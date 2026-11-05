@@ -2,21 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
 
 import { getOwnerStorageStatus, getServiceRoleClient as getAttachmentsServiceRoleClient } from '../../attachments/_shared'
+import { resolveSubscriptionCadence } from '../_shared'
 import {
   MONTHLY_PRICE,
   ANNUAL_RENEWAL_PRICE,
   STORAGE_BLOCK_GB,
   minAllowedStorageGb,
   storageRatePerBlock,
-  type SubscriptionCadence,
 } from '@/lib/subscriptionPricing'
-import {
-  getAnnualPriceId,
-  getMonthlyPriceId,
-  getStorageAnnualPriceId,
-  getStorageMonthlyPriceId,
-  getStripeClient,
-} from '@/lib/stripe'
+import { getStorageAnnualPriceId, getStorageMonthlyPriceId, getStripeClient } from '@/lib/stripe'
 
 export const runtime = 'nodejs'
 
@@ -108,6 +102,21 @@ export async function POST(request: Request) {
     return Response.json({ error: 'no_subscription' }, { status: 404 })
   }
 
+  // Testing accounts (can_toggle_tier()) are blocked from real storage
+  // purchases client-side (SubscriptionPanels.tsx greys out the controls)
+  // — re-checked here regardless, same "the locked button is a courtesy"
+  // rule every other gated write in this app already follows.
+  const { data: isTestingAccount } = await sb.rpc('can_toggle_tier')
+  if (isTestingAccount) {
+    return Response.json(
+      {
+        error: 'testing_account_blocked',
+        detail: 'Real storage purchases are disabled for testing accounts.',
+      },
+      { status: 403 }
+    )
+  }
+
   // Floor: never let a reduction go below what's actually occupied, via the
   // same getOwnerStorageStatus() every enforcement point in the app already
   // reads usedBytes from.
@@ -132,16 +141,11 @@ export async function POST(request: Request) {
     return Response.json({ error: 'stripe_error' }, { status: 502 })
   }
 
-  const annualPriceId = getAnnualPriceId()
-  const monthlyPriceId = getMonthlyPriceId()
-  const baseItem = subscription.items.data.find(
-    (item) => item.price.id === annualPriceId || item.price.id === monthlyPriceId
-  )
-  if (!baseItem) {
+  const cadence = resolveSubscriptionCadence(subscription)
+  if (!cadence) {
     console.error('[stripe/update-storage] No recognizable base plan item on subscription', subscriptionId)
     return Response.json({ error: 'stripe_error', detail: 'Could not identify your subscription plan.' }, { status: 502 })
   }
-  const cadence: SubscriptionCadence = baseItem.price.id === annualPriceId ? 'annual' : 'monthly'
   const storagePriceId = cadence === 'annual' ? getStorageAnnualPriceId() : getStorageMonthlyPriceId()
 
   const desiredBlocks = (targetTotalGb - STORAGE_BLOCK_GB) / STORAGE_BLOCK_GB

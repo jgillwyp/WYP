@@ -129,15 +129,60 @@ export default function SubscriptionForm() {
   // afterward rather than guessing the new date client-side.
   async function handleTierToggle(next: boolean) {
     if (!userId) return
-    const nextTier: 'free' | 'subscriber' = next ? 'subscriber' : 'free'
-    setTier(nextTier)
     setSaving(true)
     setSaveError(null)
 
-    const { error: updateError } = await supabase.rpc('set_tier_for_testing', { p_tier: nextTier })
+    if (!next) {
+      // Unchecking — goes through /api/stripe/testing-downgrade, not the
+      // plain RPC, so any real Stripe subscription(s) this testing account
+      // picked up along the way get canceled too, and storage resets to the
+      // base 5 GB. See that route's own header comment.
+      setTier('free')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) {
+        setTier('subscriber')
+        setSaveError('Your sign-in has expired — please sign in again and retry.')
+        setSaving(false)
+        return
+      }
+      let res: Response
+      try {
+        res = await fetch('/api/stripe/testing-downgrade', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      } catch {
+        setTier('subscriber')
+        setSaveError('Could not reach the server — check your connection and try again.')
+        setSaving(false)
+        return
+      }
+      let json: { ok?: boolean; detail?: string; error?: string } = {}
+      try {
+        json = await res.json()
+      } catch {
+        json = {}
+      }
+      if (!res.ok || !json.ok) {
+        setTier('subscriber')
+        setSaveError(json.detail ?? 'Something went wrong — please try again.')
+        setSaving(false)
+        return
+      }
+      setRenewalDate(null)
+      setStorageGb(5)
+      setSaving(false)
+      return
+    }
+
+    // Checking — purely local testing state, no Stripe involved.
+    setTier('subscriber')
+
+    const { error: updateError } = await supabase.rpc('set_tier_for_testing', { p_tier: 'subscriber' })
 
     if (updateError) {
-      setTier(next ? 'free' : 'subscriber')
+      setTier('free')
       setSaveError(updateError.message)
       setSaving(false)
       return
@@ -155,6 +200,18 @@ export default function SubscriptionForm() {
   }
 
   function handleClose() {
+    // A Stripe redirect (Checkout or the Billing Portal) is a real top-level
+    // browser navigation, not an in-app one — it breaks the history
+    // continuity router.back() normally relies on. Jim-reported, 2026-11-05:
+    // got stuck unable to leave this screen, landing back on a blank or
+    // timed-out Stripe page instead of the app. checkoutStatus is captured
+    // once at mount, before router.replace() strips the query string below,
+    // so it stays a reliable signal for "did we just arrive from Stripe" for
+    // this component's whole lifetime.
+    if (checkoutStatus) {
+      router.push('/')
+      return
+    }
     router.back()
   }
 
@@ -231,6 +288,7 @@ export default function SubscriptionForm() {
               renewalDate={renewalDate}
               storageGb={storageGb}
               onStorageUpdated={setStorageGb}
+              realStoragePurchaseDisabled={canToggleTier}
             />
           ) : (
             <BecomeSubscriberPitch variant="full" isTester={isTester} />
