@@ -1332,28 +1332,16 @@ export default function AccountForm() {
                   <BecomeSubscriberPitch variant="embedded" isTester={isTester} />
                 )}
 
-                {/* Storage Management (2026-09-03) — reachable regardless of
-                    tier, since Attachments are now free-with-a-cap, not
-                    subscriber-only (2026-08-27). Sits in this section because
-                    storage allowance is the one piece of it that IS tier-
-                    driven (100 MB free vs. the account's Subscriber
-                    allowance). */}
-                <button
-                  className="btn-secondary"
-                  type="button"
-                  style={{ marginTop: 14 }}
-                  onClick={() => router.push('/account/storage')}
-                >
-                  Manage Storage
-                </button>
+                {/* Manage Storage moved 2026-11-05 into the shared
+                    SubscriptionPanels.tsx components themselves — a
+                    right-aligned button on "Attachment Storage Capacity"'s
+                    own title row, for both the Free-account panel and the
+                    Subscriber one — rather than this standalone button
+                    sitting below either. See SubscriptionPanels.tsx's own
+                    comment on ManageStorageButton/StorageCapacityTitleRow. */}
 
                 {canToggleTier && (
                   <>
-                    {/* Fixed margin, 2026-11-05 — the conditional 0/14 split
-                        predates the Manage Storage button above now sitting
-                        between MySubscriptionSummary and this checkbox;
-                        Jim-reported, the space collapsed whenever Subscribed
-                        was checked. */}
                     <label className="checkrow" style={{ marginTop: 14 }}>
                       <input
                         type="checkbox"

@@ -6647,3 +6647,32 @@ link is built only after the stack is proven on Add Contact.
   reason). The storage-disabled note itself also now points at Plan Summary
   explicitly, closing the loop between the two. `npx tsc --noEmit`/`npm run
   lint` both clean.
+- **Attachment Storage Capacity: four real-Stripe-testing/wording/layout
+  fixes from Jim's own pasted mockup (2026-11-05).** (1) **Real bug**: the
+  stepper's N/A and +5 GB buttons (`.btn-secondary`) stayed visually blue/
+  active even when disabled for testing accounts — `.btn` has always had its
+  own `:disabled` rule (greys to `#A8B7D6`), but `.btn-secondary` never did,
+  so a disabled instance kept its normal border/text with no visual change
+  beyond the cursor. New `.btn-secondary:disabled` rule in `app/globals.css`
+  (Strip background, `--ink-soft` text, `--rule` border) — applies app-wide,
+  since every other `.btn-secondary` usage already expects "disabled reads
+  as disabled" the same way `.btn` does. (2) "Update Storage" renamed
+  "Update Capacity"; "Attachment Storage Space" renamed "Attachment Storage
+  Capacity" everywhere it appears (the panel heading, the Plan Summary line
+  item). (3) **Manage Storage relocated** — previously a standalone button
+  `AccountForm.tsx` rendered below the whole shared
+  MySubscriptionSummary/BecomeSubscriberPitch block; moved into
+  `SubscriptionPanels.tsx` itself as a new `ManageStorageButton`/
+  `StorageCapacityTitleRow`, right-aligned with "Attachment Storage
+  Capacity"'s own title row — for both real subscribers and testers, per
+  Jim's own pasted example. Since this is the shared file both
+  `AccountForm.tsx`'s embedded Subscriber section and `/account/subscription`
+  (`SubscriptionForm.tsx`) render through, the button now also reaches the
+  full-page screen, which never had a Manage Storage link of its own before.
+  (4) **New Free Account Users panel** — `FreeAccountStorageCapacityPanel`,
+  rendered at the top of `BecomeSubscriberPitch`'s own box: the identical
+  title-row-with-Manage-Storage-button shape, "Current: 100 MB," and
+  "Additional capacity is available with a subscription." — Free accounts
+  previously had no storage-capacity summary anywhere in the pitch, only the
+  since-removed standalone button below it. `npx tsc --noEmit`/`npm run
+  lint` both clean.

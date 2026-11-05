@@ -1,8 +1,10 @@
 'use client'
 
 import { type CSSProperties, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 import { supabase } from '@/lib/supabaseClient'
+import { FREE_TIER_STORAGE_LIMIT_BYTES } from '@/lib/attachments'
 import {
   ANNUAL_FIRST_YEAR_PRICE,
   ANNUAL_RENEWAL_PRICE,
@@ -307,6 +309,8 @@ export function BecomeSubscriberPitch({ variant, isTester = false }: { variant: 
     <div className="promo" style={{ margin: '0 0 4px' }}>
       {variant === 'full' && <div className="promo-h">Become a Subscriber</div>}
 
+      <FreeAccountStorageCapacityPanel />
+
       <div className="viewtoggle" role="tablist" aria-label="Subscriber Features view">
         <button
           type="button"
@@ -381,6 +385,57 @@ export function BecomeSubscriberPitch({ variant, isTester = false }: { variant: 
         period you&rsquo;ve already paid for.
       </p>
     </div>
+  )
+}
+
+// Manage Storage — moved 2026-11-05 (Jim's own pasted mockup) from a
+// standalone button AccountForm.tsx rendered below this whole shared block,
+// into a title-row button right-aligned with "Attachment Storage Capacity"
+// itself — now shown this way on both call sites (AccountForm.tsx's
+// embedded Subscriber section, and /account/subscription, which never had a
+// Manage Storage link of its own before this). Free Account Users get the
+// identical title-row treatment on their own new storage-capacity panel
+// below, per Jim's own item 4.
+function ManageStorageButton() {
+  const router = useRouter()
+  return (
+    <button type="button" className="btn-secondary" onClick={() => router.push('/account/storage')}>
+      Manage Storage
+    </button>
+  )
+}
+
+function StorageCapacityTitleRow({ title }: { title: string }) {
+  return (
+    <div
+      className="promo-sub"
+      style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+    >
+      <span>{title}</span>
+      <ManageStorageButton />
+    </div>
+  )
+}
+
+const FREE_TIER_STORAGE_LIMIT_MB = Math.round(FREE_TIER_STORAGE_LIMIT_BYTES / (1024 * 1024))
+
+// Free Account Users' own Attachment Storage Capacity panel (2026-11-05,
+// Jim's own pasted mockup, item 4) — previously Free accounts saw no storage
+// summary at all within BecomeSubscriberPitch, just the standalone Manage
+// Storage button AccountForm.tsx rendered separately below it. Mirrors
+// AttachmentStoragePanel's own title-row shape for a Subscriber, with no
+// stepper (nothing to adjust on Free) and a one-line upsell instead.
+function FreeAccountStorageCapacityPanel() {
+  return (
+    <>
+      <StorageCapacityTitleRow title="Attachment Storage Capacity" />
+      <p className="promo-p" style={{ margin: '4px 0 0' }}>
+        Current: <strong>{FREE_TIER_STORAGE_LIMIT_MB} MB</strong>
+      </p>
+      <p className="promo-p" style={{ margin: '4px 0 0' }}>
+        Additional capacity is available with a subscription.
+      </p>
+    </>
   )
 }
 
@@ -481,7 +536,7 @@ function AttachmentStoragePanel({
         }
       } catch {
         // Floor just stays at the base block — the server re-validates the
-        // real floor on Update Storage regardless.
+        // real floor on Update Capacity regardless.
       }
     }
     loadUsage()
@@ -561,9 +616,7 @@ function AttachmentStoragePanel({
 
   return (
     <>
-      <div className="promo-sub" style={{ marginTop: 12 }}>
-        Attachment Storage Space
-      </div>
+      <StorageCapacityTitleRow title="Attachment Storage Capacity" />
       <p className="promo-p" style={{ margin: '4px 0 8px' }}>
         Current: <strong>{storageGb} Gigabytes</strong>
         {extraGb > 0 && (
@@ -597,7 +650,7 @@ function AttachmentStoragePanel({
           onClick={handleUpdate}
           disabled={controlsDisabled || !changed}
         >
-          {busy ? 'Updating…' : 'Update Storage'}
+          {busy ? 'Updating…' : 'Update Capacity'}
         </button>
       </div>
       {realPurchaseDisabled ? (
@@ -635,7 +688,7 @@ function AttachmentStoragePanel({
 // checked "Subscribed? (testing only)" with no real Stripe subscription on
 // file was falling through to GenericPlanOptionsPanel below, which still
 // reads as a sales pitch ("billed today $39") even though the account is
-// already shown as Subscribed and the Attachment Storage Space note right
+// already shown as Subscribed and the Attachment Storage Capacity note right
 // above it already explains real purchases are disabled for testing — a
 // leftover mismatch from before the cadence-aware redesign existed. Jim:
 // "it was done to the prior format of that area... missing the more recent
@@ -798,7 +851,7 @@ export function PlanSummaryPanel({
       {extraGb > 0 && (
         <div className="planrow">
           <span className="plan-name">
-            Attachment Storage Space ({storageGb}GB)
+            Attachment Storage Capacity ({storageGb}GB)
           </span>
           <span className="plan-price">
             ${storageCost}

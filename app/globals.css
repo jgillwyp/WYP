@@ -470,6 +470,20 @@ body {
   outline-offset: 2px;
 }
 
+/* .btn has always had its own :disabled rule; .btn-secondary never did, so a
+   disabled secondary button (e.g. the Attachment Storage stepper's −/+
+   controls while realPurchaseDisabled, SubscriptionPanels.tsx) kept its
+   normal blue border/text and read as clickable even though it wasn't —
+   Jim-reported, 2026-11-05, from a screenshot showing N/A and +5 GB still
+   fully blue while the greyed .btn "Update Storage" right beside them
+   correctly looked disabled. */
+.btn-secondary:disabled {
+  color: var(--ink-soft);
+  background: var(--strip);
+  border-color: var(--rule);
+  cursor: not-allowed;
+}
+
 /* Full-width action button — PROPOSED (§6.19, auth screens).
    Auth screens have no band cluster, so the primary action sits in the form. */
 .btn-block {
