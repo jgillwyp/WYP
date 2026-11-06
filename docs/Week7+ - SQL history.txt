@@ -1072,3 +1072,118 @@ alter table public.profiles
 --   select column_default from information_schema.columns
 --   where table_name = 'profiles' and column_name = 'notify_owner_on_done';
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 091 (2026-11-06) -- admin_add_private_tester(). DRAFTED, NOT YET
+-- CONFIRMED RUN.
+--
+-- Jim, looking at a real docs/add-tester.mjs run: "The entry of the time
+-- zone is really awkward, the Grant Subscriber access is not required (I
+-- think all testers can grant themselves Subscriber status). Perhaps we
+-- could add this to the Statistics tab, rename the tab Admin and add an
+-- 'Add Private Tester' choice for an easier-to-use screen or dialog."
+--
+-- New SECURITY DEFINER function doing, in one call, exactly what
+-- add-tester.mjs's own "before sign-up" half already does (beta_allowlist +
+-- tier_toggle_allowlist inserts) plus queuing pending_tester_setup
+-- (migration 087) for the hourly cron's own "after sign-up" half. All three
+-- tables are deny-all for clients (no policies at all -- see each one's own
+-- header comment), so this can't be a plain insert from the browser; follows
+-- the same "is_admin re-checks itself" posture every admin_stats_* RPC
+-- already uses (migration 053 on). Called via a forwarded-JWT
+-- supabase.rpc() from the new AdminAddTesterForm.tsx -- no service_role, no
+-- new API route needed, same posture set_tier_for_testing() (migration 035)
+-- already established for a signed-in account's own self-service write.
+--
+-- Confirmed via AskUserQuestion (2026-11-06, "Always allow self-toggle,
+-- never auto-grant"): every tester added this way now ALWAYS gets self-
+-- toggle access (tier_toggle_allowlist), with no separate question on the
+-- screen -- "all testers can grant themselves Subscriber status" becomes
+-- genuinely true going forward, rather than Jim's own stated belief about
+-- *current* behavior, which wasn't actually true before this migration
+-- (only accounts explicitly added to tier_toggle_allowlist -- previously
+-- just Jim's own seeded row, migration 035 -- could self-toggle).
+-- pending_tester_setup.grant_subscriber is always queued as false -- nobody
+-- is auto-set to Subscriber tier at first sign-in through this path anymore;
+-- a tester who wants to test paid features flips Account Options' own
+-- "Subscribed? (testing only)" checkbox themselves, the same self-service
+-- action tier_toggle_allowlist already gates for every other testing-only
+-- control (Storage Management's Test Storage Cap, etc.).
+--
+-- Idempotent/re-run-safe the same way add-tester.mjs already is -- ON
+-- CONFLICT DO NOTHING for beta_allowlist/tier_toggle_allowlist (re-adding
+-- the same email changes nothing there), ON CONFLICT DO UPDATE for
+-- pending_tester_setup (a corrected name/time zone re-queues cleanly and
+-- resets provisioned_at back to null, exactly matching add-tester.mjs's own
+-- documented behavior).
+--
+-- docs/add-tester.mjs itself is updated in the same commit to match: drops
+-- its own "Grant Subscriber access?" prompt, always inserts
+-- tier_toggle_allowlist, always queues grant_subscriber: false, and
+-- validates the typed Time Zone against Intl.supportedValuesOf('timeZone')
+-- instead of accepting anything. Kept working as a command-line fallback,
+-- not removed, but no longer the primary path now that this screen exists.
+-- ============================================================================
+
+create or replace function public.admin_add_private_tester(
+  p_email text,
+  p_display_name text,
+  p_time_zone text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_is_admin boolean;
+  v_email text := lower(trim(p_email));
+  v_display_name text := trim(p_display_name);
+  v_time_zone text := nullif(trim(coalesce(p_time_zone, '')), '');
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  if v_email = '' or v_email !~ '^[^@]+@[^@]+\.[^@]+$' then
+    raise exception 'Enter a valid email address.';
+  end if;
+
+  if v_display_name = '' then
+    raise exception 'Display name is required.';
+  end if;
+
+  insert into public.beta_allowlist (email, note)
+  values (v_email, v_display_name)
+  on conflict (email) do nothing;
+
+  insert into public.tier_toggle_allowlist (email, note)
+  values (v_email, 'Private tester -- added via Admin > Add Private Tester')
+  on conflict (email) do nothing;
+
+  insert into public.pending_tester_setup (email, display_name, time_zone, grant_subscriber, provisioned_at)
+  values (v_email, v_display_name, v_time_zone, false, null)
+  on conflict (email) do update
+    set display_name = excluded.display_name,
+        time_zone = excluded.time_zone,
+        grant_subscriber = false,
+        provisioned_at = null;
+end;
+$$;
+
+revoke all on function public.admin_add_private_tester(text, text, text) from public;
+grant execute on function public.admin_add_private_tester(text, text, text) to authenticated;
+
+-- Verify (as yourself, signed in with is_admin = true):
+--
+--   select admin_add_private_tester('you+test2@example.com', 'Test Tester Two', 'America/Denver');
+--   select email, note from beta_allowlist where email = 'you+test2@example.com';
+--   select email, note from tier_toggle_allowlist where email = 'you+test2@example.com';
+--   select * from pending_tester_setup where email = 'you+test2@example.com';
+--
+--   -- clean up:
+--   delete from beta_allowlist where email = 'you+test2@example.com';
+--   delete from tier_toggle_allowlist where email = 'you+test2@example.com';
+--   delete from pending_tester_setup where email = 'you+test2@example.com';
+-- ============================================================================

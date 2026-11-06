@@ -1223,10 +1223,13 @@ export default function MainScreen() {
   const [prefsLoaded, setPrefsLoaded] = useState(false)
 
   // profiles.is_admin (migration 053, 2026-09-07) — gates the Housekeeping
-  // Statistics chip below. Read on the same profiles round trip as
-  // main_chip_prefs/tier/etc. Chip visibility is UX only; every admin
-  // aggregate-query RPC re-checks is_admin server-side on its own (see
-  // docs/WYP_Admin_Statistics_Plan.md).
+  // Admin chip below (renamed from "Statistics" 2026-11-06, per Jim's own
+  // request to fold Add Private Tester in alongside the stats screens — the
+  // internal hkTab value stays 'statistics', same precedent the Help chip's
+  // 'videos' value already set for a label-only rename). Read on the same
+  // profiles round trip as main_chip_prefs/tier/etc. Chip visibility is UX
+  // only; every admin aggregate-query RPC re-checks is_admin server-side on
+  // its own (see docs/WYP_Admin_Statistics_Plan.md).
   const [isAdmin, setIsAdmin] = useState(false)
 
   // Private Category is now an opt-in account preference, split into
@@ -2243,7 +2246,7 @@ export default function MainScreen() {
                       aria-selected={hkTab === 'statistics'}
                       onClick={() => setHkTab('statistics')}
                     >
-                      Statistics
+                      Admin
                     </button>
                   )}
                 </div>
@@ -2475,13 +2478,34 @@ export default function MainScreen() {
                 </div>
               </div>
             ) : (
-              // Statistics tab (2026-09-07) — admin-only utilization
-              // screens. Chip visibility above is already gated on isAdmin;
+              // Admin tab (2026-09-07, relabeled from "Statistics" and
+              // gained Add Private Tester 2026-11-06) — admin-only
+              // utilization screens plus the new tester-provisioning
+              // screen. Chip visibility above is already gated on isAdmin;
               // this body only ever renders once that chip has been
               // clicked, so no separate isAdmin check is needed here. See
-              // docs/WYP_Admin_Statistics_Plan.md for the four screens.
+              // docs/WYP_Admin_Statistics_Plan.md for the five stats
+              // screens.
               <div className="subbody">
                 <div className="hkrows">
+                  {/* Add Private Tester (2026-11-06) — replaces running
+                      docs/add-tester.mjs from a terminal. Jim: "The entry of
+                      the time zone is really awkward, the Grant Subscriber
+                      access is not required... Perhaps we could add this to
+                      the Statistics tab, rename the tab Admin and add an
+                      'Add Private Tester' choice." */}
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/testers/new')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/testers/new') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Add Private Tester</span>
+                      <span className="hknote"> — allow someone new to sign in and test</span>
+                    </span>
+                  </div>
                   <div
                     className="hkrow"
                     role="button"

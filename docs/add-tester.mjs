@@ -1,27 +1,40 @@
-// WYP — add-tester.mjs (2026-11-03)
+// WYP — add-tester.mjs (2026-11-03; updated 2026-11-06)
 //
-// Interactive replacement for hand-editing docs/add-private-tester.sql's
-// EMAIL/NAME variables each time. Owner: "create a prompted version to make
-// it easier for me to add testers." Asks for Email / Display Name / Time
-// Zone / Subscriber access, then:
+// Command-line fallback for adding a private tester — the primary path is
+// now the in-app Admin tab's "Add Private Tester" screen (Main Screen →
+// Housekeeping → Admin, admin_add_private_tester() RPC, migration 091), no
+// longer this script. Jim, looking at a real run of this exact script: "The
+// entry of the time zone is really awkward, the Grant Subscriber access is
+// not required (I think all testers can grant themselves Subscriber
+// status)." Both of those are fixed here too, so this still behaves the
+// same way the in-app screen does if you ever need to run it (e.g. no
+// network route to the app itself, or just prefer the terminal):
+//
+//   - Time Zone is now validated against the real list of IANA zone names
+//     (Intl.supportedValuesOf('timeZone'), same source
+//     app/src/lib/timeZones.ts uses) instead of being accepted as free text
+//     — a typo like "america/l" is rejected with the closest matches shown,
+//     rather than silently stored and failing later.
+//   - "Grant Subscriber access?" is gone. Every tester added here now
+//     ALWAYS gets added to tier_toggle_allowlist (so they can self-toggle
+//     Subscribed? in Account Options whenever they want), and nobody is
+//     auto-set to Subscriber tier at first sign-in — see migration 091's
+//     own header comment for the full reasoning.
+//
+// What it still does:
 //
 //   1. Runs the "before sign-up" half immediately — inserts into
-//      beta_allowlist (so the person can actually create an account) and,
-//      if Subscriber access was requested, tier_toggle_allowlist (so they
-//      CAN self-toggle Subscribed? later even if the automated grant below
-//      hasn't run yet).
+//      beta_allowlist (so the person can actually create an account) and
+//      tier_toggle_allowlist (so they can self-toggle Subscribed? whenever
+//      they want).
 //   2. Queues the "after sign-up" half into public.pending_tester_setup
-//      (migration 087) — profiles.display_name/time_zone, and tier/
-//      subscription_renewal_date if Subscriber access was requested. This
-//      can't happen yet if the person hasn't signed in (no auth.users row,
-//      no profiles row to update), so it's queued rather than attempted
-//      directly here.
-//
-// The old second manual step — re-running docs/add-private-tester.sql after
-// the person actually signs in — is gone: app/api/cron/tick/route.ts's own
-// Phase F calls provision_pending_testers() every hour, so the queued row
-// gets picked up and finished automatically the first time it runs after
-// the person's first sign-in. Nothing to remember, nothing to re-run.
+//      (migration 087) — profiles.display_name/time_zone. This can't happen
+//      yet if the person hasn't signed in (no auth.users row, no profiles
+//      row to update), so it's queued rather than attempted directly here.
+//      app/api/cron/tick/route.ts's own Phase F calls
+//      provision_pending_testers() every hour, so the queued row gets
+//      picked up and finished automatically the first time it runs after
+//      the person's first sign-in.
 //
 // Prerequisites (same as docs/seed-test-attachments.mjs — this script
 // cannot run inside the Cowork sandbox, no network route to your live
@@ -66,8 +79,20 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// Same source app/src/lib/timeZones.ts uses — duplicated here rather than
+// imported, since this script can't load a .ts file without a build step
+// (this project's established small-helper-duplication convention).
+function getAllTimeZones() {
+  try {
+    return [...Intl.supportedValuesOf('timeZone')]
+  } catch {
+    return []
+  }
+}
+
 async function main() {
   const rl = createInterface({ input: stdin, output: stdout })
+  const allZones = getAllTimeZones()
 
   let email = ''
   while (!EMAIL_RE.test(email)) {
@@ -81,23 +106,36 @@ async function main() {
     if (!displayName) console.log('  Required — try again.')
   }
 
-  const timeZoneInput = (
-    await rl.question('Time zone (IANA name, e.g. America/Los_Angeles — leave blank to skip): ')
-  ).trim()
-  const timeZone = timeZoneInput || null
-
-  const subscriberInput = (await rl.question('Grant Subscriber access? [Y/n]: ')).trim().toLowerCase()
-  const grantSubscriber = subscriberInput !== 'n'
+  let timeZone = null
+  let timeZoneDone = false
+  while (!timeZoneDone) {
+    const timeZoneInput = (
+      await rl.question('Time zone (IANA name, e.g. America/Los_Angeles — leave blank to skip): ')
+    ).trim()
+    if (!timeZoneInput) {
+      timeZoneDone = true
+      break
+    }
+    const exact = allZones.find((z) => z.toLowerCase() === timeZoneInput.toLowerCase())
+    if (exact) {
+      timeZone = exact
+      timeZoneDone = true
+      break
+    }
+    const close = allZones.filter((z) => z.toLowerCase().includes(timeZoneInput.toLowerCase())).slice(0, 10)
+    console.log(`  Not a recognized IANA time zone.${close.length ? ' Did you mean:' : ''}`)
+    close.forEach((z) => console.log(`    ${z}`))
+    console.log('  Try again, or leave blank to skip.')
+  }
 
   rl.close()
 
   console.log('')
-  console.log(
-    `[add-tester] Setting up ${email} (${displayName})` +
-      `${timeZone ? `, ${timeZone}` : ''}${grantSubscriber ? ', Subscriber access' : ', Free tier'}...`
-  )
+  console.log(`[add-tester] Setting up ${email} (${displayName})${timeZone ? `, ${timeZone}` : ''}...`)
 
-  // 1. "Before sign-up" half — takes effect immediately.
+  // 1. "Before sign-up" half — takes effect immediately. Every tester added
+  //    this way is always given self-toggle access (tier_toggle_allowlist) —
+  //    see migration 091's header comment for the full reasoning.
   const { error: betaError } = await admin
     .from('beta_allowlist')
     .upsert({ email, note: displayName }, { onConflict: 'email', ignoreDuplicates: true })
@@ -106,27 +144,29 @@ async function main() {
     process.exit(1)
   }
 
-  if (grantSubscriber) {
-    const { error: tierError } = await admin
-      .from('tier_toggle_allowlist')
-      .upsert(
-        { email, note: 'Private tester — set up via add-tester.mjs' },
-        { onConflict: 'email', ignoreDuplicates: true }
-      )
-    if (tierError) {
-      console.error('[add-tester] tier_toggle_allowlist insert failed:', tierError.message)
-      process.exit(1)
-    }
+  const { error: tierError } = await admin
+    .from('tier_toggle_allowlist')
+    .upsert(
+      { email, note: 'Private tester — set up via add-tester.mjs' },
+      { onConflict: 'email', ignoreDuplicates: true }
+    )
+  if (tierError) {
+    console.error('[add-tester] tier_toggle_allowlist insert failed:', tierError.message)
+    process.exit(1)
   }
 
   // 2. "After sign-up" half — queued for the hourly cron job (Phase F) to
-  //    finish once the person has actually signed in.
+  //    finish once the person has actually signed in. grant_subscriber is
+  //    always false now — nobody is auto-set to Subscriber tier through
+  //    this path; they flip Account Options' own "Subscribed? (testing
+  //    only)" checkbox themselves, now that the step above always gives
+  //    them the ability to.
   const { error: pendingError } = await admin.from('pending_tester_setup').upsert(
     {
       email,
       display_name: displayName,
       time_zone: timeZone,
-      grant_subscriber: grantSubscriber,
+      grant_subscriber: false,
       provisioned_at: null,
     },
     { onConflict: 'email' }
@@ -137,8 +177,9 @@ async function main() {
   }
 
   console.log(
-    `[add-tester] Done. ${email} can sign in now. Their name${timeZone ? '/time zone' : ''}` +
-      `${grantSubscriber ? '/Subscriber access' : ''} will be set automatically within the hour of their first sign-in.`
+    `[add-tester] Done. ${email} can sign in now. Their name${timeZone ? '/time zone' : ''} will be set ` +
+      'automatically within the hour of their first sign-in, and they can grant themselves Subscriber access ' +
+      "anytime via Account Options' \"Subscribed? (testing only)\" checkbox."
   )
 }
 

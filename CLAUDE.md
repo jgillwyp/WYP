@@ -6691,3 +6691,57 @@ link is built only after the stack is proven on Add Contact.
   `send-request-update-to-owner/route.ts`'s own `?? true` fallback (now
   `?? false`) plus its two explanatory comments. `npx tsc --noEmit`/`npm
   run lint` both clean.
+- **Add Private Tester — a real in-app screen replaces running
+  `docs/add-tester.mjs` from a terminal; Housekeeping's "Statistics" chip
+  renamed "Admin" — migration 091, DRAFTED, NOT YET CONFIRMED RUN
+  (2026-11-06).** Jim, after a real run of that script: "The entry of the
+  time zone is really awkward, the Grant Subscriber access is not required
+  (I think all testers can grant themselves Subscriber status). Perhaps we
+  could add this to the Statistics tab, rename the tab Admin and add an
+  'Add Private Tester' choice for an easier-to-use screen or dialog." New
+  `app/components/AdminAddTesterForm.tsx` + `/admin/testers/new`
+  (`RequireAdmin`-gated, same as every `/admin/stats/*` screen), reached
+  from a new "Add Private Tester" row at the top of the renamed Admin tab
+  (`MainScreen.tsx` — internal `hkTab` value stays `'statistics'`, same
+  label-only-rename precedent the Help chip's `'videos'` value already
+  set). Time Zone is now the same typeahead lookup Add Contact/Contact
+  Detail already use (`app/src/lib/timeZones.ts`) instead of a blind text
+  prompt — optional, valid blank or an exact pick from the real IANA list,
+  never a value that silently fails later the way `"america/l"` did in
+  Jim's own screenshot. **Confirmed via `AskUserQuestion`**: "Grant
+  Subscriber access?" is dropped entirely — every tester added this way is
+  now *always* given self-toggle access (`tier_toggle_allowlist`), with
+  nobody auto-set to Subscriber tier at first sign-in; a tester who wants
+  to test paid features flips Account Options' own "Subscribed? (testing
+  only)" checkbox themselves. This makes Jim's own stated belief ("I think
+  all testers can grant themselves Subscriber status") genuinely true going
+  forward — it wasn't actually true before this migration, since only
+  accounts explicitly added to `tier_toggle_allowlist` (previously just
+  Jim's own seeded row, migration 035) could self-toggle.
+
+  New `admin_add_private_tester(p_email, p_display_name, p_time_zone)` —
+  one `SECURITY DEFINER` call doing everything the script's own two steps
+  did (the immediate `beta_allowlist`/`tier_toggle_allowlist` inserts, plus
+  queuing `pending_tester_setup`, migration 087, for the hourly cron's own
+  "after sign-up" half), re-checking `is_admin` itself — the same posture
+  every `admin_stats_*` RPC already uses (migration 053 on) — so this needs
+  no `service_role` and no new API route; called via a forwarded-JWT
+  `supabase.rpc()` straight from the new screen. Idempotent the same way
+  the script already is — `ON CONFLICT DO NOTHING` for the two allowlists,
+  `ON CONFLICT DO UPDATE` (resetting `provisioned_at` back to null) for
+  `pending_tester_setup`, so correcting a typo'd name/time zone before
+  someone has signed in yet re-queues cleanly. The screen deliberately
+  stays put after a successful add (reset-and-stay, not navigate-away) —
+  Jim adds testers one after another in a real session, the same
+  repeatable shape as re-running the script per person.
+
+  `docs/add-tester.mjs` itself is updated in the same commit to match,
+  rather than left to drift from the new screen's behavior — kept working
+  as a command-line fallback (e.g. no network route to the app itself), not
+  removed, but no longer the primary path: drops its own "Grant Subscriber
+  access?" prompt, always inserts `tier_toggle_allowlist`, always queues
+  `grant_subscriber: false`, and now validates a typed Time Zone against
+  `Intl.supportedValuesOf('timeZone')` (showing close matches on a miss)
+  instead of accepting anything. `docs/delete-tester.mjs` needed no
+  change — it never referenced `grant_subscriber`. No mockup — this
+  feature family has none. `npx tsc --noEmit`/`npm run lint` both clean.
