@@ -1041,3 +1041,34 @@ alter table public.profiles
 --   select column_default from information_schema.columns
 --   where table_name = 'profiles' and column_name = 'tier';
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 090 (2026-11-06) -- profiles.notify_owner_on_done default
+-- flipped from true to false. DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Jim: "The Account Options, Requests, 'Notify Me When Requests Are Marked
+-- Done' should be 'Off by default.'" -- reverses migration 066's own
+-- "on by default" choice (2026-09-13). Same non-destructive posture every
+-- prior default-only migration in this file uses (089's own tier revert,
+-- 052's earlier tier change) -- only changes the column default for a
+-- profiles row created from now on; no existing account's own stored value
+-- is touched, so an owner who already has this on (or who already
+-- explicitly turned it off) keeps whatever they have.
+--
+-- AccountForm.tsx's own three read sites (the useState initializer, the
+-- `?? true` fallback on load, and the checknote's "On by default." copy)
+-- and send-request-update-to-owner/route.ts's own `?? true` fallback (plus
+-- its two header/inline comments) were all flipped to false/"Off by
+-- default." in the same commit as this migration, so the copy and the
+-- real default stay in sync -- same discipline migration 089 itself
+-- followed for `tier`.
+-- ============================================================================
+
+alter table public.profiles
+  alter column notify_owner_on_done set default false;
+
+-- Verify (superuser -- proves the default changed only):
+--
+--   select column_default from information_schema.columns
+--   where table_name = 'profiles' and column_name = 'notify_owner_on_done';
+-- ============================================================================

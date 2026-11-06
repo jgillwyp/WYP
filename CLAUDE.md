@@ -6676,3 +6676,18 @@ link is built only after the stack is proven on Add Contact.
   previously had no storage-capacity summary anywhere in the pitch, only the
   since-removed standalone button below it. `npx tsc --noEmit`/`npm run
   lint` both clean.
+- **"Notify Me When Requests Are Marked Done" default flipped to Off —
+  migration 090, DRAFTED, NOT YET CONFIRMED RUN (2026-11-06).** Jim: "The
+  Account Options, Requests, 'Notify Me When Requests Are Marked Done'
+  should be 'Off by default.'" Reverses migration 066's own "on by default"
+  choice (2026-09-13). `profiles.notify_owner_on_done`'s column default
+  changes to `false`, non-destructively — only affects a profile row
+  created from now on, no existing account's stored value is touched, same
+  posture every prior default-only migration here uses (089's own `tier`
+  revert). Every client/server fallback updated to match, so the copy and
+  the real default stay in sync: `AccountForm.tsx`'s `useState` initializer,
+  its `data?.notify_owner_on_done ?? true` load fallback, and the
+  checknote's own "On by default." text (now "Off by default."); and
+  `send-request-update-to-owner/route.ts`'s own `?? true` fallback (now
+  `?? false`) plus its two explanatory comments. `npx tsc --noEmit`/`npm
+  run lint` both clean.

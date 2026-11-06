@@ -246,13 +246,15 @@ export default function AccountForm() {
   // toggle above. See app/api/cron/tick/route.ts's own header comment for
   // the full Chron notification design.
   const [reminderDigestEnabled, setReminderDigestEnabled] = useState(false)
-  // profiles.notify_owner_on_done (migration 066, 2026-09-13) — on by
-  // default, unlike reminder_digest_enabled above. Gates
-  // send-request-update-to-owner/route.ts's own "a Sent Request was just
-  // marked Done" email — see that route's header comment for the self-actor
-  // exception (never sent regardless of this flag when the owner marked
-  // their own self-sent Request Done via the recipient-facing screen).
-  const [notifyOwnerOnDone, setNotifyOwnerOnDone] = useState(true)
+  // profiles.notify_owner_on_done (migration 066, 2026-09-13; default
+  // flipped to off by migration 090, 2026-11-06 — Jim: "Off by default" —
+  // same reasoning reminder_digest_enabled above already used for a
+  // low-signal digest email). Gates send-request-update-to-owner/route.ts's
+  // own "a Sent Request was just marked Done" email — see that route's
+  // header comment for the self-actor exception (never sent regardless of
+  // this flag when the owner marked their own self-sent Request Done via
+  // the recipient-facing screen).
+  const [notifyOwnerOnDone, setNotifyOwnerOnDone] = useState(false)
   // profiles.request_reminders_enabled (migration 044, 2026-08-23) —
   // standalone master toggle for the Request-side Reminders-until-Done
   // banner; see the file-level comment. Originally defaulted true
@@ -427,7 +429,7 @@ export default function AccountForm() {
       setTodoTimeEnabled(data?.todo_time_enabled ?? false)
       setTodoRemindersEnabled(data?.todo_reminders_enabled ?? false)
       setReminderDigestEnabled(data?.reminder_digest_enabled ?? false)
-      setNotifyOwnerOnDone(data?.notify_owner_on_done ?? true)
+      setNotifyOwnerOnDone(data?.notify_owner_on_done ?? false)
       setRequestRemindersEnabled(data?.request_reminders_enabled ?? false)
       setAlwaysShowSendReminder(data?.always_show_send_reminder ?? false)
       setOfferReceiptConfirmation(data?.offer_receipt_confirmation ?? false)
@@ -1054,7 +1056,7 @@ export default function AccountForm() {
                     Notify Me When Requests Are Marked Done
                     <span className="checknote">
                       Unless I marked the Request as Done, send an email each time a Sent
-                      Request is marked as Done, with a link to the Request. On by default.
+                      Request is marked as Done, with a link to the Request. Off by default.
                     </span>
                   </span>
                 </label>

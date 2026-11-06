@@ -56,10 +56,11 @@ export const runtime = 'nodejs'
  * not a minted /r/[token] link — only the owner can open that route (RLS
  * owner-only), so no token needs minting for this direction at all.
  *
- * notify_owner_on_done gating (migration 066, 2026-09-13) — when this save
- * is reporting a genuine mark-as-Done transition (Done Date newly set, not
- * just present already), the send is skipped if either: the owner's own
- * profiles.notify_owner_on_done is off (default on), or the actor marking
+ * notify_owner_on_done gating (migration 066, 2026-09-13; default flipped to
+ * off by migration 090, 2026-11-06) — when this save is reporting a genuine
+ * mark-as-Done transition (Done Date newly set, not just present already),
+ * the send is skipped if either: the owner's own profiles.notify_owner_on_done
+ * is off (now the default), or the actor marking
  * it Done IS the owner's own account (a self-sent Request, marked Done via
  * this same signed-in-recipient screen on their own Request — notifying
  * someone about their own action is never useful, regardless of the
@@ -230,13 +231,14 @@ export async function POST(request: Request) {
     if (events.length > 0) await sbc.from('events').insert(events)
   }
 
-  // notify_owner_on_done gating (migration 066, 2026-09-13) — only applies
-  // when this specific save is reporting a genuine mark-as-Done transition
-  // (Done Date newly set, same condition the 'done' event above already
-  // checks); a save that changed other fields without touching Done Date is
-  // never gated by this setting and always notifies, as before. Two ways
-  // the send gets suppressed even though changedFields.length > 0:
-  //   1. The owner's own notify_owner_on_done is off (default true).
+  // notify_owner_on_done gating (migration 066, 2026-09-13; default flipped
+  // to off by migration 090, 2026-11-06) — only applies when this specific
+  // save is reporting a genuine mark-as-Done transition (Done Date newly
+  // set, same condition the 'done' event above already checks); a save that
+  // changed other fields without touching Done Date is never gated by this
+  // setting and always notifies, as before. Two ways the send gets
+  // suppressed even though changedFields.length > 0:
+  //   1. The owner's own notify_owner_on_done is off (now the default).
   //   2. The actor marking it Done IS the owner's own account — a self-sent
   //      Request, marked Done via this signed-in-recipient screen on their
   //      own Request. Notifying someone about their own action is never
@@ -247,14 +249,14 @@ export async function POST(request: Request) {
   const markedDoneNow = changedFields.includes('Done Date') && !!reqRow.done_date
   if (markedDoneNow) {
     const selfMarkedDone = actorUserId !== null && actorUserId === reqRow.owner_id
-    let notifyOwnerOnDone = true
+    let notifyOwnerOnDone = false
     if (!selfMarkedDone) {
       const { data: ownerProfile } = await sbc
         .from('profiles')
         .select('notify_owner_on_done')
         .eq('id', reqRow.owner_id)
         .single()
-      notifyOwnerOnDone = ownerProfile?.notify_owner_on_done ?? true
+      notifyOwnerOnDone = ownerProfile?.notify_owner_on_done ?? false
     }
     if (selfMarkedDone || !notifyOwnerOnDone) {
       return Response.json({ sent: false, reason: 'opted_out' }, { status: 200 })
