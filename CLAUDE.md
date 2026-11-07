@@ -7024,3 +7024,40 @@ link is built only after the stack is proven on Add Contact.
   differently-nested screens (e.g. Request Response's own "Free Account
   Features" box) still rely on for its own margin. `npx tsc --noEmit`/`npm
   run lint` both clean.
+
+- **Private Tester page's own double horizontal margin fixed, same day
+  (2026-11-07) — the real, separate bug underneath the "narrow Subscription
+  Details" report above.** Jim, once the internal-consistency fix above
+  shipped: "The element/text widths are consistent for the two Stripe
+  presentation pages. The Testor page element/text widths are consistent,
+  but seem to have a double width left and right margin." Root cause: each
+  of `AccountStatusSection`'s three state wrapper divs
+  (`PrivateTesterStatus`/`SubscriberStatus`/`FreeStatus`) carried its own
+  `padding: 0 var(--pad)`, written on the assumption the whole section sits
+  directly in `.scroll` — true for `/account/subscription`
+  (`SubscriptionForm.tsx`) and Admin &gt; Test Stripe Payments
+  (`AdminTestStripeForm.tsx`), both of which render it with no further
+  wrapper. Account Options' own embedded call site (`AccountForm.tsx`) does
+  not: its Account Status `.subcard`/`.subbody` (same shared shell every
+  other collapsible Account Options section uses — confirmed by checking
+  Requests (sent)/ToDos' own `.checkrow` content, which sits directly in
+  `.subbody` with no extra padding wrapper of its own) already supplies
+  12px of its own horizontal padding, so `AccountStatusSection`'s own
+  `var(--pad)` stacked a second, redundant layer on top of it — visible
+  only on the Private Tester state, since that's the only one a testing
+  account (`can_toggle_tier()` true) ever reaches from the ordinary,
+  non-forced Account Options path; Free/Subscriber, only reachable there
+  via a real tier change, were never actually compared side by side in
+  that same embedded context before this report. Fixed by moving padding
+  ownership out of `AccountStatusSection` entirely (its three states now
+  carry vertical margin only) and into the two screens that actually need
+  it — `SubscriptionForm.tsx` and `AdminTestStripeForm.tsx` each gained a
+  `padding: '0 var(--pad)'` wrapper div directly around their own
+  `<AccountStatusSection>` call; `AccountForm.tsx` needed no change, since
+  `.subbody`'s existing padding is now the section's only horizontal
+  inset, matching every sibling section's own convention. The `.promo` box
+  fix immediately above (zeroed left/right margin) stays necessary
+  regardless of which layer supplies the general padding — `.promo`'s own
+  CSS margin would double up against whichever single inset layer
+  surrounds it, wherever that layer now lives. `npx tsc --noEmit`/`npm run
+  lint` both clean.
