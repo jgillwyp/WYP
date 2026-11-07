@@ -1486,11 +1486,34 @@ export function buildSignInEmailSubject(): string {
 // the icon, so the only actionable instruction is "select/copy the digits
 // above" — true on every client, with no tap target that silently does
 // nothing when pressed.
+//
+// Grouped display + hint widened, 2026-11-08, same owner-reported test,
+// follow-up round — his wife's mail client is Gmail specifically, and
+// neither selecting nor copying the code worked there at all ("I could not
+// manually select it either"). Nothing in this HTML sets
+// user-select/blocks selection — this reads as a Gmail Android app
+// rendering quirk outside this codebase's control, not something fixable
+// here. Two things actually ARE controllable, so both shipped: (1) the
+// code is now grouped into two halves with a visible gap (e.g. "1234
+// 5678") purely for display — digits only ever get typed or pasted, and
+// both the field's onChange and handlePasteCode in app/login/page.tsx
+// already strip every non-digit character, so the grouping space is
+// harmless either way — matching the common OTP convention specifically
+// because it makes a code that must be memorized and typed by hand (the
+// fallback when copy/select both fail) meaningfully easier to hold in
+// mind than one unbroken run of digits. (2) the hint now says outright
+// that typing it in is a fine fallback, rather than implying copying is
+// the only intended path.
+function groupCodeForDisplay(code: string): string {
+  const mid = Math.ceil(code.length / 2)
+  return `${code.slice(0, mid)} ${code.slice(mid)}`
+}
+
 function signInCodeBox(code: string): string {
   return [
     `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px 10px; margin:0 0 18px; text-align:center;">`,
-    `<span style="font-size:30px; font-weight:700; letter-spacing:6px; color:${EMAIL_INK};">${escapeHtml(code)}</span>`,
-    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Copy the code above</p>`,
+    `<span style="font-size:30px; font-weight:700; letter-spacing:4px; color:${EMAIL_INK};">${escapeHtml(groupCodeForDisplay(code))}</span>`,
+    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Copy the code above, or just type it in</p>`,
     `</div>`,
   ].join('')
 }
@@ -1510,7 +1533,7 @@ export function buildSignInEmailText(fields: SignInEmailFields): string {
   const lines = [
     'Enter this code on the sign-in screen:',
     '',
-    fields.code,
+    groupCodeForDisplay(fields.code),
   ]
   return [...lines, '', 'This code expires in 1 hour and can only be used once.'].join('\n')
 }

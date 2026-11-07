@@ -2402,6 +2402,26 @@ body {
   opacity: .55;
 }
 
+/* Narrow-phone tightening (2026-11-08, owner-reported) — Jim's wife's
+   Android ("a lower resolution than mine") wrapped these two buttons onto
+   separate lines where his own phone keeps them on one. Not a bug in the
+   wrap itself (flex-wrap above already stacks them cleanly, centered, when
+   they don't fit) — the real cause is just that "Subscription Features" +
+   "Terms and Privacy Policy" at this padding/font-size is right at the
+   edge of fitting a ~360px-wide viewport, a common narrow-Android width.
+   Shaves padding/gap/font-size slightly under 380px so they're more likely
+   to stay on one line there too, without changing anything on a wider
+   screen. */
+@media (max-width: 380px) {
+  .subbanner-row {
+    gap: 5px;
+  }
+  .subbanner-row .btn-secondary {
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+}
+
 .adslot {
   flex: 0 0 auto;
   height: 50px;

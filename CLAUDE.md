@@ -7108,3 +7108,56 @@ link is built only after the stack is proven on Add Contact.
   guessed at further; worth asking which email app was used if it recurs.
   `npx tsc --noEmit`/`npm run lint` both clean. No mockup — none of these
   three surfaces has ever had one.
+- **Four more findings from the same Android install, same day's follow-up
+  (2026-11-08), no migration.** Jim finished installing on his wife's
+  phone and reported four more things. **(1) Confirmed Gmail specifically**
+  is the mail client that can't select/copy the sign-in code — closing the
+  prior entry's open question. Nothing in `wrapEmailHtml`/`signInCodeBox`
+  sets `user-select` or wraps the code in a tap target, so this is treated
+  as a Gmail-Android rendering quirk outside this codebase's reach, not
+  something fixed by changing the HTML further. What *is* controllable:
+  `signInCodeBox()` (`app/src/lib/email.ts`) now displays the code split
+  into two halves with a visible gap (new `groupCodeForDisplay()`, e.g.
+  "1234 5678") — purely cosmetic, since both the Paste button
+  (`handlePasteCode`) and the field's own `onChange` already strip every
+  non-digit character, so the grouping space is harmless whether pasted or
+  typed — matching the common OTP-code convention specifically to make a
+  code that has to be memorized and typed by hand (the fallback when
+  copy/select both fail) easier to hold in mind than one unbroken digit
+  string. `buildSignInEmailText`'s plain-text alternative groups the same
+  way, for a client that renders that part instead. The copy hint's
+  wording also widened from "📋 Copy the code above" to "📋 Copy the code
+  above, or just type it in" — stating outright that typing is a fine
+  fallback, rather than only ever implying copying is the intended path.
+  **(2) "The resolution is lower than my Android... the bottom two footer
+  buttons are over/under"** — `AppFooter.tsx`'s `.subbanner-row`
+  (Subscription Features / Terms and Privacy Policy) already wraps
+  cleanly via `flex-wrap: wrap` rather than overlapping, so this wasn't
+  broken, just a real width-dependent difference: those two buttons' text
+  at the existing padding/font-size sits right at the edge of fitting a
+  common ~360px-wide Android viewport, a narrower width than Jim's own
+  phone reports. New `@media (max-width: 380px)` rule in `globals.css`
+  trims the row's `gap` and the buttons' own `padding`/`font-size` slightly
+  under that width, making them more likely to stay on one line on a
+  narrow phone too, with zero effect above that breakpoint. **(3) "No
+  desktop icon [my son has one from his install]"** — confirmed this isn't
+  something an APK can request or control: some phones/launchers place a
+  newly-installed app's icon straight on the Home Screen, others only add
+  it to the App Drawer and leave placing it on the Home Screen to the
+  person — a per-device/launcher setting, not an install-time flag. Added
+  as a new Step 3 on `app/android/page.tsx` explaining exactly that, so a
+  tester who doesn't see a new Home Screen icon knows to check the App
+  Drawer instead of assuming the install failed. **(4) "It stepped me to a
+  Google/Chrome/Android setting which I turned off - it did not work - I
+  had to separately unlock a 'block' on installing non-store apps and
+  allowed it to revert after 30 minutes"** — the page's old Step 2
+  described only the first of two separate Android checks on a sideloaded
+  app (the per-source "install unknown apps" permission); Google Play
+  Protect can block the same install a second time on top of that, with
+  its own "More details -> Install anyway" override and its own
+  short-lived, auto-reverting exception — none of which the old copy
+  mentioned, leaving exactly the stuck, "I had to find this myself"
+  experience Jim described. Step 2 rewritten to name both checks
+  explicitly and to say the reverting-after-a-while behavior is normal,
+  not something to re-disable by hand. `npx tsc --noEmit`/`npm run lint`
+  both clean. No mockup — none of these three surfaces has ever had one.

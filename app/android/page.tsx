@@ -37,6 +37,22 @@ import WypHeader from '../components/WypHeader'
 // page without yet tapping Download at all) would see exactly this: a
 // normal web page in Chrome, nothing more. Numbered so each action is its
 // own line rather than something to extract from a paragraph.
+//
+// Step 2 widened + a new Step 3 added, 2026-11-08, same owner, finishing
+// that same install: "it stepped me to a Google/Chrome/Android setting
+// which I turned off - it did not work - I had to separately unlock a
+// 'block' on installing non-store apps and allowed it to revert after 30
+// minutes" — the single "unknown sources" permission the old copy
+// described is only the first of two separate Android checks on a
+// sideloaded app; Google Play Protect can block the install a second time
+// on top of it, with its own separate "allow anyway" and its own
+// short-lived, auto-reverting exception, which the old copy never
+// mentioned at all. And: "no desktop icon [my son has one from his
+// install]" — confirmed this isn't something the app controls; some
+// phones/launchers add a newly-installed app's icon straight to the Home
+// Screen, others only add it to the App Drawer and leave placing it on the
+// Home Screen to the person, and that behavior is a per-device/launcher
+// setting, not something an APK can request or guarantee.
 export default function AndroidDownloadPage() {
   return (
     <div className="frame-none">
@@ -79,8 +95,21 @@ export default function AndroidDownloadPage() {
               Downloads/Files app and tap &ldquo;would-you-please.apk&rdquo;) to actually install
               it &mdash; this is the step that&rsquo;s easy to miss. Android will warn you about
               installing something from outside the Play Store; that&rsquo;s expected, go ahead
-              and allow it for this one. Once it&rsquo;s installed, open it from its own app icon,
-              not from Chrome.
+              and allow it (it may send you to a Chrome settings screen to turn that on, then
+              bring you back here &mdash; just tap Install again once you&rsquo;re back). You may
+              then see a <i>second</i>, separate warning from Google Play Protect about an
+              unrecognized app &mdash; if so, tap &ldquo;More details&rdquo; or &ldquo;Install
+              anyway&rdquo; to get past that one too. Either allowance is temporary and reverts on
+              its own after a short while, which is normal &mdash; it doesn&rsquo;t need to be
+              turned back off by hand.
+            </p>
+
+            <p className="subnote">
+              <b>Step 3:</b> Once it&rsquo;s installed, open it from its own app icon, not from
+              Chrome. If you don&rsquo;t see a new icon on your Home Screen, check your App Drawer
+              (the full list of installed apps) &mdash; some phones only add new app icons there,
+              leaving it up to you to drag one to the Home Screen if you want it there too. This
+              varies by phone/launcher and isn&rsquo;t something this install file controls.
             </p>
 
             <p className="subnote">
