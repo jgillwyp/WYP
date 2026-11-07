@@ -6977,3 +6977,50 @@ link is built only after the stack is proven on Add Contact.
   flagged back to Jim that the exact spot wasn't found rather than
   silently guessing which one he meant. `npx tsc --noEmit`/`npm run lint`
   both clean.
+
+- **Real root cause of the "5GB" bug found via Next's own SWC compiler, not
+  reasoning — a genuine JSX whitespace footgun distinct from the Cancel-link
+  one two entries above; Subscription Details' narrow-width bug also fixed
+  (2026-11-07, same day).** Jim, from a new screenshot, after the paragraph
+  split above shipped: "There are now two '5GB' instances..." — both inside
+  the brand-new floor-explanation paragraph. Source inspection showed a
+  literal space between every `{number}` expression and its following " GB"
+  text, so this looked wrong. Rather than guess further, loaded this
+  project's own bundled `next/dist/build/swc` transform and ran the exact
+  extracted paragraph source through it directly — confirmed Next's real
+  compiler (not Babel, which handles the identical source correctly per a
+  side-by-side test) drops the leading space on two of the three `{number}
+  GB` junctions in that specific paragraph, while a third, structurally
+  similar one compiles fine, and every occurrence in the unaffected first
+  paragraph also compiles fine — no pattern simple enough to state as a
+  rule was found (line count, parent-child position, and content-before-
+  the-expression were all ruled out by direct comparison), so this is
+  logged as a confirmed, reproducible SWC quirk rather than explained.
+  Fixed by eliminating the ambiguity outright: rewrote the floor sentence
+  as a single JS template-literal string passed as the paragraph's only
+  child (`{`A reduction can't currently go below ${minGb} GB — ...`}`) —
+  immune to JSX text-node whitespace handling entirely, since the whole
+  sentence is one JS string, not JSXText interleaved with expressions —
+  and moved the Manage Storage sentence into its own separate, purely
+  static paragraph (no adjacent expressions, so no risk there either).
+  Re-verified via the same SWC harness before shipping: the compiled output
+  is a plain `.concat()` chain with every space correct. **Any future text
+  in this file (or elsewhere) that interleaves a short dynamic value with a
+  literal unit/word across a wrapped source line should use this same
+  template-literal pattern, or test it through SWC directly, rather than
+  trust that explicit `{' '}` markers alone are sufficient** — they fixed
+  the Cancel-link case two entries above but did not reliably fix this one.
+  **Separately, Jim reported the Subscription Details box reading narrower
+  than the text above it, "the same for all 3 pages"** — confirmed via
+  globals.css: `.promo` already carries its own `margin: 4px var(--pad)
+  12px` (horizontal margin), and `PrivateTesterStatus`/`SubscriberStatus`/
+  `FreeStatus`'s own outer wrapper div (new 2026-11-06) also pads itself
+  `0 var(--pad)` — two independent sources of horizontal inset stacking on
+  the Subscription Details box alone, since every other element in these
+  three states only has the wrapper's single inset. Fixed by zeroing
+  `.promo`'s own left/right margin inline at its three call sites
+  (`marginLeft: 0, marginRight: 0` alongside the existing `marginTop: 14`)
+  rather than touching the shared `.promo` class itself, which other,
+  differently-nested screens (e.g. Request Response's own "Free Account
+  Features" box) still rely on for its own margin. `npx tsc --noEmit`/`npm
+  run lint` both clean.
