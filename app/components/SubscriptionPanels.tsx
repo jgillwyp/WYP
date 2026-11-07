@@ -869,7 +869,7 @@ function PrivateTesterStatus({
   onClearStorageOverride?: () => void
 }) {
   return (
-    <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
+    <div style={{ margin: '0 0 4px' }}>
       {canToggleTier && (
         <label className="checkrow" style={{ marginBottom: 10 }}>
           <input
@@ -1024,7 +1024,7 @@ function SubscriberStatus({
   }, [realStoragePurchaseDisabled])
 
   return (
-    <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
+    <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
         My Status: Subscriber
       </div>
@@ -1066,7 +1066,7 @@ function SubscriberStatus({
 // actually charge in that one admin-preview case.
 function FreeStatus({ isTester }: { isTester: boolean }) {
   return (
-    <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
+    <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
         My Status: Free Account
       </div>

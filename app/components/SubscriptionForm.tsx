@@ -322,23 +322,30 @@ export default function SubscriptionForm() {
             </div>
           )}
 
-          <AccountStatusSection
-            tier={tier}
-            isBetaTester={isTester}
-            canToggleTier={canToggleTier}
-            renewalDate={renewalDate}
-            storageGb={storageGb}
-            onStorageUpdated={setStorageGb}
-            saving={saving}
-            onTierToggle={handleTierToggle}
-            storageOverrideBytes={storageOverrideBytes}
-            storageOverrideInput={storageOverrideInput}
-            storageOverrideSaving={storageOverrideSaving}
-            storageOverrideError={storageOverrideError}
-            onStorageOverrideInputChange={setStorageOverrideInput}
-            onSaveStorageOverride={handleSaveStorageOverride}
-            onClearStorageOverride={handleClearStorageOverride}
-          />
+          {/* AccountStatusSection itself carries no horizontal padding
+              (2026-11-07) — Account Options' own embedded call site already
+              gets it from .subbody, so this screen (no such wrapper, direct
+              child of .scroll, same shell as Admin > Test Stripe Payments)
+              supplies it here instead. */}
+          <div style={{ padding: '0 var(--pad)' }}>
+            <AccountStatusSection
+              tier={tier}
+              isBetaTester={isTester}
+              canToggleTier={canToggleTier}
+              renewalDate={renewalDate}
+              storageGb={storageGb}
+              onStorageUpdated={setStorageGb}
+              saving={saving}
+              onTierToggle={handleTierToggle}
+              storageOverrideBytes={storageOverrideBytes}
+              storageOverrideInput={storageOverrideInput}
+              storageOverrideSaving={storageOverrideSaving}
+              storageOverrideError={storageOverrideError}
+              onStorageOverrideInputChange={setStorageOverrideInput}
+              onSaveStorageOverride={handleSaveStorageOverride}
+              onClearStorageOverride={handleClearStorageOverride}
+            />
+          </div>
 
           {saveError && (
             <p className="ferror" role="alert" style={{ margin: '10px var(--pad) 0' }}>

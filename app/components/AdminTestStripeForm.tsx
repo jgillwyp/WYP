@@ -130,14 +130,20 @@ export default function AdminTestStripeForm() {
                 your account&rsquo;s real tier/storage/renewal date, same as any real account —
                 open Account Options afterward to see them reflected there.
               </div>
-              <AccountStatusSection
-                tier={tier}
-                isBetaTester={isTester}
-                renewalDate={renewalDate}
-                storageGb={storageGb}
-                onStorageUpdated={setStorageGb}
-                forceRealVariant
-              />
+              {/* AccountStatusSection itself carries no horizontal padding
+                  (2026-11-07) — this screen, like /account/subscription,
+                  renders it directly in .scroll with no .subbody wrapper of
+                  its own, so it supplies the padding here instead. */}
+              <div style={{ padding: '0 var(--pad)' }}>
+                <AccountStatusSection
+                  tier={tier}
+                  isBetaTester={isTester}
+                  renewalDate={renewalDate}
+                  storageGb={storageGb}
+                  onStorageUpdated={setStorageGb}
+                  forceRealVariant
+                />
+              </div>
             </>
           )}
         </div>
