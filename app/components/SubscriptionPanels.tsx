@@ -17,7 +17,6 @@ import {
   parseIsoDate,
   storageRatePerBlock,
   type SubscriptionCadence,
-  type SubscriptionPlan,
 } from '@/lib/subscriptionPricing'
 
 /**
@@ -76,47 +75,126 @@ async function startStripeFlow(
 }
 
 /**
- * Shared Subscriber content (2026-08-26) — one source for the "Subscriber
- * Features" / "What's included" bullet list, the Renewal Date / Attachment
- * Storage Space / Plan Summary panels, and the dynamic Buy Add'l pricing
- * rule. Used at two call sites: the full-page `/account/subscription`
- * screen (`SubscriptionForm.tsx`, reached by "See Subscription Features and
- * Other Options") and Account Options' own embedded Subscriber section
- * (`AccountForm.tsx`). One file, reused both places, matching this
- * codebase's own `AttachmentsPanel.tsx`/`RepeatControl.tsx` precedent for
- * shared multi-screen components, rather than two independently maintained
- * copies that could drift apart — Jim's own design proposal, confirmed
- * 2026-08-26.
+ * Account Status (2026-11-06) — supersedes the earlier "Subscriber" section
+ * (2026-08-26 on). Jim, reviewing the testing-only controls stacked under
+ * the real Stripe pitch: "to simplify its use for respective users, I
+ * renamed the page/section 'Account Status' instead of 'Subscriber' (since
+ * all users of that page are not subscribers) and redesigned it to be
+ * three pages, one for testers which does not offer the Stripe payment
+ * option... one for Free Accounts, and one for Subscribers." Confirmed
+ * via AskUserQuestion: "Private Tester" (not his own suggested "Product
+ * Tester" — matches every other existing reference in this codebase), and
+ * the split applies to both call sites — Account Options' embedded section
+ * (AccountForm.tsx) and the full-page /account/subscription
+ * (SubscriptionForm.tsx).
  *
- * Fully dynamic, not caption-based (Jim's own confirmed choice, "1)... 3)
- * show the real default values... as if they'd just subscribed"): both call
- * sites render whichever of BecomeSubscriberPitch / MySubscriptionSummary
- * matches the account's *real* tier (which, during Private Testing, the
- * "Subscribed? (testing only)" checkbox on both screens controls directly).
- * There is no separate "preview" mode or explanatory banner distinguishing
- * real subscription content from a testing-driven one — a Free account's
- * pitch is the same real pitch every future Free account will see, and a
- * testing-Subscriber account's summary shows the same real panels a genuine
- * subscriber will see, just backed by profiles.subscription_renewal_date/
- * subscription_storage_gb (migration 047) instead of a real billing record.
+ * AccountStatusSection is the one shared entry point both call sites (and
+ * the new Admin > Test Stripe Payments screen, AdminTestStripeForm.tsx) now
+ * render through, replacing the old exported BecomeSubscriberPitch/
+ * MySubscriptionSummary pair and their own tier-only branch. Three states,
+ * chosen in order:
  *
- * variant controls two things that differ between the two call sites: (a)
- * whether the block renders its own "Become a Subscriber"/"My Subscription"
- * heading (the embedded Subscriber .subcard already has its own "Subscriber"
- * header from AccountForm.tsx's sectionHead(), so 'embedded' omits a second,
- * redundant one), and (b) — Subscribed content only — which intro sentence
- * to show, per Jim's own two differently-worded mockups: 'full' reads
- * "Thank you for subscribing," 'embedded' reads "...until the Renewal Date
- * shown below."
+ *   1. Private Tester — is_beta_tester() true. Informational only: no live
+ *      Stripe button anywhere on this page (that's exactly the overlap Jim
+ *      flagged — a real Sign Up button sitting right above a testing-only
+ *      checkbox). The self-toggle "Subscribed? (testing only)" checkbox and
+ *      Test Storage Cap field (migration 051) move here, gated by
+ *      can_toggle_tier() same as before — a tester without self-toggle
+ *      rights (rare; migration 091 grants both together going forward)
+ *      still sees the page, just without those controls.
+ *   2. Subscriber — real tier (or a testing-toggle "subscriber", handled via
+ *      realStoragePurchaseDisabled below). Jim's own confirmed
+ *      simplification: no separate dynamic "Your Plan Summary" box — the
+ *      status paragraph itself states the plan type (annual/monthly) and
+ *      renewal date, Cancel is an inline text link in that same sentence
+ *      (not a standalone prominent button — Jim's original complaint), and
+ *      Attachment Storage Capacity's existing stepper is the one place
+ *      capacity gets modified. "Subscription Details" below is the same
+ *      static reference content every state shows.
+ *   3. Free — the real pitch, unchanged in substance from the old
+ *      BecomeSubscriberPitch, just reusing the same "Subscription Details"
+ *      box heading/content the other two states use instead of its own.
  *
- * Pricing repriced 2026-10-13 — Jim's own instruction: "$39/1st yr (a 20%
- * discount), $49/yr thereafter" (he'd meant to type $36, caught the typo,
- * and confirmed sticking with $39 anyway). The Monthly figure was first set
- * to a reasoned-but-unconfirmed $5.99/mo (ratio-matched to the old $2.95/mo
- * vs. $23.95/yr relationship); Jim then directly confirmed the real number
- * is $5/mo flat, which is what's used throughout.
+ * forceRealVariant (Admin > Test Stripe Payments, 2026-11-06) skips state 1
+ * even when is_beta_tester() is true, so an admin can click through the
+ * real Free/Subscriber panels — and their real Stripe calls — against
+ * their own account. No separate write-back plumbing: it's the same
+ * profiles row, so a real purchase there is simply the account's real
+ * tier/renewal/storage the next time the ordinary page (not forced) reads
+ * them — ordinarily landing back on the Private Tester variant, which
+ * reflects it directly (the checkbox tracks tier === 'subscriber' either
+ * way). Stripe's own success/cancel redirect targets
+ * (create-checkout-session/create-portal-session route.ts) are unchanged —
+ * they still land on /account/subscription, not back on the Admin screen;
+ * acceptable since that's exactly "written back to the Private Tester
+ * page" taken literally.
  */
-type Variant = 'full' | 'embedded'
+export function AccountStatusSection({
+  tier,
+  isBetaTester,
+  canToggleTier = false,
+  renewalDate,
+  storageGb,
+  onStorageUpdated,
+  saving = false,
+  onTierToggle,
+  storageOverrideBytes = null,
+  storageOverrideInput = '',
+  storageOverrideSaving = false,
+  storageOverrideError = null,
+  onStorageOverrideInputChange,
+  onSaveStorageOverride,
+  onClearStorageOverride,
+  forceRealVariant = false,
+}: {
+  tier: 'free' | 'subscriber'
+  isBetaTester: boolean
+  canToggleTier?: boolean
+  renewalDate: string | null
+  storageGb: number
+  onStorageUpdated: (newStorageGb: number) => void
+  saving?: boolean
+  onTierToggle?: (next: boolean) => void | Promise<void>
+  storageOverrideBytes?: number | null
+  storageOverrideInput?: string
+  storageOverrideSaving?: boolean
+  storageOverrideError?: string | null
+  onStorageOverrideInputChange?: (value: string) => void
+  onSaveStorageOverride?: () => void
+  onClearStorageOverride?: () => void
+  forceRealVariant?: boolean
+}) {
+  if (isBetaTester && !forceRealVariant) {
+    return (
+      <PrivateTesterStatus
+        tier={tier}
+        canToggleTier={canToggleTier}
+        saving={saving}
+        onTierToggle={onTierToggle}
+        storageOverrideBytes={storageOverrideBytes}
+        storageOverrideInput={storageOverrideInput}
+        storageOverrideSaving={storageOverrideSaving}
+        storageOverrideError={storageOverrideError}
+        onStorageOverrideInputChange={onStorageOverrideInputChange}
+        onSaveStorageOverride={onSaveStorageOverride}
+        onClearStorageOverride={onClearStorageOverride}
+      />
+    )
+  }
+
+  if (tier === 'subscriber') {
+    return (
+      <SubscriberStatus
+        renewalDate={renewalDate}
+        storageGb={storageGb}
+        onStorageUpdated={onStorageUpdated}
+        realStoragePurchaseDisabled={!forceRealVariant && canToggleTier}
+      />
+    )
+  }
+
+  return <FreeStatus isTester={isBetaTester} />
+}
 
 // Title Case throughout. Replaced 2026-10-08 with Jim's own revised list
 // ("sales lit and main page updates.pdf") to add Receipt Confirmation
@@ -184,12 +262,12 @@ export const FREE_TIER_ADVANCED_FEATURES: { title: string; desc: string }[] = [
 /** Free vs. Subscriber comparison table (2026-08-27) — Jim's own drafted
  * mockup, an alternative to the bulleted Subscriber Features list that
  * takes roughly the same vertical space (so switching between the two
- * views on Account Options' Subscriber section doesn't jump/pop the
- * layout — his own design goal). Exported so LandingPage.tsx can render it
- * directly (always visible there, no toggle — see that file's own comment)
- * as well as BecomeSubscriberPitch below (toggle-gated). Colors/borders use
- * the same design tokens (--rule/--strip/--row-tint/--ink) every other
- * panel in this app already reads from `:root`, not new one-off values. */
+ * views on Account Status doesn't jump/pop the layout — his own design
+ * goal). Exported so LandingPage.tsx can render it directly (always
+ * visible there, no toggle — see that file's own comment) as well as
+ * SubscriptionFeaturesAndCost below (toggle-gated). Colors/borders use the
+ * same design tokens (--rule/--strip/--row-tint/--ink) every other panel
+ * in this app already reads from `:root`, not new one-off values. */
 // Receipt Confirmation and Data Retention rows added, Support row dropped,
 // 2026-10-08 — see SUBSCRIBER_FEATURES' own comment above for the same
 // revision applied to the bullet list.
@@ -232,7 +310,7 @@ export function SubscriptionCheckoutButton({
   className = 'btn',
   style,
 }: {
-  plan: SubscriptionPlan
+  plan: 'annual' | 'monthly'
   label?: string
   className?: string
   style?: CSSProperties
@@ -267,50 +345,36 @@ export function SubscriptionCheckoutButton({
   )
 }
 
-// heading is now optional (2026-08-27) — BecomeSubscriberPitch's new
-// Subscriber Features/Comparison toggle buttons serve as the visible
-// heading for that context, so passing no heading there avoids a
-// redundant second "Subscriber Features" label; PlanSummaryPanel's own
-// "What's included" call site is unaffected, still passing a heading.
-function SubscriberFeatureList({ heading }: { heading?: string }) {
+function SubscriberFeatureList() {
   return (
-    <>
-      {heading && (
-        <div className="promo-sub" style={{ marginTop: 10 }}>
-          {heading}
-        </div>
-      )}
-      <ul className="promo-features">
-        {SUBSCRIBER_FEATURES.map((f) => (
-          <li key={f.title}>
-            <strong>{f.title}</strong> — {f.desc}
-          </li>
-        ))}
-      </ul>
-    </>
+    <ul className="promo-features">
+      {SUBSCRIBER_FEATURES.map((f) => (
+        <li key={f.title}>
+          <strong>{f.title}</strong> — {f.desc}
+        </li>
+      ))}
+    </ul>
   )
 }
 
-// "Become a Subscriber" — the Free-account pitch (Jim's own written content,
-// unchanged from the 2026-08-24 batch, just relocated into this shared
-// file so both call sites read the identical copy).
-//
-// Subscriber Features / Free vs. Subscriber Comparison toggle added
-// 2026-08-27, Jim's own drafted mockups (two pasted screenshots): a
-// two-button view switch above the feature content, with "Subscription
-// Cost" (renamed from "Cost") and everything below it staying fixed
-// regardless of which view is showing — his own explicit design goal,
-// so the sign-up button and cancel-anytime note don't jump position when
-// the person switches views.
-export function BecomeSubscriberPitch({ variant, isTester = false }: { variant: Variant; isTester?: boolean }) {
+// Subscriber Features / Free vs. Subscriber Comparison toggle + Subscription
+// Cost — the one static block all three Account Status states now show
+// inside their own "Subscription Details" box (2026-11-06, replacing the
+// old per-state copies: BecomeSubscriberPitch's inline version, and the
+// Subscriber state's old dynamic "Your Plan Summary" — Jim, confirmed: "a
+// text paragraph states their subscription type, renewal date, and offers
+// a cancellation option... I prefer this new presentation method," i.e. no
+// separate dynamic plan/cadence box at all, just this same static
+// reference content everywhere). isTester only ever applies to the real
+// Free-account pitch (FreeStatus) — the Private Tester and Subscriber
+// states always show the plain $39 reference price, confirmed against
+// Jim's own mockup (his page 1 "Subscription Cost" box shows $39, not the
+// $19 tester rate — this page is "what it costs for real," not a pitch).
+function SubscriptionFeaturesAndCost({ isTester = false }: { isTester?: boolean }) {
   const [view, setView] = useState<'features' | 'comparison'>('features')
 
   return (
-    <div className="promo" style={{ margin: '0 0 4px' }}>
-      {variant === 'full' && <div className="promo-h">Become a Subscriber</div>}
-
-      <FreeAccountStorageCapacityPanel />
-
+    <>
       <div className="viewtoggle" role="tablist" aria-label="Subscriber Features view">
         <button
           type="button"
@@ -337,65 +401,29 @@ export function BecomeSubscriberPitch({ variant, isTester = false }: { variant: 
       <div className="promo-sub" style={{ marginTop: 12 }}>
         Subscription Cost
       </div>
-      {/* Simplified 2026-08-28, Jim's own drafted wording — drops the
-          repeated "subscription" suffix on each line and states the
-          renewal behavior directly ("renews each year/month until
-          canceled") rather than the vaguer "thereafter". "canceled" is
-          Jim's identified preferred spelling — see this file's other
-          "cancelled" fix at the note below and in PlanSummaryPanel. */}
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
         1st year — {isTester ? 'private tester rate' : '20% discount'}, only{' '}
         <strong>${isTester ? TESTER_FIRST_YEAR_PRICE : ANNUAL_FIRST_YEAR_PRICE}</strong>
         <br />
         Per year — <strong>${ANNUAL_RENEWAL_PRICE}</strong>, renews each year until canceled
         <br />
-        {/* Monthly option added 2026-08-27, Jim's own drafted addition —
-            no discount attaches to it (unlike the annual plan's 1st-year
-            20% off), since it's meant as a low-commitment alternative, not
-            a cheaper path to the same year of service. Price repriced
-            2026-10-13 alongside the annual figures — Jim's own confirmed
-            $5/mo flat (not a 49/12 division or a ratio match). */}
         Monthly — <strong>${MONTHLY_PRICE}/mo</strong>, renews each month until canceled
       </p>
 
       {isTester && (
-        // Tester-only visible text (2026-11-04), per Jim's own ask —
-        // explains why this account sees $19 rather than $39, so it never
-        // reads as a pricing mistake. Shown directly on the Subscribe
-        // screen itself, not gated behind any "testing complete" moment —
-        // Jim's own confirmed scope: every private tester (beta_allowlist)
-        // sees this any time they're on this screen during testing.
         <p className="promo-p" style={{ margin: '6px 0 0', fontStyle: 'italic' }}>
           Private tester rate — thank you for testing Would You Please. This $
           {TESTER_FIRST_YEAR_PRICE} 1st-year rate is available to private testers only.
         </p>
       )}
-
-      <SubscriptionCheckoutButton plan="annual" style={{ width: '100%', marginTop: 12 }} />
-      <div style={{ textAlign: 'center', marginTop: 8 }}>
-        <SubscriptionCheckoutButton
-          plan="monthly"
-          label="Or sign up monthly instead"
-          className="btn-quiet"
-        />
-      </div>
-
-      <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        Cancel anytime — your Subscriber features stay active through the end of the
-        period you&rsquo;ve already paid for.
-      </p>
-    </div>
+    </>
   )
 }
 
-// Manage Storage — moved 2026-11-05 (Jim's own pasted mockup) from a
-// standalone button AccountForm.tsx rendered below this whole shared block,
-// into a title-row button right-aligned with "Attachment Storage Capacity"
-// itself — now shown this way on both call sites (AccountForm.tsx's
-// embedded Subscriber section, and /account/subscription, which never had a
-// Manage Storage link of its own before this). Free Account Users get the
-// identical title-row treatment on their own new storage-capacity panel
-// below, per Jim's own item 4.
+// Manage Storage — a title-row button right-aligned with "Attachment
+// Storage Capacity" itself, shown this way on every Account Status state
+// (Private Tester, Free, Subscriber) and on both call sites (Account
+// Options' embedded section, /account/subscription).
 function ManageStorageButton() {
   const router = useRouter()
   return (
@@ -417,23 +445,33 @@ function StorageCapacityTitleRow({ title }: { title: string }) {
   )
 }
 
+// The generic free-vs-subscriber capacity explanation (2026-11-06, Jim's
+// own mockup wording) — shown on both the Private Tester and Free states;
+// the Subscriber state has its own, more specific paragraph inside
+// AttachmentStoragePanel below, since a real subscriber needs the actual
+// proration/billing-cycle rules, not this generic overview.
+function StorageCapacityExplainer() {
+  return (
+    <p className="promo-p" style={{ margin: '4px 0 0' }}>
+      Free Account users are provided 100 MB of capacity for Attachments. Subscribers are
+      provided a {STORAGE_BLOCK_GB} GB capacity and are offered the ability to add increments
+      of {STORAGE_BLOCK_GB} GB for ${STORAGE_MONTHLY_RATE_PER_BLOCK}/month. Attachment Storage
+      can be managed with an ability to download and/or delete selected Attachments (the
+      &ldquo;Manage Storage&rdquo; button above).
+    </p>
+  )
+}
+
 const FREE_TIER_STORAGE_LIMIT_MB = Math.round(FREE_TIER_STORAGE_LIMIT_BYTES / (1024 * 1024))
 
-// Free Account Users' own Attachment Storage Capacity panel (2026-11-05,
-// Jim's own pasted mockup, item 4) — previously Free accounts saw no storage
-// summary at all within BecomeSubscriberPitch, just the standalone Manage
-// Storage button AccountForm.tsx rendered separately below it. Mirrors
-// AttachmentStoragePanel's own title-row shape for a Subscriber, with no
-// stepper (nothing to adjust on Free) and a one-line upsell instead.
 function FreeAccountStorageCapacityPanel() {
   return (
     <>
       <StorageCapacityTitleRow title="Attachment Storage Capacity" />
-      <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        Current: <strong>{FREE_TIER_STORAGE_LIMIT_MB} MB</strong>
-      </p>
-      <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        Additional capacity is available with a subscription.
+      <StorageCapacityExplainer />
+      <p className="promo-p" style={{ margin: '8px 0 0' }}>
+        Current: <strong>{FREE_TIER_STORAGE_LIMIT_MB} MB</strong>. Additional capacity is
+        available with a subscription.
       </p>
     </>
   )
@@ -449,41 +487,45 @@ function formatRenewalDate(iso: string | null): string {
   })
 }
 
-function RenewalDatePanel({ renewalDate }: { renewalDate: string | null }) {
+// Cancel — now a quiet inline text link inside the status sentence rather
+// than a standalone prominent button (2026-11-06; the old RenewalDatePanel
+// is gone). Jim's own stated trigger for this whole redesign: "One of the
+// first things that got me going down this path is the current 'Cancel
+// Renewal' button being such a prominent feature of a Subscriber's page."
+// Errors surface through onError so the parent can show them below the
+// status paragraph, not nested inside it (a <p> can't validly contain a
+// block-level error line).
+function CancelRenewalLink({ onError }: { onError: (message: string | null) => void }) {
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  async function handleCancelRenewal() {
+  async function handleClick() {
     setBusy(true)
-    setError(null)
+    onError(null)
     // Redirects to Stripe's own hosted Billing Portal — it already shows
     // this same renewal date and offers Cancel there, so there's nothing
     // further to build here beyond starting that session.
     const result = await startStripeFlow('/api/stripe/create-portal-session', {})
     if (!result.ok) {
-      setError(result.message)
+      onError(result.message)
       setBusy(false)
     }
   }
 
   return (
-    <>
-      <div className="promo-sub" style={{ marginTop: 12 }}>
-        Renewal Date
-      </div>
-      <div className="donerow" style={{ margin: '4px 0 0' }}>
-        <span className="donenote">{formatRenewalDate(renewalDate)}</span>
-        <button type="button" className="btn" onClick={handleCancelRenewal} disabled={busy}>
-          {busy ? 'Opening…' : 'Cancel Renewal'}
-        </button>
-      </div>
-      {error && (
-        <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--alert-red)' }}>
-          {error}
-        </p>
-      )}
-    </>
+    <button type="button" className="linkbtn" onClick={handleClick} disabled={busy}>
+      {busy ? 'opening…' : 'Cancel'}
+    </button>
   )
+}
+
+// Client-side preview only, for the confirm dialog below — the server
+// (update-storage/route.ts) always recomputes this for real from the
+// actual Stripe subscription, never trusts this value.
+function computeStoragePreviewTotal(cadence: SubscriptionCadence, targetTotalGb: number): number {
+  const basePrice = cadence === 'annual' ? ANNUAL_RENEWAL_PRICE : MONTHLY_PRICE
+  const ratePerBlock = storageRatePerBlock(cadence)
+  const extraGb = targetTotalGb - STORAGE_BLOCK_GB
+  return basePrice + (extraGb / STORAGE_BLOCK_GB) * ratePerBlock
 }
 
 // Redesigned 2026-11-04 from a one-time purchase into an in-place target-
@@ -493,6 +535,25 @@ function RenewalDatePanel({ renewalDate }: { renewalDate: string | null }) {
 // per Jim's own follow-up instruction; the server re-validates this
 // regardless of what the stepper shows, so a stale/unfetched minGb here is
 // never a security gap, only a slightly late error message.
+//
+// Explanatory text and the Update confirmation message both corrected
+// 2026-11-06 (Jim: "monthly account storage capacity charges would apply
+// to the following month" — he'd first said "changes," then corrected
+// himself to "charges") — an Annual plan's change is still prorated and
+// charged immediately, but a Monthly plan's change now takes effect
+// starting the next billing date with no charge today, matching
+// update-storage/route.ts's own cadence-conditional proration_behavior.
+//
+// Confirm dialog added the same day, same conversation — Jim: "Since there
+// will not be an immediate Stripe interaction for a monthly subscription
+// incremental Attachment capacity - there should be a dialog confirming the
+// additional storage and additional charge." Clicking Update Capacity now
+// opens a .scrim/.modal (§6.12) confirmation instead of charging
+// immediately, for both cadences (not just Monthly) — the dialog states the
+// real target GB and, once cadence is known, the real resulting price and
+// timing (charged now vs. next billing date). cadence is fetched the same
+// way SubscriberStatus's own status sentence fetches it, so the dialog can
+// show accurate wording before the server call, not just after.
 function AttachmentStoragePanel({
   storageGb,
   onStorageUpdated,
@@ -514,6 +575,8 @@ function AttachmentStoragePanel({
 }) {
   const [target, setTarget] = useState(storageGb)
   const [minGb, setMinGb] = useState(STORAGE_BLOCK_GB)
+  const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<string | null>(null)
@@ -540,6 +603,30 @@ function AttachmentStoragePanel({
       }
     }
     loadUsage()
+    return () => {
+      cancelled = true
+    }
+  }, [realPurchaseDisabled])
+
+  useEffect(() => {
+    if (realPurchaseDisabled) return
+    let cancelled = false
+    async function loadCadence() {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) return
+      try {
+        const res = await fetch('/api/stripe/plan-summary', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const json: { cadence?: SubscriptionCadence | null } = await res.json()
+        if (!cancelled) setCadence(json.cadence ?? null)
+      } catch {
+        // cadence stays null — the confirm dialog falls back to generic wording.
+      }
+    }
+    loadCadence()
     return () => {
       cancelled = true
     }
@@ -599,9 +686,11 @@ function AttachmentStoragePanel({
 
     const unit = json.cadence === 'annual' ? '/yr' : '/mo'
     const planLabel = json.cadence === 'annual' ? 'Annual' : 'Monthly'
-    setConfirmation(
-      `Storage updated to ${json.newStorageGb} GB. Your ${planLabel} subscription is now $${json.newRecurringTotal}${unit}.`
-    )
+    const message =
+      json.cadence === 'annual'
+        ? `Storage updated to ${json.newStorageGb} GB. Your ${planLabel} subscription is now $${json.newRecurringTotal}${unit}.`
+        : `Storage updated to ${json.newStorageGb} GB. Your ${planLabel} subscription will be $${json.newRecurringTotal}${unit} starting your next billing date — no charge today.`
+    setConfirmation(message)
     if (typeof json.newStorageGb === 'number') {
       setTarget(json.newStorageGb)
       onStorageUpdated(json.newStorageGb)
@@ -647,27 +736,76 @@ function AttachmentStoragePanel({
           type="button"
           className="btn"
           style={{ marginLeft: 'auto' }}
-          onClick={handleUpdate}
+          onClick={() => setShowConfirm(true)}
           disabled={controlsDisabled || !changed}
         >
           {busy ? 'Updating…' : 'Update Capacity'}
         </button>
       </div>
+      {showConfirm && (
+        <>
+          <div className="scrim" onClick={() => setShowConfirm(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="storage-confirm-title">
+            <div className="modalhead">
+              <p className="modal-title" id="storage-confirm-title">
+                {target > storageGb ? 'Increase' : 'Reduce'} Attachment Storage Capacity?
+              </p>
+            </div>
+            <p className="subnote">
+              {target > storageGb ? 'Increase' : 'Reduce'} your Attachment Storage Capacity to{' '}
+              <strong>{target} GB</strong>
+              {cadence === 'annual' && (
+                <>
+                  {' '}
+                  — this is prorated and charged now, then{' '}
+                  <strong>${computeStoragePreviewTotal('annual', target)}/yr</strong> starting your next renewal.
+                </>
+              )}
+              {cadence === 'monthly' && (
+                <>
+                  {' '}
+                  — this takes effect on your next billing date, with no charge today. Your subscription will
+                  become <strong>${computeStoragePreviewTotal('monthly', target)}/mo</strong> from then on.
+                </>
+              )}
+              {!cadence && <> This will change your billed amount.</>}
+            </p>
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn-secondary" type="button" onClick={() => setShowConfirm(false)} disabled={busy}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setShowConfirm(false)
+                  handleUpdate()
+                }}
+              >
+                {busy ? 'Updating…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
       {realPurchaseDisabled ? (
         <p className="promo-p" style={{ margin: '8px 0 0' }}>
           Real storage purchases are disabled for testing accounts — no Stripe billing
           applies. Use <strong>Test Storage Cap (MB, testing only)</strong> below to simulate a
-          different storage cap instead. See Plan Summary below for the same reason this
-          account has no real plan to show either.
+          different storage cap instead.
         </p>
       ) : (
         <p className="promo-p" style={{ margin: '8px 0 0' }}>
-          Billed as part of your subscription, at the same cadence it already renews on —{' '}
-          <strong>${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo</strong> per {STORAGE_BLOCK_GB} GB on a
-          Monthly plan, or <strong>${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr</strong> per{' '}
-          {STORAGE_BLOCK_GB} GB on an Annual plan (prorated for the remainder of your current
-          year if added mid-cycle). No separate charges — the rate simply changes, and a
-          reduction can&rsquo;t go below what&rsquo;s already in use ({minGb} GB right now).
+          Subscribers are provided {STORAGE_BLOCK_GB} GB of storage space for Attachments.
+          Additional storage capacity can be added in increments of {STORAGE_BLOCK_GB} GB for $
+          {STORAGE_MONTHLY_RATE_PER_BLOCK}/month. On an <strong>Annual</strong> plan, a change
+          is prorated for the remainder of your current year and charged now, then $
+          {STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per {STORAGE_BLOCK_GB} GB each year thereafter. On
+          a <strong>Monthly</strong> plan, a change takes effect on your next billing date — no
+          charge today — at ${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo per {STORAGE_BLOCK_GB} GB from
+          then on. A reduction can&rsquo;t go below what&rsquo;s already in use ({minGb} GB
+          right now).
         </p>
       )}
       {confirmation && (
@@ -684,114 +822,175 @@ function AttachmentStoragePanel({
   )
 }
 
-// Testing-only fallback (2026-11-05) — a tester (can_toggle_tier()) who
-// checked "Subscribed? (testing only)" with no real Stripe subscription on
-// file was falling through to GenericPlanOptionsPanel below, which still
-// reads as a sales pitch ("billed today $39") even though the account is
-// already shown as Subscribed and the Attachment Storage Capacity note right
-// above it already explains real purchases are disabled for testing — a
-// leftover mismatch from before the cadence-aware redesign existed. Jim:
-// "it was done to the prior format of that area... missing the more recent
-// wording changes to storage space and plan summary." This matches that
-// newer tone (heading + subtitle, no price-pitch rows) instead.
-function TestingPlanSummaryPanel({ heading }: { heading: string }) {
+// State 1 — Private Tester. is_beta_tester() true. Informational only: no
+// live Stripe control anywhere on this page. canToggleTier gates the
+// self-toggle checkbox + Test Storage Cap field (migration 051) — moved
+// here verbatim from AccountForm.tsx/SubscriptionForm.tsx's own former
+// inline copies, now driven by props so both call sites (and their own
+// Supabase calls, unchanged) can share this one presentation.
+function PrivateTesterStatus({
+  tier,
+  canToggleTier,
+  saving,
+  onTierToggle,
+  storageOverrideBytes,
+  storageOverrideInput,
+  storageOverrideSaving,
+  storageOverrideError,
+  onStorageOverrideInputChange,
+  onSaveStorageOverride,
+  onClearStorageOverride,
+}: {
+  tier: 'free' | 'subscriber'
+  canToggleTier: boolean
+  saving: boolean
+  onTierToggle?: (next: boolean) => void | Promise<void>
+  storageOverrideBytes: number | null
+  storageOverrideInput: string
+  storageOverrideSaving: boolean
+  storageOverrideError: string | null
+  onStorageOverrideInputChange?: (value: string) => void
+  onSaveStorageOverride?: () => void
+  onClearStorageOverride?: () => void
+}) {
   return (
-    <>
-      <div className="promo-sub" style={{ marginTop: 12 }}>
-        {heading}
-        <span className="plan-sub" style={{ display: 'block', fontWeight: 400 }}>
-          testing only — no real subscription on file
-        </span>
+    <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
+      {canToggleTier && (
+        <label className="checkrow" style={{ marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={tier === 'subscriber'}
+            disabled={saving}
+            onChange={(e) => onTierToggle?.(e.target.checked)}
+          />
+          <span className="checktext">
+            Subscribed? (testing only)
+            <span className="checknote">
+              Sets your account to the Subscriber tier so subscriber-only features like
+              Attachments can be tested. This status only lasts for the testing period —
+              once testing ends, this checkbox goes away. Off by default.
+            </span>
+          </span>
+        </label>
+      )}
+
+      <div className="promo-sub" style={{ marginTop: 4 }}>
+        My Status: Private Tester
       </div>
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        Your account is set to the Subscriber tier for testing, via the{' '}
-        <strong>Subscribed? (testing only)</strong> checkbox above — not through a real
-        subscription, so there&rsquo;s no real plan or billing to summarize here. Uncheck it to
-        return to Free, or use the real Sign Up button once testing ends.
+        Thank you for helping us launch Would You Please. As a private tester, you can
+        temporarily turn on Subscriber features without charge. Your feedback is important
+        and appreciated — please use the Housekeeping &ldquo;Private Tester&rdquo; button to
+        provide feedback by email and to monitor your own progress through various features.
       </p>
 
-      <SubscriberFeatureList heading="What's included" />
-    </>
+      <StorageCapacityTitleRow title="Attachment Storage Capacity" />
+      <StorageCapacityExplainer />
+
+      {canToggleTier && (
+        <>
+          <p className="promo-p" style={{ margin: '8px 0 0' }}>
+            If you want to see what happens when you exceed the provided Attachment storage
+            capacity, you can set a limit to exceed below. Unless you change it below, the
+            Tester Attachment storage capacity is based on the Subscribed check box above
+            (unchecked — 100 MB, or checked — {STORAGE_BLOCK_GB} GB).
+          </p>
+          <div className="fgroup" style={{ marginTop: 10 }}>
+            <label className="flabel" htmlFor="tester-storage-override-mb">
+              Test Storage Cap (MB, testing only)
+            </label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                id="tester-storage-override-mb"
+                className="finput"
+                style={{ maxWidth: 120 }}
+                type="number"
+                min={0}
+                step="0.1"
+                placeholder="e.g. 2"
+                value={storageOverrideInput}
+                disabled={storageOverrideSaving}
+                onChange={(e) => onStorageOverrideInputChange?.(e.target.value)}
+              />
+              <button
+                className="btn-secondary"
+                type="button"
+                disabled={storageOverrideSaving || storageOverrideInput === ''}
+                onClick={onSaveStorageOverride}
+              >
+                Save
+              </button>
+              <button
+                className="btn-secondary"
+                type="button"
+                disabled={storageOverrideSaving || storageOverrideBytes === null}
+                onClick={onClearStorageOverride}
+              >
+                Clear
+              </button>
+            </div>
+            <span className="checknote" style={{ display: 'block', marginTop: 6 }}>
+              {storageOverrideBytes != null
+                ? `Overriding your real storage cap with ${formatBytesForOverride(storageOverrideBytes)} for testing.`
+                : 'Not overridden — using your real tier-based storage cap.'}{' '}
+              Replaces the account&rsquo;s real Attachment storage allowance (100 MB free, or
+              your Subscriber allowance) while set, on both Requests and ToDos. Clear it to go
+              back to the real number.
+            </span>
+            {storageOverrideError && (
+              <p className="ferror" role="alert" style={{ marginTop: 6 }}>
+                {storageOverrideError}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="promo" style={{ marginTop: 14 }}>
+        <div className="promo-h">Subscription Details</div>
+        <SubscriptionFeaturesAndCost />
+      </div>
+    </div>
   )
 }
 
-// The three-row reference list every non-subscriber pitch already shows
-// (Annual 1st-year / Renews-at / Monthly) — kept as GenericPlanOptionsPanel,
-// the fallback for an already-subscribed account whose real cadence can't be
-// determined for some other reason (Stripe unreachable, a subscription id on
-// file that Stripe no longer recognizes, etc.) — genuinely rare, unlike the
-// tester case above, which now has its own fallback instead of landing here.
-function GenericPlanOptionsPanel({ heading }: { heading: string }) {
-  return (
-    <>
-      <div className="promo-sub" style={{ marginTop: 12 }}>
-        {heading}
-      </div>
-      <div className="planrow">
-        <span className="plan-name">
-          Subscriber — 1st year
-          <span className="plan-sub">20% discount, billed today</span>
-        </span>
-        <span className="plan-price">${ANNUAL_FIRST_YEAR_PRICE}</span>
-      </div>
-      <div className="planrow">
-        <span className="plan-name">
-          Renews at
-          <span className="plan-sub">automatically, each year thereafter</span>
-        </span>
-        <span className="plan-price">${ANNUAL_RENEWAL_PRICE}/yr</span>
-      </div>
-      <div className="planrow">
-        <span className="plan-name">
-          Monthly
-          <span className="plan-sub">renews each month until canceled</span>
-        </span>
-        <span className="plan-price">${MONTHLY_PRICE}/mo</span>
-      </div>
-
-      <SubscriberFeatureList heading="What's included" />
-
-      <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        Cancel anytime — your Subscriber features stay active through the end of the
-        period you&rsquo;ve already paid for.
-      </p>
-    </>
-  )
+// Small, local formatter — avoids importing attachments.ts's formatBytes()
+// just for this one override-note sentence, matching this file's existing
+// FREE_TIER_STORAGE_LIMIT_MB precedent of deriving its own small display
+// value rather than pulling in a whole helper module for one line.
+function formatBytesForOverride(bytes: number): string {
+  const mb = bytes / (1024 * 1024)
+  const rounded = Math.round(mb * 100) / 100
+  return `${rounded} MB`
 }
 
-// Redesigned 2026-11-05, Jim's own request: an already-subscribed account
-// doesn't need every plan option listed — just its own real plan and its
-// own real storage add-on cost, each in the cadence it's actually billed
-// on. Fetches which cadence (Annual/Monthly) the account's real Stripe
-// subscription is on from plan-summary/route.ts; falls back to the generic
-// three-row list above when that comes back null (no real subscription on
-// file — the common case for a testing-toggle "subscriber" who never went
-// through real Sign Up).
-export function PlanSummaryPanel({
+// State 2 — Subscriber (real tier, or a testing-toggle "subscriber" via
+// realStoragePurchaseDisabled). No separate dynamic plan/cadence box — the
+// status paragraph itself states the plan type and renewal date (Jim's own
+// confirmed simplification, 2026-11-06), Cancel is the inline link above,
+// and Attachment Storage Capacity's existing stepper is the one place
+// capacity gets modified.
+function SubscriberStatus({
+  renewalDate,
   storageGb,
-  heading = 'Your Plan Summary',
-  testingOnly = false,
+  onStorageUpdated,
+  realStoragePurchaseDisabled,
 }: {
+  renewalDate: string | null
   storageGb: number
-  heading?: string
-  // can_toggle_tier() — same flag AttachmentStoragePanel's realPurchaseDisabled
-  // already uses — so a tester with no real Stripe cadence gets the
-  // testing-appropriate fallback above instead of GenericPlanOptionsPanel's
-  // sales-pitch wording. See TestingPlanSummaryPanel's own comment.
-  testingOnly?: boolean
+  onStorageUpdated: (newStorageGb: number) => void
+  realStoragePurchaseDisabled: boolean
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
-  const [loaded, setLoaded] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (realStoragePurchaseDisabled) return
     let cancelled = false
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
-      if (!token) {
-        if (!cancelled) setLoaded(true)
-        return
-      }
+      if (!token) return
       try {
         const res = await fetch('/api/stripe/plan-summary', {
           method: 'POST',
@@ -800,111 +999,79 @@ export function PlanSummaryPanel({
         const json: { cadence?: SubscriptionCadence | null } = await res.json()
         if (!cancelled) setCadence(json.cadence ?? null)
       } catch {
-        // cadence stays null — falls back to the generic list below.
-      } finally {
-        if (!cancelled) setLoaded(true)
+        // cadence stays null — the status sentence falls back to generic wording.
       }
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [realStoragePurchaseDisabled])
 
-  if (!loaded) {
-    return (
-      <div className="promo-sub" style={{ marginTop: 12 }}>
-        {heading}
-      </div>
-    )
-  }
-
-  if (!cadence) {
-    return testingOnly ? (
-      <TestingPlanSummaryPanel heading={heading} />
-    ) : (
-      <GenericPlanOptionsPanel heading={heading} />
-    )
-  }
-
-  const extraGb = storageGb - STORAGE_BLOCK_GB
-  const ratePerBlock = storageRatePerBlock(cadence)
-  const storageCost = (extraGb / STORAGE_BLOCK_GB) * ratePerBlock
-  const unit = cadence === 'annual' ? '/yr' : '/mo'
-
-  return (
-    <>
-      <div className="promo-sub" style={{ marginTop: 12 }}>
-        {heading}
-        <span className="plan-sub" style={{ display: 'block', fontWeight: 400 }}>
-          renews until canceled
-        </span>
-      </div>
-      <div className="planrow">
-        <span className="plan-name">{cadence === 'annual' ? 'Annual Subscription' : 'Monthly Subscription'}</span>
-        <span className="plan-price">
-          {cadence === 'annual'
-            ? `$${ANNUAL_FIRST_YEAR_PRICE} 1st year, $${ANNUAL_RENEWAL_PRICE} thereafter`
-            : `$${MONTHLY_PRICE}${unit}`}
-        </span>
-      </div>
-      {extraGb > 0 && (
-        <div className="planrow">
-          <span className="plan-name">
-            Attachment Storage Capacity ({storageGb}GB)
-          </span>
-          <span className="plan-price">
-            ${storageCost}
-            {unit}
-          </span>
-        </div>
-      )}
-
-      <SubscriberFeatureList heading="What's included" />
-
-      <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        Cancel anytime — your Subscriber features stay active through the end of the
-        period you&rsquo;ve already paid for.
-      </p>
-    </>
-  )
-}
-
-// "My Subscription" — the Subscribed-account summary. renewalDate is the
-// raw ISO date string from profiles.subscription_renewal_date (migration
-// 047, null for an account that has never once been a testing Subscriber);
-// storageGb is the account's actual granted storage
-// (profiles.subscription_storage_gb, currently always 5 — no real Buy
-// Add'l purchase path exists yet).
-export function MySubscriptionSummary({
-  variant,
-  renewalDate,
-  storageGb,
-  onStorageUpdated,
-  realStoragePurchaseDisabled = false,
-}: {
-  variant: Variant
-  renewalDate: string | null
-  storageGb: number
-  onStorageUpdated: (newStorageGb: number) => void
-  realStoragePurchaseDisabled?: boolean
-}) {
   return (
     <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
-      {variant === 'full' && <div className="promo-h">My Subscription</div>}
-      <p className="promo-p" style={{ margin: '0 0 4px' }}>
-        {variant === 'full'
-          ? 'You have Subscriber features. Thank you for subscribing.'
-          : 'You have subscriber features until the Renewal Date shown below.'}
+      <div className="promo-sub" style={{ marginTop: 0 }}>
+        My Status: Subscriber
+      </div>
+      <p className="promo-p" style={{ margin: '4px 0 0' }}>
+        Thank you for being {cadence === 'annual' ? 'an annual' : cadence === 'monthly' ? 'a monthly' : 'a'}{' '}
+        Would You Please subscriber. Your Renewal Date is: <strong>{formatRenewalDate(renewalDate)}</strong>. If
+        you wish to do so, you can <CancelRenewalLink onError={setCancelError} /> anytime — your Subscriber
+        features stay active through the end of the period you&rsquo;ve already paid for.
       </p>
+      {cancelError && (
+        <p className="ferror" role="alert" style={{ margin: '6px 0 0' }}>
+          {cancelError}
+        </p>
+      )}
 
-      <RenewalDatePanel renewalDate={renewalDate} />
       <AttachmentStoragePanel
         storageGb={storageGb}
         onStorageUpdated={onStorageUpdated}
         realPurchaseDisabled={realStoragePurchaseDisabled}
       />
-      <PlanSummaryPanel storageGb={storageGb} testingOnly={realStoragePurchaseDisabled} />
+
+      <div className="promo" style={{ marginTop: 14 }}>
+        <div className="promo-h">Subscription Details</div>
+        <SubscriptionFeaturesAndCost />
+      </div>
+    </div>
+  )
+}
+
+// State 3 — Free Account. The real Sign Up pitch, unchanged in substance
+// from the old exported BecomeSubscriberPitch — just reusing the same
+// "Subscription Details" box heading/content every state now shows.
+// isTester only matters here via Admin > Test Stripe Payments
+// (forceRealVariant) — an ordinary real Free user is never a tester under
+// this routing (is_beta_tester() true always routes to PrivateTesterStatus
+// instead), so isTester reflects the real $19-vs-$39 price Stripe will
+// actually charge in that one admin-preview case.
+function FreeStatus({ isTester }: { isTester: boolean }) {
+  return (
+    <div style={{ margin: '0 0 4px', padding: '0 var(--pad)' }}>
+      <div className="promo-sub" style={{ marginTop: 0 }}>
+        My Status: Free Account
+      </div>
+      <p className="promo-p" style={{ margin: '4px 0 0' }}>
+        Thank you for using Would You Please. The advantages and costs for a Subscription are
+        shown below.
+      </p>
+
+      <FreeAccountStorageCapacityPanel />
+
+      <div className="promo" style={{ marginTop: 14 }}>
+        <div className="promo-h">Subscription Details</div>
+        <SubscriptionFeaturesAndCost isTester={isTester} />
+        <SubscriptionCheckoutButton plan="annual" style={{ width: '100%', marginTop: 12 }} />
+        <div style={{ textAlign: 'center', marginTop: 8 }}>
+          <SubscriptionCheckoutButton plan="monthly" label="Or sign up monthly instead" className="btn-quiet" />
+        </div>
+        <p className="promo-p" style={{ margin: '8px 0 0' }}>
+          Cancel anytime — your Subscriber features stay active through the end of the period
+          you&rsquo;ve already paid for.
+        </p>
+      </div>
     </div>
   )
 }

@@ -2425,6 +2425,34 @@ body {
   letter-spacing: .04em;
 }
 
+/* Mock-ad preview for a Free-account Private Tester (2026-11-06) — Jim:
+   "I would like to see a mock ad presented when a tester is working with a
+   free account version... it could be as simple as a colored background
+   with a title." Jim's own placeholder sentence doesn't fit the real
+   .adbox's fixed 320x50 dashed box, so this is a distinct, wider, auto-
+   height variant rather than a longer label squeezed into the same shape —
+   AppFooter.tsx swaps to it only for is_beta_tester() accounts, real Free
+   users still see the plain "AD — 320×50 RESERVED" placeholder. */
+.adslot.adslot-preview {
+  height: auto;
+  padding: 10px var(--pad);
+}
+
+.adbox-preview {
+  width: 100%;
+  height: auto;
+  border: none;
+  border-radius: 4px;
+  background: var(--strip);
+  color: var(--brand-blue);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: normal;
+  line-height: 1.4;
+  text-align: center;
+  padding: 10px 12px;
+}
+
 /* ============================================================================
    MAIN SCREEN (§6.7 band + new components) — ported from
    design/screens/WYP_main_screen_palette1.html for MainScreen.tsx, 2026-08-08.

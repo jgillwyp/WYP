@@ -23,13 +23,18 @@ export const runtime = 'nodejs'
  * the caller's EXISTING Stripe Subscription directly (adding, updating, or
  * removing a second "Additional Storage" subscription item riding the same
  * billing cycle as the base plan), since the customer already has a payment
- * method on file. Stripe prorates the change immediately
- * (proration_behavior: 'always_invoice') and bills that proration right
- * away; every subsequent regular invoice then simply includes the new
- * quantity at the normal per-block rate — no separate periodic charge for
- * storage, no cron job, matching Jim's own design: "That way the period
- * doesn't matter and there are no periodic incremental charges - there is
- * just a higher rate."
+ * method on file. No separate periodic charge for storage, no cron job,
+ * matching Jim's own design: "That way the period doesn't matter and there
+ * are no periodic incremental charges - there is just a higher rate."
+ *
+ * Proration behavior differs by cadence (2026-11-06, Jim's own spec,
+ * corrects this route's original always-'always_invoice' behavior for
+ * Monthly): on an Annual plan, a change is prorated for the remainder of
+ * the current year and charged immediately ('always_invoice'); on a
+ * Monthly plan, a change takes effect starting the next billing date with
+ * no charge today ('none' — Stripe updates the item's quantity but
+ * generates no proration invoice item; the next regular invoice simply
+ * bills the new quantity at the normal rate).
  *
  * A reduction is allowed (Jim, 2026-11-04) but never below whatever is
  * actually in use right now — enforced server-side via
@@ -150,24 +155,32 @@ export async function POST(request: Request) {
 
   const desiredBlocks = (targetTotalGb - STORAGE_BLOCK_GB) / STORAGE_BLOCK_GB
   const existingStorageItem = subscription.items.data.find((item) => item.price.id === storagePriceId)
+  // For the audit log below — the real "before" value, read from Stripe's
+  // own subscription item rather than trusted from the client.
+  const previousStorageGb = STORAGE_BLOCK_GB + (existingStorageItem?.quantity ?? 0) * STORAGE_BLOCK_GB
+
+  // See this route's own header comment — Annual prorates and charges
+  // immediately; Monthly takes effect next billing date with no charge today.
+  const prorationBehavior: Stripe.SubscriptionUpdateParams.ProrationBehavior =
+    cadence === 'annual' ? 'always_invoice' : 'none'
 
   try {
     if (desiredBlocks === 0) {
       if (existingStorageItem) {
-        await stripe.subscriptionItems.del(existingStorageItem.id, { proration_behavior: 'always_invoice' })
+        await stripe.subscriptionItems.del(existingStorageItem.id, { proration_behavior: prorationBehavior })
       }
       // Else: already at the base 5 GB with no storage item — nothing to do
       // on the Stripe side.
     } else if (existingStorageItem) {
       await stripe.subscriptions.update(subscriptionId, {
         items: [{ id: existingStorageItem.id, quantity: desiredBlocks }],
-        proration_behavior: 'always_invoice',
+        proration_behavior: prorationBehavior,
         payment_behavior: 'error_if_incomplete',
       })
     } else {
       await stripe.subscriptions.update(subscriptionId, {
         items: [{ price: storagePriceId, quantity: desiredBlocks }],
-        proration_behavior: 'always_invoice',
+        proration_behavior: prorationBehavior,
         payment_behavior: 'error_if_incomplete',
       })
     }
@@ -191,6 +204,30 @@ export async function POST(request: Request) {
   const basePrice = cadence === 'annual' ? ANNUAL_RENEWAL_PRICE : MONTHLY_PRICE
   const ratePerBlock = storageRatePerBlock(cadence)
   const newRecurringTotal = basePrice + desiredBlocks * ratePerBlock
+
+  // Audit trail (migration 092, 2026-11-06) — this is the ONLY record of
+  // "the user confirmed this" for a Monthly change (proration_behavior:
+  // 'none' means no Stripe invoice event follows immediately, unlike
+  // Annual's own always_invoice, which the webhook's invoice.paid handler
+  // separately logs for real once Stripe settles it). Best-effort — a
+  // failed audit insert must never undo or block a storage change that
+  // Stripe has already applied.
+  try {
+    await admin.from('stripe_billing_audit').insert({
+      user_id: user.id,
+      event_type: 'storage_update_confirmed',
+      currency: 'usd',
+      detail: {
+        previous_storage_gb: previousStorageGb,
+        new_storage_gb: targetTotalGb,
+        cadence,
+        new_recurring_total: newRecurringTotal,
+        prorated_now: prorationBehavior === 'always_invoice',
+      },
+    })
+  } catch (err) {
+    console.error('[stripe/update-storage] audit insert failed', err)
+  }
 
   return Response.json({
     ok: true,

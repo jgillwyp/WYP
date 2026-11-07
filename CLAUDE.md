@@ -6745,3 +6745,167 @@ link is built only after the stack is proven on Add Contact.
   instead of accepting anything. `docs/delete-tester.mjs` needed no
   change — it never referenced `grant_subscriber`. No mockup — this
   feature family has none. `npx tsc --noEmit`/`npm run lint` both clean.
+
+- **Account Status — the "Subscriber" section redesigned into three distinct
+  states (Private Tester / Free / Subscriber); Admin > Test Stripe
+  Payments; Monthly storage changes now defer to the next billing cycle,
+  with a confirm dialog; a Stripe billing audit trail — migration 092
+  confirmed run by Jim, 2026-11-06.** Jim, with a 3-page PDF
+  mockup: the existing single "Subscriber" section stacked the real Stripe
+  pitch (Sign Up button, Cancel Renewal) directly against the testing-only
+  "Subscribed?" checkbox and Test Storage Cap field — "to simplify its use
+  for respective users, I renamed the page/section 'Account Status' instead
+  of 'Subscriber'... and redesigned it to be three pages, one for testers
+  which does not offer the Stripe payment option... one for Free Accounts,
+  and one for Subscribers." Naming confirmed via `AskUserQuestion`:
+  **"Private Tester,"** not his own suggested "Product Tester" — matches
+  every existing reference in this codebase (the Private Testing signup
+  gate, the Housekeeping "Private Tester" menu, `beta_allowlist`, etc.).
+  Confirmed scope: applies to **both** call sites — Account Options' own
+  embedded section (`AccountForm.tsx`) and the full-page `/account/
+  subscription` (`SubscriptionForm.tsx`, reached via the shared
+  `AppFooter.tsx`'s "Subscription Features" button).
+
+  New `AccountStatusSection` (`SubscriptionPanels.tsx`) is the one shared
+  entry point both call sites (and the new Admin screen below) now render
+  through, replacing the old exported `BecomeSubscriberPitch`/
+  `MySubscriptionSummary` pair and each caller's own tier-only branch.
+  Three states, chosen in order: (1) **Private Tester** —
+  `is_beta_tester()` true — informational only, no live Stripe control
+  anywhere on the page; the self-toggle "Subscribed? (testing only)"
+  checkbox and Test Storage Cap field (migration 051) move here, still
+  gated on `can_toggle_tier()`. (2) **Subscriber** — real tier (or a
+  testing-toggle "subscriber"). (3) **Free** — the real Sign Up pitch,
+  substantively unchanged. A new `forceRealVariant` flag (Admin > Test
+  Stripe Payments, below) skips state 1 even when `is_beta_tester()` is
+  true.
+
+  **Subscriber state simplified per Jim's own explicit confirmation** —
+  asked directly whether the dynamic "Your Plan Summary" (stated which
+  cadence you're on, Annual vs. Monthly, plus any storage add-on cost)
+  should survive alongside the new static "Subscription Details" reference
+  box his mockup draws identically on all three pages; Jim: "a text
+  paragraph states their subscription type, renewal date, and offers a
+  cancellation option. The current storage capacity is shown under
+  Attachment Storage Capacity with the ability to modify. I prefer this new
+  presentation method." So `PlanSummaryPanel`/`GenericPlanOptionsPanel`/
+  `TestingPlanSummaryPanel` are gone outright — the status paragraph itself
+  now reads "Thank you for being {an annual|a monthly} Would You Please
+  subscriber. Your Renewal Date is: `<date>`. If you wish to do so, you can
+  Cancel anytime...", fetching cadence once via the same `/api/stripe/
+  plan-summary` route the old panel used, purely to pick the one word. Every
+  state's "Subscription Details" box now shows the identical static
+  Subscriber Features/Comparison toggle + flat reference pricing
+  (`$39`/`$49`/`$5`/mo) — the Private Tester and Subscriber states always
+  show the plain price, never the `$19` tester rate, confirmed against
+  Jim's own mockup (his own Tester page shows `$39`, not `$19` — "what it
+  costs for real," not a pitch); only the real Free pitch still shows the
+  tester-discounted price when applicable (relevant only via the Admin
+  preview below, since an ordinary real Free user is never a tester under
+  this routing).
+
+  **Cancel is now a quiet inline text link** inside that same status
+  sentence (new `CancelRenewalLink`, `.linkbtn`) — the old standalone
+  `RenewalDatePanel` (a full-width `.btn`) is gone. Jim's own stated trigger
+  for this whole redesign: "One of the first things that got me going down
+  this path is the current 'Cancel Renewal' button being such a prominent
+  feature of a Subscriber's page."
+
+  **New Admin > Test Stripe Payments** (`/admin/stripe-test`,
+  `AdminTestStripeForm.tsx`, `RequireAdmin`-gated) — Jim: "That leaves the
+  need to have a path to testing Stripe while in a Private Testing mode...
+  add a 'Test Stripe Payments' menu choice to the Admin menu... It would
+  present the Free Account or Subscriber Account Status page based on the
+  currently checked or unchecked [tier]. The results of the Stripe
+  interaction should be written back to the Product/Private Tester page."
+  Renders `AccountStatusSection` with `forceRealVariant`, against the
+  admin's own real account — no separate write-back plumbing needed, since
+  it's the same `profiles` row: a real Sign Up here is simply the account's
+  real tier the next time the ordinary (non-forced) Account Status screens
+  are opened, which the Private Tester state's own checkbox already
+  reflects directly (`checked={tier === 'subscriber'}`). `isBetaTester` is
+  still read and passed through here (not hardcoded false) so the Free
+  pitch's price matches what `create-checkout-session/route.ts` will
+  actually charge the admin's own tester account. Stripe's own success/
+  cancel redirect targets are unchanged (still hardcoded to `/account/
+  subscription`, not back to this Admin screen) — landing on the ordinary
+  page afterward, now showing the real result, is "written back to the
+  Private Tester page" taken literally. New Admin tab row, "Test Stripe
+  Payments," alongside "Add Private Tester."
+
+  **Monthly storage-capacity changes corrected to defer billing to the next
+  cycle** (`update-storage/route.ts`) — Jim, mid-build, twice: "I specified
+  that monthly account storage capacity changes would apply to the
+  following month" / "I meant 'Charges', not changes." The route had always
+  used `proration_behavior: 'always_invoice'` for both cadences (an
+  immediate prorated charge) — Jim's own mockup text says otherwise for
+  Monthly ("the $1 charge per additional 5 GBs is applied to the next month
+  and each month thereafter"). Fixed: Annual keeps `'always_invoice'`
+  (prorated and charged now); Monthly now uses `'none'` (Stripe updates the
+  item's quantity immediately but generates no proration invoice — the next
+  regular invoice simply bills the new quantity). `AttachmentStoragePanel`'s
+  explanatory text and its post-update confirmation message both rewritten
+  to state this distinction plainly.
+
+  **Confirm-before-charging dialog added**, same conversation — Jim: "Since
+  there will not be an immediate Stripe interaction for a monthly
+  subscription incremental Attachment capacity - there should be a dialog
+  confirming the additional storage and additional charge." Clicking Update
+  Capacity now opens a `.scrim`/`.modal` (§6.12) confirmation instead of
+  charging immediately, for both cadences — states the real target GB and,
+  once cadence is known (fetched the same way the status sentence fetches
+  it), the real resulting price and timing (charged now vs. next billing
+  date). Purely a client-side preview (`computeStoragePreviewTotal`) — the
+  server always recomputes for real and is the only thing that actually
+  charges anything.
+
+  **New `stripe_billing_audit` table (migration 092)** — Jim, right after:
+  "There should be an audit file posted for all Stripe charges (and the
+  prior dialog confirmation)." Records two kinds of rows: real, settled
+  charges (new `invoice.paid` webhook case — the authoritative "money
+  changed hands" signal, since a Monthly storage change now produces no
+  invoice at all until its own next renewal — plus `checkout.session.
+  completed` for the initial Sign Up, and `customer.subscription.deleted`
+  for cancellations), and confirmed-but-not-yet-charged intents (`update-
+  storage/route.ts` logs `storage_update_confirmed` the moment a request
+  arrives, which only happens after the dialog above was accepted — the
+  only record of "the user confirmed this" for a Monthly change). Hit a
+  real SDK-version wrinkle building the webhook case: this `stripe` package
+  version (23.1.0, a post-2025-03-31 API version) moved `Invoice.
+  subscription` under `invoice.parent?.subscription_details?.subscription`
+  — no top-level field anymore; found via reading the installed package's
+  own `.d.ts` rather than assumed from memory. `service_role`-only, by
+  design — same deny-all posture as `stripe_webhook_events` (migration
+  088); `update-storage/route.ts` reuses the service-role client it already
+  holds for its own storage-usage floor check, rather than a new SECURITY
+  DEFINER function. **No viewing UI built** — Jim asked only that this be
+  "posted" (recorded); an admin screen to browse it is a natural, easy
+  follow-up once he wants one, not assumed here. **Migration 092 confirmed
+  run by Jim, 2026-11-06.**
+
+  **Mock ad for a Free-account Private Tester**, same conversation — Jim:
+  "I would like to see a mock ad presented when a tester is working with a
+  free account version. Besides fitting where it would normally be placed,
+  it could be as simple as a colored background with a title of 'This is
+  where product advertisements will appear after Would You Please private
+  testing is completed.'" Found the real `.adslot` placeholder lives in one
+  shared place already, `AppFooter.tsx` (confirmed genuinely shared, not
+  duplicated across screens, resolving an earlier CLAUDE.md entry's own
+  flagged uncertainty about this) — so this needed changing in exactly one
+  file. `AppFooter.tsx` now fetches `is_beta_tester()` (only when `tier`
+  resolves to `'free'`, so a real subscriber or non-tester never pays for
+  the extra round trip) and swaps to a new, wider, auto-height variant
+  (`.adslot-preview`/`.adbox-preview`, colored `--strip` background,
+  `--brand-blue` text) instead of the plain fixed-size dashed "AD —
+  320×50 RESERVED" box — Jim's own placeholder sentence doesn't fit that
+  box's dimensions, so this is a distinct shape, not the same box with
+  longer text. Wording extended same-session per Jim's own follow-up
+  ("extend the wording 'will appear' to 'will appear for Free Accounts'")
+  to read "...will appear for Free Accounts after Would You Please private
+  testing is completed." A real (non-tester) Free account still sees the
+  original plain placeholder, unchanged.
+
+  No mockup updated for any of this — Jim's own PDF (the 3-page Account
+  Status redesign) and plain chat messages (the rest) are the only
+  references; `design/README.md` not touched. `npx tsc --noEmit`/`npm run
+  lint` both clean across the whole batch.

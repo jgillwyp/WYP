@@ -2506,6 +2506,23 @@ export default function MainScreen() {
                       <span className="hknote"> — allow someone new to sign in and test</span>
                     </span>
                   </div>
+                  {/* Test Stripe Payments (2026-11-06) — the Private Tester
+                      Account Status page is informational only, no live
+                      Stripe control on it; this is the one path left to
+                      click through the real Free/Subscriber panels (and
+                      their real Stripe calls) against your own account. */}
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/stripe-test')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stripe-test') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Test Stripe Payments</span>
+                      <span className="hknote"> — preview the real Free/Subscriber pages</span>
+                    </span>
+                  </div>
                   <div
                     className="hkrow"
                     role="button"

@@ -140,6 +140,10 @@ async function handleSubscriptionDeleted(sb: SupabaseAdmin, subscription: Stripe
       tier: 'free',
     })
     .eq('id', userId)
+
+  await logBillingAudit(sb, userId, 'subscription_canceled', null, null, {
+    stripe_subscription_id: subscription.id,
+  })
 }
 
 async function handleCheckoutSessionCompleted(sb: SupabaseAdmin, stripe: Stripe, session: Stripe.Checkout.Session) {
@@ -151,6 +155,69 @@ async function handleCheckoutSessionCompleted(sb: SupabaseAdmin, stripe: Stripe,
   const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
   await handleSubscriptionUpsert(sb, subscription, session.customer as string | null)
+
+  const userId = await resolveUserId(sb, session.metadata, session.customer as string | null)
+  if (userId) {
+    await logBillingAudit(sb, userId, 'checkout_completed', session.amount_total, session.currency, {
+      plan: session.metadata?.plan ?? null,
+      tester: session.metadata?.tester ?? null,
+      stripe_subscription_id: subscription.id,
+      stripe_checkout_session_id: session.id,
+    })
+  }
+}
+
+async function handleInvoicePaid(sb: SupabaseAdmin, invoice: Stripe.Invoice) {
+  // The authoritative "money changed hands" signal (migration 092,
+  // 2026-11-06) — Jim: "There should be an audit file posted for all
+  // Stripe charges." Fires for every real charge this app's subscriptions
+  // ever produce: the Sign Up checkout's own first invoice, every renewal,
+  // and an Annual-plan storage change's immediate prorated invoice (a
+  // Monthly-plan storage change deliberately produces NO invoice here at
+  // all until its own next regular renewal — see update-storage/route.ts's
+  // own audit insert for that case instead).
+  // Stripe's 2025-03-31+ API moved this link under invoice.parent.
+  // subscription_details.subscription (no top-level invoice.subscription
+  // field anymore on this SDK version).
+  const subscriptionRef = invoice.parent?.subscription_details?.subscription
+  const subscriptionId = typeof subscriptionRef === 'string' ? subscriptionRef : (subscriptionRef?.id ?? null)
+  const userId = await resolveUserId(sb, null, invoice.customer as string | null)
+  if (!userId) {
+    console.error('[stripe/webhook] Could not resolve a profiles row for paid invoice', invoice.id)
+    return
+  }
+
+  await logBillingAudit(sb, userId, 'invoice_paid', invoice.amount_paid, invoice.currency, {
+    stripe_invoice_id: invoice.id,
+    stripe_subscription_id: subscriptionId,
+    billing_reason: invoice.billing_reason,
+  })
+}
+
+// Audit trail (migration 092, 2026-11-06) — see that migration's own header
+// comment and stripe_billing_audit's table comment for the full reasoning.
+// Best-effort: a failed audit insert must never fail or retry the whole
+// webhook delivery (Stripe would just redeliver the same event into this
+// same code path, which already ran its real side effects above).
+async function logBillingAudit(
+  sb: SupabaseAdmin,
+  userId: string,
+  eventType: 'checkout_completed' | 'invoice_paid' | 'subscription_canceled',
+  amountCents: number | null,
+  currency: string | null,
+  detail: Record<string, unknown>
+) {
+  try {
+    await sb.from('stripe_billing_audit').insert({
+      user_id: userId,
+      event_type: eventType,
+      amount_cents: amountCents,
+      currency,
+      detail,
+    })
+  } catch (err) {
+    console.error('[stripe/webhook] audit insert failed', eventType, err)
+  }
 }
 
 export async function POST(request: Request) {
@@ -207,6 +274,9 @@ export async function POST(request: Request) {
         break
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(sb, event.data.object as Stripe.Subscription)
+        break
+      case 'invoice.paid':
+        await handleInvoicePaid(sb, event.data.object as Stripe.Invoice)
         break
       default:
         // Unhandled event type — fine to ignore (Stripe sends many we

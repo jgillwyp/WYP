@@ -15,9 +15,11 @@ import {
 export const runtime = 'nodejs'
 
 /**
- * POST /api/stripe/create-checkout-session — the Sign Up button on both
- * BecomeSubscriberPitch call sites (Account Options' Subscriber section,
- * /account/subscription). Body: { plan: 'annual' | 'monthly' }.
+ * POST /api/stripe/create-checkout-session — the Sign Up button on the Free
+ * Account Status state (FreeStatus, SubscriptionPanels.tsx — renamed from
+ * BecomeSubscriberPitch, 2026-11-06), shown on both Account Options' own
+ * Account Status section and /account/subscription. Body:
+ * { plan: 'annual' | 'monthly' }.
  *
  * Forwarded-JWT, no service_role — same posture app/api/email/send-request/
  * route.ts already established: every query runs as the caller, under

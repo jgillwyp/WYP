@@ -5,27 +5,31 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
-import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPanels'
+import { AccountStatusSection } from './SubscriptionPanels'
 
 /**
- * "See Subscription Features and Other Options" — the full-page click-
- * through screen (2026-08-26, Jim's own five mockups + design proposal
- * confirmed the same day). Reached from a link at the bottom of Account
- * Options (per Jim's own placement instruction — "the banner already shows
- * on the bottom of the page when viewing the Housekeeping [Account Options]
- * part of the main screen"), and from the same wording wherever else it
- * already appears (e.g. Response Detail/Request Response's own upsell,
- * unaffected by this batch).
+ * Account Status — the full-page click-through screen (2026-08-26, Jim's own
+ * five mockups + design proposal confirmed the same day). Reached from a
+ * link at the bottom of Account Options (per Jim's own placement
+ * instruction — "the banner already shows on the bottom of the page when
+ * viewing the Housekeeping [Account Options] part of the main screen"), and
+ * from the same wording wherever else it already appears (e.g. Response
+ * Detail/Request Response's own upsell, unaffected by this batch).
  *
- * Fully dynamic — see SubscriptionPanels.tsx's own header comment for why
- * there's no separate "preview" caption. The testing-only "Subscribed?"
- * checkbox (only rendered for canToggleTier accounts, same gate as Account
- * Options' own copy) sits at the top; everything below reacts live to the
- * real tier value, which the checkbox itself controls during testing.
- * Content is otherwise identical to Account Options' own embedded
- * Subscriber section, just full-page and with variant="full" (its own
- * "Become a Subscriber"/"My Subscription" heading, since there's no
- * .subcard header to supply one here).
+ * Renamed from "My Subscription"/"Become a Subscriber" to a single, static
+ * "Account Status" band title, 2026-11-06 — Jim: "I renamed the page/
+ * section 'Account Status' instead of 'Subscriber' (since all users of that
+ * page are not subscribers) and redesigned it to be three pages, one for
+ * testers which does not offer the Stripe payment option... one for Free
+ * Accounts, and one for Subscribers." Content is identical to Account
+ * Options' own embedded Account Status section — both call sites now render
+ * through the one shared AccountStatusSection (SubscriptionPanels.tsx),
+ * which picks the state (is_beta_tester() first, then real tier) and owns
+ * all three presentations. The self-toggle "Subscribed?" checkbox and Test
+ * Storage Cap field (previously this screen's own checkbox with no Test
+ * Storage Cap at all — a pre-existing asymmetry with Account Options' own
+ * embedded section) are both supplied here now, closing that gap so the
+ * Private Tester state looks and behaves identically on both call sites.
  */
 export default function SubscriptionForm() {
   const router = useRouter()
@@ -40,6 +44,15 @@ export default function SubscriptionForm() {
   const [isTester, setIsTester] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Test Storage Cap (migration 051) — same shape as AccountForm.tsx's own
+  // copy. storageOverrideBytes is what's actually saved (null = no
+  // override); storageOverrideInput is the free-typed MB text, kept
+  // separate so a not-yet-saved edit doesn't fight the loaded value.
+  const [storageOverrideBytes, setStorageOverrideBytes] = useState<number | null>(null)
+  const [storageOverrideInput, setStorageOverrideInput] = useState('')
+  const [storageOverrideSaving, setStorageOverrideSaving] = useState(false)
+  const [storageOverrideError, setStorageOverrideError] = useState<string | null>(null)
 
   // Stripe Checkout/Billing Portal both redirect back here with
   // ?checkout=success|cancelled (create-checkout-session/create-portal-
@@ -77,7 +90,7 @@ export default function SubscriptionForm() {
 
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('tier, subscription_renewal_date, subscription_storage_gb')
+        .select('tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes')
         .eq('id', userData.user.id)
         .single()
 
@@ -92,14 +105,20 @@ export default function SubscriptionForm() {
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
+      const overrideBytes = data?.storage_limit_override_bytes ?? null
+      setStorageOverrideBytes(overrideBytes)
+      setStorageOverrideInput(
+        overrideBytes != null ? String(Math.round((overrideBytes / (1024 * 1024)) * 100) / 100) : ''
+      )
 
       // can_toggle_tier() (migration 035) — same "failure reads as not
       // allowed" posture as AccountForm.tsx's own copy of this check.
       const { data: canToggle } = await supabase.rpc('can_toggle_tier')
       if (!cancelled) setCanToggleTier(canToggle === true)
 
-      // is_beta_tester() (migration 088) — drives the $19-vs-$39 1st-year
-      // price shown below; same "failure reads as not a tester" posture.
+      // is_beta_tester() (migration 088) — now also decides whether this
+      // screen shows the Private Tester state at all (2026-11-06), not just
+      // the $19-vs-$39 1st-year price.
       const { data: tester } = await supabase.rpc('is_beta_tester')
       if (!cancelled) setIsTester(tester === true)
 
@@ -123,10 +142,11 @@ export default function SubscriptionForm() {
   }, [])
 
   // Same shape as AccountForm.tsx's own handleTierToggle — goes through
-  // set_tier_for_testing() (migration 035/047), never a raw table update.
-  // Migration 047 also sets subscription_renewal_date server-side whenever
-  // the transition is to 'subscriber', so this re-reads the fresh row
-  // afterward rather than guessing the new date client-side.
+  // set_tier_for_testing() (migration 035/047) or /api/stripe/testing-
+  // downgrade, never a raw table update. Migration 047 also sets
+  // subscription_renewal_date server-side whenever the transition is to
+  // 'subscriber', so this re-reads the fresh row afterward rather than
+  // guessing the new date client-side.
   async function handleTierToggle(next: boolean) {
     if (!userId) return
     setSaving(true)
@@ -199,6 +219,46 @@ export default function SubscriptionForm() {
     setSaving(false)
   }
 
+  // Test Storage Cap (migration 051) — same shape as AccountForm.tsx's own
+  // copy: goes through the gated set_storage_limit_override() RPC, never a
+  // raw table update (there is no direct grant to write this column).
+  async function handleSaveStorageOverride() {
+    if (!userId) return
+    const mb = parseFloat(storageOverrideInput)
+    if (!Number.isFinite(mb) || mb < 0) {
+      setStorageOverrideError('Enter a number of MB, 0 or greater.')
+      return
+    }
+    const bytes = Math.round(mb * 1024 * 1024)
+    setStorageOverrideSaving(true)
+    setStorageOverrideError(null)
+
+    const { error: rpcError } = await supabase.rpc('set_storage_limit_override', { p_bytes: bytes })
+
+    setStorageOverrideSaving(false)
+    if (rpcError) {
+      setStorageOverrideError(rpcError.message)
+      return
+    }
+    setStorageOverrideBytes(bytes)
+  }
+
+  async function handleClearStorageOverride() {
+    if (!userId) return
+    setStorageOverrideSaving(true)
+    setStorageOverrideError(null)
+
+    const { error: rpcError } = await supabase.rpc('set_storage_limit_override', { p_bytes: null })
+
+    setStorageOverrideSaving(false)
+    if (rpcError) {
+      setStorageOverrideError(rpcError.message)
+      return
+    }
+    setStorageOverrideBytes(null)
+    setStorageOverrideInput('')
+  }
+
   function handleClose() {
     // A Stripe redirect (Checkout or the Billing Portal) is a real top-level
     // browser navigation, not an in-app one — it breaks the history
@@ -243,7 +303,7 @@ export default function SubscriptionForm() {
         <WypHeader />
 
         <div className="band">
-          <span className="glabel">{tier === 'subscriber' ? 'My Subscription' : 'Become a Subscriber'}</span>
+          <span className="glabel">Account Status</span>
           <button className="btn" type="button" onClick={handleClose}>
             Close
           </button>
@@ -262,37 +322,23 @@ export default function SubscriptionForm() {
             </div>
           )}
 
-          {canToggleTier && (
-            <label className="checkrow" style={{ margin: '4px var(--pad) 14px' }}>
-              <input
-                type="checkbox"
-                checked={tier === 'subscriber'}
-                disabled={saving}
-                onChange={(e) => handleTierToggle(e.target.checked)}
-              />
-              <span className="checktext">
-                Subscribed? (testing only)
-                <span className="checknote">
-                  Sets your account to the Subscriber tier so subscriber-only features
-                  like Attachments can be tested. This status only lasts for the
-                  testing period — once testing ends, this checkbox goes away and you
-                  would subscribe for real, through the button below. Off by default.
-                </span>
-              </span>
-            </label>
-          )}
-
-          {tier === 'subscriber' ? (
-            <MySubscriptionSummary
-              variant="full"
-              renewalDate={renewalDate}
-              storageGb={storageGb}
-              onStorageUpdated={setStorageGb}
-              realStoragePurchaseDisabled={canToggleTier}
-            />
-          ) : (
-            <BecomeSubscriberPitch variant="full" isTester={isTester} />
-          )}
+          <AccountStatusSection
+            tier={tier}
+            isBetaTester={isTester}
+            canToggleTier={canToggleTier}
+            renewalDate={renewalDate}
+            storageGb={storageGb}
+            onStorageUpdated={setStorageGb}
+            saving={saving}
+            onTierToggle={handleTierToggle}
+            storageOverrideBytes={storageOverrideBytes}
+            storageOverrideInput={storageOverrideInput}
+            storageOverrideSaving={storageOverrideSaving}
+            storageOverrideError={storageOverrideError}
+            onStorageOverrideInputChange={setStorageOverrideInput}
+            onSaveStorageOverride={handleSaveStorageOverride}
+            onClearStorageOverride={handleClearStorageOverride}
+          />
 
           {saveError && (
             <p className="ferror" role="alert" style={{ margin: '10px var(--pad) 0' }}>

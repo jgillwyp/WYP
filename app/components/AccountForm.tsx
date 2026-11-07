@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
-import { formatBytes } from '@/lib/attachments'
-import { BecomeSubscriberPitch, MySubscriptionSummary } from './SubscriptionPanels'
+import { AccountStatusSection } from './SubscriptionPanels'
 
 /**
  * Account (2026-08-13) — new, deliberately minimal. Every other time this
@@ -459,8 +458,9 @@ export default function AccountForm() {
       const { data: canToggle } = await supabase.rpc('can_toggle_tier')
       if (!cancelled) setCanToggleTier(canToggle === true)
 
-      // is_beta_tester() (migration 088) — drives the $19-vs-$39 1st-year
-      // price shown in BecomeSubscriberPitch below.
+      // is_beta_tester() (migration 088) — now also decides whether
+      // AccountStatusSection shows the Private Tester state at all
+      // (2026-11-06), not just the $19-vs-$39 1st-year price.
       const { data: tester } = await supabase.rpc('is_beta_tester')
       if (!cancelled) setIsTester(tester === true)
 
@@ -1309,117 +1309,40 @@ export default function AccountForm() {
             )}
           </div>
 
-          {/* ---------------------------------------------------- Subscriber */}
-          {/* Un-gated from canToggleTier, 2026-08-24 — that flag now governs
-              only the testing checkbox below it, not the section itself.
-              Every non-subscriber sees the real "Become a Subscriber" pitch
-              (Jim's own written content) instead; the section only used to
-              be worth showing for the handful of people allowed to flip the
-              testing toggle. Content as of 2026-08-26 comes from the shared
-              SubscriptionPanels.tsx (variant="embedded") rather than a
-              local copy — see that file's own header comment. */}
+          {/* ------------------------------------------------ Account Status */}
+          {/* Renamed from "Subscriber" (2026-11-06) — Jim: "I renamed the
+              page/section 'Account Status' instead of 'Subscriber' (since
+              all users of that page are not subscribers) and redesigned it
+              to be three pages, one for testers which does not offer the
+              Stripe payment option... one for Free Accounts, and one for
+              Subscribers." AccountStatusSection (SubscriptionPanels.tsx)
+              picks the state (is_beta_tester() first, then real tier) and
+              owns all three presentations; this screen just supplies the
+              account's own real data + the handlers the self-toggle
+              checkbox/Test Storage Cap need when the Private Tester state
+              renders. See that file's own header comment for the full
+              design. */}
           <div className="subcard">
-            {sectionHead('Subscriber', subscriberOpen, setSubscriberOpenAndStore)}
+            {sectionHead('Account Status', subscriberOpen, setSubscriberOpenAndStore)}
             {subscriberOpen && (
               <div className="subbody">
-                {tier === 'subscriber' ? (
-                  <MySubscriptionSummary
-                    variant="embedded"
-                    renewalDate={renewalDate}
-                    storageGb={storageGb}
-                    onStorageUpdated={setStorageGb}
-                    realStoragePurchaseDisabled={canToggleTier}
-                  />
-                ) : (
-                  <BecomeSubscriberPitch variant="embedded" isTester={isTester} />
-                )}
-
-                {/* Manage Storage moved 2026-11-05 into the shared
-                    SubscriptionPanels.tsx components themselves — a
-                    right-aligned button on "Attachment Storage Capacity"'s
-                    own title row, for both the Free-account panel and the
-                    Subscriber one — rather than this standalone button
-                    sitting below either. See SubscriptionPanels.tsx's own
-                    comment on ManageStorageButton/StorageCapacityTitleRow. */}
-
-                {canToggleTier && (
-                  <>
-                    <label className="checkrow" style={{ marginTop: 14 }}>
-                      <input
-                        type="checkbox"
-                        checked={tier === 'subscriber'}
-                        disabled={saving}
-                        onChange={(e) => handleTierToggle(e.target.checked)}
-                      />
-                      <span className="checktext">
-                        Subscribed? (testing only)
-                        <span className="checknote">
-                          Sets your account to the Subscriber tier so subscriber-only features
-                          like Attachments can be tested. This status only lasts for the
-                          testing period — once testing ends, this checkbox goes away and you
-                          would subscribe for real, through the button below. New accounts start
-                          Free (Off by default); check this whenever you want to test Subscriber
-                          features.
-                        </span>
-                      </span>
-                    </label>
-
-                    {/* Test Storage Cap (migration 051, 2026-09-03) — same
-                        gate as the checkbox above. Replaces the account's
-                        real Attachment storage allowance outright while
-                        set, so the warning/blocked states can be reached
-                        with a couple of small test uploads instead of
-                        actually approaching 100 MB. */}
-                    <div className="fgroup" style={{ marginTop: 14 }}>
-                      <label className="flabel" htmlFor="storage-override-mb">
-                        Test Storage Cap (MB, testing only)
-                      </label>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                          id="storage-override-mb"
-                          className="finput"
-                          style={{ maxWidth: 120 }}
-                          type="number"
-                          min={0}
-                          step="0.1"
-                          placeholder="e.g. 2"
-                          value={storageOverrideInput}
-                          disabled={storageOverrideSaving}
-                          onChange={(e) => setStorageOverrideInput(e.target.value)}
-                        />
-                        <button
-                          className="btn-secondary"
-                          type="button"
-                          disabled={storageOverrideSaving || storageOverrideInput === ''}
-                          onClick={handleSaveStorageOverride}
-                        >
-                          Save
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          type="button"
-                          disabled={storageOverrideSaving || storageOverrideBytes === null}
-                          onClick={handleClearStorageOverride}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <span className="checknote" style={{ display: 'block', marginTop: 6 }}>
-                        {storageOverrideBytes != null
-                          ? `Overriding your real storage cap with ${formatBytes(storageOverrideBytes)} for testing.`
-                          : 'Not overridden — using your real tier-based storage cap.'}{' '}
-                        Replaces the account&rsquo;s real Attachment storage allowance (100 MB
-                        free, or your Subscriber allowance) while set, on both Requests and
-                        ToDos. Clear it to go back to the real number.
-                      </span>
-                      {storageOverrideError && (
-                        <p className="ferror" role="alert" style={{ marginTop: 6 }}>
-                          {storageOverrideError}
-                        </p>
-                      )}
-                    </div>
-                  </>
-                )}
+                <AccountStatusSection
+                  tier={tier}
+                  isBetaTester={isTester}
+                  canToggleTier={canToggleTier}
+                  renewalDate={renewalDate}
+                  storageGb={storageGb}
+                  onStorageUpdated={setStorageGb}
+                  saving={saving}
+                  onTierToggle={handleTierToggle}
+                  storageOverrideBytes={storageOverrideBytes}
+                  storageOverrideInput={storageOverrideInput}
+                  storageOverrideSaving={storageOverrideSaving}
+                  storageOverrideError={storageOverrideError}
+                  onStorageOverrideInputChange={setStorageOverrideInput}
+                  onSaveStorageOverride={handleSaveStorageOverride}
+                  onClearStorageOverride={handleClearStorageOverride}
+                />
               </div>
             )}
           </div>

@@ -5,8 +5,10 @@ import { getSiteUrl, getStripeClient } from '@/lib/stripe'
 export const runtime = 'nodejs'
 
 /**
- * POST /api/stripe/create-portal-session — RenewalDatePanel's "Cancel
- * Renewal" button. Redirects to Stripe's own hosted Billing Portal rather
+ * POST /api/stripe/create-portal-session — the inline "Cancel" link inside
+ * the Subscriber status sentence (CancelRenewalLink, SubscriptionPanels.tsx
+ * — not a standalone button, 2026-11-06 on). Redirects to Stripe's own
+ * hosted Billing Portal rather
  * than a custom cancellation screen: it already shows the renewal date,
  * offers Cancel (effective at period end, matching this app's own "stays
  * active through the end of the period you've already paid for" promise),
