@@ -802,17 +802,26 @@ function AttachmentStoragePanel({
           different storage cap instead.
         </p>
       ) : (
-        <p className="promo-p" style={{ margin: '8px 0 0' }}>
-          Subscribers are provided {STORAGE_BLOCK_GB} GB of storage space for Attachments.
-          Additional storage capacity can be added in increments of {STORAGE_BLOCK_GB} GB for $
-          {STORAGE_MONTHLY_RATE_PER_BLOCK}/month. On an <strong>Annual</strong> plan, a change
-          is prorated for the remainder of your current year and charged now, then $
-          {STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per {STORAGE_BLOCK_GB} GB each year thereafter. On
-          a <strong>Monthly</strong> plan, a change takes effect on your next billing date — no
-          charge today — at ${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo per {STORAGE_BLOCK_GB} GB from
-          then on. A reduction can&rsquo;t go below what&rsquo;s already in use ({minGb} GB
-          right now).
-        </p>
+        <>
+          <p className="promo-p" style={{ margin: '8px 0 0' }}>
+            Subscribers are provided {STORAGE_BLOCK_GB} GB of storage space for Attachments.
+            Additional storage capacity can be added in increments of {STORAGE_BLOCK_GB} GB for
+            ${STORAGE_MONTHLY_RATE_PER_BLOCK}/month. On an <strong>Annual</strong> plan, a
+            change is prorated for the remainder of your current year and charged now, then $
+            {STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per {STORAGE_BLOCK_GB} GB each year thereafter.
+            On a <strong>Monthly</strong> plan, a change takes effect on your next billing
+            date — no charge today — at ${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo per{' '}
+            {STORAGE_BLOCK_GB} GB from then on.
+          </p>
+          <p className="promo-p" style={{ margin: '8px 0 0' }}>
+            A reduction can&rsquo;t currently go below {minGb} GB — the greater of your
+            plan&rsquo;s base {STORAGE_BLOCK_GB} GB allowance and however much capacity your
+            Attachments actually require right now, rounded up to the nearest{' '}
+            {STORAGE_BLOCK_GB} GB. Storage capacity can be reduced further once less is in
+            use — the &ldquo;Manage Storage&rdquo; button above offers the ability to download
+            and/or delete selected Attachments.
+          </p>
+        </>
       )}
       {confirmation && (
         <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--brand-blue)' }}>
