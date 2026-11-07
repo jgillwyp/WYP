@@ -6909,3 +6909,46 @@ link is built only after the stack is proven on Add Contact.
   Status redesign) and plain chat messages (the rest) are the only
   references; `design/README.md` not touched. `npx tsc --noEmit`/`npm run
   lint` both clean across the whole batch.
+
+- **Account Status routing bug fixed: a real gating mix-up between
+  `is_beta_tester()` and `can_toggle_tier()`; a JSX spacing bug on the
+  Cancel link (2026-11-07).** Jim, immediately after deploy: "I am being
+  shown as a subscriber, instead of a tester with the Subscription check
+  box checked. And, there is a spacing issue after the Cancel link." A
+  screenshot confirmed it: "My Status: Subscriber" was showing, with
+  Attachment Storage Capacity's "Real storage purchases are disabled for
+  testing accounts" note underneath it — proving `canToggleTier` was true
+  (the checkbox/Test Storage Cap machinery works) while the page still
+  routed to the Subscriber state instead of Private Tester. Root cause:
+  `AccountStatusSection`'s top-level gate used `isBetaTester`
+  (`is_beta_tester()`, `beta_allowlist`, migration 088) to decide the
+  Private Tester state, but the owner's own account was only ever seeded
+  into `tier_toggle_allowlist` (migration 035, "so this doesn't lock him
+  out of Attachments testing") — never into `beta_allowlist`, since the
+  Private Testing signup gate (migration 015) never needed it for an
+  account that already existed. The two lists overlap going forward for
+  any tester added via migration 091's Add Private Tester screen (which
+  grants both together), but are not the same population, and the owner's
+  own account is the clearest case where they diverge. Fixed by gating on
+  `canToggleTier` instead — the actual population that needs the
+  testing-only checkbox/Test Storage Cap and shouldn't see live Stripe
+  buttons, matching Jim's own original framing of the Private Tester state.
+  `isBetaTester` still drives the $19-vs-$39 tester pricing inside
+  `FreeStatus`, unaffected by this fix — that's a genuinely separate
+  concept (sign-up/pricing eligibility, not self-toggle ability). As a
+  side effect, `AttachmentStoragePanel`'s/`SubscriberStatus`'s
+  `realPurchaseDisabled`/`realStoragePurchaseDisabled` plumbing is now
+  unreachable from either live call site (a `canToggleTier`-true account
+  never reaches `SubscriberStatus` anymore, and `AdminTestStripeForm.tsx`
+  never passes a real `canToggleTier` value in its `forceRealVariant`
+  case) — left in place rather than stripped out, since it's harmless and
+  still a reasonable defensive fallback if a future caller combination
+  needs it. Separately, "Cancel`anytime`" (no space) was a classic JSX
+  whitespace-collapse bug: the literal space between
+  `<CancelRenewalLink />` and `anytime` sat at the start of the text
+  node's own first line from the JSX compiler's perspective and got
+  trimmed away, even though it reads as mid-line in the source — fixed
+  with an explicit `{' '}` between the component and the following text,
+  the same established fix this codebase has used for this exact class of
+  bug before (e.g. the 2026-09-01 `.deletewarn` missing-space fix). `npx
+  tsc --noEmit`/`npm run lint` both clean.
