@@ -94,14 +94,20 @@ async function startStripeFlow(
  * MySubscriptionSummary pair and their own tier-only branch. Three states,
  * chosen in order:
  *
- *   1. Private Tester — is_beta_tester() true. Informational only: no live
+ *   1. Private Tester — can_toggle_tier() true (migration 035's
+ *      tier_toggle_allowlist, not is_beta_tester()'s beta_allowlist — the
+ *      two lists overlap for a tester added via migration 091's Add Private
+ *      Tester screen going forward, but are NOT the same population: the
+ *      owner's own account is seeded into tier_toggle_allowlist but was
+ *      never added to beta_allowlist, since the signup gate never needed
+ *      it. Gating on is_beta_tester() here (as first shipped 2026-11-06)
+ *      sent the owner's own account to the Subscriber state instead of this
+ *      one — fixed 2026-11-07, Jim-reported.). Informational only: no live
  *      Stripe button anywhere on this page (that's exactly the overlap Jim
  *      flagged — a real Sign Up button sitting right above a testing-only
  *      checkbox). The self-toggle "Subscribed? (testing only)" checkbox and
- *      Test Storage Cap field (migration 051) move here, gated by
- *      can_toggle_tier() same as before — a tester without self-toggle
- *      rights (rare; migration 091 grants both together going forward)
- *      still sees the page, just without those controls.
+ *      Test Storage Cap field (migration 051) are shown within this same
+ *      state, since canToggleTier is now what decides the state itself.
  *   2. Subscriber — real tier (or a testing-toggle "subscriber", handled via
  *      realStoragePurchaseDisabled below). Jim's own confirmed
  *      simplification: no separate dynamic "Your Plan Summary" box — the
@@ -116,7 +122,7 @@ async function startStripeFlow(
  *      box heading/content the other two states use instead of its own.
  *
  * forceRealVariant (Admin > Test Stripe Payments, 2026-11-06) skips state 1
- * even when is_beta_tester() is true, so an admin can click through the
+ * even when can_toggle_tier() is true, so an admin can click through the
  * real Free/Subscriber panels — and their real Stripe calls — against
  * their own account. No separate write-back plumbing: it's the same
  * profiles row, so a real purchase there is simply the account's real
@@ -164,7 +170,7 @@ export function AccountStatusSection({
   onClearStorageOverride?: () => void
   forceRealVariant?: boolean
 }) {
-  if (isBetaTester && !forceRealVariant) {
+  if (canToggleTier && !forceRealVariant) {
     return (
       <PrivateTesterStatus
         tier={tier}
@@ -1016,8 +1022,10 @@ function SubscriberStatus({
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
         Thank you for being {cadence === 'annual' ? 'an annual' : cadence === 'monthly' ? 'a monthly' : 'a'}{' '}
         Would You Please subscriber. Your Renewal Date is: <strong>{formatRenewalDate(renewalDate)}</strong>. If
-        you wish to do so, you can <CancelRenewalLink onError={setCancelError} /> anytime — your Subscriber
-        features stay active through the end of the period you&rsquo;ve already paid for.
+        you wish to do so, you can <CancelRenewalLink onError={setCancelError} />
+        {' '}
+        anytime — your Subscriber features stay active through the end of the period you&rsquo;ve already paid
+        for.
       </p>
       {cancelError && (
         <p className="ferror" role="alert" style={{ margin: '6px 0 0' }}>
