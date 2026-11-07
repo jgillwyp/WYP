@@ -814,12 +814,12 @@ function AttachmentStoragePanel({
             {STORAGE_BLOCK_GB} GB from then on.
           </p>
           <p className="promo-p" style={{ margin: '8px 0 0' }}>
-            A reduction can&rsquo;t currently go below {minGb} GB — the greater of your
-            plan&rsquo;s base {STORAGE_BLOCK_GB} GB allowance and however much capacity your
-            Attachments actually require right now, rounded up to the nearest{' '}
-            {STORAGE_BLOCK_GB} GB. Storage capacity can be reduced further once less is in
-            use — the &ldquo;Manage Storage&rdquo; button above offers the ability to download
-            and/or delete selected Attachments.
+            {`A reduction can’t currently go below ${minGb} GB — the greater of your plan’s base ${STORAGE_BLOCK_GB} GB allowance and however much capacity your Attachments actually require right now, rounded up to the nearest ${STORAGE_BLOCK_GB} GB.`}
+          </p>
+          <p className="promo-p" style={{ margin: '8px 0 0' }}>
+            Storage capacity can be reduced further once less is in use — the &ldquo;Manage
+            Storage&rdquo; button above offers the ability to download and/or delete selected
+            Attachments.
           </p>
         </>
       )}
@@ -961,7 +961,7 @@ function PrivateTesterStatus({
         </>
       )}
 
-      <div className="promo" style={{ marginTop: 14 }}>
+      <div className="promo" style={{ marginTop: 14, marginLeft: 0, marginRight: 0 }}>
         <div className="promo-h">Subscription Details</div>
         <SubscriptionFeaturesAndCost />
       </div>
@@ -1048,7 +1048,7 @@ function SubscriberStatus({
         realPurchaseDisabled={realStoragePurchaseDisabled}
       />
 
-      <div className="promo" style={{ marginTop: 14 }}>
+      <div className="promo" style={{ marginTop: 14, marginLeft: 0, marginRight: 0 }}>
         <div className="promo-h">Subscription Details</div>
         <SubscriptionFeaturesAndCost />
       </div>
@@ -1077,7 +1077,7 @@ function FreeStatus({ isTester }: { isTester: boolean }) {
 
       <FreeAccountStorageCapacityPanel />
 
-      <div className="promo" style={{ marginTop: 14 }}>
+      <div className="promo" style={{ marginTop: 14, marginLeft: 0, marginRight: 0 }}>
         <div className="promo-h">Subscription Details</div>
         <SubscriptionFeaturesAndCost isTester={isTester} />
         <SubscriptionCheckoutButton plan="annual" style={{ width: '100%', marginTop: 12 }} />
