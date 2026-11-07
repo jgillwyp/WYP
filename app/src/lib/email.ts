@@ -1478,11 +1478,19 @@ export function buildSignInEmailSubject(): string {
 // on any input method. The "use" half of the request (a real paste button)
 // lives in app/login/page.tsx, next to the code input field, where an
 // actual Clipboard API call works.
+//
+// Reworded 2026-11-07, owner-reported (his wife's Android test): "the
+// copy... icon did not work" — the 📋 was never a real button (see above),
+// but the wording "📋 Copy this code" reads like an instruction to tap the
+// icon itself, which does nothing. Changed to point at the code text, not
+// the icon, so the only actionable instruction is "select/copy the digits
+// above" — true on every client, with no tap target that silently does
+// nothing when pressed.
 function signInCodeBox(code: string): string {
   return [
     `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px 10px; margin:0 0 18px; text-align:center;">`,
     `<span style="font-size:30px; font-weight:700; letter-spacing:6px; color:${EMAIL_INK};">${escapeHtml(code)}</span>`,
-    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Copy this code</p>`,
+    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Copy the code above</p>`,
     `</div>`,
   ].join('')
 }

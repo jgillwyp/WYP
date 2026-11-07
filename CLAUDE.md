@@ -7061,3 +7061,50 @@ link is built only after the stack is proven on Add Contact.
   CSS margin would double up against whichever single inset layer
   surrounds it, wherever that layer now lives. `npx tsc --noEmit`/`npm run
   lint` both clean.
+- **Android APK install page rewritten as explicit numbered steps; sign-in
+  code's Paste button gets visible failure feedback; the email's copy hint
+  reworded (2026-11-07), no migration.** Jim, testing an install on his
+  wife's Android phone (a separate install, on his son's phone a few days
+  earlier, had succeeded unwatched): "with the wouldyouplease.com/android
+  URL it only opened a WYP Chrome session - did not prompt for or install
+  the app... both the copy and the paste Code icons did not work... at one
+  time while I tried it - it did not allow me to even manually select the
+  Code to copy - I had to remember it to enter it manually." Three
+  distinct reports, addressed separately. **(1) `/android`'s own
+  instructions** (`app/android/page.tsx`, built 2026-11-02) never actually
+  installs anything just by being visited — real installation needs two
+  separate taps (Download, then open the resulting "Download complete"
+  notification or Downloads/Files entry to trigger Android's own install
+  prompt), and the original prose buried that second tap inside a sentence
+  about the "unknown sources" warning rather than naming it as its own
+  step — exactly the kind of easy-to-miss step that reads as "nothing
+  happened" to someone who only ever did the first one. Rewritten as
+  explicit "Step 1"/"Step 2" paragraphs, plus an opening sentence stating
+  plainly that opening the page alone installs nothing. **(2) The sign-in
+  code's Paste button** (`app/login/page.tsx`, built 2026-11-03) swallowed
+  every failure silently by design — correct in spirit (a missed paste is
+  only ever a convenience, not an error worth alarming the user over), but
+  silence reads identically to "broken," and Android's own clipboard-read
+  permission can be refused outright with no visible prompt at all on some
+  OEM builds/versions, which is the likely cause here. New `pasteNote`
+  state shows a muted (`.subnote`, not `.ferror` — still not a real error)
+  explanation on both failure paths — nothing usable on the clipboard, or
+  the browser blocked the read — each ending by pointing back at the field
+  to type the code manually; cleared on the next keystroke, same pattern
+  `verifyError` already uses. **(3) The email's own 📋 hint** (`email.ts`'s
+  `signInCodeBox()`) was never a real button — a plain-text emoji, since
+  virtually every email client strips the script a clickable copy-to-
+  clipboard control would need — but its wording, "📋 Copy this code," read
+  as an instruction to tap the icon itself, which does nothing on any
+  client; most likely what "the copy... icon did not work" actually
+  describes. Reworded to "📋 Copy the code above," pointing at the
+  selectable digits rather than the icon, so there's no tap target that
+  silently fails. **The third report — unable to even manually select the
+  code text in the email at one point — isn't addressed by any of this**;
+  nothing in `wrapEmailHtml`/`signInCodeBox`'s HTML blocks selection (no
+  `user-select:none`, no wrapping `<a>` around the code span), so this
+  reads as a specific mail app's own WebView/rendering quirk rather than
+  something this codebase's own markup is doing — flagged rather than
+  guessed at further; worth asking which email app was used if it recurs.
+  `npx tsc --noEmit`/`npm run lint` both clean. No mockup — none of these
+  three surfaces has ever had one.

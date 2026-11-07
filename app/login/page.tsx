@@ -181,18 +181,36 @@ function LoginScreen() {
     })
   }, [])
 
+  // Visible feedback on a failed/empty paste, 2026-11-07 — owner-reported
+  // (his wife's Android test): the button appeared to "not work" at all.
+  // The original version swallowed every failure silently (permission
+  // denied, nothing on the clipboard, or some other Clipboard API error) on
+  // the reasoning that a failed paste is only ever a missed convenience,
+  // never worth an alarming error — true, but silence reads identically to
+  // "broken," especially since Android's own clipboard-read permission
+  // prompt doesn't always appear (some OEM builds/Android versions deny it
+  // outright with no prompt at all), leaving no visible cause for the
+  // button doing nothing. Reusing .subnote (muted, not alarming) rather
+  // than .ferror — this still isn't a real error, just a now-visible one.
+  const [pasteNote, setPasteNote] = useState<string | null>(null)
+
   async function handlePasteCode() {
+    setPasteNote(null)
     try {
       const text = await navigator.clipboard.readText()
       const digits = text.replace(/\D/g, '').slice(0, 10)
       if (digits) {
         setCode(digits)
         setVerifyError(null)
+      } else {
+        setPasteNote("Nothing usable on the clipboard — copy the code from the email first, or type it in below.")
       }
     } catch {
-      // Permission denied, or nothing on the clipboard — the field is still
-      // right there to type into, so this just quietly does nothing rather
-      // than interrupting with an error for what's only ever a convenience.
+      // Permission denied is the common real-world case (some Android
+      // browsers refuse clipboard-read with no prompt at all) — the field
+      // is still right there to type into, so this note just explains why
+      // nothing happened rather than leaving the tap looking broken.
+      setPasteNote("Couldn't read the clipboard — your browser may have blocked it. You can still type the code in below.")
     }
   }
 
@@ -545,6 +563,7 @@ function LoginScreen() {
                     onChange={(e) => {
                       setCode(e.target.value.replace(/\D/g, '').slice(0, 10))
                       if (verifyError) setVerifyError(null)
+                      if (pasteNote) setPasteNote(null)
                     }}
                   />
                   <label className="flabel" htmlFor="otp">
@@ -561,6 +580,7 @@ function LoginScreen() {
                     </button>
                   )}
                 </div>
+                {pasteNote && <p className="subnote" style={{ margin: '4px 0 0' }}>{pasteNote}</p>}
                 {verifyError && (
                   <p className="ferror" role="alert">
                     {verifyError}

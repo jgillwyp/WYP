@@ -24,6 +24,19 @@ import WypHeader from '../components/WypHeader'
 // note) so a tester who lands here from a different path than the email —
 // or re-visits later for an updated APK — gets the same instructions either
 // way.
+//
+// Rewritten as explicit numbered steps, 2026-11-07 — owner-reported: his
+// wife visited this exact URL and "it only opened a WYP Chrome session -
+// did not prompt for or install the app." The page was never going to
+// install anything on its own — visiting it just shows these instructions;
+// installing takes two separate taps (Download, then open the downloaded
+// file to actually trigger Android's install prompt), and the original
+// prose buried that second, easy-to-miss step inside a sentence about the
+// "unknown sources" warning rather than calling it out as its own step. A
+// visitor who only ever did the first tap (or who, like her, landed on the
+// page without yet tapping Download at all) would see exactly this: a
+// normal web page in Chrome, nothing more. Numbered so each action is its
+// own line rather than something to extract from a paragraph.
 export default function AndroidDownloadPage() {
   return (
     <div className="frame-none">
@@ -38,7 +51,8 @@ export default function AndroidDownloadPage() {
           <div className="form">
             <p>
               Would You Please isn&rsquo;t on the Google Play Store yet &mdash; this is the
-              direct install file for private testers.
+              direct install file for private testers. Installing takes two steps below &mdash;
+              just opening this page doesn&rsquo;t install anything by itself.
             </p>
 
             <div className="noticeband">
@@ -49,16 +63,24 @@ export default function AndroidDownloadPage() {
               first, and nothing is lost either way.
             </div>
 
-            <p style={{ textAlign: 'center', margin: '20px 0' }}>
+            <p style={{ margin: '20px 0 4px' }}>
+              <b>Step 1:</b> Tap the button below. Android will download the install file &mdash;
+              you&rsquo;ll see a &ldquo;Downloading&rdquo; notification, then a
+              &ldquo;Download complete&rdquo; one once it&rsquo;s done.
+            </p>
+            <p style={{ textAlign: 'center', margin: '4px 0 20px' }}>
               <a className="btn" href="/android/would-you-please.apk" download>
                 Download the Android App
               </a>
             </p>
 
             <p className="subnote">
-              Android will warn you about installing something from outside the Play Store
-              &mdash; that&rsquo;s expected, go ahead and allow it for this one. Once it&rsquo;s
-              installed, open it from its own app icon, not from Chrome.
+              <b>Step 2:</b> Open that &ldquo;Download complete&rdquo; notification (or open your
+              Downloads/Files app and tap &ldquo;would-you-please.apk&rdquo;) to actually install
+              it &mdash; this is the step that&rsquo;s easy to miss. Android will warn you about
+              installing something from outside the Play Store; that&rsquo;s expected, go ahead
+              and allow it for this one. Once it&rsquo;s installed, open it from its own app icon,
+              not from Chrome.
             </p>
 
             <p className="subnote">
