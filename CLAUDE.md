@@ -6952,3 +6952,28 @@ link is built only after the stack is proven on Add Contact.
   the same established fix this codebase has used for this exact class of
   bug before (e.g. the 2026-09-01 `.deletewarn` missing-space fix). `npx
   tsc --noEmit`/`npm run lint` both clean.
+
+- **Storage-capacity reduction floor's wording clarified, same day
+  (2026-11-07, `AttachmentStoragePanel`).** Jim, from Test Stripe Payments'
+  real Subscriber state: "the sentence you added 'A reduction can't go
+  below what's already in use (5 GB right now).' could easily be
+  misunderstood — the 5 GB is not really 'in use'. For example, for my
+  account the Storage Management screen says '11.1 MB of 5120.0 MB
+  used'." Correct: `minAllowedStorageGb()` (`subscriptionPricing.ts`)
+  returns the *greater* of the plan's base {STORAGE_BLOCK_GB} GB
+  allowance and real usage rounded up to the next block — at low usage
+  (Jim's own account) the floor is just the base allowance, not a
+  reflection of actual bytes consumed, so "already in use" was a real
+  mischaracterization, not just loose wording. Split into its own
+  paragraph (Jim: "add a modified version of that sentence and a
+  description of the Manage Storage button/ability as a separate
+  paragraph," with a pasted rough mockup) explaining the floor is the
+  greater-of-two-things computation, plus a Manage Storage
+  download/delete-attachments sentence. Checked for the "5GB" (no space)
+  instance Jim flagged as a consistency nit — found no literal
+  no-space occurrence anywhere in `SubscriptionPanels.tsx`'s source (every
+  existing `{STORAGE_BLOCK_GB} GB` interpolation already has the space);
+  wrote the new/changed text with "5 GB" throughout regardless, and
+  flagged back to Jim that the exact spot wasn't found rather than
+  silently guessing which one he meant. `npx tsc --noEmit`/`npm run lint`
+  both clean.
