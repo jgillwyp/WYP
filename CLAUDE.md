@@ -7251,3 +7251,53 @@ link is built only after the stack is proven on Add Contact.
   sites across the six affected screens. `npx tsc --noEmit`/`npm run
   lint` both clean across the whole batch. No mockup — none of these
   surfaces has ever had one.
+- **Persistent session-event log, new `app/src/lib/sessionDiagnostics.ts`;
+  sign-in code's data-detector fix on iPhone (2026-11-09), no migration.**
+  (1) Jim: opening the app on his iPhone after several days away required
+  a fresh sign-in, with "a way to set some local or server values that
+  can be tested later to clarify why this behavior occurs." The existing
+  `/debug-session` (2026-09-22) only ever shows a *live* snapshot — useful
+  only if caught in the act, before signing back in destroys whatever the
+  stored session's own state actually was. New `sessionDiagnostics.ts`
+  keeps a small, persistent (`localStorage`, survives the exact multi-day
+  gaps this is trying to explain) ring buffer (`wyp.sessionLog`, capped at
+  80 entries) of two kinds of event: every `supabase.auth.onAuthStateChange`
+  firing (`INITIAL_SESSION`/`SIGNED_IN`/`SIGNED_OUT`/`TOKEN_REFRESHED`/etc.,
+  with `hasSession`/`expiresAt`) and every time the app/tab returns to the
+  foreground (`visibilitychange` → visible, logging a fresh
+  `getSession()` read plus an idle-gap figure computed against
+  `wyp.sessionLastSeen`). Both are wired in once from
+  `supabaseClient.ts`'s own `getSupabase()` — attached alongside the
+  client's one-time creation, the same existing guard, so it's always
+  recording regardless of which screen happens to be mounted when a real
+  event fires, rather than duplicated per-page. `/debug-session` gained a
+  new "Session Event Log" section (reverse-chronological, with a Clear Log
+  button) so the *next* occurrence has a trail to look back at — e.g.
+  whether the last known expiry had already passed, whether a refresh was
+  ever attempted, how long the device actually sat idle beforehand —
+  without needing to reproduce the bug live. Structure/metadata only, same
+  posture as `/debug-session` itself, never a raw token value. Jim's own
+  separate ask to "develop a more formal way to document and track the
+  sign-in code interaction processes" is explicitly deferred, per his own
+  words ("I am travelling for two days... we should *subsequently*
+  develop") — not built this batch. (2) Jim, iPhone: holding down on the
+  sign-in code to copy it (now shown grouped, "1234 5678",
+  2026-11-08) offered "Call" first — iOS's own Data Detectors reading the
+  spaced digit run as a phone number — before, after several tries,
+  finally surfacing a "Copy" option; pasting afterward correctly dropped
+  the grouping space, confirming the grouping itself isn't what breaks
+  pasting. Jim's own two suggestions — drop the space, or drop the
+  copy hint entirely if email clients keep defeating it — are logged as
+  the fallback if this doesn't hold, but the fix actually shipped targets
+  the real mechanism instead: a new `<meta name="format-detection"
+  content="telephone=no, date=no, address=no, email=no">` in
+  `wrapEmailHtml`'s now-added `<head>` (every other mail client simply
+  ignores a meta tag it doesn't recognize, so this is safe to apply to
+  every email this app sends, not just the sign-in code) plus
+  `x-apple-data-detectors="false"` directly on the code `<span>` in
+  `signInCodeBox()` as a second, Apple-Mail-specific layer scoped to just
+  the code itself. Keeps the grouping space, since removing it doesn't
+  reliably avoid phone-number detection either (an unspaced digit run can
+  still match) while giving up the memorization/typing benefit it exists
+  for. `npx tsc --noEmit`/`npm run lint` both clean. No mockup — neither
+  surface has one.

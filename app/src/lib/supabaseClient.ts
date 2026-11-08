@@ -2,6 +2,8 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
+import { logAuthEvent, logResume } from './sessionDiagnostics'
+
 /**
  * "Keep me signed in" is a client-side storage decision, not a Supabase
  * setting. supabase-js persists the session in localStorage by default, which
@@ -105,6 +107,27 @@ export function getSupabase(): SupabaseClient {
         },
       }
     )
+
+    // Session diagnostics (2026-11-09) — see sessionDiagnostics.ts's own
+    // header comment for why. Attached exactly once, right alongside the
+    // client's own one-time creation above, so it's always running
+    // regardless of which page happens to be mounted when a real event
+    // fires. onAuthStateChange covers INITIAL_SESSION/SIGNED_IN/
+    // SIGNED_OUT/TOKEN_REFRESHED/etc.; the visibilitychange listener
+    // covers the app/tab simply returning to the foreground, which — on
+    // a backgrounded WebView whose JS timers iOS has suspended — may not
+    // fire a fresh INITIAL_SESSION at all.
+    if (typeof window !== 'undefined') {
+      cached.auth.onAuthStateChange((event, session) => {
+        logAuthEvent(event, !!session, session?.expires_at)
+      })
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return
+        cached!.auth.getSession().then(({ data }) => {
+          logResume(!!data.session, data.session?.expires_at)
+        })
+      })
+    }
   }
   return cached
 }

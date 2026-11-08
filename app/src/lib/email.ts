@@ -188,6 +188,20 @@ function wrapEmailHtml(siteUrl: string, bodyHtml: string): string {
   return [
     '<!DOCTYPE html>',
     '<html>',
+    // <head>/format-detection meta added 2026-11-09 — owner-reported,
+    // iPhone, the sign-in code's two-group display ("1234 5678"):
+    // holding down on the code to copy it offered "Call" instead,
+    // because iOS's own Data Detectors read a short digit run with a
+    // space in it as a phone number. This is the standard, universally
+    // supported way to tell iOS/Apple Mail's text system not to treat
+    // *anything* in this email as a phone number, date, address, or
+    // email address worth auto-linking — every other mail client simply
+    // ignores a meta tag it doesn't recognize, so this is safe to apply
+    // to every email this app sends, not just the sign-in code. See
+    // signInCodeBox's own x-apple-data-detectors="false" below for a
+    // second, Apple-Mail-specific belt-and-suspenders layer scoped to
+    // the code itself.
+    '<head><meta charset="utf-8"><meta name="format-detection" content="telephone=no, date=no, address=no, email=no"></head>',
     '<body style="margin:0; padding:0; background:#F4F5F7;">',
     // Outer wrapper padding removed and the card's own HTML width attribute
     // changed from a fixed "1200" to "100%", 2026-08-22, seventh same-day
@@ -1504,6 +1518,24 @@ export function buildSignInEmailSubject(): string {
 // mind than one unbroken run of digits. (2) the hint now says outright
 // that typing it in is a fine fallback, rather than implying copying is
 // the only intended path.
+//
+// x-apple-data-detectors="false" added to the code <span> itself,
+// 2026-11-09, same owner-reported issue as wrapEmailHtml's own new
+// format-detection <meta> tag above — on his iPhone, holding down on the
+// grouped code to copy it offered "Call" (iOS's Data Detectors reading
+// "1234 5678" as a phone number) before, after several tries, finally
+// surfacing a "Copy" option. The <meta> tag is the one universal fix (and
+// should be enough on its own); this attribute is Apple Mail's own
+// narrower, element-scoped equivalent, kept as a second layer specifically
+// around the code since that's the one place this actually bit. Not
+// dropping the grouping space itself (the owner's other suggestion) —
+// removing it doesn't reliably avoid phone-number detection either (an
+// unspaced run of digits can still match), while the space itself makes
+// the code meaningfully easier to memorize/type by hand, the fallback
+// this is all for in the first place. If the <meta> tag doesn't fully
+// resolve this in practice, the owner's own fallback — drop the copy
+// hint/icon outright if email clients keep defeating it — is the next
+// thing to try, not a further detector-suppression attempt.
 function groupCodeForDisplay(code: string): string {
   const mid = Math.ceil(code.length / 2)
   return `${code.slice(0, mid)} ${code.slice(mid)}`
@@ -1512,7 +1544,7 @@ function groupCodeForDisplay(code: string): string {
 function signInCodeBox(code: string): string {
   return [
     `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px 10px; margin:0 0 18px; text-align:center;">`,
-    `<span style="font-size:30px; font-weight:700; letter-spacing:4px; color:${EMAIL_INK};">${escapeHtml(groupCodeForDisplay(code))}</span>`,
+    `<span x-apple-data-detectors="false" style="font-size:30px; font-weight:700; letter-spacing:4px; color:${EMAIL_INK};">${escapeHtml(groupCodeForDisplay(code))}</span>`,
     `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Copy the code above, or just type it in</p>`,
     `</div>`,
   ].join('')

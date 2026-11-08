@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 
 import { supabase } from '@/lib/supabaseClient'
+import { clearSessionLog, readSessionLog, type SessionLogEntry } from '@/lib/sessionDiagnostics'
 
 /**
  * Temporary diagnostic page (2026-09-22) — Chrome-for-iOS is effectively
@@ -21,6 +22,17 @@ import { supabase } from '@/lib/supabaseClient'
  * whole purpose is to be screenshotted and shared, and a live bearer token
  * has no business landing in a chat transcript or a screenshot passed
  * around. Remove this route once the underlying bug is found.
+ *
+ * Session Event Log section added 2026-11-09 — owner-reported: "it has
+ * been several days since I used the app on the iPhone" before it
+ * required a fresh sign-in, with nothing left afterward to say why. Every
+ * section above this one is a live snapshot — only useful if caught in
+ * the act, before re-signing-in wipes the evidence. sessionDiagnostics.ts
+ * now keeps a running, persistent log of auth events and foreground
+ * resumes (wired in from supabaseClient.ts, so it's always recording
+ * regardless of which screen was open at the time), so the *next*
+ * occurrence has a trail to look back at here instead of needing to be
+ * reproduced live.
  */
 
 type LocalStorageEntry = {
@@ -36,6 +48,16 @@ type LocalStorageEntry = {
   rawLength: number
 }
 
+function formatIdleMs(ms: number | undefined): string {
+  if (ms === undefined) return '(no prior entry)'
+  const minutes = Math.round(ms / 60000)
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return `${hours} hr`
+  const days = (hours / 24).toFixed(1)
+  return `${days} days`
+}
+
 export default function DebugSessionPage() {
   const [entries, setEntries] = useState<LocalStorageEntry[]>([])
   const [rememberValue, setRememberValue] = useState<string | null>(null)
@@ -43,6 +65,7 @@ export default function DebugSessionPage() {
   const [userAgent, setUserAgent] = useState('')
   const [getSessionResult, setGetSessionResult] = useState<string>('checking…')
   const [getUserResult, setGetUserResult] = useState<string>('checking…')
+  const [sessionLog, setSessionLog] = useState<SessionLogEntry[]>([])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -95,6 +118,7 @@ export default function DebugSessionPage() {
       }
     }
     setEntries(found)
+    setSessionLog(readSessionLog())
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
@@ -157,6 +181,31 @@ export default function DebugSessionPage() {
 
       <h2 style={{ fontSize: 14 }}>supabase.auth.getUser() (live round-trip)</h2>
       <div style={{ marginBottom: 12 }}>{getUserResult}</div>
+
+      <h2 style={{ fontSize: 14 }}>
+        Session Event Log ({sessionLog.length} entries, most recent first)
+      </h2>
+      <p style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={() => {
+            clearSessionLog()
+            setSessionLog([])
+          }}
+        >
+          Clear Log
+        </button>
+      </p>
+      {sessionLog.length === 0 && <div style={{ marginBottom: 12 }}>(no entries yet)</div>}
+      {[...sessionLog].reverse().map((e, i) => (
+        <div key={`${e.ts}-${i}`} style={{ marginBottom: 8, border: '1px solid #ccc', padding: 8 }}>
+          <div><b>ts:</b> {e.ts}</div>
+          <div><b>kind:</b> {e.kind}{e.event ? ` (${e.event})` : ''}</div>
+          <div><b>hasSession:</b> {String(e.hasSession)}</div>
+          <div><b>expiresAt:</b> {e.expiresAt ?? '(none)'}</div>
+          {e.kind === 'resume' && <div><b>idle since previous entry:</b> {formatIdleMs(e.idleMs)}</div>}
+        </div>
+      ))}
     </div>
   )
 }
