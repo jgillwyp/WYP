@@ -1359,8 +1359,17 @@ export default function TodoDetailForm() {
                 Repeats, enforced and explained by RepeatControl itself
                 (redesigned 2026-11-02, see repeatRule.ts's own header
                 comment). Greyed when archived or before a Due Date has
-                been entered. */}
-            {todoDatesEnabled && todoRepeatEnabled && (
+                been entered.
+
+                `|| repeatRule !== null` added 2026-11-08, same owner report
+                as RequestDetailForm.tsx's identical fix — turning off "Show
+                Add Repeat option" after a ToDo was already set to repeat
+                shouldn't hide that it still is (CLAUDE.md's Entitlements
+                rule: gates govern adding, never viewing). todoDatesEnabled
+                stays a hard requirement either side of the ||, unlike
+                todoRepeatEnabled — with Due/Done Dates off there's no Due
+                Date field left on screen for Repeat to anchor to at all. */}
+            {todoDatesEnabled && (todoRepeatEnabled || repeatRule !== null) && (
               <RepeatControl
                 rule={repeatRule}
                 dueDate={form.dueDate}

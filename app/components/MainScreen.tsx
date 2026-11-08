@@ -528,6 +528,14 @@ const TODO_SORT_DEFAULT_DIR: Record<TodoSortKey, SortDir> = {
   category: 'asc',
 }
 
+// Each list's own starting sort, used both to seed sessionStorage on first
+// load (readStoredSort's own fallback below) and, as of 2026-11-08, to
+// revert to when a filter-chip click leaves a "done" sort key stranded —
+// see selectSentFilter/selectReceivedFilter/selectTodoFilter.
+const SENT_SORT_LIST_DEFAULT: { key: SentSortKey; dir: SortDir } = { key: 'due', dir: 'desc' }
+const RECEIVED_SORT_LIST_DEFAULT: { key: ReqSortKey; dir: SortDir } = { key: 'due', dir: 'desc' }
+const TODO_SORT_LIST_DEFAULT: { key: TodoSortKey; dir: SortDir } = { key: 'priority', dir: 'asc' }
+
 function toggleSort<K extends string>(
   current: { key: K; dir: SortDir },
   key: K,
@@ -1277,13 +1285,13 @@ export default function MainScreen() {
   const [todoDatesEnabled, setTodoDatesEnabled] = useState(false)
 
   const [sentSort, setSentSort] = useState<{ key: SentSortKey; dir: SortDir }>(() =>
-    readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done', 'category'] as const, { key: 'due', dir: 'desc' })
+    readStoredSort(SENT_SORT_KEY, ['name', 'date', 'due', 'done', 'category'] as const, SENT_SORT_LIST_DEFAULT)
   )
   const [receivedSort, setReceivedSort] = useState<{ key: ReqSortKey; dir: SortDir }>(() =>
-    readStoredSort(RECEIVED_SORT_KEY, ['name', 'date', 'due', 'done'] as const, { key: 'due', dir: 'desc' })
+    readStoredSort(RECEIVED_SORT_KEY, ['name', 'date', 'due', 'done'] as const, RECEIVED_SORT_LIST_DEFAULT)
   )
   const [todoSort, setTodoSort] = useState<{ key: TodoSortKey; dir: SortDir }>(() =>
-    readStoredSort(TODO_SORT_KEY, ['priority', 'date', 'due', 'done', 'category'] as const, { key: 'priority', dir: 'asc' })
+    readStoredSort(TODO_SORT_KEY, ['priority', 'date', 'due', 'done', 'category'] as const, TODO_SORT_LIST_DEFAULT)
   )
 
   useEffect(() => {
@@ -1780,6 +1788,36 @@ export default function MainScreen() {
     setTodoSort((s) => toggleSort(s, key, TODO_SORT_DEFAULT_DIR))
   }
 
+  // Filter-chip selection also clears a stranded "done" sort (2026-11-08,
+  // owner-reported): "if All or Done chip is selected and the sort
+  // selection is by done date and then the open chip is selected, no sort
+  // selection is shown." Done's own ColSort column is disabled (greyed,
+  // no active pill) for any chip other than All/Done, and nothing else
+  // becomes active just because Done did — the list stayed sorted by Done
+  // with no column anywhere showing as the active one. Reverting to the
+  // list's own default sort whenever the newly-selected chip would disable
+  // Done keeps a visible active column at all times.
+  function selectSentFilter(value: FilterValue) {
+    setSentFilter(value)
+    if (value !== 'all' && value !== 'done') {
+      setSentSort((s) => (s.key === 'done' ? SENT_SORT_LIST_DEFAULT : s))
+    }
+  }
+
+  function selectReceivedFilter(value: FilterValue) {
+    setReceivedFilter(value)
+    if (value !== 'all' && value !== 'done') {
+      setReceivedSort((s) => (s.key === 'done' ? RECEIVED_SORT_LIST_DEFAULT : s))
+    }
+  }
+
+  function selectTodoFilter(value: FilterValue) {
+    setTodoFilter(value)
+    if (value !== 'all' && value !== 'done') {
+      setTodoSort((s) => (s.key === 'done' ? TODO_SORT_LIST_DEFAULT : s))
+    }
+  }
+
   return (
     <div className="frame-none">
       <div className="app no-print">
@@ -1815,15 +1853,15 @@ export default function MainScreen() {
                 </div>
               ) : (
                 <div className="chips">
-                  <button className={`chip${sentFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('all')}>All</button>
-                  <button className={`chip${sentFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('open')}>Open</button>
-                  <button className={`chip over${sentFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('overdue')}>Overdue</button>
-                  <button className={`chip done${sentFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setSentFilter('done')}>Done</button>
+                  <button className={`chip${sentFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => selectSentFilter('all')}>All</button>
+                  <button className={`chip${sentFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => selectSentFilter('open')}>Open</button>
+                  <button className={`chip over${sentFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => selectSentFilter('overdue')}>Overdue</button>
+                  <button className={`chip done${sentFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => selectSentFilter('done')}>Done</button>
                   <button
                     className={`chip${sentFilter === 'repeating' ? ' sel' : ''}`}
                     type="button"
                     disabled={!hasRepeatingSent}
-                    onClick={() => setSentFilter('repeating')}
+                    onClick={() => selectSentFilter('repeating')}
                   >
                     Repeating
                   </button>
@@ -1956,10 +1994,10 @@ export default function MainScreen() {
                 </div>
               ) : (
                 <div className="chips">
-                  <button className={`chip${receivedFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('all')}>All</button>
-                  <button className={`chip${receivedFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('open')}>Open</button>
-                  <button className={`chip over${receivedFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('overdue')}>Overdue</button>
-                  <button className={`chip done${receivedFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setReceivedFilter('done')}>Done</button>
+                  <button className={`chip${receivedFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => selectReceivedFilter('all')}>All</button>
+                  <button className={`chip${receivedFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => selectReceivedFilter('open')}>Open</button>
+                  <button className={`chip over${receivedFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => selectReceivedFilter('overdue')}>Overdue</button>
+                  <button className={`chip done${receivedFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => selectReceivedFilter('done')}>Done</button>
                 </div>
               )}
             </div>
@@ -2064,18 +2102,18 @@ export default function MainScreen() {
                 </div>
               ) : (
                 <div className="chips">
-                  <button className={`chip${todoFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('all')}>All</button>
-                  <button className={`chip${todoFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('open')}>Open</button>
+                  <button className={`chip${todoFilter === 'all' ? ' sel' : ''}`} type="button" onClick={() => selectTodoFilter('all')}>All</button>
+                  <button className={`chip${todoFilter === 'open' ? ' sel' : ''}`} type="button" onClick={() => selectTodoFilter('open')}>Open</button>
                   {todoDatesEnabled && (
-                    <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('overdue')}>Overdue</button>
+                    <button className={`chip over${todoFilter === 'overdue' ? ' sel' : ''}`} type="button" onClick={() => selectTodoFilter('overdue')}>Overdue</button>
                   )}
-                  <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => setTodoFilter('done')}>Done</button>
+                  <button className={`chip done${todoFilter === 'done' ? ' sel' : ''}`} type="button" onClick={() => selectTodoFilter('done')}>Done</button>
                   {todoDatesEnabled && (
                     <button
                       className={`chip${todoFilter === 'repeating' ? ' sel' : ''}`}
                       type="button"
                       disabled={!hasRepeatingTodos}
-                      onClick={() => setTodoFilter('repeating')}
+                      onClick={() => selectTodoFilter('repeating')}
                     >
                       Repeating
                     </button>

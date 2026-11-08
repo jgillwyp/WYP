@@ -48,13 +48,31 @@ const PLATFORM_TITLE: Record<Platform, string> = {
   windows: 'Windows Tester Checklist',
 }
 
+// "Fourteen days" dropped from every intro, 2026-11-08 — owner-reported:
+// "Android testers are not all part of the '14 days' - that is yet to be
+// started - but there are Android testers... similarly for iPhone
+// testers - there is no 14 day strategy with Apple for testing... also
+// for Windows, there is no 14 day strategy for testing." The literal
+// 12-tester/14-day window is a Google Play closed-testing *track*
+// requirement (see MainScreen.tsx's own Feedback-dialog comment) — real
+// for Android specifically, but not yet the track these current Android
+// testers are actually on (they're on the direct-APK-sideload path, see
+// app/android/page.tsx), and never applicable to iOS/Mac/Windows at all.
+// Any platform-specific duration/instructions belong in whatever channel
+// recruits that round of testers (an email, or the testing organization's
+// own instructions to its participants), not hardcoded into this screen.
+// iOS's own wording also updated here — it no longer claims "the
+// dedicated iPhone app is still being built": TestFlight External Testing
+// is real and already in use (see the Features-Exposure history), so a
+// tester reaching this screen's iOS branch may already be running that
+// app, not only Safari. Mac's wording touched too, for consistency, even
+// though the owner's own message didn't name it — the same "no fixed
+// program length" reasoning applies there equally.
 const PLATFORM_INTRO: Record<Platform, string> = {
-  android:
-    "Fourteen days, your phone, real Requests and ToDos. You're testing the installed Android app itself, not just the website.",
-  ios: "Fourteen days, your iPhone, real Requests and ToDos. The dedicated iPhone app is still being built, so for now you're testing through Safari (or another browser) — from a regular tab, or from the Home Screen icon if you've added one.",
-  mac: "Fourteen days, your Mac, real Requests and ToDos. You're testing through a browser, or the installed app if you've added it to your Dock.",
-  windows:
-    "Fourteen days, your PC, real Requests and ToDos. You're testing through a browser, or the installed desktop app if you've added its icon.",
+  android: "Your phone, real Requests and ToDos. You're testing the installed Android app itself, not just the website.",
+  ios: "Your iPhone, real Requests and ToDos. You're testing either the TestFlight app, if you installed it, or through Safari (or another browser) — including from a Home Screen icon if you've added one.",
+  mac: "Your Mac, real Requests and ToDos. You're testing through a browser, or the installed app if you've added it to your Dock.",
+  windows: "Your PC, real Requests and ToDos. You're testing through a browser, or the installed desktop app if you've added its icon.",
 }
 
 const PLATFORM_INTRO_TAIL =

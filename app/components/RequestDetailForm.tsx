@@ -1392,8 +1392,19 @@ export default function RequestDetailForm() {
                 offered at all on this account, same precedent as
                 categoriesEnabled just above. Greyed until a Due Date is
                 entered, or when this Request is archived — Jim's own
-                spec. */}
-            {requestRepeatEnabled && (
+                spec.
+
+                `|| repeatRule !== null` added 2026-11-08 — owner-reported:
+                "If opening a repeating item and the show repeat is not
+                selected in Account options, the repeat is not shown - if
+                an item is set to repeat, the repeat information should be
+                shown - regardless of the options setting." The account
+                option governs whether Repeat is *offered* (CLAUDE.md's own
+                Entitlements rule: gates govern adding, never viewing) —
+                turning it off after a Request was already set to repeat
+                shouldn't hide that fact. A Request with no repeat_rule at
+                all still correctly stays hidden when the option is off. */}
+            {(requestRepeatEnabled || repeatRule !== null) && (
               <RepeatControl
                 rule={repeatRule}
                 dueDate={form.dueDate}

@@ -2358,8 +2358,28 @@ body {
   border-top: 1px solid var(--rule);
 }
 
+/* Bottom safe-area padding (2026-11-08, owner-reported: "Footer buttons
+   not working on any screen on Android, they work in iOS and Windows.")
+   Same root cause already diagnosed and fixed for .updatebanner above,
+   just reached by normal flow instead of position:fixed: .app fills the
+   full device height (.frame-none's 100vh/100dvh) and is a flex column
+   with .scroll taking the flexible middle, so AppFooter — the last
+   flex:0 0 auto child — sits with its own bottom edge flush against the
+   literal bottom edge of the screen. On a device that draws edge-to-edge
+   (the Capacitor Android app in particular), that's exactly the strip
+   Android reserves for its gesture-navigation swipe-up zone, which reads
+   a tap there as a system gesture instead of delivering it to the
+   button — not something CSS :active/pointer-events can fix, since the
+   OS never hands the touch to the page at all. iOS's own equivalent
+   zone (the home-indicator swipe) doesn't swallow a single tap the same
+   way, and Windows has no such zone, which is why only Android showed
+   this. padding-bottom pushes the footer's real content up and out of
+   that zone; the padding itself has no background of its own, so it
+   just reveals .app's own white background underneath, same as every
+   other inset here. */
 .app-footer {
   flex: 0 0 auto;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .subbanner-row .btn-secondary {
@@ -3510,6 +3530,32 @@ body {
 
 .micbtn.listening:active {
   color: #fff;
+}
+
+/* Reserve room for the mic button so text can never flow under it
+   (2026-11-08, owner-reported: "When typing a text description/dialog
+   that is long, sometimes part of the text is visually under the mike
+   icon. In one instance, I could not tell if the last character of a
+   word was typed."). Worst on an auto-growing Description
+   (RequestDetailForm.tsx/TodoDetailForm.tsx's own .ftextarea-autosize) —
+   the box keeps growing while typing, and the icon, pinned to
+   .descwrap's own bottom-right corner, tracks right along with it, so
+   it sits exactly where the cursor's current line is. A plain
+   fixed-height .ftextarea (Create Request/Create ToDo's Description, and
+   every Dialog Text field) has the same risk any time its own last
+   visible line reaches the bottom-right corner. A textarea can't
+   shape-wrap text around a circular cutout the way inline content can
+   (the owner's own first suggestion — "text could wrap the area where
+   the mike is shown" — isn't something a plain <textarea> supports), so
+   this reserves the whole bottom strip instead: padding-bottom pushes
+   the usable text area up so no line can ever reach that corner at all,
+   whether the field is actively growing or just scrolled to its end.
+   :has() scopes this to only the textareas that actually have a mic
+   button next to them, and degrades harmlessly (no reserved space, same
+   as before this fix) in a browser old enough not to support it, rather
+   than reserving blank space nobody needed. */
+.descwrap:has(.micbtn) .ftextarea {
+  padding-bottom: 48px;
 }
 
 /* micnote (2026-10-30) — a small overlay note, not an HTML placeholder

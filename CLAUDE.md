@@ -7161,3 +7161,93 @@ link is built only after the stack is proven on Add Contact.
   explicitly and to say the reverting-after-a-while behavior is normal,
   not something to re-disable by hand. `npx tsc --noEmit`/`npm run lint`
   both clean. No mockup — none of these three surfaces has ever had one.
+- **Five more findings (2026-11-08), no migration.** (1) **Footer buttons
+  dead on Android, working on iOS/Windows** (`app/globals.css`) — root
+  cause: `.app-footer` is the last `flex: 0 0 auto` child of `.app`, which
+  itself fills the full device height (`.frame-none`'s 100vh/100dvh), so
+  the footer's own buttons sit with their bottom edge flush against the
+  literal bottom edge of the screen — the exact same root cause already
+  diagnosed and fixed for `.updatebanner` (2026-11-02), just reached by
+  normal flow instead of `position: fixed`. On a device that draws
+  edge-to-edge (the Capacitor Android app), that's Android's own
+  gesture-navigation swipe-up zone, which reads a tap there as a system
+  gesture and never hands it to the page at all — not something
+  `:active`/pointer-events can fix. iOS's equivalent zone (the
+  home-indicator swipe) doesn't swallow a single tap the same way, and
+  Windows has no such zone, matching exactly which platforms worked.
+  Fixed with `padding-bottom: env(safe-area-inset-bottom)` on
+  `.app-footer`, same mechanism as the `.updatebanner` fix. (2) **Main
+  Screen: a filter-chip click could strand the Done sort with no active
+  column shown** (`MainScreen.tsx`) — "if All or Done chip is selected
+  and the sort selection is by done date and then the open chip is
+  selected, no sort selection is shown - it should revert to the default
+  sort for that list." Done's own `ColSort` column is disabled (greyed,
+  no active pill) for any chip other than All/Done (2026-09-02), and the
+  stored sort key was deliberately left alone so it "resumes when
+  All/Done is reselected" — but with no other column active either, the
+  list was left visibly sorted by nothing. New
+  `selectSentFilter`/`selectReceivedFilter`/`selectTodoFilter` wrapper
+  functions (replacing the chips' direct `setSentFilter`/etc. calls)
+  revert a stranded "done" sort to that list's own default
+  (`SENT_SORT_LIST_DEFAULT`/`RECEIVED_SORT_LIST_DEFAULT`/
+  `TODO_SORT_LIST_DEFAULT`, new named constants replacing the inline
+  `{ key: 'due', dir: 'desc' }` literals `readStoredSort`'s own fallback
+  already used) whenever the newly-selected chip would disable Done.
+  Archive has no equivalent status chips (only Record Type/Action), so
+  this bug and fix are Main-Screen-only. (3) **Repeat info hidden by the
+  "Show Add Repeat option" account toggle even when an item is actually
+  repeating** (`RequestDetailForm.tsx`, `TodoDetailForm.tsx`) — "if an
+  item is set to repeat, the repeat information should be shown -
+  regardless of the options setting." `<RepeatControl>` was wrapped
+  entirely in `{requestRepeatEnabled && (...)}` / `{todoDatesEnabled &&
+  todoRepeatEnabled && (...)}` (migration 086, 2026-11-02) — turning the
+  account option off after a Request/ToDo was already set to repeat hid
+  that fact outright, a real violation of this file's own Entitlements
+  doctrine ("gates govern adding, never viewing"). Fixed by widening both
+  conditions to `|| repeatRule !== null` — `requestRepeatEnabled ||
+  repeatRule !== null` and `todoDatesEnabled && (todoRepeatEnabled ||
+  repeatRule !== null)` (`todoDatesEnabled` stays a hard requirement
+  either side, since there's no Due Date field left on screen for Repeat
+  to anchor to once it's off). Request Response/Response Detail already
+  gated their own read-only repeat display on `data.repeat_rule` alone,
+  never on the account toggle, so neither needed a change. (4) **"14
+  days" tester-checklist wording removed for Android/iPhone/Windows; iOS
+  wording updated** (`TesterChecklistForm.tsx`) — "Android testers are
+  not all part of the '14 days' - that is yet to be started... there is
+  no 14 day strategy with Apple... also for Windows, there is no 14 day
+  strategy." The literal 12-tester/14-day window is a real Google Play
+  closed-testing *track* requirement (see `MainScreen.tsx`'s own
+  Feedback-dialog comment), but not yet the track today's Android testers
+  are actually on (they're on the direct-APK-sideload path,
+  `app/android/page.tsx`), and never applicable to iOS/Windows at all —
+  any platform-specific duration belongs in whatever channel recruits
+  that round of testers, not hardcoded here. Dropped "Fourteen days" from
+  all four `PLATFORM_INTRO` entries (Android/iOS/Mac/Windows — Mac
+  touched too, for consistency, though not named in the report). iOS's
+  own wording also updated: no longer claims "the dedicated iPhone app is
+  still being built" — TestFlight External Testing is real and already
+  in use (see the Features-Exposure history, 2026-11-02), so a tester
+  reaching this screen's iOS branch may already be running that app, not
+  only Safari. (5) **Mic icon covering the last-typed text in a long
+  Description/Dialog field** (`app/globals.css`) — "sometimes part of the
+  text is visually under the mike icon... I could not tell if the last
+  character of a word was typed." Worst on an auto-growing Description
+  (Request Detail/ToDo Detail's own `.ftextarea-autosize`) — the box
+  keeps growing while typing, and the mic icon, pinned to `.descwrap`'s
+  own bottom-right corner, tracks right along with it, sitting exactly
+  where the cursor's current line is; a plain fixed-height `.ftextarea`
+  (Create Request/Create ToDo's Description, every Dialog Text field) has
+  the same risk whenever its own last visible line reaches that corner. A
+  `<textarea>` can't shape-wrap text around a circular cutout the way
+  inline content can, so rather than the owner's literal "wrap the area"
+  phrasing, this reserves the whole bottom strip instead: new rule
+  `.descwrap:has(.micbtn) .ftextarea { padding-bottom: 48px; }` pushes the
+  usable text area up so no line can ever reach that corner, whether the
+  field is actively growing or just scrolled to its end — scoped via
+  `:has()` to only the textareas that actually have a mic button next to
+  them (no prior `:has()` usage in this file; degrades harmlessly, same
+  as before this fix, in a browser old enough not to support it), so no
+  JSX changes were needed at any of the 11 `.descwrap`/`.micbtn` call
+  sites across the six affected screens. `npx tsc --noEmit`/`npm run
+  lint` both clean across the whole batch. No mockup — none of these
+  surfaces has ever had one.
