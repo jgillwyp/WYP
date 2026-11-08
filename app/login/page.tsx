@@ -65,23 +65,6 @@ function friendlyAuthErrorMessage(message: string): string {
 // already has, not a separate toggle — an unchecked box already means
 // "leave no trace on this device," so remembering the email too when it's
 // unchecked would contradict that promise on a shared/public computer.
-// Clipboard glyph for the sign-in code's paste button (2026-11-03) — stroke
-// uses currentColor so it inherits .fpaste's own color (--ink-soft at rest,
-// matching .fclear's established muted-icon convention), rather than a
-// hardcoded hex the way DateTimeField.tsx's CalendarGlyph/ClockGlyph do —
-// this one needs an :active color change (globals.css), which only works if
-// the SVG itself doesn't pin its own color.
-function PasteIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="6" y="4" width="12" height="17" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <rect x="9" y="2.5" width="6" height="3.5" rx="1" fill="currentColor" />
-      <line x1="8.5" y1="10" x2="15.5" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <line x1="8.5" y1="13.5" x2="15.5" y2="13.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <line x1="8.5" y1="17" x2="12.5" y2="17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  )
-}
 
 const LAST_EMAIL_KEY = 'wyp.lastEmail'
 
@@ -162,58 +145,13 @@ function LoginScreen() {
   // app/api/auth/send-email/route.ts and email.ts's own "Sign-in email"
   // section for the matching server-side simplification.
 
-  // "Use" half of the owner's copy/paste request (2026-11-03) — the
-  // "presentation" half (a 📋 tap-and-hold hint on the code itself) lives in
-  // email.ts's signInCodeBox(). A real one-tap paste button is only possible
-  // here, where actual JS runs — email clients strip the script a clickable
-  // copy button in the message body would need. Feature-detected in a mount
-  // effect (never read during render) so server and first client render
-  // agree, same pattern as CreateRequestForm.tsx's own voiceSupported.
-  // Hidden outright rather than shown-and-failing when the Clipboard API
-  // isn't present at all (e.g. a
-  // very old browser, or a non-HTTPS context, which this site never is) —
-  // a denied *permission* at click time is a different, expected case,
-  // handled inline in handlePasteCode below, not by hiding the button.
-  const [pasteSupported, setPasteSupported] = useState(false)
-  useEffect(() => {
-    queueMicrotask(() => {
-      setPasteSupported(typeof navigator !== 'undefined' && typeof navigator.clipboard?.readText === 'function')
-    })
-  }, [])
-
-  // Visible feedback on a failed/empty paste, 2026-11-07 — owner-reported
-  // (his wife's Android test): the button appeared to "not work" at all.
-  // The original version swallowed every failure silently (permission
-  // denied, nothing on the clipboard, or some other Clipboard API error) on
-  // the reasoning that a failed paste is only ever a missed convenience,
-  // never worth an alarming error — true, but silence reads identically to
-  // "broken," especially since Android's own clipboard-read permission
-  // prompt doesn't always appear (some OEM builds/Android versions deny it
-  // outright with no prompt at all), leaving no visible cause for the
-  // button doing nothing. Reusing .subnote (muted, not alarming) rather
-  // than .ferror — this still isn't a real error, just a now-visible one.
-  const [pasteNote, setPasteNote] = useState<string | null>(null)
-
-  async function handlePasteCode() {
-    setPasteNote(null)
-    try {
-      const text = await navigator.clipboard.readText()
-      const digits = text.replace(/\D/g, '').slice(0, 10)
-      if (digits) {
-        setCode(digits)
-        setVerifyError(null)
-      } else {
-        setPasteNote("Nothing usable on the clipboard — copy the code from the email first, or type it in below.")
-      }
-    } catch {
-      // Permission denied is the common real-world case (some Android
-      // browsers refuse clipboard-read with no prompt at all) — the field
-      // is still right there to type into, so this note just explains why
-      // nothing happened rather than leaving the tap looking broken.
-      setPasteNote("Couldn't read the clipboard — your browser may have blocked it. You can still type the code in below.")
-    }
-  }
-
+  // Paste button removed entirely, 2026-11-09 — owner-reported: "the icon
+  // on the right in the text field for the sign-in code... does not work
+  // and should be dropped." Same root call as dropping the email's own 📋
+  // copy icon just below — a control that looks actionable but isn't
+  // reliable enough across real devices/browsers is worse than no control
+  // at all. The field is still right there to type the code into by hand,
+  // which was always the fallback this button only ever supplemented.
   const emailRef = useRef<HTMLInputElement>(null)
 
   // Someone already signed in has no business on this screen.
@@ -552,7 +490,7 @@ function LoginScreen() {
               <form onSubmit={handleVerifyCode} noValidate>
                 <div className={`fgroup ffloat${verifyError ? ' is-invalid' : ''}`} style={{ marginTop: 10 }}>
                   <input
-                    className={`finput${pasteSupported ? ' finput-paste' : ''}`}
+                    className="finput"
                     id="otp"
                     type="text"
                     inputMode="numeric"
@@ -563,24 +501,12 @@ function LoginScreen() {
                     onChange={(e) => {
                       setCode(e.target.value.replace(/\D/g, '').slice(0, 10))
                       if (verifyError) setVerifyError(null)
-                      if (pasteNote) setPasteNote(null)
                     }}
                   />
                   <label className="flabel" htmlFor="otp">
                     Sign-in code
                   </label>
-                  {pasteSupported && (
-                    <button
-                      className="fpaste"
-                      type="button"
-                      aria-label="Paste code from clipboard"
-                      onClick={handlePasteCode}
-                    >
-                      <PasteIcon />
-                    </button>
-                  )}
                 </div>
-                {pasteNote && <p className="subnote" style={{ margin: '4px 0 0' }}>{pasteNote}</p>}
                 {verifyError && (
                   <p className="ferror" role="alert">
                     {verifyError}

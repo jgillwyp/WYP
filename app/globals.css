@@ -933,52 +933,10 @@ body {
   outline-offset: 1px;
 }
 
-/* Paste-code button, /login's sign-in-code field (2026-11-03, owner request:
-   "add a copy/paste icon to both the presentation and use of the code") —
-   same absolute-positioned-inside-.ffloat convention as .fclear above, sized
-   up slightly (28px vs 24px) since this is the field's only action, not one
-   of a crowded pair. Active state uses --brand-blue rather than .fclear's
-   --alert-red — pasting isn't a destructive action the way clearing a field
-   is, so it gets the app's ordinary "something forward-moving just
-   happened" color instead (same token .updatebanner-reload's text already
-   uses). .finput-paste reserves room on the input itself so typed/pasted
-   digits never run under the button. */
-.fpaste {
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-soft);
-  background: none;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  z-index: 2;
-}
-
-.fpaste svg {
-  width: 18px;
-  height: 18px;
-}
-
-.fpaste:active {
-  background: var(--row-tint);
-  color: var(--brand-blue);
-}
-
-.fpaste:focus-visible {
-  outline: 2px solid var(--brand-blue);
-  outline-offset: 1px;
-}
-
-.finput-paste {
-  padding-right: 38px;
-}
+/* .fpaste/.finput-paste (the sign-in code's paste button, 2026-11-03)
+   removed outright, 2026-11-09 — owner-reported: "that also does not
+   work and should be dropped." See app/login/page.tsx's own comment at
+   the removal site. */
 
 /* Close button (2026-09-17, owner-reported) — Chrome's own native Date
    picker dropdown offers "Clear" and "Today" text links, and clicking a

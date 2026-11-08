@@ -1536,6 +1536,19 @@ export function buildSignInEmailSubject(): string {
 // resolve this in practice, the owner's own fallback — drop the copy
 // hint/icon outright if email clients keep defeating it — is the next
 // thing to try, not a further detector-suppression attempt.
+//
+// 📋 icon dropped outright, 2026-11-09 — the fallback named just above,
+// now actually taken. Owner: "it is preceded by an icon which looks like
+// it can be clicked to effect a copy - but since that does not 'copy', it
+// should not be shown." The icon was always inert text, never a real
+// button (see 2026-11-03 above) — but an icon that visually implies a tap
+// target, when none of the data-detector/selection fixes above fully
+// solved copying on every real device, reads as broken rather than
+// decorative. The hint text itself stays (still accurate advice on any
+// client — select the code, or just type it in); only the emoji in front
+// of it is gone. The in-app paste button this hint's own comment used to
+// point to (app/login/page.tsx) is removed in this same batch, per the
+// owner's own matching report that it "does not work" either.
 function groupCodeForDisplay(code: string): string {
   const mid = Math.ceil(code.length / 2)
   return `${code.slice(0, mid)} ${code.slice(mid)}`
@@ -1545,7 +1558,7 @@ function signInCodeBox(code: string): string {
   return [
     `<div style="background:#FFFFFF; border-radius:8px; padding:18px 16px 10px; margin:0 0 18px; text-align:center;">`,
     `<span x-apple-data-detectors="false" style="font-size:30px; font-weight:700; letter-spacing:4px; color:${EMAIL_INK};">${escapeHtml(groupCodeForDisplay(code))}</span>`,
-    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">📋 Copy the code above, or just type it in</p>`,
+    `<p style="margin:8px 0 0; font-size:12.5px; color:${EMAIL_INK};">Copy the code above, or just type it in</p>`,
     `</div>`,
   ].join('')
 }

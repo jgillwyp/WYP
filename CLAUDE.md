@@ -7301,3 +7301,23 @@ link is built only after the stack is proven on Add Contact.
   still match) while giving up the memorization/typing benefit it exists
   for. `npx tsc --noEmit`/`npm run lint` both clean. No mockup — neither
   surface has one.
+- **Both sign-in-code "copy" icons removed outright, same day (2026-11-09),
+  no migration — the fallback flagged in the entry just above, now
+  actually taken.** Jim: the email's 📋 icon "looks like it can be clicked
+  to effect a copy - but since that does not 'copy', it should not be
+  shown... The same is true in all other environments, including the icon
+  on the right in the text field for the sign-in code - that also does
+  not work and should be dropped." (1) `signInCodeBox()`
+  (`app/src/lib/email.ts`) drops the 📋 character from in front of "Copy
+  the code above, or just type it in" — the sentence itself stays, still
+  accurate advice on any client, only the icon implying a tap target is
+  gone. (2) The in-app Paste button on `/login`'s sign-in-code field
+  (`app/login/page.tsx`, built 2026-11-03) is removed entirely —
+  `PasteIcon()`, the `pasteSupported`/`pasteNote` state, and
+  `handlePasteCode()` are all gone; the input goes back to a plain
+  `.finput` with no paste affordance. Matching `.fpaste`/`.finput-paste`
+  CSS removed from `app/globals.css`. The field itself is unaffected —
+  typing the code in by hand was always the fallback this button only
+  ever supplemented, and still works exactly as before. `npx tsc
+  --noEmit`/`npm run lint` both clean. No mockup — neither surface has
+  one.
