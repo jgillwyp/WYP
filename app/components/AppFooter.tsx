@@ -84,10 +84,7 @@ export default function AppFooter({
       {tier === 'free' && (
         <div className={`adslot${isBetaTester ? ' adslot-preview' : ''}`} aria-hidden="true">
           {isBetaTester ? (
-            <span className="adbox-preview">
-              This is where product advertisements will appear for Free Accounts after Would You
-              Please private testing is completed.
-            </span>
+            <span className="adbox-preview">For Free Accounts, ads will appear in this location.</span>
           ) : (
             <span className="adbox">AD — 320×50 RESERVED</span>
           )}

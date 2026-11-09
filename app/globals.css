@@ -2430,25 +2430,35 @@ body {
    .adbox's fixed 320x50 dashed box, so this is a distinct, wider, auto-
    height variant rather than a longer label squeezed into the same shape —
    AppFooter.tsx swaps to it only for is_beta_tester() accounts, real Free
-   users still see the plain "AD — 320×50 RESERVED" placeholder. */
+   users still see the plain "AD — 320×50 RESERVED" placeholder.
+
+   Recolored 2026-11-10 — Jim reported not noticing it at all; the original
+   --strip/--brand-blue treatment is the same pale, light-blue palette every
+   other informational band in the app already uses (.noticeband, .linkband,
+   .checkrow), so it blended straight in rather than reading as a distinct
+   ad slot. Jim's own mockup: a solid, muted, deliberately off-brand color —
+   "obviously its own (not part of WYP), but avoided it being as garish as
+   it may actually be in real life" — full-bleed edge to edge like a real
+   banner ad, not inset like the rest of the app's content. Neither color
+   token here is reused anywhere else in Palette 1, on purpose. */
 .adslot.adslot-preview {
   height: auto;
-  padding: 10px var(--pad);
+  padding: 0;
 }
 
 .adbox-preview {
   width: 100%;
   height: auto;
   border: none;
-  border-radius: 4px;
-  background: var(--strip);
-  color: var(--brand-blue);
-  font-weight: 600;
-  font-size: 12px;
+  border-radius: 0;
+  background: #5B7A5B;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
   letter-spacing: normal;
   line-height: 1.4;
   text-align: center;
-  padding: 10px 12px;
+  padding: 14px var(--pad);
 }
 
 /* ============================================================================

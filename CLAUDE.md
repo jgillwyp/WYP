@@ -7455,3 +7455,28 @@ link is built only after the stack is proven on Add Contact.
   details, which the prior copy never did. `npx tsc --noEmit`/`npm run
   lint` both clean. No mockup — Jim's own screenshots are the only
   reference.
+
+- **Free-account mock ad recolored, full-bleed, shorter wording
+  (2026-11-10), no migration.** Jim: "I am not seeing the placeholder 'ad'
+  when using the app as a free account. There should probably be a colored
+  background," with his own pasted mockup. Checked the actual logic first
+  (`AppFooter.tsx`'s tier/`is_beta_tester()` fetch, `TodoDetailForm.tsx`'s
+  own `tier` state) — no bug; it really was rendering. The real problem was
+  exactly Jim's own diagnosis: `.adbox-preview` (built 2026-11-06) used
+  `--strip`/`--brand-blue` — the same pale, light-blue palette every other
+  informational band in the app already uses
+  (`.noticeband`/`.linkband`/`.checkrow`) — so it blended straight into the
+  rest of the screen instead of reading as a distinct ad slot. Recolored to
+  a solid, muted, deliberately off-brand `#5B7A5B`/white (Jim's own
+  mockup — "obviously its own (not part of WYP), but avoided it being as
+  garish as it may actually be in real life"), neither value reused
+  anywhere else in Palette 1; `.adslot.adslot-preview`'s own padding
+  dropped to 0 so the color now runs full-bleed edge to edge like a real
+  banner ad, rather than inset like the rest of the app's content.
+  `AppFooter.tsx`'s copy shortened to Jim's own mockup wording, "For Free
+  Accounts, ads will appear in this location." — replacing the longer
+  original sentence. The real, plain `.adbox`/`.adslot` shown to a
+  non-tester Free user (the "AD — 320×50 RESERVED" dashed placeholder) is
+  untouched — this only affects the Private Tester preview variant. `npx
+  tsc --noEmit`/`npm run lint` both clean. No mockup file — Jim's own
+  screenshot is the only reference.
