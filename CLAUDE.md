@@ -7405,3 +7405,28 @@ link is built only after the stack is proven on Add Contact.
   directly, not just search results — before any plan to submit the iOS
   app to the full public App Store**, not something to treat as settled
   by this pass.
+
+  **Follow-up the same day, prompted by Jim sharing a Gemini-researched
+  commission breakdown (30% standard / 15% Small Business / the evolving
+  US external-link situation / EU DMA's bifurcated rates) — one line in
+  that answer surfaced the real open question, separate from the
+  commission-percentage debate:** "Direct in-app third-party payment forms
+  remain prohibited in the US." That's a *mechanism* requirement, not a
+  fee-rate one — whether something qualifies as an exempted "external
+  link" at all, before any commission percentage even applies. Pushed on
+  this specifically and found real, unresolved disagreement across
+  sources: several guides state the external URL must open in **Safari
+  (the system browser)**, not an in-app web view; one Apple-adjacent
+  EU-specific source instead says the destination may be reached "outside
+  the app or via a web view that appears in the app," suggesting the
+  Safari-vs-webview rule may differ between the US entitlement and the EU
+  terms, or may have shifted over time. **This is directly load-bearing
+  for WYP's current implementation, independent of whatever commission
+  rate eventually applies**: the Capacitor iOS wrapper navigates the
+  *same* WebView to Stripe's hosted Checkout page rather than handing off
+  to Safari — if the "must open the system browser" reading governs the
+  US storefront, that's the detail needing to change before a real App
+  Store submission, not the commission math. Not resolved — needs a direct
+  read of Apple's own current StoreKit External Purchase Link
+  documentation (not third-party summaries) when this becomes live rather
+  than hypothetical.
