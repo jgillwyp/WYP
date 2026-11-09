@@ -10,7 +10,7 @@ import {
   type ReminderUrgency,
 } from '@/lib/email'
 import { hasLocalDateTimePassed } from '@/lib/cronTime'
-import { buildReminderSmsBody, contactSmsNumber, sendSms, shortenSmsLink } from '@/lib/sms'
+import { buildReminderSmsBody, confirmLinkFor, contactSmsNumber, sendSms, shortenSmsLink } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -228,7 +228,7 @@ export async function POST(request: Request) {
       ownerName,
       dueDate: reqRow.due_date,
       dueTime: reqRow.due_time,
-      link: await shortenSmsLink(sb, link),
+      link: await shortenSmsLink(sb, confirmLinkFor(link, urgency === 'awaiting_confirmation')),
       offerReceiptConfirmation: urgency === 'awaiting_confirmation',
     })
     const result = await sendSms(smsNumber, smsBody)

@@ -33,7 +33,7 @@ import {
   type DigestItem,
 } from '@/lib/email'
 import { addDaysISO, hasLocalDateTimePassed, localDateISO, localHour } from '@/lib/cronTime'
-import { buildReminderSmsBody, contactSmsNumber, sendSms, shortenSmsLink } from '@/lib/sms'
+import { buildReminderSmsBody, confirmLinkFor, contactSmsNumber, sendSms, shortenSmsLink } from '@/lib/sms'
 
 // nodemailer needs Node's net/tls — see send-request/route.ts's identical
 // comment.
@@ -546,7 +546,7 @@ async function handle(request: Request) {
           ownerName,
           dueDate: row.due_date,
           dueTime: row.due_time,
-          link: await shortenSmsLink(sb, link),
+          link: await shortenSmsLink(sb, confirmLinkFor(link, awaitingConfirmation)),
           offerReceiptConfirmation: awaitingConfirmation,
         })
       )
@@ -663,7 +663,7 @@ async function handle(request: Request) {
           ownerName,
           dueDate: row.due_date,
           dueTime: row.due_time,
-          link: await shortenSmsLink(sb, link),
+          link: await shortenSmsLink(sb, confirmLinkFor(link, awaitingConfirmation)),
           offerReceiptConfirmation: awaitingConfirmation,
         })
       )
@@ -902,7 +902,7 @@ async function handle(request: Request) {
           ownerName,
           dueDate: row.due_date,
           dueTime: row.due_time,
-          link: await shortenSmsLink(sb, link),
+          link: await shortenSmsLink(sb, confirmLinkFor(link, urgency === 'awaiting_confirmation')),
           offerReceiptConfirmation: urgency === 'awaiting_confirmation',
         })
       )

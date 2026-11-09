@@ -7502,3 +7502,37 @@ link is built only after the stack is proven on Add Contact.
   darker - this version of green is not preferred" — `.adbox-preview`'s
   background darkened from `#5B7A5B` to `#3F5940`. `npx tsc --noEmit`/`npm
   run lint` both clean.
+
+- **Receipt Confirmation: SMS link clicks never actually confirmed receipt
+  — real bug, fixed (2026-11-10), no migration.** Jim: "not updated when
+  a link is clicked in a text message." Traced to `app/src/lib/sms.ts`'s
+  own Initial Request/Reminder SMS templates (migration 081, 2026-10-19) —
+  every call site already computed and passed an `offerReceiptConfirmation`
+  flag, driving the "Please click to confirm receipt." sentence
+  (`confirmReceiptClause`), but the link itself was always the bare
+  `/r/[token]` URL. Every email equivalent (`email.ts`'s
+  `showReceiptConfirmButton`) appends `?confirm=1` specifically so
+  `RequestResponseForm.tsx` auto-confirms receipt the moment the page
+  opens — the SMS path never did, so a recipient clicking the texted link
+  alone never actually confirmed anything, even though the message told
+  them to. New `confirmLinkFor()` in `sms.ts` mirrors the email gate
+  exactly, applied before `shortenSmsLink()` (confirmed the `/s/[code]`
+  short-link redirect does a plain `Response.redirect` to whatever full
+  URL — including any query string — was shortened, so the fix survives
+  the shortening step). Applied at all five SMS call sites:
+  `send-request/route.ts` (Initial Request), `send-reminder/route.ts`
+  (manual Send Reminder), and `cron/tick/route.ts`'s three automated
+  Reminder phases (day-before, day-of, day-after/overdue). `npx tsc
+  --noEmit`/`npm run lint` both clean.
+
+  Jim's second point, "there are no longer two links provided in the
+  email - the text was updated to state that accurately," reads as
+  context for the bug above (the email's own wording already correctly
+  promises one combined link that both confirms and opens the Response
+  screen, migration/change 2026-10-08 — the SMS fix above is what makes
+  the *SMS* link actually live up to that same promise) rather than a
+  second, separate defect — searched Create Request's own checkbox note,
+  every Help topic, and `email.ts` itself for any remaining "two links"
+  wording and found none; everything already describes a single link.
+  Flagged for Jim to confirm, since "[see pasted-in]" in his own message
+  didn't come through with any actual pasted content attached.

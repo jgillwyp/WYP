@@ -128,6 +128,22 @@ export function contactSmsNumber(contact: SmsEligibleContact | null | undefined)
 // ----------------------------------------------------------------------------
 export type SmsSendResult = { sent: boolean; reason?: string; detail?: string }
 
+// confirmLinkFor — mirrors email.ts's own showReceiptConfirmButton gate
+// (fields.link + '?confirm=1'). Added 2026-11-10: every SMS call site
+// already computed and passed an offerReceiptConfirmation flag — it drove
+// the "Please click to confirm receipt." sentence (confirmReceiptClause
+// above) — but the link itself was always the bare /r/[token] URL, never
+// the ?confirm=1 variant RequestResponseForm.tsx actually reads to
+// auto-confirm on open. So a recipient clicking the SMS link alone never
+// confirmed receipt, even though the message told them to — a real bug,
+// owner-reported, not an email-only behavior by design. Applied before
+// shortenSmsLink() so the short /s/<code> redirect's own stored target_url
+// carries the query string through (that route does a plain redirect to
+// whatever URL was shortened).
+export function confirmLinkFor(link: string, offerReceiptConfirmation: boolean | undefined): string {
+  return offerReceiptConfirmation ? `${link}?confirm=1` : link
+}
+
 // ----------------------------------------------------------------------------
 // shortenSmsLink — wraps a long /r/[token] link behind a short, first-party
 // /s/<code> redirect (migration 081), so an SMS has room left for its own
