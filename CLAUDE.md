@@ -7847,3 +7847,13 @@ link is built only after the stack is proven on Add Contact.
   getting a build onto TestFlight for Jim's other testers (not just his
   own device) — a distribution step, not a functionality gap; nothing
   about today's findings blocks it.
+
+- **Missing-space bug on Test Stripe Payments' `.testernote` paragraph,
+  same family as every other documented JSX-whitespace footgun in this
+  file (2026-11-10).** Jim: "paragraphis" rendered instead of "paragraph
+  is" — the space between `</b>` and the following text, though present
+  in the source on the same line, didn't survive compilation. Fixed the
+  same proven way the earlier Cancel-link bug was: an explicit `{' '}`
+  between the closing tag and the following text in
+  `AdminTestStripeForm.tsx`, rather than trusting the plain source space.
+  `npx tsc --noEmit`/`npm run lint` both clean.

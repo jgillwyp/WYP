@@ -132,7 +132,8 @@ export default function AdminTestStripeForm() {
                   .noticeband copy never stated). See globals.css's own
                   comment at .testernote for the visual reasoning. */}
               <div className="testernote" style={{ margin: '4px var(--pad) 14px' }}>
-                <b>What you see below this paragraph</b> is a real Free/Subscriber page
+                <b>What you see below this paragraph</b>{' '}
+                is a real Free/Subscriber page
                 including the &ldquo;My Status&rdquo;. It is responsive to how you may have
                 checked or unchecked the Private Tester Subscription status under Account
                 Options. Your actions here with Stripe updates your account status, storage
