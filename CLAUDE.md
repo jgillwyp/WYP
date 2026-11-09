@@ -7700,3 +7700,30 @@ link is built only after the stack is proven on Add Contact.
   further, since the actual, reproducible gap (second click, no account-
   holder navigation at all) is what the new Close button now closes. `npx
   tsc --noEmit`/`npm run lint` both clean.
+
+- **Universal Links / App Links — real work already exists (seven commits,
+  2026-10-21 through 2026-11-02) that was never recorded here; corrects a
+  wrong in-session claim that it was "not yet configured" (2026-11-10).**
+  Confirmed via a live `curl`: both `public/.well-known/assetlinks.json`
+  (Android) and `public/.well-known/apple-app-site-association` (iOS) are
+  served correctly in production right now (200, correct `Content-Type`,
+  no redirect). `AndroidManifest.xml` has a real `autoVerify` intent-filter
+  (www host only — the apex redirects and that alone broke verification
+  for both hosts, fixed `cc66008`); `App.entitlements` has the real,
+  correct Associated Domains entitlement (Team ID `4G59NPT4P2`, corrected
+  once from a wrong value, `995d9dd`); `PWAProvider.tsx` already has a
+  platform-agnostic `appUrlOpen` listener routing an intercepted link to
+  the actual tapped path. **Still unconfirmed**: whether Android
+  verification is actually succeeding end-to-end today (the commit trail
+  ends right after the apex-host fix with no recorded successful retest;
+  `assetlinks.json`'s fingerprint is specifically a debug-keystore one,
+  which silently stops matching if the installed APK was ever rebuilt with
+  a different debug keystore). **Confirmed not working, expected**: iOS —
+  the entitlement/AASA scaffolding was explicitly left "ready for the
+  first TestFlight archive" and has never actually been compiled, still
+  blocked on the same Mac/Xcode access gap documented elsewhere in this
+  project's iOS history. Full write-up, diagnostic steps, and open
+  questions in `docs/WYP_Universal_Links_Plan.md` — fold that doc's
+  findings back into a real entry here once the Android diagnostic
+  (`adb shell pm get-app-links com.wouldyouplease.app`) lands on an
+  answer, rather than leaving this as a separate file indefinitely.
