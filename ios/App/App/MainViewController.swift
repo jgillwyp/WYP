@@ -1,4 +1,5 @@
 import Capacitor
+import CapacitorBrowser
 
 /// Registers this app's local custom plugins (not npm packages) —
 /// NativePrintPlugin.swift and NativeCalendarPlugin.swift, both added
@@ -27,6 +28,21 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(NativeCalendarPlugin())
         bridge?.registerPluginInstance(NativeAudioSessionPlugin())
         bridge?.registerPluginInstance(NativeSpeechPlugin())
+
+        // 2026-11-10, owner debugging the Stripe/Safari hand-off --
+        // @capacitor/browser's own CAPBrowserPlugin should auto-register via
+        // capacitor.config.json's packageClassList (confirmed correctly
+        // listed there) the same way CapacitorApp's own AppPlugin already
+        // does -- but it consistently threw "'Browser' plugin is not
+        // implemented on ios" / {"code":"UNIMPLEMENTED"} on a real device,
+        // confirmed live via Web Inspector, surviving npm install, Reset
+        // Package Caches, a Clean Build Folder, and even a full
+        // ~/Library/Developer/Xcode/DerivedData wipe -- ruling out every
+        // normal staleness/caching explanation. Registering it explicitly
+        // here instead, the same proven, reliable path this file's own
+        // custom plugins already use, rather than continue chasing why its
+        // own auto-discovery isn't working in this project.
+        bridge?.registerPluginInstance(CAPBrowserPlugin())
 
         // 2026-11-10, owner debugging the Stripe/Safari hand-off -- since
         // iOS 16.4, WKWebView content is only reachable from Safari's own

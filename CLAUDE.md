@@ -7926,6 +7926,47 @@ link is built only after the stack is proven on Add Contact.
   Stripe-in-Safari change together before submitting for TestFlight
   review.
 
+- **`@capacitor/browser`'s CAPBrowserPlugin never auto-registered with the
+  native bridge — explicit manual registration fixes it, after a long
+  elimination process (2026-11-10), no migration.** The Stripe-in-Safari
+  fix (above) consistently threw `"'Browser' plugin is not implemented on
+  ios"` (`{"code":"UNIMPLEMENTED"}`) on a real device, confirmed live via
+  Safari's Web Inspector connected to the phone — the fetch to create the
+  Stripe Checkout session worked perfectly (a real 200, a real checkout
+  URL), the failure was entirely in `Browser.open()` itself. Methodically
+  ruled out every normal explanation before landing on the real fix: (1)
+  stale cached JS — ruled out, confirmed via fresh trace logging after a
+  genuine force-quit-and-relaunch that the error happens on current code,
+  not an old cached bundle; (2) missing `node_modules` on the owner's own
+  Mac (this dependency was added and `npm install`ed only in this session's
+  own Windows sandbox, and `node_modules` isn't tracked in git) — ruled
+  out, confirmed the owner ran `npm install` on his Mac with the package
+  actually downloading; (3) Xcode's package-resolution cache — ruled out,
+  Reset Package Caches ran clean; (4) stale compiled build output — ruled
+  out, Clean Build Folder didn't fix it; (5) a leftover `DerivedData`
+  cache spanning every project on the machine — ruled out, a full
+  `rm -rf ~/Library/Developer/Xcode/DerivedData` and fresh rebuild still
+  hit the identical error. Also directly compared `@capacitor/browser`'s
+  own `Package.swift` and Swift source (`CAPBrowserPlugin.swift`) against
+  `@capacitor/app`'s — byte-for-byte parallel structure, same
+  `packageClassList`-based auto-registration convention, and `AppPlugin`
+  demonstrably already works via that exact mechanism — so this isn't a
+  code or manifest problem either.
+
+  Given every caching/staleness explanation was exhausted and the two
+  plugins are structurally identical, stopped trying to explain *why*
+  auto-discovery fails for this one plugin specifically and just bypassed
+  it: `MainViewController.swift` (already hand-registers this app's own
+  four custom plugins, since local Swift-file plugins were never eligible
+  for `packageClassList` auto-discovery in the first place) now also
+  explicitly calls `bridge?.registerPluginInstance(CAPBrowserPlugin())`
+  after importing `CapacitorBrowser` — the same proven, already-working
+  registration path, just applied to one more plugin. **Not yet confirmed
+  working** — needs a rebuild and retest; if this doesn't resolve it
+  either, the next step would be checking whether `AppPlugin`'s own
+  auto-registration is genuinely working via `packageClassList` or is
+  itself silently relying on some other mechanism not yet identified.
+
 - **Stripe checkout button stuck on "Starting checkout…" forever on native
   iOS — real, confirmed bug in the Stripe-in-Safari fix itself
   (2026-11-10), no migration.** Jim tested Sign Up on a real device after
