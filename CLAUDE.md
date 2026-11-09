@@ -7360,13 +7360,15 @@ link is built only after the stack is proven on Add Contact.
   simply doesn't work. Confirmed locally that `.env.local`'s
   `STRIPE_SECRET_KEY` is prefixed `sk_test_` (test mode) — this sandbox has
   no way to inspect Vercel's own copy of that variable for the live
-  deployment, so **Jim should confirm the same `sk_test_` prefix is set in
-  Vercel's Environment Variables** before handing the card number out
-  broadly; if it ever is a live key there, testers using `4242...` would
-  just get a clean decline (annoying, not dangerous), but Stripe's own
-  Services Agreement separately prohibits testing in live mode with a
-  *real* card, worth keeping in mind if a tester ever substitutes their
-  own card "to see if it works."
+  deployment, so Jim was pointed at the new Test Stripe Payments screen
+  itself as the definitive check (Stripe's own Checkout page visibly marks
+  sandbox mode, no Vercel access needed). **Confirmed by Jim the same day**
+  — his own screenshot of a real Sign Up click-through on production shows
+  the **"Sandbox"** badge next to the business name, **"Would You Please
+  Inc sandbox"** subtitle, and the saved card itself labeled **"Test ••••
+  4242"** — Stripe's current UI uses "Sandbox" rather than the older
+  orange "TEST MODE" ribbon, same meaning. Production is confirmed running
+  on test keys; the `4242...` card is safe to hand out broadly as planned.
 
   *Apple In-App Purchase:* Guideline 3.1.1 requires Apple's own In-App
   Purchase for unlocking digital features/content from *within* an app —
