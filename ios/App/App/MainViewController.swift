@@ -27,5 +27,18 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(NativeCalendarPlugin())
         bridge?.registerPluginInstance(NativeAudioSessionPlugin())
         bridge?.registerPluginInstance(NativeSpeechPlugin())
+
+        // 2026-11-10, owner debugging the Stripe/Safari hand-off -- since
+        // iOS 16.4, WKWebView content is only reachable from Safari's own
+        // Web Inspector (Settings > Safari > Advanced > Web Inspector, then
+        // Mac Safari's Develop menu) if the WebView explicitly opts in via
+        // isInspectable. Without this, Web Inspector enabled on the device
+        // still shows nothing for this app's own content -- only ordinary
+        // Safari tabs. Debug-build convenience, not a runtime behavior
+        // change; safe to leave in a TestFlight build too, since it still
+        // requires the device's own Web Inspector setting to be on.
+        if #available(iOS 16.4, *) {
+            webView?.isInspectable = true
+        }
     }
 }

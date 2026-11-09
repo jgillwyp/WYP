@@ -7953,3 +7953,20 @@ link is built only after the stack is proven on Add Contact.
   connected to the device (Settings → Safari → Advanced → Web Inspector,
   then Safari on the Mac → Develop menu), not more guessing from
   descriptions. `npx tsc --noEmit`/`npm run lint` both clean.
+
+  **Confirmed, same evening: the button fix alone didn't resolve it** —
+  Safari still never opens on a retry. Before sending Jim down the Web
+  Inspector path, checked whether it would even show anything: confirmed
+  via grep that no `isInspectable` setting exists anywhere in `ios/`. Since
+  iOS 16.4, `WKWebView` content is only reachable from Safari's own Web
+  Inspector if the WebView explicitly opts in — without it, turning on
+  the device's own Web Inspector setting still shows nothing for this
+  app's content, only ordinary Safari tabs, which would have sent Jim
+  through the whole setup for nothing. Added `webView?.isInspectable =
+  true` to `MainViewController.swift`'s `capacitorDidLoad()`, guarded by
+  `if #available(iOS 16.4, *)`. Debug convenience, not a runtime behavior
+  change — safe to leave in, including in a future TestFlight build,
+  since it still requires the device's own Web Inspector toggle to be on
+  before anything is actually reachable. **Needs a real rebuild** (native
+  Swift change, can't ship as a remote JS fix) before Web Inspector will
+  show the app's content at all.
