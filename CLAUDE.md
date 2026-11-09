@@ -7430,3 +7430,28 @@ link is built only after the stack is proven on Add Contact.
   read of Apple's own current StoreKit External Purchase Link
   documentation (not third-party summaries) when this becomes live rather
   than hypothetical.
+
+- **New `.testernote` CSS — deliberately off-brand "testing only" look for
+  two to-tester messages (2026-11-10), no migration.** Jim, with his own
+  pasted mockup screenshots: "I would like to have a clearly-not-part-of-
+  WYP look for the to-tester messages we provide in the Account Options and
+  Test Stripe Payments... the final does not need to be exactly what I
+  laid-out — it just needs to not look like the rest of the app." New
+  `.testernote` in `app/globals.css`: sharp corners (`border-radius: 0`,
+  Palette 1 never uses this anywhere), a 2px dashed black border, a plain
+  grey (`#f2f2f2`) background, and a monospace font stack — none of which
+  reuses any `--brand-blue`/`--strip`/`--ink` token, so it reads as foreign
+  on sight rather than as a themed component. Two descendant rules
+  (`.testernote .checktext`/`.checknote`) repaint those spans' text black +
+  monospace specifically when nested inside one, at higher specificity than
+  their own base color rules. Applied to two places: (1) Account Options'
+  "Subscribed? (testing only)" checkbox (`SubscriptionPanels.tsx`'s
+  `PrivateTesterStatus`) — `className="checkrow testernote"`, text
+  unchanged, visual treatment only; (2) Test Stripe Payments'
+  explanatory paragraph (`AdminTestStripeForm.tsx`) — replaces the old
+  `.noticeband` entirely, with Jim's own rewritten wording (used near-
+  verbatim, only an obvious stray-space/lowercase-sentence-start typo
+  corrected) that now actually states the `4242 4242 4242 4242` test-card
+  details, which the prior copy never did. `npx tsc --noEmit`/`npm run
+  lint` both clean. No mockup — Jim's own screenshots are the only
+  reference.

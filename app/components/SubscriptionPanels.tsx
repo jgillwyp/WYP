@@ -871,7 +871,13 @@ function PrivateTesterStatus({
   return (
     <div style={{ margin: '0 0 4px' }}>
       {canToggleTier && (
-        <label className="checkrow" style={{ marginBottom: 10 }}>
+        // .testernote (2026-11-10) — Jim's own request: a deliberately
+        // off-brand look for this to-tester control, "clearly-not-part-of-
+        // WYP," distinguishing testing-only scaffolding from the app's own
+        // real UI. See globals.css's own comment at .testernote for why
+        // (sharp corners, dashed border, monospace — nothing Palette 1
+        // itself ever uses).
+        <label className="checkrow testernote" style={{ marginBottom: 10 }}>
           <input
             type="checkbox"
             checked={tier === 'subscriber'}

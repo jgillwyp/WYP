@@ -3600,6 +3600,41 @@ body {
    existing-thread-Dialog patterns that were mockup-only until now.
    ========================================================================= */
 
+/* .testernote (2026-11-10) — deliberately off-brand "testing only" callout.
+   Jim: "a clearly-not-part-of-WYP look for the to-tester messages we
+   provide in Account Options and Test Stripe Payments... it just needs to
+   not look like the rest of the app." Palette 1 never uses sharp corners,
+   a dashed border, or a monospace body font anywhere else, so this
+   combination reads as foreign on sight rather than as a themed
+   component — deliberately avoids every --brand-blue/--strip/--ink token.
+   Used standalone (Test Stripe Payments' own explanatory paragraph,
+   AdminTestStripeForm.tsx — margin set by the caller, same as .noticeband's
+   own convention) and combined with .checkrow (Account Options' "Subscribed?
+   (testing only)" checkbox, SubscriptionPanels.tsx) — the descendant rules
+   below repaint .checktext/.checknote black+monospace specifically when
+   nested inside one, at higher specificity than their own base color rules,
+   so the override holds regardless of source order. */
+.testernote {
+  border: 2px dashed #000;
+  border-radius: 0;
+  background: #f2f2f2;
+  color: #000;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+.testernote b {
+  font-weight: 700;
+}
+
+.testernote .checktext,
+.testernote .checknote {
+  color: #000;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 /* Notice band (§9.3, PROPOSED) — Strip background, not .ferror red: this is
    a heads-up, not an error. Sits directly under the title band, full width. */
 .noticeband {

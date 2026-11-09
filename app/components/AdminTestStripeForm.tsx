@@ -125,11 +125,20 @@ export default function AdminTestStripeForm() {
             <div className="subempty">{loadError}</div>
           ) : (
             <>
-              <div className="noticeband" style={{ margin: '4px var(--pad) 14px' }}>
-                Preview only — this shows the real Free/Subscriber page (and makes real Stripe
-                calls) against your own account, bypassing the Private Tester page. Results are
-                your account&rsquo;s real tier/storage/renewal date, same as any real account —
-                open Account Options afterward to see them reflected there.
+              {/* .testernote (2026-11-10) — Jim's own request: a deliberately
+                  off-brand look for this to-tester explanation, "clearly-
+                  not-part-of-WYP," plus his own rewritten wording (now
+                  including the 4242... test-card details, which the prior
+                  .noticeband copy never stated). See globals.css's own
+                  comment at .testernote for the visual reasoning. */}
+              <div className="testernote" style={{ margin: '4px var(--pad) 14px' }}>
+                <b>What you see below this paragraph</b> is a real Free/Subscriber page
+                including the &ldquo;My Status&rdquo;. It is responsive to how you may have
+                checked or unchecked the Private Tester Subscription status under Account
+                Options. Your actions here with Stripe updates your account status, storage
+                capacity, and renewal date. A test-only credit card id of 4242 4242 4242 4242
+                with any future renewal date and 3 digit CVC code can be used. You can see the
+                results in Account Options.
               </div>
               {/* AccountStatusSection itself carries no horizontal padding
                   (2026-11-07) — this screen, like /account/subscription,
