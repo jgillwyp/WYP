@@ -7727,3 +7727,62 @@ link is built only after the stack is proven on Add Contact.
   findings back into a real entry here once the Android diagnostic
   (`adb shell pm get-app-links com.wouldyouplease.app`) lands on an
   answer, rather than leaving this as a separate file indefinitely.
+
+- **Android App Links diagnostic resolved — verification is confirmed
+  working; the real gap was in-app navigation, not deep linking; a real
+  Android hardware-back-button fix shipped (2026-11-10), no migration.**
+  `adb shell pm get-app-links com.wouldyouplease.app` (run from `adb.exe`
+  at its default Android Studio SDK location, `%LOCALAPPDATA%\Android\
+  Sdk\platform-tools\adb.exe` — not on PATH by default) reported
+  `www.wouldyouplease.com: verified` — the installed APK's signing
+  fingerprint matches `assetlinks.json` and Android genuinely opens a
+  `wouldyouplease.com` link in the native app rather than a browser tab.
+  This reframes every symptom from yesterday's end-of-day testing: "the
+  Request Response became the app's only page, the other prior instance
+  (main screen) no longer existed" wasn't App Links *failing* — it was App
+  Links *succeeding*, landing the tapped link inside the already-running
+  app exactly as designed. The actual bug was downstream of that.
+
+  Root cause, confirmed by reading `PWAProvider.tsx`'s own `appUrlOpen`
+  listener: it does `window.location.href = event.url` — a real, hard page
+  navigation (the file's own comment already said as much), not a
+  client-side route change. That's necessary (there's no other way to
+  land on an arbitrary path from a native-side URL), but it means Main
+  Screen's live React state is gone the instant the link is tapped. The
+  real missing piece, confirmed via a repo-wide grep (`backButton`, zero
+  matches): **nothing anywhere in this codebase ever listened for
+  Android's hardware back button.** A plain `location.href =` assignment
+  pushes a new entry onto the WebView's session history rather than
+  replacing the current one, so Main Screen was never actually gone from
+  history — there was simply no control wired to go back to it. Jim's own
+  "Enter key got me to Main Screen" was presumably an unrelated default
+  browser/WebView behavior, not anything this app defines.
+
+  Fixed with a second `appUrlOpen`-style effect in `PWAProvider.tsx`,
+  using `@capacitor/app`'s own `backButton` event (the plugin was already
+  a dependency, already imported in this file for `appStateChange`) —
+  `history.back()` when `canGoBack` is true, `CapacitorApp.exitApp()`
+  otherwise, matching the platform's own expected behavior for a back
+  press at an app's root screen. Gated on `Capacitor.isNativePlatform()`,
+  same convention as every other native-only effect in this file (iOS has
+  no hardware back button to wire regardless, so this is a no-op there by
+  design, not an oversight). **Needs no Android rebuild at all** —
+  Capacitor's `server.url` config (`capacitor.config.ts`) means the
+  installed app loads this live site remotely, so a JS-only fix like this
+  one is live for Jim the moment it's pushed, the same as any other code
+  change in this project.
+
+  **Still genuinely open, flagged rather than guessed at**: whether the
+  separate, earlier-reported "no Close button, even though signed in"
+  symptom (from the retest right before this one) was a real bug in the
+  `isSignedIn` check timing on `RequestResponseForm.tsx`, or just Jim
+  looking at the screen before the async `getSession()` call resolved.
+  Not chased further this round — the back-button fix makes the Close
+  button's own correctness less urgent, since there's now always a
+  working way back regardless. Worth a fresh look if Jim still sees it
+  missing on a retest with this fix in place. `docs/
+  WYP_Universal_Links_Plan.md` is superseded by this entry and can be
+  deleted — both of its own "next steps" (confirm which platform was
+  tested; run the Android diagnostic) are now answered. iOS remains
+  unchanged from that doc: scaffolding exists, never compiled, blocked on
+  Mac/Xcode access. `npx tsc --noEmit`/`npm run lint` both clean.

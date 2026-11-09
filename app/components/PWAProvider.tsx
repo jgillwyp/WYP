@@ -204,6 +204,37 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
     }
   }, [])
 
+  // Android hardware back button (2026-11-10, owner-reported) — nothing in
+  // this codebase was ever listening for it, so it did whatever Android's
+  // own un-handled default is (often nothing). This mattered in practice
+  // because of the effect just above: appUrlOpen's own
+  // window.location.href reassignment is a real page navigation, not a
+  // client-side route change — it pushes the tapped link's page onto the
+  // WebView's session history ahead of whatever was already open (e.g.
+  // Main Screen), rather than replacing it, so a plain history.back() can
+  // reach it again. @capacitor/app's own backButton event already reports
+  // canGoBack for exactly this check; this isn't Android-only by the plugin's
+  // own design, but isNativePlatform() already scopes every other native-
+  // only effect in this file the same way, and iOS has no hardware back
+  // button to wire regardless. Exits the app only when there's truly
+  // nowhere left to go back to, matching the platform's own expected
+  // behavior for a back press at an app's root screen.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    const listenerPromise = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back()
+      } else {
+        CapacitorApp.exitApp()
+      }
+    })
+
+    return () => {
+      listenerPromise.then((handle) => handle.remove())
+    }
+  }, [])
+
   // Default standalone-window width (2026-08-18, owner-reported) — the
   // manifest itself has no field for a preferred launch size (confirmed via
   // web.dev's own PWA documentation: "There is no way to define your PWA's
