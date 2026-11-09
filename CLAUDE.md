@@ -7925,3 +7925,31 @@ link is built only after the stack is proven on Add Contact.
   (frozen) run, Run again fresh, and confirm both this fix and the
   Stripe-in-Safari change together before submitting for TestFlight
   review.
+
+- **Stripe checkout button stuck on "Starting checkout…" forever on native
+  iOS — real, confirmed bug in the Stripe-in-Safari fix itself
+  (2026-11-10), no migration.** Jim tested Sign Up on a real device after
+  a long evening of unrelated connection/keyboard troubleshooting (see the
+  AppDelegate freeze fix and the still-open keyboard/Safari-jump issue,
+  both this same day) — clicked "1st Year Discount," button stayed stuck
+  on "Starting checkout…," confirmed no Safari view ever appeared. Real
+  bug found on inspection: both `SubscriptionCheckoutButton`'s
+  `handleClick` and `CancelRenewalLink`'s own copy left `busy` permanently
+  `true` on a successful `startStripeFlow()` call, with a comment
+  justifying it ("the page is already navigating away"). That reasoning
+  was correct for the old same-WebView `window.location.href` redirect
+  (true page unload, component unmounts, so a stuck `busy` state never
+  mattered) but stopped being true the moment this same evening's earlier
+  fix made native iOS call `Browser.open()` instead — the screen stays
+  mounted while Safari opens separately, so a permanently-`true` `busy`
+  state now means the button visibly never recovers. Fixed by always
+  calling `setBusy(false)` after `startStripeFlow()` resolves, success or
+  failure, in both components — harmless on web/Android, where the page
+  really is about to unload anyway. **Does not by itself explain why
+  Safari never appeared at all** — that's still open; this fix only
+  guarantees the *button* recovers correctly regardless of what actually
+  happened underneath. If Safari still doesn't open after this deploys,
+  the next step is watching it live via Safari's own Web Inspector
+  connected to the device (Settings → Safari → Advanced → Web Inspector,
+  then Safari on the Mac → Develop menu), not more guessing from
+  descriptions. `npx tsc --noEmit`/`npm run lint` both clean.

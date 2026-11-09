@@ -360,11 +360,15 @@ export function SubscriptionCheckoutButton({
     const result = await startStripeFlow('/api/stripe/create-checkout-session', { plan })
     if (!result.ok) {
       setError(result.message)
-      setBusy(false)
     }
-    // On success the page is already navigating away — leave busy=true so
-    // the button stays disabled rather than flashing back to clickable
-    // during the redirect.
+    // Always reset, success or failure (2026-11-10, owner-reported: stuck
+    // forever on "Starting checkout…") — the old comment here assumed the
+    // page always navigates away on success, which stopped being true once
+    // native iOS started opening Stripe in Safari instead
+    // (startStripeFlow's own 2026-11-10 fix) while this screen stays
+    // mounted. Harmless on web/Android, where the page really is about to
+    // unload anyway.
+    setBusy(false)
   }
 
   return (
@@ -543,8 +547,10 @@ function CancelRenewalLink({ onError }: { onError: (message: string | null) => v
     const result = await startStripeFlow('/api/stripe/create-portal-session', {})
     if (!result.ok) {
       onError(result.message)
-      setBusy(false)
     }
+    // Same fix as SubscriptionCheckoutButton's own handleClick above —
+    // always reset, not just on failure.
+    setBusy(false)
   }
 
   return (
