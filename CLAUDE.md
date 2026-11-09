@@ -7793,3 +7793,57 @@ link is built only after the stack is proven on Add Contact.
   website — a fine outcome, but not evidence the native iOS app itself
   handles these links yet. That remains blocked on real Mac/Xcode access,
   unchanged.
+
+- **Correction: the iOS "blocked on Mac/Xcode access" claim above was
+  wrong — the real iOS build already exists, has been running for two
+  weeks, and Universal Links are confirmed working end to end
+  (2026-11-10). Second time this exact mistake happened — trusting an old
+  CLAUDE.md entry instead of checking git log first, same failure mode as
+  the original "not yet configured" error this whole thread started
+  from.** Jim corrected it directly: "xCode is fully installed... We have
+  already built the iPhone Capacitor wrapper for iOS." `git log -- ios/`
+  confirms a real, substantial build history from 2026-10-16 through
+  2026-10-31 — native Swift plugins for Print and Add to Calendar
+  (mirroring Android's own, `baadca4`), a real on-device bug fix for
+  "Print/Calendar UNIMPLEMENTED" traced to the SceneDelegate bypassing
+  MainViewController (`473a6ce` — the kind of bug only a running build on
+  a real device surfaces), Voice Dictation iterated against a real
+  microphone and AVAudioSession three times in one day (`ef57ce2`,
+  `bb1181a`, `1a0b163`), and a build-version-stamp fix for a number Jim
+  himself was watching tick on a live running app (`f522393`). The
+  earlier "two Mac Minis" confusion traced to conflating two different
+  machines — the 2012 Mac Mini (A1347, 4GB RAM, capped at Catalina,
+  genuinely can't run current Xcode) is not the machine any of this iOS
+  work was ever done on; Jim's working Mac is a separate M1 Mac Mini
+  (2020, 16GB RAM, a current macOS), fully capable, already set up with
+  Xcode.
+
+  Checked `ios/App/App/SceneDelegate.swift` directly: `scene(_:continue:)`
+  correctly forwards `NSUserActivity` into
+  `SceneDelegateProxy.shared.scene(scene, continue: userActivity)` —
+  Capacitor's own native-side hook for Universal Links, which is what
+  fires the `appUrlOpen` JS event `PWAProvider.tsx` already listens for
+  (the same handler fixed for Android two entries above). Universal Links
+  scaffolding itself (`App.entitlements`, the hosted
+  `apple-app-site-association`, the real Team ID `4G59NPT4P2`) was already
+  correctly recorded in the first entry in this thread — only the
+  "never compiled" conclusion drawn from it was wrong.
+
+  **Confirmed by Jim, live test, real device**: "The app is opened for a
+  Receipt Confirmation link click when it is otherwise not open, and the
+  Request Response has a close button that takes the user to the main
+  screen." App fully closed beforehand, link tapped, native app launched
+  directly (not Safari/Mail's browser), landed on the correct screen,
+  Close correctly navigated to Main Screen — the identical end-to-end
+  result already confirmed on Android. **iOS Universal Links are
+  confirmed working, full stop.** The one paragraph above describing the
+  iPhone test as "almost certainly via the ordinary browser... not the
+  native iOS app" was itself wrong, superseded by this entry rather than
+  edited in place, so the mistake and its correction both stay visible in
+  the record rather than silently vanishing.
+
+  Nothing left outstanding on either platform's deep-linking now. The
+  only remaining native-iOS item anywhere in this project's history is
+  getting a build onto TestFlight for Jim's other testers (not just his
+  own device) — a distribution step, not a functionality gap; nothing
+  about today's findings blocks it.
