@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 import WypHeader from './WypHeader'
@@ -235,10 +235,27 @@ function currentTimeHHMM(): string {
 export default function RequestResponseForm() {
   const params = useParams<{ token: string }>()
   const token = params.token
+  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [data, setData] = useState<ResponsePayload | null>(null)
+
+  // isSignedIn (2026-11-10) — this screen's own /r/[token] link is the same
+  // one sent to every recipient regardless of account status, so an
+  // "account holder" and a genuinely anonymous visitor land here
+  // identically — there was never a second, account-holder-specific
+  // screen reached by clicking this link (ResponseDetailForm.tsx is a
+  // different route, only ever reached via Main Screen's own Received
+  // list). Owner-reported: "For an account holder, could an enter key take
+  // the user to the main screen... Of course if the recipient was not an
+  // account holder, the normal 'have to kill the screen' would apply" —
+  // this is the signal that distinguishes the two cases on this one
+  // screen. A plain getSession() check (not getCurrentUser() — no
+  // trust-sensitive write depends on this, only whether to show a
+  // navigation convenience), since this screen never requires a session
+  // for anything else it does.
+  const [isSignedIn, setIsSignedIn] = useState(false)
 
   const [doneDate, setDoneDate] = useState('')
   const [doneTime, setDoneTime] = useState('')
@@ -398,6 +415,16 @@ export default function RequestResponseForm() {
   const [wantsReceiptConfirm] = useState(() =>
     typeof window === 'undefined' ? false : new URLSearchParams(window.location.search).get('confirm') === '1'
   )
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.auth.getSession().then(({ data: sessionData }) => {
+      if (!cancelled) setIsSignedIn(!!sessionData.session)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!token) return
@@ -929,14 +956,33 @@ export default function RequestResponseForm() {
             (Request Detail/Response Detail/ToDo Detail), this screen never
             writes anything until Send, so there was never a saved value to
             revert to — the button's only real effect (dismissing
-            sendConfirmed) wasn't worth keeping a control around for. Send
-            is now the band's only button. */}
+            sendConfirmed) wasn't worth keeping a control around for.
+
+            Close added back, 2026-11-10, but only for a signed-in visitor
+            with nothing left to send — owner-reported: "For an account
+            holder, could an enter key take the user to the main screen -
+            or maybe change the greyed 'Send' button (after being used) to
+            a 'Close' button to go to the Main screen. Of course if the
+            recipient was not an account holder, the normal 'have to kill
+            the screen' would apply." This /r/[token] link is the one and
+            only link ever sent to a recipient, account holder or not — an
+            account holder reaches this exact screen too, not a different
+            one, so whether a "go to Main Screen" destination makes sense
+            depends on isSignedIn, not on which screen rendered. For a
+            genuinely anonymous visitor (isSignedIn false), nothing changes
+            — Send is still the band's only button, exactly as it was. */}
         <div className="band">
           <span className="glabel">Request Response</span>
           <span className="bandcluster">
-            <button className="btn" type="submit" form="request-response-form" disabled={sending || !hasUnsentChanges}>
-              {sending ? 'Sending…' : remindersOnlyChanged ? 'Save' : 'Send'}
-            </button>
+            {isSignedIn && !hasUnsentChanges && !sending ? (
+              <button className="btn" type="button" onClick={() => router.push('/')}>
+                Close
+              </button>
+            ) : (
+              <button className="btn" type="submit" form="request-response-form" disabled={sending || !hasUnsentChanges}>
+                {sending ? 'Sending…' : remindersOnlyChanged ? 'Save' : 'Send'}
+              </button>
+            )}
           </span>
         </div>
 

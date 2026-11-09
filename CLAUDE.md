@@ -7655,3 +7655,48 @@ link is built only after the stack is proven on Add Contact.
   anything). No wording change made; flagged for Jim to retest with a
   freshly-sent text once the fix deploys — a message already in hand still
   carries the old, un-fixed link.
+
+- **The "nowhere to go after Send" fix two entries above targeted the wrong
+  screen — real fix landed in `RequestResponseForm.tsx` instead
+  (2026-11-10), no migration.** Jim retested: "I was able to get to the
+  main screen with an enter key [the first click]. However, when I clicked
+  the link a second time, the Request Response came up, but I could not
+  get to the main screen." Band title "Request Response" was the tell —
+  that's `RequestResponseForm.tsx` (the `/r/[token]` link), not
+  `ResponseDetailForm.tsx` (only ever reached via Main Screen's own
+  Received list, never by clicking an emailed/texted link at all). Wrong
+  premise in the earlier fix: an "account holder" and a genuinely
+  anonymous recipient both land on the *identical* `/r/[token]` screen —
+  there was never a second, account-holder-specific screen reached by
+  clicking that link, so the owner's own distinction ("For an account
+  holder... Of course if the recipient was not an account holder, the
+  normal 'have to kill the screen' would apply") was always about
+  conditional behavior on *this one screen*, keyed on whether the current
+  visitor happens to be signed in — not about which screen they land on.
+  Confirmed via code: this screen had zero session-awareness anywhere
+  (`currentUserId={null}` hardcoded for `AttachmentsPanel`) and no
+  Close/Cancel button at all, removed outright 2026-08-20 for having no
+  purpose for a visitor with nothing to navigate back to.
+
+  New `isSignedIn` state (`supabase.auth.getSession()`, checked once on
+  mount — a plain read for a navigation convenience, not a trust-sensitive
+  write, so `getSession()` rather than `getCurrentUser()`). The band's
+  Send button is now conditional: when `isSignedIn && !hasUnsentChanges &&
+  !sending` — nothing left to send, whether from a Send that already
+  succeeded or from `?confirm=1` alone already seeding that state — it
+  becomes an enabled **Close** button (`router.push('/')`) instead of the
+  disabled Send button, matching Jim's own suggested fix almost verbatim
+  ("change the greyed 'Send' button... to a 'Close' button to go to the
+  Main screen"). For a genuinely anonymous visitor (`isSignedIn` false),
+  nothing changes at all — Send is still the band's only button, exactly
+  as before. The previous entry's `ResponseDetailForm.tsx` fix
+  (`router.back()` → `router.push('/')`) is **not reverted** — it's a
+  real, separate robustness fix for that screen's own distinct reachable-
+  via-external-link path, just not what this specific report turned out
+  to be about. Jim's own "got to Main Screen with Enter the first click"
+  remains unexplained by anything in this codebase (no Enter-key handler
+  exists anywhere on this screen, before or after this fix) — most likely
+  an unrelated browser-level action, not a WYP behavior; not chased
+  further, since the actual, reproducible gap (second click, no account-
+  holder navigation at all) is what the new Close button now closes. `npx
+  tsc --noEmit`/`npm run lint` both clean.
