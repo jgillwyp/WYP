@@ -7772,17 +7772,24 @@ link is built only after the stack is proven on Add Contact.
   one is live for Jim the moment it's pushed, the same as any other code
   change in this project.
 
-  **Still genuinely open, flagged rather than guessed at**: whether the
-  separate, earlier-reported "no Close button, even though signed in"
-  symptom (from the retest right before this one) was a real bug in the
-  `isSignedIn` check timing on `RequestResponseForm.tsx`, or just Jim
-  looking at the screen before the async `getSession()` call resolved.
-  Not chased further this round — the back-button fix makes the Close
-  button's own correctness less urgent, since there's now always a
-  working way back regardless. Worth a fresh look if Jim still sees it
-  missing on a retest with this fix in place. `docs/
-  WYP_Universal_Links_Plan.md` is superseded by this entry and can be
+  `docs/WYP_Universal_Links_Plan.md` is superseded by this entry and was
   deleted — both of its own "next steps" (confirm which platform was
   tested; run the Android diagnostic) are now answered. iOS remains
   unchanged from that doc: scaffolding exists, never compiled, blocked on
   Mac/Xcode access. `npx tsc --noEmit`/`npm run lint` both clean.
+
+  **Confirmed fixed end to end by Jim, same day, both platforms, with the
+  app fully closed (not just backgrounded) beforehand**: on Android,
+  tapping a text message's link opened Request Response with a real
+  Close button shown, and Close correctly landed on Main Screen — closes
+  the "still genuinely open" question this entry originally flagged about
+  `isSignedIn` timing; it resolves reliably, nothing further to chase. On
+  iPhone, tapping an email link produced the identical working result —
+  but almost certainly via the ordinary browser (Safari/Chrome), not the
+  native iOS app, since iOS Universal Links have never been compiled into
+  a real build (see immediately above). It worked because that browser
+  already held a signed-in session from earlier normal use, so
+  `isSignedIn`/Close/navigation all behaved exactly as they would on any
+  website — a fine outcome, but not evidence the native iOS app itself
+  handles these links yet. That remains blocked on real Mac/Xcode access,
+  unchanged.
