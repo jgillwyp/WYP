@@ -1262,7 +1262,16 @@ export default function MainScreen() {
   // is wired to navigate to /account/subscription (SubscriptionForm.tsx) —
   // it shows real Subscriber content for a subscriber too (Renewal Date,
   // Attachment Storage, Plan Summary), not just a Free-account pitch.
-  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  //
+  // Defaults to null, not 'free' (2026-11-10) — owner-reported: "when
+  // opening the WYP app, it now flashes the ad even though the user is set
+  // as a subscriber." AppFooter is rendered unconditionally on this screen
+  // (no full-page loading gate the way Detail screens have), so the old
+  // 'free' default was passed straight through to AppFooter for the brief
+  // window before this effect resolves, flashing the ad for every account
+  // regardless of real tier. null renders as "unknown" there instead (ad
+  // hidden) — see AppFooter.tsx's own comment on its tier prop.
+  const [tier, setTier] = useState<'free' | 'subscriber' | null>(null)
 
   // Due/Done Time is now an opt-in account preference too (migration 019,
   // 2026-08-13) — see AccountForm.tsx. On by default. Governs the Print

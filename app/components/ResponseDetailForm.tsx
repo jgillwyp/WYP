@@ -53,12 +53,20 @@ import NativeCalendar from '@/lib/nativeCalendar'
  *      has an account. (Matches the mockup's own header comment: "the
  *      .promo block from Respond to Request is dropped... whoever's
  *      looking at this screen already has an account.")
- *   2. Cancel uses router.back(), not a local-state reset — unlike an
- *      anonymous /r/[token] visitor (who has no prior in-app history entry
- *      to return to), this screen is only ever reached by clicking a row on
- *      Main Screen, same as every other signed-in Detail screen
- *      (Request Detail, ToDo Detail, Contact Detail all use router.back()
- *      for the identical reason).
+ *   2. Cancel/Close navigate to Main Screen directly (router.push('/')), not
+ *      a local-state reset — unlike an anonymous /r/[token] visitor (who has
+ *      no prior in-app history entry to return to at all, and so has no
+ *      Cancel button whatsoever), this screen's own visitor does have an
+ *      account, but reaching it isn't reliably an in-app click the way
+ *      Request Detail/ToDo Detail/Contact Detail's own router.back() assumes
+ *      — it's commonly opened fresh from an "Open Request..." link in an
+ *      email or text message instead, with no real browser history to go
+ *      back to. Owner-reported 2026-11-10: router.back() silently did
+ *      nothing in that case, stranding the visitor on this same screen with
+ *      only the footer buttons left. Switched to an unconditional
+ *      router.push('/'), trading away Main Screen's exact restored scroll
+ *      position for the (less common) in-app-click arrival, in exchange for
+ *      this always actually working.
  *   3. The quick-Done band (§6.31) and owner_tier-gated Attachments segment
  *      — both built for Request Response on 2026-08-10 — are included here
  *      too, even though the static mockup file predates both and hasn't
@@ -311,8 +319,8 @@ export default function ResponseDetailForm() {
   // No savedDoneDate/savedDoneTime pair here, unlike RequestResponseForm.tsx
   // — that screen's Cancel resets in-place to the last-saved values because
   // an anonymous visitor has nothing to navigate back to; this screen's
-  // Cancel uses router.back() instead (file header comment, point 2), so
-  // there's nothing that needs remembering.
+  // Cancel navigates to Main Screen instead (file header comment, point 2),
+  // so there's nothing that needs remembering.
   const [doneDate, setDoneDate] = useState('')
   const [doneTime, setDoneTime] = useState('')
 
@@ -439,6 +447,10 @@ export default function ResponseDetailForm() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendConfirmed, setSendConfirmed] = useState(false)
+  // sentHadRealChanges (2026-11-10) — see RequestResponseForm.tsx's own
+  // identical comment; same signal (changedFieldLabels from
+  // computeChangedFieldLabels), same wording decision, mirrored here.
+  const [sentHadRealChanges, setSentHadRealChanges] = useState(false)
 
   // Attachments (Week 5 Priority 3, 2026-08-14) — this signed-in recipient
   // can delete their own uploads, unlike the anonymous Request Response
@@ -896,6 +908,7 @@ export default function ResponseDetailForm() {
     setDialogChanged(false)
     setAttachmentsChanged(false)
 
+    setSentHadRealChanges(changedFieldLabels.length > 0)
     setSendConfirmed(true)
   }
 
@@ -999,11 +1012,26 @@ export default function ResponseDetailForm() {
     URL.revokeObjectURL(url)
   }
 
-  // router.back(), not a local-state reset — see file header comment
-  // point 2. Restores Main Screen's Received row and scroll position, same
-  // as Request Detail/ToDo Detail/Contact Detail's own Cancel/Close.
+  // Goes to Main Screen directly, not router.back() — changed 2026-11-10.
+  // Owner-reported: "after the response is sent, the screen has nowhere to
+  // go... the only screens available are the two footer buttons and a
+  // return to this screen." Unlike Request Detail/ToDo Detail/Contact
+  // Detail, which are reliably reached by clicking a row inside the app
+  // (so router.back() has real history to return to), this screen is at
+  // least as often reached by a signed-in account holder clicking a
+  // "Open Request..." link straight out of an email or text message —
+  // opening fresh, with no in-app history at all, so router.back() had
+  // nowhere to go and silently did nothing, stranding them on this same
+  // screen. Always navigating to '/' trades away restoring Main Screen's
+  // exact scroll position for the in-app-click case, in exchange for this
+  // button always actually working regardless of how the screen was
+  // reached — judged the better trade for a screen this reachable from
+  // outside the app. The anonymous /r/[token] path (RequestResponseForm.tsx)
+  // has no Cancel button at all for the identical reason (removed
+  // 2026-08-20) — this is the signed-in account holder's own equivalent
+  // fix.
   function handleCancel() {
-    router.back()
+    router.push('/')
   }
 
   // "Archive this Request" (owner, 2026-09-16) — a standalone one-click
@@ -1013,7 +1041,8 @@ export default function ResponseDetailForm() {
   // (migration 028), the same RPC Archive's own Archive action already calls
   // for a signed-in recipient's own copy — RLS is owner-only on requests, so
   // this can never be a plain client .update() from this side. Navigates
-  // back on success, same as Close/Cancel.
+  // to Main Screen on success, same as Close/Cancel (2026-11-10 — see
+  // handleCancel's own comment for why this no longer uses router.back()).
   async function handleArchiveThis() {
     setArchiving(true)
     setArchiveError(null)
@@ -1025,7 +1054,7 @@ export default function ResponseDetailForm() {
       setArchiveError(archiveRpcError.message)
       return
     }
-    router.back()
+    router.push('/')
   }
 
   if (loading) {
@@ -1096,7 +1125,15 @@ export default function ResponseDetailForm() {
             further edit) after a successful Send left this banner claiming
             "saved" while real unsent changes sat pending. */}
         {sendConfirmed && !hasChanges && !contentChanged && (
-          <div className="noticeband"><b>Response saved.</b> Your update has been recorded.</div>
+          <div className="noticeband">
+            {receiptConfirmed && !sentHadRealChanges ? (
+              <b>Receipt confirmation sent.</b>
+            ) : receiptConfirmed ? (
+              <><b>Receipt confirmation sent</b> and your update has been recorded.</>
+            ) : (
+              <><b>Response saved.</b> Your update has been recorded.</>
+            )}
+          </div>
         )}
 
         {/* Receipt Confirmation (migration 072, 2026-09-25) — supersedes the

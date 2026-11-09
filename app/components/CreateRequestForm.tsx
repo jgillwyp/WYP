@@ -421,7 +421,15 @@ export default function CreateRequestForm() {
   // written directly (that route is the only place a kind = 'file' row can
   // be created at all — see migration 025). tier gates whether this panel
   // or the locked one renders; re-checked server-side regardless.
-  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  //
+  // Defaults to null, not 'free' (2026-11-10) — this screen has no full-page
+  // loading gate, so AppFooter below renders immediately with whatever this
+  // default is; 'free' flashed the ad for a real Subscriber for the brief
+  // window before this fetch resolves. See AppFooter.tsx's own comment on
+  // its tier prop and MainScreen.tsx's identical fix. RepeatControl's own
+  // tier prop is optional and treats undefined as "skip the cap check," so
+  // its call site below passes `tier ?? undefined` rather than null.
+  const [tier, setTier] = useState<'free' | 'subscriber' | null>(null)
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [attachError, setAttachError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1792,7 +1800,7 @@ export default function CreateRequestForm() {
                 onRemove={() => setRepeatRule(null)}
                 disabled={form.dueDate.trim() === ''}
                 disabledReason="Please select a Due Date before adding a Repeat."
-                tier={tier}
+                tier={tier ?? undefined}
               />
             )}
 

@@ -317,6 +317,15 @@ export default function RequestResponseForm() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendConfirmed, setSendConfirmed] = useState(false)
+  // sentHadRealChanges (2026-11-10) — Jim: the post-Send banner should say
+  // explicitly when the Send was really just a Receipt Confirmation with
+  // nothing else to it, vs. a real update. Set from the exact same
+  // changedFieldLabels list handleSend already computes for the owner's own
+  // change-notification email, so "real change" means the same thing in
+  // both places — Done Date/Time, Dialog, Attachments; Reminder-toggle-only
+  // changes don't count as a "real update" here either, matching that
+  // email's own scoping.
+  const [sentHadRealChanges, setSentHadRealChanges] = useState(false)
 
   // remindersOnlyChanged (2026-09-04, Jim's own note on the Responding to a
   // Request Help topic) — true when the visitor has touched one of the
@@ -647,6 +656,7 @@ export default function RequestResponseForm() {
     setDialogChanged(false)
     setAttachmentsChanged(false)
 
+    setSentHadRealChanges(changedFieldLabels.length > 0)
     setSendConfirmed(true)
   }
 
@@ -938,8 +948,21 @@ export default function RequestResponseForm() {
             sendConfirmed alone: clearing Done Date (or any other further
             edit) after a successful Send left this banner claiming "sent"
             while real unsent changes sat pending. */}
+        {/* Three-way wording (2026-11-10) — Jim: a generic "Response sent"
+            undersold what actually happened when Receipt Confirmation was
+            involved. receiptConfirmed is true regardless of whether it was
+            confirmed this visit or earlier; sentHadRealChanges says whether
+            the Send that just completed carried anything beyond that. */}
         {sendConfirmed && !hasUnsentChanges && (
-          <div className="noticeband"><b>Response sent.</b> Your update has been recorded.</div>
+          <div className="noticeband">
+            {receiptConfirmed && !sentHadRealChanges ? (
+              <b>Receipt confirmation sent.</b>
+            ) : receiptConfirmed ? (
+              <><b>Receipt confirmation sent</b> and your update has been recorded.</>
+            ) : (
+              <><b>Response sent.</b> Your update has been recorded.</>
+            )}
+          </div>
         )}
 
         {/* Receipt Confirmation (migration 069, 2026-09-24) — owner's own

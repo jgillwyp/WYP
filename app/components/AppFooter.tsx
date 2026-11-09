@@ -11,7 +11,19 @@ export default function AppFooter({
   tier: providedTier,
   subscriptionDisabled = false,
 }: {
-  tier?: Tier
+  // `null` (2026-11-10) is distinct from omitting the prop entirely: it
+  // means "a caller that fetches its own tier, but hasn't resolved it yet"
+  // — skips this component's own self-fetch (same as a real value would)
+  // while still rendering as "unknown" (ad hidden) rather than guessing
+  // 'free'. Owner-reported: several Create/Main screens defaulted their own
+  // local tier state to 'free' before their real fetch resolved and passed
+  // that default straight through, so a genuine Subscriber briefly saw the
+  // ad flash on every open. No internal logic change needed here — `tier =
+  // providedTier ?? loadedTier` already collapses null the same way
+  // undefined would (loadedTier's own initializer runs the identical `??`
+  // once at mount), so this is a type-only widening to let a caller pass
+  // null while its own fetch is still in flight.
+  tier?: Tier | null
   subscriptionDisabled?: boolean
 }) {
   const router = useRouter()

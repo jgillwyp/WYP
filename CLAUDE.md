@@ -7536,3 +7536,122 @@ link is built only after the stack is proven on Add Contact.
   wording and found none; everything already describes a single link.
   Flagged for Jim to confirm, since "[see pasted-in]" in his own message
   didn't come through with any actual pasted content attached.
+
+- **Three-way post-Send banner wording on both recipient-facing screens
+  (2026-11-10), no migration.** Jim: the generic "Response sent. Your
+  update has been recorded." undersold what actually happened when Receipt
+  Confirmation was involved — "if no changes were made, it would be better
+  to be more explicit 'Receipt confirmation sent.' and if changes were
+  made, it could say 'Receipt confirmation sent and your update has been
+  recorded.'" New `sentHadRealChanges` state on both
+  `RequestResponseForm.tsx` and `ResponseDetailForm.tsx`, set from the same
+  `changedFieldLabels` list `handleSend` already computes for the owner's
+  own "UPDATED:" change-notification email (Done Date/Time, Dialog,
+  Attachments — Reminder-toggle-only changes don't count as a "real
+  update" here either, matching that email's own scoping). The post-Send
+  `.noticeband` is now a three-way branch: `receiptConfirmed &&
+  !sentHadRealChanges` → "Receipt confirmation sent."; `receiptConfirmed`
+  alone → "Receipt confirmation sent and your update has been recorded.";
+  neither → the original "Response sent."/"Response saved." wording,
+  unchanged for the ordinary case where Receipt Confirmation was never
+  involved at all. `npx tsc --noEmit`/`npm run lint` both clean.
+
+- **Response Detail's Close/Cancel/Archive-this all navigate straight to
+  Main Screen instead of `router.back()` (2026-11-10), no migration.**
+  Jim: "after the response is sent, the screen has nowhere to go — even
+  though it is 'in the app' the only screens available are the two footer
+  buttons and a return to this screen... could an enter key take the user
+  to the main screen - or maybe change the greyed 'Send' button (after
+  being used) to a 'Close' button to go to the Main screen. Of course if
+  the recipient was not an account holder, the normal 'have to kill the
+  screen' would apply." Root cause: `ResponseDetailForm.tsx`'s own
+  Close/Cancel (and `handleArchiveThis`) used `router.back()` on the
+  original assumption — stated explicitly in this file's own header
+  comment — that it's "only ever reached by clicking a row on Main
+  Screen," same as Request Detail/ToDo Detail/Contact Detail. That's false
+  for this one screen specifically: it's at least as often reached by a
+  signed-in account holder clicking "Open Request..." straight out of an
+  email or text message, opening a fresh browser context with no in-app
+  history at all — `router.back()` then has nowhere to go and silently
+  does nothing, exactly the stranded state Jim described. All three call
+  sites (`handleCancel`, used by both Close and Cancel; `handleArchiveThis`)
+  switched to an unconditional `router.push('/')` — trades away restoring
+  Main Screen's exact scroll position for the (less common) in-app-click
+  arrival, in exchange for this control always actually working regardless
+  of how the screen was reached. Deliberately scoped to this one screen,
+  per Jim's own explicit carve-out — Request Detail/ToDo Detail/Contact
+  Detail keep `router.back()` unchanged, since those really are only ever
+  reached by an in-app row click. The anonymous `/r/[token]` path
+  (`RequestResponseForm.tsx`) already has no Cancel button at all, removed
+  2026-08-20 for the identical underlying reason (no prior in-app history
+  for an anonymous visitor) — this is the signed-in account holder's own
+  equivalent fix. The Enter-key idea wasn't built separately — once Close
+  reliably navigates, a second input path to the same destination wasn't
+  judged necessary. `npx tsc --noEmit`/`npm run lint` both clean.
+
+- **Ad-flash-on-open bug: four screens defaulted their own tier state to
+  'free' before the real fetch resolved, passing that straight through to
+  AppFooter — fixed everywhere it actually mattered (2026-11-10), no
+  migration.** Jim: "when opening the WYP app, it now flashes the ad even
+  though the user is set as a subscriber (I suspect it has to look up the
+  account status - but it would be better to 'add the ad' if needed)" —
+  his own diagnosis was exactly right. Audited all ten `<AppFooter
+  tier={...} />` call sites: six (`AccountForm.tsx`, `ContactDetailForm.tsx`,
+  `StorageManagementForm.tsx`, `ResponseDetailForm.tsx`,
+  `RequestDetailForm.tsx`, `TodoDetailForm.tsx`) already gate their entire
+  render behind a full-page `if (loading) return (...)`, so by the time
+  `AppFooter` ever mounts, the same load effect that fetches the record has
+  already resolved the real tier too — no flash possible there. Four
+  (`MainScreen.tsx`, `AddContactForm.tsx`, `CreateTodoForm.tsx`,
+  `CreateRequestForm.tsx`) have no such gate — their forms render
+  immediately, with supporting data (contacts, categories, tier/account
+  prefs) loading in the background — so `AppFooter` mounted right away
+  using each file's own `useState<'free' | 'subscriber'>('free')` default,
+  flashing the ad for a real Subscriber for the brief window before the
+  fetch resolved. `MainScreen.tsx` is literally what shows right after
+  sign-in/app launch, matching Jim's own "when opening the WYP app"
+  framing exactly; the other three share the identical bug shape, fixed
+  for consistency even though not specifically reported.
+
+  `AppFooter.tsx`'s own `tier` prop widened to `Tier | null` — `null` now
+  means "a caller that fetches its own tier but hasn't resolved it yet,"
+  distinct from omitting the prop (which still triggers this component's
+  own self-fetch fallback for the six screens that never pass it at all).
+  No internal logic change was needed: `tier = providedTier ?? loadedTier`
+  already collapses `null` the same way `undefined` would, since
+  `loadedTier`'s own `useState` initializer runs the identical `??` once
+  at mount — this was a type-only widening to let a caller pass `null`
+  honestly instead of lying with `'free'`. All four affected files'
+  `tier` state changed from `useState<'free' | 'subscriber'>('free')` to
+  `useState<'free' | 'subscriber' | null>(null)` — audited every other
+  usage of `tier` in each file first (SMS/Text unlock gates, voice
+  dictation gates, the "100 MB total" note, `RepeatControl`'s own `tier`
+  prop) and confirmed every `=== 'subscriber'`/`!== 'subscriber'` check
+  behaves identically for `null` as it did for the old `'free'` default,
+  so nothing else in any of these forms changed behavior — the only
+  exception, `RepeatControl`'s own `tier` prop (optional, treats
+  `undefined` as "skip the free-tier cap check," not typed for `null`),
+  so its two call sites (`CreateTodoForm.tsx`, `CreateRequestForm.tsx`)
+  pass `tier ?? undefined` instead. `MainScreen.tsx`'s own `tier` state
+  turned out to have no other consumer at all besides `AppFooter` — the
+  safest possible case. `npx tsc --noEmit`/`npm run lint` both clean.
+
+- **Receipt Confirmation SMS wording — flagged, not changed, pending a
+  retest (2026-11-10), no migration.** Jim: the SMS's "Please click to
+  confirm receipt" implies arriving at the page alone doesn't finish
+  confirming ("which it does not"), and proposed "To confirm receipt,
+  please click this link and then click Send," matched in the email too.
+  Pushed back rather than making the change: by design, `?confirm=1`
+  confirms receipt server-side as a side effect of the very `get_request_
+  by_token`/`get_received_request` read call that loads the page — fully
+  complete by the time the page finishes loading, no Send required (the
+  owner's own original spec for this feature, 2026-09-24: "the user should
+  not need to additionally click the Send button"). Changing the copy to
+  require a Send click would make it describe something false. Asked
+  whether this was tested via email or text, and whether before or after
+  the same day's SMS `confirmLinkFor()` fix (above) — confirmed: **text
+  message**, matching that bug exactly (a texted link never carried
+  `?confirm=1` before the fix, so arriving via SMS genuinely didn't confirm
+  anything). No wording change made; flagged for Jim to retest with a
+  freshly-sent text once the fix deploys — a message already in hand still
+  carries the old, un-fixed link.

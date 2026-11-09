@@ -120,7 +120,13 @@ export default function AddContactForm() {
   // `profiles` fetch rather than a second query, unlike Contact Detail's
   // equivalent fix — that file's own `profiles` select only runs in a rare
   // fallback branch, this one always runs.
-  const [tier, setTier] = useState<'free' | 'subscriber'>('free')
+  //
+  // Defaults to null, not 'free' (2026-11-10) — this screen has no full-page
+  // loading gate, so AppFooter renders immediately with whatever this
+  // default is; 'free' flashed the ad for a real Subscriber for the brief
+  // window before this fetch resolves. See AppFooter.tsx's own comment on
+  // its tier prop and MainScreen.tsx's identical fix.
+  const [tier, setTier] = useState<'free' | 'subscriber' | null>(null)
 
   // Default Time Zone on mount — see the file-header comment for the
   // profiles.time_zone / browser-detection / write-back reasoning.
