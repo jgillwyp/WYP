@@ -2423,14 +2423,13 @@ body {
   letter-spacing: .04em;
 }
 
-/* Mock-ad preview for a Free-account Private Tester (2026-11-06) — Jim:
-   "I would like to see a mock ad presented when a tester is working with a
-   free account version... it could be as simple as a colored background
-   with a title." Jim's own placeholder sentence doesn't fit the real
-   .adbox's fixed 320x50 dashed box, so this is a distinct, wider, auto-
-   height variant rather than a longer label squeezed into the same shape —
-   AppFooter.tsx swaps to it only for is_beta_tester() accounts, real Free
-   users still see the plain "AD — 320×50 RESERVED" placeholder.
+/* Mock-ad preview, now shown to every Free account (2026-11-06, originally
+   is_beta_tester()-only) — Jim: "I would like to see a mock ad presented
+   when a tester is working with a free account version... it could be as
+   simple as a colored background with a title." Jim's own placeholder
+   sentence doesn't fit the real .adbox's fixed 320x50 dashed box, so this
+   is a distinct, wider, auto-height variant rather than a longer label
+   squeezed into the same shape.
 
    Recolored 2026-11-10 — Jim reported not noticing it at all; the original
    --strip/--brand-blue treatment is the same pale, light-blue palette every
@@ -2440,7 +2439,16 @@ body {
    "obviously its own (not part of WYP), but avoided it being as garish as
    it may actually be in real life" — full-bleed edge to edge like a real
    banner ad, not inset like the rest of the app's content. Neither color
-   token here is reused anywhere else in Palette 1, on purpose. */
+   token here is reused anywhere else in Palette 1, on purpose. Darkened
+   the same day — "this version of green is not preferred" — from #5B7A5B
+   to #3F5940.
+
+   Simplified the same day, same conversation — "simplify now": AppFooter.tsx
+   no longer branches on is_beta_tester() at all; every Free account sees
+   this preview, not just a registered tester. The real .adbox "AD — 320×50
+   RESERVED" placeholder below is left in place, unreferenced for now, for
+   when the tester/public distinction is worth reinstating closer to actual
+   launch. */
 .adslot.adslot-preview {
   height: auto;
   padding: 0;
@@ -2451,7 +2459,7 @@ body {
   height: auto;
   border: none;
   border-radius: 0;
-  background: #5B7A5B;
+  background: #3F5940;
   color: #fff;
   font-weight: 700;
   font-size: 13px;

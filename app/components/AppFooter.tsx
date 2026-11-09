@@ -16,12 +16,6 @@ export default function AppFooter({
 }) {
   const router = useRouter()
   const [loadedTier, setLoadedTier] = useState<Tier | null>(providedTier ?? null)
-  // is_beta_tester() (2026-11-06) — Jim: "I would like to see a mock ad
-  // presented when a tester is working with a free account version." Only
-  // fetched when it matters (tier resolves to 'free' — the ad slot renders
-  // at all), so a real subscriber or a non-tester account never pays for
-  // this extra round trip.
-  const [isBetaTester, setIsBetaTester] = useState(false)
 
   useEffect(() => {
     if (providedTier !== undefined) {
@@ -48,17 +42,6 @@ export default function AppFooter({
 
   const tier = providedTier ?? loadedTier
 
-  useEffect(() => {
-    if (tier !== 'free') return
-    let cancelled = false
-    supabase.rpc('is_beta_tester').then(({ data }) => {
-      if (!cancelled) setIsBetaTester(data === true)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [tier])
-
   return (
     <footer className="app-footer">
       <div className="subbanner-row">
@@ -81,13 +64,20 @@ export default function AppFooter({
           year: 'numeric',
         }).format(new Date())} Would You Please, Inc. All rights reserved.`}
       </p>
+      {/* Simplified 2026-11-10 — was is_beta_tester()-gated (colored preview
+          for a registered tester, plain "AD — 320×50 RESERVED" placeholder
+          for anyone else), built 2026-11-06. Jim: "simplify now" — during
+          private testing essentially every real account is a tester in
+          spirit even when it isn't in beta_allowlist specifically (e.g. an
+          account set up before that list existed), so every Free account
+          sees the explanatory preview for now. The plain .adbox placeholder
+          CSS is left in globals.css, unreferenced here, for when the real
+          tester/public distinction is worth reinstating closer to actual
+          launch — see CLAUDE.md's own history for the exact prior
+          is_beta_tester() branch to restore. */}
       {tier === 'free' && (
-        <div className={`adslot${isBetaTester ? ' adslot-preview' : ''}`} aria-hidden="true">
-          {isBetaTester ? (
-            <span className="adbox-preview">For Free Accounts, ads will appear in this location.</span>
-          ) : (
-            <span className="adbox">AD — 320×50 RESERVED</span>
-          )}
+        <div className="adslot adslot-preview" aria-hidden="true">
+          <span className="adbox-preview">For Free Accounts, ads will appear in this location.</span>
         </div>
       )}
     </footer>

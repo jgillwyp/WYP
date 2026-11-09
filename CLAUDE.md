@@ -7480,3 +7480,25 @@ link is built only after the stack is proven on Add Contact.
   untouched — this only affects the Private Tester preview variant. `npx
   tsc --noEmit`/`npm run lint` both clean. No mockup file — Jim's own
   screenshot is the only reference.
+
+- **Mock ad shown to every Free account (not just registered testers);
+  recolored darker green, same conversation (2026-11-10), no migration.**
+  Jim cross-tested two different accounts — same unchecked "Subscribed?"
+  status on both — and found Android/Windows showed the plain "AD —
+  320×50 RESERVED" placeholder while iPhone showed the colored preview,
+  which traced to the real, as-built scoping: the preview had only ever
+  shown for an `is_beta_tester()` account (registered in `beta_allowlist`),
+  not every Free account — the Android/Windows account there simply wasn't
+  on that list. Jim: "simplify now" — during private testing essentially
+  every real account is a tester in spirit even when it predates
+  `beta_allowlist` specifically, so showing the explanatory preview only
+  to a formally-registered subset was adding a distinction not worth
+  keeping right now. `AppFooter.tsx` no longer calls `is_beta_tester()` or
+  branches on it at all — the preview now renders for any `tier === 'free'`
+  account. The real `.adbox` "AD — 320×50 RESERVED" placeholder and its
+  CSS are left in place, just unreferenced, for when the tester/public
+  distinction is worth reinstating closer to actual public launch.
+  Separately, Jim: "the background color of the 'ad' could be a little
+  darker - this version of green is not preferred" — `.adbox-preview`'s
+  background darkened from `#5B7A5B` to `#3F5940`. `npx tsc --noEmit`/`npm
+  run lint` both clean.
