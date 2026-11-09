@@ -3074,9 +3074,9 @@ export default function MainScreen() {
         </>
       )}
 
-      {/* Private Tester menu (2026-10-26) — see testerMenuOpen's own
-          comment above. A plain two-row choice, same .scrim/.modal pattern
-          as every other dialog on this screen. */}
+      {/* Private Tester menu (2026-10-26, gained a third choice 2026-11-09)
+          — see testerMenuOpen's own comment above. Same .scrim/.modal
+          pattern as every other dialog on this screen. */}
       {testerMenuOpen && (
         <>
           <div className="scrim" onClick={() => setTesterMenuOpen(false)} />
@@ -3108,6 +3108,26 @@ export default function MainScreen() {
                 }}
               >
                 Checklist
+              </button>
+              {/* Test Stripe Payments (2026-11-09) — Jim: "place the 'Test
+                  Stripe Payments' choice on the Private Tester menu... if
+                  testers wanted to use it they could do so." Same screen the
+                  Admin tab's own row already links to (/admin/stripe-test,
+                  AdminTestStripeForm.tsx) — now gated by RequireTester
+                  (can_toggle_tier()) instead of RequireAdmin, so any real
+                  private tester can reach it here, not just the admin
+                  account. Left on the Admin tab too, same "reachable two
+                  ways" precedent as Storage Management/Archive/Install. */}
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ marginBottom: 8 }}
+                onClick={() => {
+                  setTesterMenuOpen(false)
+                  router.push('/admin/stripe-test')
+                }}
+              >
+                Test Stripe Payments
               </button>
               <button type="button" className="btn-secondary" onClick={() => setTesterMenuOpen(false)}>
                 Cancel

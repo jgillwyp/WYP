@@ -36,9 +36,10 @@ import WypHeader from './WypHeader'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { AccountStatusSection } from './SubscriptionPanels'
 
-// RequireAdmin-wrapped at the page level (app/admin/stripe-test/page.tsx),
-// same convention as AdminAddTesterForm.tsx/every other /admin/* screen —
-// not wrapped here.
+// RequireTester-wrapped at the page level (app/admin/stripe-test/page.tsx) —
+// changed from RequireAdmin, 2026-11-09, once this screen also became
+// reachable from the Private Tester menu (MainScreen.tsx), not just the
+// Admin tab. Not wrapped here.
 export default function AdminTestStripeForm() {
   const router = useRouter()
 

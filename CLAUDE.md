@@ -7321,3 +7321,85 @@ link is built only after the stack is proven on Add Contact.
   ever supplemented, and still works exactly as before. `npx tsc
   --noEmit`/`npm run lint` both clean. No mockup — neither surface has
   one.
+
+- **"Test Stripe Payments" added to the Private Tester menu, open to any
+  real tester, not just the admin account; new `RequireTester.tsx` gate
+  (2026-11-09), no migration.** Jim: "place the 'Test Stripe Payments'
+  choice on the Private Tester menu... if testers wanted to use it they
+  could do so (I think we could give them the '4242...' card
+  information)." The screen itself (`AdminTestStripeForm.tsx`,
+  `/admin/stripe-test`, built 2026-11-06) was `RequireAdmin`-wrapped —
+  happened to work for Jim's own account (seeded into
+  `tier_toggle_allowlist`, migration 035) but would refuse every other
+  private tester outright. New `app/RequireTester.tsx` mirrors
+  `RequireAdmin.tsx`'s exact shape, checking `can_toggle_tier()` instead of
+  `profiles.is_admin` — the same allowlist that already gates the
+  "Subscribed? (testing only)" checkbox and Test Storage Cap field, so
+  nothing new to grant; every tester added via Admin &gt; Add Private
+  Tester (migration 091) already qualifies. `app/admin/stripe-test/page.tsx`
+  now wraps with `RequireTester` instead; the URL itself is left as
+  `/admin/stripe-test` rather than renamed, to avoid touching every
+  existing link into it for a cosmetic-only change. A third button,
+  **Test Stripe Payments**, was added to the `testerMenuOpen` dialog
+  (`MainScreen.tsx`) between Checklist and Cancel, routing to the same
+  screen — left on the Admin tab too, same "reachable two ways" precedent
+  Storage Management/Archive/Install already set, rather than moved
+  outright. `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this
+  feature has never had one.
+
+  **Researched alongside this, per Jim's own request — Apple In-App
+  Purchase (Guideline 3.1.1) and the Stripe `4242...` test-card question.**
+  Neither changed any code; both are flagged for Jim's own awareness.
+
+  *Stripe test card:* confirmed via Stripe's own documented behavior —
+  test cards like `4242 4242 4242 4242` only work against TEST-mode API
+  keys; used against LIVE keys, Stripe cleanly declines with "Your request
+  was made in live mode, but used a known test card" rather than silently
+  succeeding or charging anything. So handing testers the `4242...` number
+  carries no risk of an accidental real charge either way — worst case it
+  simply doesn't work. Confirmed locally that `.env.local`'s
+  `STRIPE_SECRET_KEY` is prefixed `sk_test_` (test mode) — this sandbox has
+  no way to inspect Vercel's own copy of that variable for the live
+  deployment, so **Jim should confirm the same `sk_test_` prefix is set in
+  Vercel's Environment Variables** before handing the card number out
+  broadly; if it ever is a live key there, testers using `4242...` would
+  just get a clean decline (annoying, not dangerous), but Stripe's own
+  Services Agreement separately prohibits testing in live mode with a
+  *real* card, worth keeping in mind if a tester ever substitutes their
+  own card "to see if it works."
+
+  *Apple In-App Purchase:* Guideline 3.1.1 requires Apple's own In-App
+  Purchase for unlocking digital features/content from *within* an app —
+  WYP's Subscriber features (Attachments, Repeat, Voice Dictation, Receipt
+  Confirmation, etc.) are squarely the kind of thing this rule targets if
+  purchased through the native iOS app. A real, confirmed exception: in
+  May 2025 Apple updated the **US** App Store Review Guidelines (3.1.1/
+  3.1.3) to permit external purchase links/buttons/calls-to-action with no
+  IAP entitlement and no commission on that path — a direct result of the
+  Epic v. Apple litigation. The nuance that matters for WYP's own
+  implementation: that exception is generally understood to cover a link
+  that sends the person *out* of the app (the system browser, or Apple's
+  own `ExternalPurchaseLink` StoreKit API/entitlement) — not a third-party
+  checkout rendered *inside* the app's own UI. WYP's Capacitor iOS wrapper
+  loads the real site in one WebView (`capacitor.config.ts`'s `server.url`),
+  and Sign Up's own `startStripeFlow()` navigates that *same* WebView to
+  Stripe's hosted Checkout page rather than opening an external browser —
+  closer to an embedded third-party payment flow than a qualifying
+  external link, on the research found so far, though this wasn't tested
+  against Apple's own current guideline text directly. **Genuinely
+  unsettled, not just under-researched**: Epic v. Apple remains in active
+  litigation (a cited, unverified source mentions a Supreme Court appeal
+  being taken up mid-2026), and the EU's own alternative-payment terms are
+  being replaced outright on 2026-10-01 — this is a moving target right
+  now, not a one-time fact to confirm and forget. Found no source
+  distinguishing TestFlight **Beta** App Review's scrutiny of this from
+  the full App Store Review that applies to a real public listing;
+  anecdotally beta review tends to be lighter-touch (crashes/basic
+  functionality), but that's this agent's general understanding, not
+  something today's research actually confirmed — showing the real Stripe
+  flow to testers or a Beta reviewer during the current private-testing
+  period is very likely fine in practice, but **this needs real,
+  dedicated attention — ideally from someone who tracks Apple policy
+  directly, not just search results — before any plan to submit the iOS
+  app to the full public App Store**, not something to treat as settled
+  by this pass.
