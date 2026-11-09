@@ -92,13 +92,28 @@ async function startStripeFlow(
   // APK sideload only, see /android), so no Play Store review applies to
   // second-guess here; same reasoning CLAUDE.md gives for not touching
   // Android App Links scope beyond what it already covers.
+  // Temporary trace logging (2026-11-10) — the fetch to create the Stripe
+  // session was confirmed working (200, a real checkout URL) via live Web
+  // Inspector, but Safari never visibly opened afterward with no console
+  // error either. Logging each step so the next attempt shows exactly
+  // where it stops, instead of guessing further. Remove once resolved.
+  console.log('[stripe-debug] platform:', Capacitor.getPlatform(), 'url:', json.url)
   if (Capacitor.getPlatform() === 'ios') {
-    const handle = await Browser.addListener('browserFinished', () => {
-      handle.remove()
-      window.location.reload()
-    })
-    await Browser.open({ url: json.url })
+    try {
+      console.log('[stripe-debug] ios branch entered, registering browserFinished listener')
+      const handle = await Browser.addListener('browserFinished', () => {
+        console.log('[stripe-debug] browserFinished fired')
+        handle.remove()
+        window.location.reload()
+      })
+      console.log('[stripe-debug] listener registered, calling Browser.open()')
+      await Browser.open({ url: json.url })
+      console.log('[stripe-debug] Browser.open() resolved without throwing')
+    } catch (err) {
+      console.error('[stripe-debug] Browser.open() threw:', err)
+    }
   } else {
+    console.log('[stripe-debug] non-ios branch, redirecting same-window')
     window.location.href = json.url
   }
   return { ok: true }
