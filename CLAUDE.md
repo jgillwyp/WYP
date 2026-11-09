@@ -7857,3 +7857,42 @@ link is built only after the stack is proven on Add Contact.
   between the closing tag and the following text in
   `AdminTestStripeForm.tsx`, rather than trusting the plain source space.
   `npx tsc --noEmit`/`npm run lint` both clean.
+
+- **Stripe checkout opens in Safari, not this app's own WebView, on native
+  iOS — the Apple IAP concern from the earlier research is now resolved,
+  not just parked (2026-11-10), no migration.** New `@capacitor/browser`
+  dependency (`^8.0.5`, matching every other Capacitor 8 package in this
+  project; confirmed via `npm audit` to introduce no new vulnerable
+  package). `startStripeFlow()` (`SubscriptionPanels.tsx`, shared by Sign
+  Up and Cancel Renewal — Buy Add'l Storage never redirects to Stripe at
+  all, see its own 2026-11-04 entry) now branches on
+  `Capacitor.getPlatform() === 'ios'`: native iOS calls
+  `Browser.open({ url })` instead of the plain `window.location.href =`
+  redirect every other platform still uses. This is the deliberate
+  resolution of the open question this file's own 2026-11-09/11-10 Apple
+  IAP research entry flagged and left unresolved pending "close to going
+  live" — submitting for TestFlight External Testing is that moment,
+  since Apple's reviewer is about to click through Sign Up directly.
+  `Browser.open()` presents Safari (`SFSafariViewController`) as a real,
+  separate browser context from the app's main WKWebView, with its own
+  "Done" control to return — matching the stricter of the two readings
+  found in that earlier research, so this is no longer a gamble on which
+  interpretation of Guideline 3.1.1's external-link exception applies. A
+  one-time `browserFinished` listener reloads the page once the visitor
+  returns, replacing the role the old same-WebView redirect's own return
+  trip used to play (picking up whatever tier/subscription change Stripe
+  just made). **Android deliberately untouched** — WYP isn't on the Play
+  Store yet (direct APK sideload only, see `/android`), so no Play Store
+  review exists to second-guess here.
+
+  `npx cap sync ios` ran cleanly from this Windows sandbox with no Xcode
+  needed — this project's iOS side uses Swift Package Manager, not
+  CocoaPods, so syncing a new plugin is a plain file write
+  (`ios/App/CapApp-SPM/Package.swift` gained the `CapacitorBrowser`
+  package/product pair) rather than anything requiring real Xcode/macOS
+  tooling. Jim's own next Xcode open should pick this up automatically
+  via SPM dependency resolution — no manual Xcode step beyond what he'd
+  do for any other rebuild. `npx tsc --noEmit`/`npm run lint` both clean.
+  **Not yet tested on a real device** — this needs a real build/run on
+  Jim's Mac to confirm the Safari handoff and return actually work as
+  designed before submitting for review.

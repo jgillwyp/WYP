@@ -3,6 +3,9 @@
 import { type CSSProperties, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
+
 import { supabase } from '@/lib/supabaseClient'
 import { FREE_TIER_STORAGE_LIMIT_BYTES } from '@/lib/attachments'
 import {
@@ -70,7 +73,34 @@ async function startStripeFlow(
     return { ok: false, message }
   }
 
-  window.location.href = json.url
+  // Opens in Safari (SFSafariViewController) rather than this app's own
+  // WebView on native iOS, 2026-11-10 — Apple's Guideline 3.1.1 external-
+  // purchase-link exception (the reason WYP can use Stripe instead of
+  // Apple's own In-App Purchase at all) is widely read as requiring the
+  // link to leave the app's own WebView, not render a third-party
+  // checkout inside it; this was flagged and deliberately parked in
+  // CLAUDE.md until "close to going live" — submitting for TestFlight
+  // External Testing is that moment, since Apple's own reviewer is about
+  // to click through this exact flow. @capacitor/browser's Browser.open()
+  // is the standard way to do this from Capacitor: a real, separate
+  // browser context (not the main WKWebView), with its own "Done" button
+  // the visitor taps to return. A one-time browserFinished listener
+  // reloads the page on return so any tier/subscription change Stripe
+  // just made is reflected immediately, replacing the role the old
+  // same-WebView redirect's own return trip used to play. Android is
+  // untouched — WYP isn't distributed through the Play Store yet (direct
+  // APK sideload only, see /android), so no Play Store review applies to
+  // second-guess here; same reasoning CLAUDE.md gives for not touching
+  // Android App Links scope beyond what it already covers.
+  if (Capacitor.getPlatform() === 'ios') {
+    const handle = await Browser.addListener('browserFinished', () => {
+      handle.remove()
+      window.location.reload()
+    })
+    await Browser.open({ url: json.url })
+  } else {
+    window.location.href = json.url
+  }
   return { ok: true }
 }
 
