@@ -7896,3 +7896,32 @@ link is built only after the stack is proven on Add Contact.
   **Not yet tested on a real device** — this needs a real build/run on
   Jim's Mac to confirm the Safari handoff and return actually work as
   designed before submitting for review.
+
+- **Real app-launch freeze found and fixed, unrelated to the Stripe
+  change above — `AppDelegate.swift`'s AVAudioSession activation was
+  blocking the main thread (2026-11-10), no migration.** Jim ran the app
+  on a real device for the first time in a while and it froze on launch;
+  Xcode's own "AVAudioSession Hang Risk" static-analysis warning pointed
+  straight at `session.setActive(true)` inside
+  `application(_:didFinishLaunchingWithOptions:)` — a synchronous call on
+  the main thread, exactly the kind of thing that can block the UI from
+  ever appearing if audio-session activation takes real time (e.g.
+  negotiating Bluetooth HFP routing with a connected headset). This is
+  the 2026-10-30 Voice-Dictation-launch-warmup code (see that commit's own
+  comment, preserved in the file) — pre-existing, not something this
+  session's Stripe/Safari change touched or could have caused; confirmed
+  by checking `NativeAudioSessionPlugin.swift`'s own `ensureActive()`,
+  which already re-activates the session before every *real* Voice
+  Dictation attempt, so the launch-time call was only ever a warm-up for
+  the very first one — nothing depends on it finishing before the UI can
+  render. Fixed by wrapping the identical setup code in
+  `DispatchQueue.global(qos: .userInitiated).async { ... }` instead of
+  running it synchronously — `didFinishLaunchingWithOptions` returns
+  immediately, the session still gets configured in the background well
+  before a user could navigate anywhere and tap the mic button. No change
+  to `NativeAudioSessionPlugin.swift`, which is unaffected either way.
+  **Not yet verified on a real build** — can't run `tsc`/`eslint` against
+  Swift, and this sandbox has no Xcode; Jim needs to Stop the current
+  (frozen) run, Run again fresh, and confirm both this fix and the
+  Stripe-in-Safari change together before submitting for TestFlight
+  review.

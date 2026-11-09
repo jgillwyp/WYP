@@ -21,12 +21,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // real audio behind it and aborts almost immediately -- matching
         // what was observed. Configured once at launch, before any
         // WebView content can ever ask to record.
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP])
-            try session.setActive(true)
-        } catch {
-            NSLog("[AppDelegate] AVAudioSession setup failed: \(error)")
+        //
+        // Dispatched off the main thread (2026-11-10, owner-reported: the
+        // app froze on first launch on a real device) -- Xcode's own "Hang
+        // Risk" diagnostic flagged session.setActive(true) here as exactly
+        // this: a synchronous call on the main thread during
+        // didFinishLaunchingWithOptions can block the UI from ever
+        // appearing if audio-session activation takes any real time (e.g.
+        // negotiating Bluetooth HFP routing with a connected headset).
+        // didFinishLaunchingWithOptions doesn't need this to finish before
+        // returning true, and the only thing it was ever warming up for --
+        // the *first* Voice Dictation attempt -- has plenty of time to
+        // complete in the background before a user could navigate to a
+        // screen and tap the mic button. Every later attempt already
+        // re-activates the session itself via NativeAudioSessionPlugin's
+        // own ensureActive(), unaffected by this change.
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP])
+                try session.setActive(true)
+            } catch {
+                NSLog("[AppDelegate] AVAudioSession setup failed: \(error)")
+            }
         }
         return true
     }
