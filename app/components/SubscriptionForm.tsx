@@ -40,6 +40,9 @@ export default function SubscriptionForm() {
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
   const [renewalDate, setRenewalDate] = useState<string | null>(null)
   const [storageGb, setStorageGb] = useState(5)
+  // profiles.stripe_cancel_at_period_end -- same as AccountForm.tsx's own
+  // copy (2026-11-11), drives SubscriberStatus's Cancel-vs-Renew wording.
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false)
   const [canToggleTier, setCanToggleTier] = useState(false)
   const [isTester, setIsTester] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -90,7 +93,9 @@ export default function SubscriptionForm() {
 
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes')
+        .select(
+          'tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end'
+        )
         .eq('id', userData.user.id)
         .single()
 
@@ -105,6 +110,7 @@ export default function SubscriptionForm() {
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
+      setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
       const overrideBytes = data?.storage_limit_override_bytes ?? null
       setStorageOverrideBytes(overrideBytes)
       setStorageOverrideInput(
@@ -210,12 +216,13 @@ export default function SubscriptionForm() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('subscription_renewal_date, subscription_storage_gb')
+      .select('subscription_renewal_date, subscription_storage_gb, stripe_cancel_at_period_end')
       .eq('id', userId)
       .single()
 
     setRenewalDate(data?.subscription_renewal_date ?? null)
     setStorageGb(data?.subscription_storage_gb ?? 5)
+    setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
     setSaving(false)
   }
 
@@ -335,6 +342,8 @@ export default function SubscriptionForm() {
               renewalDate={renewalDate}
               storageGb={storageGb}
               onStorageUpdated={setStorageGb}
+              cancelAtPeriodEnd={cancelAtPeriodEnd}
+              onRenewed={() => setCancelAtPeriodEnd(false)}
               saving={saving}
               onTierToggle={handleTierToggle}
               storageOverrideBytes={storageOverrideBytes}

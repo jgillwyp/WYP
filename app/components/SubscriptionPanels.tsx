@@ -181,6 +181,8 @@ export function AccountStatusSection({
   renewalDate,
   storageGb,
   onStorageUpdated,
+  cancelAtPeriodEnd = false,
+  onRenewed,
   saving = false,
   onTierToggle,
   storageOverrideBytes = null,
@@ -198,6 +200,11 @@ export function AccountStatusSection({
   renewalDate: string | null
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
+  // profiles.stripe_cancel_at_period_end (migration 088) — true once
+  // Cancel Renewal has been used; flips SubscriberStatus's status line and
+  // link from Cancel to Renew (2026-11-11, owner-asked).
+  cancelAtPeriodEnd?: boolean
+  onRenewed?: () => void
   saving?: boolean
   onTierToggle?: (next: boolean) => void | Promise<void>
   storageOverrideBytes?: number | null
@@ -233,6 +240,8 @@ export function AccountStatusSection({
         renewalDate={renewalDate}
         storageGb={storageGb}
         onStorageUpdated={onStorageUpdated}
+        cancelAtPeriodEnd={cancelAtPeriodEnd}
+        onRenewed={onRenewed}
         realStoragePurchaseDisabled={!forceRealVariant && canToggleTier}
       />
     )
@@ -536,6 +545,18 @@ function formatRenewalDate(iso: string | null): string {
   })
 }
 
+// MM-DD-YYYY — the short form used in SubscriberStatus's own "(until
+// 11-08-2027)" title suffix and Renew wording (2026-11-11), distinct from
+// formatRenewalDate()'s long weekday/month form used in the status sentence
+// itself.
+function formatRenewalDateShort(iso: string | null): string {
+  if (!iso) return '—'
+  const d = parseIsoDate(iso)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}-${dd}-${d.getFullYear()}`
+}
+
 // Cancel — now a quiet inline text link inside the status sentence rather
 // than a standalone prominent button (2026-11-06; the old RenewalDatePanel
 // is gone). Jim's own stated trigger for this whole redesign: "One of the
@@ -566,6 +587,106 @@ function CancelRenewalLink({ onError }: { onError: (message: string | null) => v
     <button type="button" className="linkbtn" onClick={handleClick} disabled={busy}>
       {busy ? 'opening…' : 'Cancel'}
     </button>
+  )
+}
+
+// Renew — the Cancel link's own opposite, shown once cancelAtPeriodEnd is
+// true (2026-11-11, owner-asked: "I am not sure if this has to be a Stripe
+// transaction with a $0 charge or just a confirmation dialog and an api
+// call to update Stripe"). It's the latter — cancel_at_period_end merely
+// un-schedules an already-scheduled non-renewal; no Checkout/charge
+// involved at all (see renew-subscription/route.ts's own header comment).
+// Unlike Cancel, which hands off to Stripe's own hosted Billing Portal
+// (which shows its own confirmation), this is a direct API call with
+// nothing else to confirm it — so, reversing a deliberate cancellation
+// being a real billing-affecting action, it gets its own small .scrim/
+// .modal (§6.12) confirm step first, matching AttachmentStoragePanel's own
+// confirm-before-charging precedent.
+function RenewSubscriptionLink({
+  renewalDate,
+  onError,
+  onRenewed,
+}: {
+  renewalDate: string | null
+  onError: (message: string | null) => void
+  onRenewed?: () => void
+}) {
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function handleConfirm() {
+    setShowConfirm(false)
+    setBusy(true)
+    onError(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      onError('Your sign-in has expired — please sign in again and retry.')
+      setBusy(false)
+      return
+    }
+
+    let res: Response
+    try {
+      res = await fetch('/api/stripe/renew-subscription', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {
+      onError('Could not reach the server — check your connection and try again.')
+      setBusy(false)
+      return
+    }
+
+    let json: { ok?: boolean; error?: string; detail?: string }
+    try {
+      json = await res.json()
+    } catch {
+      json = {}
+    }
+
+    if (!res.ok || !json.ok) {
+      onError(json.detail ?? 'Something went wrong — please try again.')
+      setBusy(false)
+      return
+    }
+
+    onRenewed?.()
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <button type="button" className="linkbtn" onClick={() => setShowConfirm(true)} disabled={busy}>
+        {busy ? 'renewing…' : 'Renew'}
+      </button>
+      {showConfirm && (
+        <>
+          <div className="scrim" onClick={() => setShowConfirm(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="renew-confirm-title">
+            <div className="modalhead">
+              <p className="modal-title" id="renew-confirm-title">
+                Renew Your Subscription?
+              </p>
+            </div>
+            <p className="subnote">
+              Your Subscriber features will continue uninterrupted after{' '}
+              <strong>{formatRenewalDateShort(renewalDate)}</strong>. You&rsquo;ll be charged at the end of your
+              current subscription period, same as before you cancelled.
+            </p>
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn-secondary" type="button" onClick={() => setShowConfirm(false)}>
+                Cancel
+              </button>
+              <button className="btn" type="button" onClick={handleConfirm}>
+                Renew
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   )
 }
 
@@ -1040,11 +1161,15 @@ function SubscriberStatus({
   renewalDate,
   storageGb,
   onStorageUpdated,
+  cancelAtPeriodEnd,
+  onRenewed,
   realStoragePurchaseDisabled,
 }: {
   renewalDate: string | null
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
+  cancelAtPeriodEnd: boolean
+  onRenewed?: () => void
   realStoragePurchaseDisabled: boolean
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
@@ -1077,15 +1202,25 @@ function SubscriberStatus({
   return (
     <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
-        My Status: Subscriber
+        My Status: Subscriber{cancelAtPeriodEnd && <> (until {formatRenewalDateShort(renewalDate)})</>}
       </div>
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
         Thank you for being {cadence === 'annual' ? 'an annual' : cadence === 'monthly' ? 'a monthly' : 'a'}{' '}
         Would You Please subscriber. Your Renewal Date is: <strong>{formatRenewalDate(renewalDate)}</strong>. If
-        you wish to do so, you can <CancelRenewalLink onError={setCancelError} />
-        {' '}
-        anytime — your Subscriber features stay active through the end of the period you&rsquo;ve already paid
-        for.
+        you wish to do so, you can{' '}
+        {cancelAtPeriodEnd ? (
+          <>
+            <RenewSubscriptionLink renewalDate={renewalDate} onError={setCancelError} onRenewed={onRenewed} />
+            {' anytime — so your Subscriber features will stay active after '}
+            {formatRenewalDateShort(renewalDate)}
+            {'. The renewal will be charged at the end of the current subscription period.'}
+          </>
+        ) : (
+          <>
+            <CancelRenewalLink onError={setCancelError} />
+            {' anytime — your Subscriber features stay active through the end of the period you’ve already paid for.'}
+          </>
+        )}
       </p>
       {cancelError && (
         <p className="ferror" role="alert" style={{ margin: '6px 0 0' }}>

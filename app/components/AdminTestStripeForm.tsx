@@ -48,6 +48,9 @@ export default function AdminTestStripeForm() {
   const [tier, setTier] = useState<'free' | 'subscriber'>('free')
   const [renewalDate, setRenewalDate] = useState<string | null>(null)
   const [storageGb, setStorageGb] = useState(5)
+  // profiles.stripe_cancel_at_period_end -- same as AccountForm.tsx's own
+  // copy (2026-11-11), drives SubscriberStatus's Cancel-vs-Renew wording.
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false)
   const [isTester, setIsTester] = useState(false)
 
   useEffect(() => {
@@ -68,7 +71,7 @@ export default function AdminTestStripeForm() {
 
       const { data, error: fetchError } = await supabase
         .from('profiles')
-        .select('tier, subscription_renewal_date, subscription_storage_gb')
+        .select('tier, subscription_renewal_date, subscription_storage_gb, stripe_cancel_at_period_end')
         .eq('id', userData.user.id)
         .single()
 
@@ -83,6 +86,7 @@ export default function AdminTestStripeForm() {
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
+      setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
 
       // is_beta_tester() — still read here even though forceRealVariant
       // skips the Private Tester state entirely: a real admin is almost
@@ -152,6 +156,8 @@ export default function AdminTestStripeForm() {
                   renewalDate={renewalDate}
                   storageGb={storageGb}
                   onStorageUpdated={setStorageGb}
+                  cancelAtPeriodEnd={cancelAtPeriodEnd}
+                  onRenewed={() => setCancelAtPeriodEnd(false)}
                   forceRealVariant
                 />
               </div>

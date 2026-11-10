@@ -309,6 +309,10 @@ export default function AccountForm() {
   // these stand in for real billing data during Private Testing.
   const [renewalDate, setRenewalDate] = useState<string | null>(null)
   const [storageGb, setStorageGb] = useState(5)
+  // profiles.stripe_cancel_at_period_end (migration 088, kept in sync by
+  // webhook/route.ts's own customer.subscription.updated handler) — drives
+  // SubscriberStatus's Cancel-vs-Renew wording (2026-11-11).
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false)
   // Locked down, migration 035 — the whole Subscriber Options section is
   // hidden unless this is true, rather than shown and failing on click.
   // Defaults false so there is no flash of the section before
@@ -406,7 +410,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'request_category_enabled, todo_category_enabled, request_time_enabled, request_repeat_enabled, todo_repeat_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes'
+          'request_category_enabled, todo_category_enabled, request_time_enabled, request_repeat_enabled, todo_repeat_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end'
         )
         .eq('id', userData.user.id)
         .single()
@@ -445,6 +449,7 @@ export default function AccountForm() {
       setTier((data?.tier as 'free' | 'subscriber') ?? 'free')
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
+      setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
       const overrideBytes = data?.storage_limit_override_bytes ?? null
       setStorageOverrideBytes(overrideBytes)
       setStorageOverrideInput(
@@ -621,12 +626,13 @@ export default function AccountForm() {
     // copy of this handler.
     const { data } = await supabase
       .from('profiles')
-      .select('subscription_renewal_date, subscription_storage_gb')
+      .select('subscription_renewal_date, subscription_storage_gb, stripe_cancel_at_period_end')
       .eq('id', userId)
       .single()
 
     setRenewalDate(data?.subscription_renewal_date ?? null)
     setStorageGb(data?.subscription_storage_gb ?? 5)
+    setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
     setSaving(false)
   }
 
@@ -1333,6 +1339,8 @@ export default function AccountForm() {
                   renewalDate={renewalDate}
                   storageGb={storageGb}
                   onStorageUpdated={setStorageGb}
+                  cancelAtPeriodEnd={cancelAtPeriodEnd}
+                  onRenewed={() => setCancelAtPeriodEnd(false)}
                   saving={saving}
                   onTierToggle={handleTierToggle}
                   storageOverrideBytes={storageOverrideBytes}
