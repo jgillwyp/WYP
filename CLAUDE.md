@@ -8011,3 +8011,93 @@ link is built only after the stack is proven on Add Contact.
   before anything is actually reachable. **Needs a real rebuild** (native
   Swift change, can't ship as a remote JS fix) before Web Inspector will
   show the app's content at all.
+
+- **CapacitorBrowser build failures resolved; a real Stripe-return bug found
+  and fixed; build succeeded and the real flow confirmed working on a real
+  device (2026-11-10/11), no migration.** Continues the Browser.open() saga
+  immediately above. Two separate, previously-undiscovered root causes, hit
+  in sequence once Jim's Mac was confirmed to actually be on current code
+  (his earlier `git pull` had silently been blocked by an unrelated local
+  `project.pbxproj` change, so every fix that evening up to and including
+  the explicit `CAPBrowserPlugin` registration had never actually reached
+  his machine — once `git stash` + `git pull` got him current, the *first*
+  real build attempt against current code surfaced genuinely new errors).
+  (1) **"Unable to resolve module dependency: 'CapacitorBrowser'"** — a
+  structural gap in `ios/App/App.xcodeproj/project.pbxproj`: only
+  `CapApp-SPM` was ever linked to the App target as an explicit package
+  product (confirmed via direct grep); `CapacitorBrowser` resolved fine at
+  the project/package-graph level (visible in Xcode's own Package
+  Dependencies list, since it's a transitive dependency of `CapApp-SPM`'s
+  own `Package.swift`) but was never an explicit product dependency of the
+  App target itself, which `MainViewController.swift`'s own `import
+  CapacitorBrowser` (added for the explicit `CAPBrowserPlugin()`
+  registration) needs. Fixed by hand-editing `project.pbxproj` directly —
+  not through Xcode's GUI, which repeatedly failed to open the actual
+  Project/Target settings editor for reasons never fully diagnosed (single-
+  click, double-click, and switch-away-then-back on the project icon all
+  left the editor pane stuck showing either the raw `.pbxproj` text or
+  whatever file was previously open) — following the exact precedent this
+  same file already uses for its hand-added custom plugin files
+  (`AA1111111111111111111111`-style placeholder IDs): added a new
+  `XCLocalSwiftPackageReference` for CapacitorBrowser (pointing directly at
+  `node_modules/@capacitor/browser`, the same way `CapApp-SPM` is linked,
+  rather than trying to reference it indirectly through `CapApp-SPM`'s own
+  nested dependency), plus the matching `XCSwiftPackageProductDependency`,
+  `PBXBuildFile`, and Frameworks-phase/target entries. Committed directly
+  and had Jim `git pull` rather than fight the GUI further — consistent
+  with how the custom plugin files themselves were apparently added in an
+  earlier session. (2) **"No such module 'CapacitorBrowser'"** — a real,
+  different error that surfaced once the target-linking fix above actually
+  took effect (confirmed via `Resolve Packages` running clean with no error
+  icon). Root cause: `@capacitor/browser`'s own `Package.swift` wraps a
+  single Swift target named **`BrowserPlugin`** (`ios/Sources/
+  BrowserPlugin/`, confirmed by listing the actual `.swift` files and
+  grepping for the `CAPBrowserPlugin` class declaration) inside a library
+  **product** named `CapacitorBrowser` — Swift's `import` always resolves
+  the compiled *module* (target) name, never the *product* name wrapping
+  it, so `import CapacitorBrowser` could never succeed regardless of how
+  correctly the product itself was linked to the App target. Fixed by
+  changing `MainViewController.swift`'s import to `import BrowserPlugin`
+  (the class name used to instantiate it, `CAPBrowserPlugin`, is unchanged
+  and still resolves correctly from that module). **Confirmed: build
+  succeeded** once both fixes were in place. (3) **Real bug, found
+  immediately on the first live test**: Sign Up completed a genuine test
+  subscription correctly, but returned to a blank-email sign-in screen
+  instead of the app's own Account Status page. Root cause: `Browser.open()`
+  presents Stripe Checkout in a genuinely separate browsing context (its
+  own storage, no shared Supabase session with the app's main WKWebView) —
+  Stripe's `success_url` redirect landing directly on `/account/
+  subscription` hit that route's `RequireAuth` wrapper with no session and
+  bounced to `/login`, inside what reasonably read as "the app." Confirmed
+  `/account/subscription` isn't in the Universal Links path list
+  (`public/.well-known/apple-app-site-association` only covers `/r/*` and
+  `/textmessaging/*`), so there was no guarantee a *programmatic* (non-
+  tapped) redirect landing on that path would be intercepted back into the
+  real, already-signed-in app the way a tapped link already reliably is —
+  rather than depend on that less-certain case, built a dedicated,
+  unauthenticated landing page instead. New `app/stripe-return/page.tsx`
+  (no `RequireAuth`) is now the one redirect target for every Stripe hand-
+  off (`create-checkout-session`'s `success_url`/`cancel_url`,
+  `create-portal-session`'s `return_url`, both updated) — it checks the
+  session itself and branches: signed in (the ordinary same-window web/
+  Android case, where this always worked) replaces straight to `/account/
+  subscription?checkout=...` exactly as before; signed out (the separate-
+  context iOS case) shows a plain, form-free confirmation ("You're all
+  set." / "No changes were made." + "You can close this and return to the
+  Would You Please app.") instead of a sign-in prompt, since the real app
+  already picks up the change itself via `Browser.open()`'s own
+  `browserFinished`-triggered reload the moment that view closes. No
+  mockup — built directly, same precedent `/privacy` already set for
+  plain-prose utility screens with no Palette-1 form/button components.
+  Also removed the temporary `[stripe-debug]` trace logging from
+  `startStripeFlow()` (`SubscriptionPanels.tsx`) once the Safari hand-off
+  was confirmed working end to end — kept a plain `try`/`catch` around
+  `Browser.open()` itself rather than removing it outright, since neither
+  caller (`SubscriptionCheckoutButton`, `CancelRenewalLink`) wraps that
+  call in its own `try`/`catch`, and an uncaught rejection would have
+  reintroduced the "stuck on Starting checkout…" bug fixed earlier the
+  same evening. `npx tsc --noEmit`/`npm run lint` both clean across every
+  `.tsx`/`.ts` change in this entry (Swift changes aren't typecheckable
+  from this sandbox). **Not yet retested after the `/stripe-return` fix**
+  — awaiting Jim's next live Sign Up/Cancel Renewal attempt to confirm it
+  actually lands on the plain confirmation screen instead of `/login`.
