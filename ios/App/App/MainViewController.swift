@@ -1,5 +1,11 @@
 import Capacitor
-import CapacitorBrowser
+// @capacitor/browser's own Package.swift wraps a single Swift target named
+// "BrowserPlugin" (ios/Sources/BrowserPlugin/) inside a library PRODUCT named
+// "CapacitorBrowser" -- `import` always refers to the compiled module
+// (target) name, never the product name that wraps it, so `import
+// CapacitorBrowser` can never resolve ("No such module 'CapacitorBrowser'")
+// even once the product itself links correctly.
+import BrowserPlugin
 
 /// Registers this app's local custom plugins (not npm packages) —
 /// NativePrintPlugin.swift and NativeCalendarPlugin.swift, both added
