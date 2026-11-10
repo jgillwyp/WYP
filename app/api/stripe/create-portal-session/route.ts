@@ -57,7 +57,9 @@ export async function POST(request: Request) {
   try {
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: profile.stripe_customer_id as string,
-      return_url: `${getSiteUrl()}/account/subscription`,
+      // /stripe-return, not /account/subscription directly -- see that
+      // page's own header comment (2026-11-10, owner-reported).
+      return_url: `${getSiteUrl()}/stripe-return`,
     })
     return Response.json({ url: portalSession.url })
   } catch (err) {

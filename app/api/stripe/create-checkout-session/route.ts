@@ -130,9 +130,12 @@ export async function POST(request: Request) {
     }
   }
 
+  // /stripe-return, not /account/subscription directly (2026-11-10,
+  // owner-reported) -- see that page's own header comment for why a direct
+  // redirect bounced to a sign-in screen on native iOS.
   const siteUrl = getSiteUrl()
-  const successUrl = `${siteUrl}/account/subscription?checkout=success`
-  const cancelUrl = `${siteUrl}/account/subscription?checkout=cancelled`
+  const successUrl = `${siteUrl}/stripe-return?checkout=success`
+  const cancelUrl = `${siteUrl}/stripe-return?checkout=cancelled`
 
   try {
     if (plan === 'monthly') {
