@@ -353,6 +353,7 @@ export default function SubscriptionForm() {
               onStorageOverrideInputChange={setStorageOverrideInput}
               onSaveStorageOverride={handleSaveStorageOverride}
               onClearStorageOverride={handleClearStorageOverride}
+              returnPath="/account/subscription"
             />
           </div>
 

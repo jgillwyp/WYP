@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 import { getSiteUrl, getStripeClient } from '@/lib/stripe'
+import { sanitizeStripeReturnPath } from '@/lib/subscriptionPricing'
 
 export const runtime = 'nodejs'
 
@@ -16,6 +17,16 @@ export const runtime = 'nodejs'
  * all for free, with no custom UI to build or get wrong.
  */
 export async function POST(request: Request) {
+  let body: { returnPath?: string } = {}
+  try {
+    body = await request.json()
+  } catch {
+    // No body at all (CancelRenewalLink always sends {}, but tolerate a
+    // genuinely empty request too) — falls back to /account/subscription
+    // via sanitizeStripeReturnPath below.
+  }
+  const returnPath = sanitizeStripeReturnPath(body.returnPath)
+
   const authHeader = request.headers.get('authorization')
   if (!authHeader) {
     return Response.json({ error: 'unauthenticated' }, { status: 401 })
@@ -58,8 +69,9 @@ export async function POST(request: Request) {
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: profile.stripe_customer_id as string,
       // /stripe-return, not /account/subscription directly -- see that
-      // page's own header comment (2026-11-10, owner-reported).
-      return_url: `${getSiteUrl()}/stripe-return`,
+      // page's own header comment (2026-11-10, owner-reported). returnTo
+      // carries the caller's own originating screen back (2026-11-11).
+      return_url: `${getSiteUrl()}/stripe-return?returnTo=${encodeURIComponent(returnPath)}`,
     })
     return Response.json({ url: portalSession.url })
   } catch (err) {

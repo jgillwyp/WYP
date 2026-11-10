@@ -8,6 +8,7 @@ import {
   getStripeClient,
   getTesterFirstYearCouponId,
 } from '@/lib/stripe'
+import { sanitizeStripeReturnPath } from '@/lib/subscriptionPricing'
 
 // Stripe's Node SDK needs real network sockets — not available on Next's
 // Edge runtime, same reasoning every other Node-dependent route in this
@@ -37,7 +38,7 @@ export const runtime = 'nodejs'
  * for every other gated write.
  */
 export async function POST(request: Request) {
-  let body: { plan?: string }
+  let body: { plan?: string; returnPath?: string }
   try {
     body = await request.json()
   } catch {
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
   if (plan !== 'annual' && plan !== 'monthly') {
     return Response.json({ error: 'bad_request', detail: "plan must be 'annual' or 'monthly'." }, { status: 400 })
   }
+  const returnPath = sanitizeStripeReturnPath(body.returnPath)
 
   const authHeader = request.headers.get('authorization')
   if (!authHeader) {
@@ -132,10 +134,13 @@ export async function POST(request: Request) {
 
   // /stripe-return, not /account/subscription directly (2026-11-10,
   // owner-reported) -- see that page's own header comment for why a direct
-  // redirect bounced to a sign-in screen on native iOS.
+  // redirect bounced to a sign-in screen on native iOS. returnTo carries the
+  // caller's own originating screen back through Stripe's own redirect
+  // (2026-11-11, owner-reported: this used to always land on
+  // /account/subscription regardless of where the flow started).
   const siteUrl = getSiteUrl()
-  const successUrl = `${siteUrl}/stripe-return?checkout=success`
-  const cancelUrl = `${siteUrl}/stripe-return?checkout=cancelled`
+  const successUrl = `${siteUrl}/stripe-return?checkout=success&returnTo=${encodeURIComponent(returnPath)}`
+  const cancelUrl = `${siteUrl}/stripe-return?checkout=cancelled&returnTo=${encodeURIComponent(returnPath)}`
 
   try {
     if (plan === 'monthly') {

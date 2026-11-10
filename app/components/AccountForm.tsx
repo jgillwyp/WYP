@@ -1350,6 +1350,7 @@ export default function AccountForm() {
                   onStorageOverrideInputChange={setStorageOverrideInput}
                   onSaveStorageOverride={handleSaveStorageOverride}
                   onClearStorageOverride={handleClearStorageOverride}
+                  returnPath="/account"
                 />
               </div>
             )}

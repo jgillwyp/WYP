@@ -21,6 +21,24 @@ export const MONTHLY_PRICE = 5
 
 export type SubscriptionPlan = 'annual' | 'monthly'
 
+// Where a Stripe Checkout/Billing Portal hand-off should return to once it's
+// done (2026-11-11, owner-reported: "private tester Stripe session returns
+// to Account Options instead of to the private tester 'account' screen") —
+// create-checkout-session/create-portal-session route.ts had always
+// hardcoded /account/subscription regardless of which of the three
+// AccountStatusSection call sites actually started the flow. Each caller now
+// passes its own real path; both the route handlers and /stripe-return/
+// page.tsx validate against this exact allowlist (never trust an arbitrary
+// client-supplied path as a redirect target) and fall back to
+// /account/subscription on anything else.
+export const STRIPE_RETURN_PATHS = ['/account', '/account/subscription', '/admin/stripe-test'] as const
+export type StripeReturnPath = (typeof STRIPE_RETURN_PATHS)[number]
+export function sanitizeStripeReturnPath(value: unknown): StripeReturnPath {
+  return (STRIPE_RETURN_PATHS as readonly string[]).includes(value as string)
+    ? (value as StripeReturnPath)
+    : '/account/subscription'
+}
+
 // Parses a plain YYYY-MM-DD as a local calendar date, not a UTC instant —
 // moved here verbatim from SubscriptionPanels.tsx (2026-08-26), same
 // reasoning as every other bare "date" field in this app (Due Date, Done

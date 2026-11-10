@@ -19,6 +19,7 @@ import {
   minAllowedStorageGb,
   parseIsoDate,
   storageRatePerBlock,
+  type StripeReturnPath,
   type SubscriptionCadence,
 } from '@/lib/subscriptionPricing'
 
@@ -168,11 +169,16 @@ async function startStripeFlow(
  * tier/renewal/storage the next time the ordinary page (not forced) reads
  * them — ordinarily landing back on the Private Tester variant, which
  * reflects it directly (the checkbox tracks tier === 'subscriber' either
- * way). Stripe's own success/cancel redirect targets
- * (create-checkout-session/create-portal-session route.ts) are unchanged —
- * they still land on /account/subscription, not back on the Admin screen;
- * acceptable since that's exactly "written back to the Private Tester
- * page" taken literally.
+ * way).
+ *
+ * returnPath (2026-11-11, owner-reported: "private tester Stripe session
+ * returns to Account Options instead of to the private tester 'account'
+ * screen") carries each call site's own real path through Stripe's
+ * Checkout/Billing Portal redirect (create-checkout-session/create-portal-
+ * session route.ts, then /stripe-return/page.tsx) so it returns to
+ * wherever the flow actually started — Account Options ("/account"),
+ * /account/subscription, or this Admin screen ("/admin/stripe-test") —
+ * rather than always landing on /account/subscription regardless.
  */
 export function AccountStatusSection({
   tier,
@@ -193,6 +199,7 @@ export function AccountStatusSection({
   onSaveStorageOverride,
   onClearStorageOverride,
   forceRealVariant = false,
+  returnPath = '/account/subscription',
 }: {
   tier: 'free' | 'subscriber'
   isBetaTester: boolean
@@ -215,6 +222,12 @@ export function AccountStatusSection({
   onSaveStorageOverride?: () => void
   onClearStorageOverride?: () => void
   forceRealVariant?: boolean
+  // The screen this call site actually renders on (2026-11-11) — carried
+  // through Stripe's own Checkout/Billing Portal redirect so it returns to
+  // wherever the flow started, not always /account/subscription. Each
+  // caller passes its own real path; see subscriptionPricing.ts's own
+  // STRIPE_RETURN_PATHS comment.
+  returnPath?: StripeReturnPath
 }) {
   if (canToggleTier && !forceRealVariant) {
     return (
@@ -243,11 +256,12 @@ export function AccountStatusSection({
         cancelAtPeriodEnd={cancelAtPeriodEnd}
         onRenewed={onRenewed}
         realStoragePurchaseDisabled={!forceRealVariant && canToggleTier}
+        returnPath={returnPath}
       />
     )
   }
 
-  return <FreeStatus isTester={isBetaTester} />
+  return <FreeStatus isTester={isBetaTester} returnPath={returnPath} />
 }
 
 // Title Case throughout. Replaced 2026-10-08 with Jim's own revised list
@@ -363,11 +377,13 @@ export function SubscriptionCheckoutButton({
   label,
   className = 'btn',
   style,
+  returnPath = '/account/subscription',
 }: {
   plan: 'annual' | 'monthly'
   label?: string
   className?: string
   style?: CSSProperties
+  returnPath?: StripeReturnPath
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -375,7 +391,7 @@ export function SubscriptionCheckoutButton({
   async function handleClick() {
     setBusy(true)
     setError(null)
-    const result = await startStripeFlow('/api/stripe/create-checkout-session', { plan })
+    const result = await startStripeFlow('/api/stripe/create-checkout-session', { plan, returnPath })
     if (!result.ok) {
       setError(result.message)
     }
@@ -441,7 +457,7 @@ function SubscriptionFeaturesAndCost({ isTester = false }: { isTester?: boolean 
           className={view === 'features' ? 'sel' : ''}
           onClick={() => setView('features')}
         >
-          Subscriber Features
+          Features
         </button>
         <button
           type="button"
@@ -450,7 +466,7 @@ function SubscriptionFeaturesAndCost({ isTester = false }: { isTester?: boolean 
           className={view === 'comparison' ? 'sel' : ''}
           onClick={() => setView('comparison')}
         >
-          Free vs. Subscriber Comparison
+          Free vs. Subscriber
         </button>
       </div>
 
@@ -565,7 +581,13 @@ function formatRenewalDateShort(iso: string | null): string {
 // Errors surface through onError so the parent can show them below the
 // status paragraph, not nested inside it (a <p> can't validly contain a
 // block-level error line).
-function CancelRenewalLink({ onError }: { onError: (message: string | null) => void }) {
+function CancelRenewalLink({
+  onError,
+  returnPath = '/account/subscription',
+}: {
+  onError: (message: string | null) => void
+  returnPath?: StripeReturnPath
+}) {
   const [busy, setBusy] = useState(false)
 
   async function handleClick() {
@@ -574,7 +596,7 @@ function CancelRenewalLink({ onError }: { onError: (message: string | null) => v
     // Redirects to Stripe's own hosted Billing Portal — it already shows
     // this same renewal date and offers Cancel there, so there's nothing
     // further to build here beyond starting that session.
-    const result = await startStripeFlow('/api/stripe/create-portal-session', {})
+    const result = await startStripeFlow('/api/stripe/create-portal-session', { returnPath })
     if (!result.ok) {
       onError(result.message)
     }
@@ -1116,14 +1138,14 @@ function PrivateTesterStatus({
                 Clear
               </button>
             </div>
-            <span className="checknote" style={{ display: 'block', marginTop: 6 }}>
-              {storageOverrideBytes != null
-                ? `Overriding your real storage cap with ${formatBytesForOverride(storageOverrideBytes)} for testing.`
-                : 'Not overridden — using your real tier-based storage cap.'}{' '}
-              Replaces the account&rsquo;s real Attachment storage allowance (100 MB free, or
-              your Subscriber allowance) while set, on both Requests and ToDos. Clear it to go
-              back to the real number.
-            </span>
+            {storageOverrideBytes != null && (
+              // 2026-11-11, owner-asked: drop the "Not overridden..." paragraph —
+              // only the active-override state is worth a note now; the quiet
+              // default case (nothing set) no longer states so explicitly.
+              <span className="checknote" style={{ display: 'block', marginTop: 6 }}>
+                {`Overriding your real storage cap with ${formatBytesForOverride(storageOverrideBytes)} for testing.`}
+              </span>
+            )}
             {storageOverrideError && (
               <p className="ferror" role="alert" style={{ marginTop: 6 }}>
                 {storageOverrideError}
@@ -1164,6 +1186,7 @@ function SubscriberStatus({
   cancelAtPeriodEnd,
   onRenewed,
   realStoragePurchaseDisabled,
+  returnPath,
 }: {
   renewalDate: string | null
   storageGb: number
@@ -1171,6 +1194,7 @@ function SubscriberStatus({
   cancelAtPeriodEnd: boolean
   onRenewed?: () => void
   realStoragePurchaseDisabled: boolean
+  returnPath: StripeReturnPath
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -1217,7 +1241,7 @@ function SubscriberStatus({
           </>
         ) : (
           <>
-            <CancelRenewalLink onError={setCancelError} />
+            <CancelRenewalLink onError={setCancelError} returnPath={returnPath} />
             {' anytime — your Subscriber features stay active through the end of the period you’ve already paid for.'}
           </>
         )}
@@ -1250,7 +1274,7 @@ function SubscriberStatus({
 // this routing (is_beta_tester() true always routes to PrivateTesterStatus
 // instead), so isTester reflects the real $19-vs-$39 price Stripe will
 // actually charge in that one admin-preview case.
-function FreeStatus({ isTester }: { isTester: boolean }) {
+function FreeStatus({ isTester, returnPath }: { isTester: boolean; returnPath: StripeReturnPath }) {
   return (
     <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
@@ -1266,9 +1290,18 @@ function FreeStatus({ isTester }: { isTester: boolean }) {
       <div className="promo" style={{ marginTop: 14, marginLeft: 0, marginRight: 0 }}>
         <div className="promo-h">Subscription Details</div>
         <SubscriptionFeaturesAndCost isTester={isTester} />
-        <SubscriptionCheckoutButton plan="annual" style={{ width: '100%', marginTop: 12 }} />
+        <SubscriptionCheckoutButton
+          plan="annual"
+          style={{ width: '100%', marginTop: 12 }}
+          returnPath={returnPath}
+        />
         <div style={{ textAlign: 'center', marginTop: 8 }}>
-          <SubscriptionCheckoutButton plan="monthly" label="Or sign up monthly instead" className="btn-quiet" />
+          <SubscriptionCheckoutButton
+            plan="monthly"
+            label="Or sign up monthly instead"
+            className="btn-quiet"
+            returnPath={returnPath}
+          />
         </div>
         <p className="promo-p" style={{ margin: '8px 0 0' }}>
           Cancel anytime — your Subscriber features stay active through the end of the period

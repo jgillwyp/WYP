@@ -8165,3 +8165,46 @@ link is built only after the stack is proven on Add Contact.
   tested live** — awaiting Jim's next Cancel Renewal / Renew round trip on
   a real device to confirm the wording and the actual Stripe un-cancel
   both work end to end.
+- **Three small fixes to the Account Status redesign (2026-11-11), no
+  migration.** (1) The two "Subscription Details" toggle buttons
+  (SubscriptionFeaturesAndCost, `SubscriptionPanels.tsx`) shortened —
+  "Subscriber Features" → "Features," "Free vs. Subscriber Comparison" →
+  "Free vs. Subscriber" — so both fit more comfortably on a phone width.
+  (2) **Real bug, owner-reported**: "private tester Stripe session returns
+  to Account Options instead of to the private tester 'account' screen."
+  `create-checkout-session`/`create-portal-session`'s own `success_url`/
+  `cancel_url`/`return_url` had always hardcoded `/stripe-return` straight
+  through to `/account/subscription`, regardless of which of the three
+  `AccountStatusSection` call sites (Account Options `/account`,
+  `/account/subscription`, Admin's Test Stripe Payments `/admin/
+  stripe-test`) actually started the flow — so a Sign Up/Cancel Renewal
+  click from the Private Tester menu's own Test Stripe Payments screen
+  always bounced back to Account Options instead of back to where it
+  started. New `STRIPE_RETURN_PATHS`/`sanitizeStripeReturnPath()`
+  (`app/src/lib/subscriptionPricing.ts` — already client-and-server-safe,
+  already imported from both sides) is a small allowlist of exactly the
+  three real paths; a new `returnPath` prop threads from each of the three
+  callers through `AccountStatusSection` → `FreeStatus`/`SubscriberStatus`
+  → `SubscriptionCheckoutButton`/`CancelRenewalLink` → `startStripeFlow()`'s
+  POST body → the two route handlers (which re-validate server-side rather
+  than trust the client, same posture every other gated write in this app
+  already takes) → the `success_url`/`cancel_url`/`return_url` they hand to
+  Stripe as a `?returnTo=` query param → `/stripe-return/page.tsx`, which
+  re-validates again before using it as its own `router.replace()` target
+  (falls back to `/account/subscription` on anything not on the
+  allowlist — the old universal default, never removed, just no longer
+  the only option). `AccountForm.tsx` passes `"/account"`,
+  `SubscriptionForm.tsx` passes `"/account/subscription"`,
+  `AdminTestStripeForm.tsx` passes `"/admin/stripe-test"` — each call site's
+  own real route. (3) Jim: "drop the 'Not overridden...' paragraph in
+  account options" — the Private Tester state's Test Storage Cap
+  explanatory `<span>` (`PrivateTesterStatus`, same shared component, so
+  this also affects `/account/subscription`'s identical Private Tester
+  state) no longer states anything in the ordinary not-yet-overridden case;
+  it still shows a short one-line note ("Overriding your real storage cap
+  with ... for testing.") once an override is actually set, since that's
+  genuinely useful state to see, just shortened — the old trailing
+  "Replaces the account's real Attachment storage allowance..." sentence
+  is dropped either way. `npx tsc --noEmit`/`npm run lint` both clean
+  across the whole batch. No mockup — none of these three screens has
+  ever had one.

@@ -24,11 +24,11 @@
 // the self-toggle checkbox there already tracks tier === 'subscriber'
 // regardless of how it got set.
 //
-// Stripe's own success/cancel redirect targets (create-checkout-session/
-// create-portal-session route.ts) are unchanged and still hardcoded to
-// /account/subscription, not back to this Admin screen — landing on the
-// ordinary Account Status page afterward, now showing the real result, is
-// exactly "written back to the Private Tester page" taken literally.
+// Stripe's own success/cancel redirect lands back on this exact screen
+// (returnPath="/admin/stripe-test" below, 2026-11-11 — previously always
+// hardcoded to /account/subscription regardless of where the flow started,
+// owner-reported) — showing the real result here directly is "written back
+// to the Private Tester page" taken literally.
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -159,6 +159,7 @@ export default function AdminTestStripeForm() {
                   cancelAtPeriodEnd={cancelAtPeriodEnd}
                   onRenewed={() => setCancelAtPeriodEnd(false)}
                   forceRealVariant
+                  returnPath="/admin/stripe-test"
                 />
               </div>
             </>

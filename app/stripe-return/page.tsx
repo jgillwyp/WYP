@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from '../components/WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { sanitizeStripeReturnPath } from '@/lib/subscriptionPricing'
 
 /**
  * /stripe-return — the one redirect target for every Stripe hand-off
@@ -29,11 +30,20 @@ import { supabase } from '@/lib/supabaseClient'
  *
  * This page is NOT wrapped in RequireAuth — it checks the session itself and
  * branches: signed in (the ordinary same-context case) replaces straight to
- * /account/subscription?checkout=... exactly as before; signed out (the
- * separate-context iOS case) shows a plain, form-free confirmation instead
- * of a sign-in prompt — there is nothing to sign into here, and the real app
- * (already signed in) already picks up the change via its own
+ * whichever screen actually started the flow (returnTo, below); signed out
+ * (the separate-context iOS case) shows a plain, form-free confirmation
+ * instead of a sign-in prompt — there is nothing to sign into here, and the
+ * real app (already signed in) already picks up the change via its own
  * browserFinished-triggered reload the moment this view is closed.
+ *
+ * returnTo (2026-11-11, owner-reported: "private tester Stripe session
+ * returns to Account Options instead of to the private tester 'account'
+ * screen") carries back whichever of the three AccountStatusSection call
+ * sites (Account Options, /account/subscription, Admin's Test Stripe
+ * Payments) actually started the flow — create-checkout-session/
+ * create-portal-session route.ts both embed it in the URL they hand to
+ * Stripe. Re-validated here against the same allowlist those routes already
+ * check, rather than trusted as a redirect target straight from the URL.
  */
 export default function StripeReturnPage() {
   const router = useRouter()
@@ -42,6 +52,10 @@ export default function StripeReturnPage() {
     if (typeof window === 'undefined') return null
     const value = new URLSearchParams(window.location.search).get('checkout')
     return value === 'success' || value === 'cancelled' ? value : null
+  })
+  const [returnPath] = useState<string>(() => {
+    if (typeof window === 'undefined') return '/account/subscription'
+    return sanitizeStripeReturnPath(new URLSearchParams(window.location.search).get('returnTo'))
   })
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
 
@@ -58,9 +72,9 @@ export default function StripeReturnPage() {
 
   useEffect(() => {
     if (signedIn) {
-      router.replace(checkoutStatus ? `/account/subscription?checkout=${checkoutStatus}` : '/account/subscription')
+      router.replace(checkoutStatus ? `${returnPath}?checkout=${checkoutStatus}` : returnPath)
     }
-  }, [signedIn, checkoutStatus, router])
+  }, [signedIn, checkoutStatus, returnPath, router])
 
   if (signedIn === null || signedIn) {
     return (
