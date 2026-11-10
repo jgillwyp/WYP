@@ -831,12 +831,17 @@ export default function ResponseDetailForm() {
   // RequestDetailForm.tsx's identical addition for the full reasoning.
   // Excludes the Reminder checkboxes (this viewer's own opt-outs, not
   // meaningful to the owner) and Repeat (owner-only, not editable here).
-  function computeChangedFieldLabels(): string[] {
+  // effectiveDoneDate/effectiveDoneTime default to the live state so the
+  // ordinary Send button's own call site needs no change; "Done, Send"
+  // (handleQuickDone below) passes today's date/time explicitly instead,
+  // since a setDoneDate/setDoneTime call a moment earlier in the same click
+  // handler wouldn't be visible yet through the doneDate/doneTime closures.
+  function computeChangedFieldLabels(effectiveDoneDate: string = doneDate, effectiveDoneTime: string = doneTime): string[] {
     if (!initialFormRef.current) return []
     const snap = initialFormRef.current
     const labels: string[] = []
-    if (doneDate !== snap.doneDate) labels.push('Done Date')
-    if (doneTime !== snap.doneTime) labels.push('Done Time')
+    if (effectiveDoneDate !== snap.doneDate) labels.push('Done Date')
+    if (effectiveDoneTime !== snap.doneTime) labels.push('Done Time')
     if (dialogChanged) labels.push('Dialog')
     if (attachmentsChanged) labels.push('Attachments')
     return labels
@@ -862,16 +867,27 @@ export default function ResponseDetailForm() {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
+    await performSend(doneDate, doneTime)
+  }
+
+  // Shared by the Send button (handleSend, above) and the "Done, Send"
+  // quick-action button (handleQuickDone, below) — both ultimately write
+  // through set_response_done_as_recipient with the same Done Date/Time;
+  // "Done, Send" just supplies today's date/time as explicit parameters
+  // rather than reading doneDate/doneTime back out of state, since a
+  // setDoneDate/setDoneTime call made moments earlier in the same handler
+  // wouldn't be visible yet through those closures.
+  async function performSend(effectiveDoneDate: string, effectiveDoneTime: string) {
     setSendError(null)
     setSendConfirmed(false)
 
-    const changedFieldLabels = computeChangedFieldLabels()
+    const changedFieldLabels = computeChangedFieldLabels(effectiveDoneDate, effectiveDoneTime)
     setSending(true)
 
     const { error: rpcError } = await supabase.rpc('set_response_done_as_recipient', {
       p_request_id: requestId,
-      p_done_date: doneDate.trim() === '' ? null : doneDate,
-      p_done_time: doneTime.trim() === '' ? null : doneTime,
+      p_done_date: effectiveDoneDate.trim() === '' ? null : effectiveDoneDate,
+      p_done_time: effectiveDoneTime.trim() === '' ? null : effectiveDoneTime,
       p_reminder_enabled: reminderEnabled,
       p_overdue_reminder_enabled: overdueReminderEnabled,
       p_reminder_day_of_enabled: reminderDayOfEnabled,
@@ -896,8 +912,8 @@ export default function ResponseDetailForm() {
     // true forever after the first edit, even once it had already been
     // sent, leaving Send enabled and the donenote wording stale.
     initialFormRef.current = {
-      doneDate,
-      doneTime,
+      doneDate: effectiveDoneDate,
+      doneTime: effectiveDoneTime,
       reminderEnabled,
       reminderDayOfEnabled,
       overdueReminderEnabled,
@@ -912,21 +928,25 @@ export default function ResponseDetailForm() {
     setSendConfirmed(true)
   }
 
-  // Same quick-Done band as Request Response (§6.31, built 2026-08-10) —
-  // purely a local field fill (Send/set_response_done_as_recipient is still
-  // the actual write). Also fills Done Time with the current time,
-  // 2026-09-14 (see RequestResponseForm.tsx's own handleQuickDone comment
-  // for the full report/reasoning) — gated on owner_request_time_enabled
-  // and further narrowed to only when today (the Done Date this click just
-  // set) equals the Due Date. Originally left untouched entirely ("optional
-  // refinement, not required" — still freely editable/clearable afterward).
-  function handleQuickDone() {
+  // Same quick-Done band as Request Response (§6.31, built 2026-08-10).
+  // Also fills Done Time with the current time, 2026-09-14 (see
+  // RequestResponseForm.tsx's own handleQuickDone comment for the full
+  // report/reasoning) — gated on owner_request_time_enabled and further
+  // narrowed to only when today (the Done Date this click just set) equals
+  // the Due Date.
+  //
+  // Relabeled "Done, Send," 2026-11-10 — see RequestResponseForm.tsx's own
+  // identical fix: this now actually sends in the same click (calls
+  // performSend directly) rather than only filling the fields below and
+  // leaving Send as a separate second step.
+  async function handleQuickDone() {
     const today = todayISODate()
+    const effectiveDoneTime =
+      data?.owner_request_time_enabled && today === data.due_date ? currentTimeHHMM() : doneTime
     setDoneDate(today)
-    if (data?.owner_request_time_enabled && today === data.due_date) {
-      setDoneTime(currentTimeHHMM())
-    }
+    if (effectiveDoneTime !== doneTime) setDoneTime(effectiveDoneTime)
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    await performSend(today, effectiveDoneTime)
   }
 
   // Calendar-reminder dialog (2026-09-17) — Add to Calendar now opens
@@ -1202,6 +1222,10 @@ export default function ResponseDetailForm() {
 
             <div className="grabber" aria-hidden="true"></div>
 
+            {/* Relabeled "Done, Send," 2026-11-10 — see RequestResponseForm.
+                tsx's identical fix: clicking it now actually sends in the
+                same click, rather than only filling the fields below and
+                leaving Send as a separate second step. */}
             <div className="donerow">
               <span className="donenote">
                 {/* Revised 2026-09-21 — see RequestResponseForm.tsx's
@@ -1210,7 +1234,7 @@ export default function ResponseDetailForm() {
                     (already gating Send's own disabled state above) instead
                     of a separate flag. */}
                 {doneDate.trim() === '' ? (
-                  <><b>Note:</b> For a quick response, click Done and Send.</>
+                  <><b>Note:</b> For a quick response, click Done, Send.</>
                 ) : !hasChanges && !contentChanged ? (
                   'This Request is reported as completed.'
                 ) : doneChangedSinceLastSend ? (
@@ -1223,9 +1247,9 @@ export default function ResponseDetailForm() {
                 className="btn"
                 type="button"
                 onClick={handleQuickDone}
-                disabled={doneDate.trim() !== ''}
+                disabled={doneDate.trim() !== '' || sending}
               >
-                Done
+                {sending ? 'Sending…' : 'Done, Send'}
               </button>
             </div>
 

@@ -572,17 +572,37 @@ export default function CreateTodoForm() {
   // Voice dictation toggle (2026-08-19) — see CreateRequestForm.tsx's
   // identical handler for the full reasoning.
   // Quick-Done band (2026-08-10) — same pattern as Request Response's
-  // handleQuickDone: fills Done Date with today only, purely a local field
-  // fill (Save is still the actual write). No Done Time to leave untouched
-  // here — ToDos don't have one.
-  function handleQuickDone() {
-    set('doneDate', todayISODate())
+  // handleQuickDone: fills Done Date with today. No Done Time to leave
+  // untouched here — ToDos don't have one.
+  //
+  // Relabeled "Done, Save," 2026-11-10 (owner's own correction, matching
+  // the donenote's own long-standing "click Done and Save" wording): this
+  // now actually saves in the same click — mirrors handleSubmit's own
+  // validate()/repeat-carry-forward-gate sequence, then calls doSubmit
+  // with today's date passed as an explicit override, since the
+  // set('doneDate', today) call just above wouldn't be visible yet through
+  // form.doneDate's own closure by the time doSubmit would otherwise read
+  // it.
+  async function handleQuickDone() {
+    const today = todayISODate()
+    set('doneDate', today)
     // Features band (Stage 3, 2026-11-02) — Done Date now stays collapsed
     // behind "+ Add Done Date" until expanded; filling it via the quick-
     // Done button has to expand it too, or there'd be nothing to scroll to
     // and the value that just got set would be invisible.
     setDoneDateExpanded(true)
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+    setError(null)
+    if (!validate()) return
+
+    if (effectiveRepeatRule && stagedFiles.length > 0 && !carryPromptOpen) {
+      setCarryFileIndexes(new Set(stagedFiles.map((_, i) => i)))
+      setCarryPromptOpen(true)
+      return
+    }
+
+    await doSubmit(today)
   }
 
   // ToDo Reminders (migration 041, 2026-08-22, owner's own itemized
@@ -789,7 +809,15 @@ export default function CreateTodoForm() {
     await doSubmit()
   }
 
-  async function doSubmit() {
+  // doneDateOverride (2026-11-10, "Done, Save" — see handleQuickDone below)
+  // lets the quick-Done button pass today's date straight through as an
+  // explicit parameter, rather than relying on form.doneDate, which a
+  // set('doneDate', today) call made moments earlier in the same click
+  // handler wouldn't have updated yet by the time this function reads it.
+  // The carry-forward-prompt's own Continue button still calls doSubmit()
+  // with no override — by the time that confirm click happens, a render
+  // has already come and gone, so form.doneDate is no longer stale there.
+  async function doSubmit(doneDateOverride?: string) {
     setSaving(true)
 
     const { data: userData, error: userError } = await getCurrentUser()
@@ -804,9 +832,10 @@ export default function CreateTodoForm() {
     // field: Done sets it to today only if it isn't already set (nothing to
     // preserve here on a brand-new ToDo), Open leaves it null. due_date
     // stays null too — there's no way to set one in this simplified state.
+    const rawDoneDate = doneDateOverride ?? form.doneDate
     const effectiveDoneDate = todoDatesEnabled
-      ? (form.doneDate.trim() === '' ? null : form.doneDate)
-      : (todoStatus === 'done' ? (form.doneDate.trim() === '' ? todayISODate() : form.doneDate) : null)
+      ? (rawDoneDate.trim() === '' ? null : rawDoneDate)
+      : (todoStatus === 'done' ? (rawDoneDate.trim() === '' ? todayISODate() : rawDoneDate) : null)
 
     // Features band (Stage 3, 2026-11-02) — same "Retain can leave real
     // data sitting in state behind an unchecked checkbox" reasoning as
@@ -1466,11 +1495,17 @@ export default function CreateTodoForm() {
                     Date already holds a value, however it got there (clicking
                     Done here or typing directly into the field below both land
                     in the same state — no separate "did they click Done" flag).
-                    Owner's own wording, verbatim. */}
+
+                    Relabeled "Done, Save," 2026-11-10 — owner's own correction,
+                    matching the donenote's own long-standing "click Done and
+                    Save" wording: clicking it now actually saves in the same
+                    click (handleQuickDone calls doSubmit directly), rather
+                    than only filling the field above and leaving Save as a
+                    separate second step. */}
                 <div className="donerow">
                   <span className="donenote">
                     {form.doneDate.trim() === '' ? (
-                      <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
+                      <><b>Note:</b> To quickly complete this ToDo, click Done, Save.</>
                     ) : (
                       'This ToDo is now marked as Done.'
                     )}
@@ -1479,9 +1514,9 @@ export default function CreateTodoForm() {
                     className="btn"
                     type="button"
                     onClick={handleQuickDone}
-                    disabled={form.doneDate.trim() !== ''}
+                    disabled={form.doneDate.trim() !== '' || saving}
                   >
-                    Done
+                    {saving ? 'Saving…' : 'Done, Save'}
                   </button>
                 </div>
 

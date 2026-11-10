@@ -8208,3 +8208,47 @@ link is built only after the stack is proven on Add Contact.
   is dropped either way. `npx tsc --noEmit`/`npm run lint` both clean
   across the whole batch. No mockup — none of these three screens has
   ever had one.
+- **Quick-Done buttons relabeled and made to actually finish the action —
+  "Done, Send" on the two Request screens, "Done, Save" on the two ToDo
+  screens (2026-11-10), no migration.** Jim: modify the Done button and
+  wording "to be a 'Done, Save' button — and function accordingly," then,
+  mid-task, corrected the Request side to "Done, Send" instead (Requests
+  use Send throughout the app, ToDos use Save). Scoped to the four screens
+  that actually have a quick-Done band: `RequestResponseForm.tsx` (the
+  anonymous `/r/[token]` path) and `ResponseDetailForm.tsx` (the signed-in
+  recipient's own screen) both relabel to **"Done, Send"**;
+  `CreateTodoForm.tsx` and `TodoDetailForm.tsx` both relabel to **"Done,
+  Save."** `RequestDetailForm.tsx` (the owner's own screen) and
+  `CreateRequestForm.tsx` were left untouched — neither has ever had a
+  quick-Done button at all, only a plain editable Done Date field, so
+  there was nothing to relabel there. The donenote wording on all four
+  screens already said "click Done and Send"/"click Done and Save"
+  (unchanged since this family was first built, 2026-08-10) — only the
+  button's own label was still the plain, inherited "Done"; both notes'
+  wording tightened to "click Done, Send"/"click Done, Save" to match the
+  button exactly.
+  **Real behavior change, not just a label swap**: previously, clicking
+  Done only filled Done Date (and, on the two Request screens, Done Time)
+  locally — Send/Save was always a required separate second click. Now
+  clicking the button does both in one action. The two Request screens'
+  `handleSend`/`computeChangedFieldLabels` were each split so the actual
+  write (renamed `performSend`) takes explicit `effectiveDoneDate`/
+  `effectiveDoneTime` parameters, defaulting to the live `doneDate`/
+  `doneTime` state for the ordinary Send button's own call site;
+  `handleQuickDone` on both screens now calls `performSend` directly with
+  today's date/time, rather than relying on `doneDate`/`doneTime` state a
+  `setDoneDate`/`setDoneTime` call moments earlier in the same handler
+  wouldn't have updated yet. Same shape of fix on the ToDo side:
+  `CreateTodoForm.tsx`'s `doSubmit()` and `TodoDetailForm.tsx`'s
+  `handleSubmit()` (split into a thin wrapper plus a new `doSave()`) both
+  gained an optional `doneDateOverride` parameter for the identical
+  reason; each screen's `handleQuickDone` now calls through with today's
+  date and otherwise mirrors its own Save button's existing
+  validate()/repeat-carry-forward-gate sequence, so clicking Done, Save
+  behaves exactly as if Done Date had been set by hand and Save clicked
+  — including `TodoDetailForm.tsx`'s own `router.back()` on success.
+  Both ToDo screens' quick-Done button now also disables while
+  saving (matching the main Save button's own "Saving…" label); both
+  Request screens' quick-Done button disables while sending ("Sending…").
+  `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this feature
+  family has never had one.

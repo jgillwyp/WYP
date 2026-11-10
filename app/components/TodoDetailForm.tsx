@@ -435,14 +435,24 @@ export default function TodoDetailForm() {
   const [contentChanged, setContentChanged] = useState(false)
 
   // Quick-Done band (§6.31) — added 2026-08-11, matching CreateTodoForm.tsx's
-  // identical handleQuickDone: this screen never got the band ported over
-  // when Create ToDo gained it 2026-08-10 (that batch was scoped to Create
-  // ToDo only), a real gap the owner caught testing the live screen. Fills
-  // Done Date with today only — no Done Time to leave untouched, ToDos
-  // don't have one.
-  function handleQuickDone() {
-    set('doneDate', todayISODate())
+  // identical handleQuickDone. Fills Done Date with today only — no Done
+  // Time to leave untouched, ToDos don't have one.
+  //
+  // Relabeled "Done, Save," 2026-11-10 (owner's own correction, matching
+  // the donenote's own long-standing "click Done and Save" wording): this
+  // now actually saves in the same click — mirrors handleSubmit's own
+  // validate() check, then calls doSave with today's date passed as an
+  // explicit override, since the set('doneDate', today) call just above
+  // wouldn't be visible yet through form.doneDate's own closure.
+  async function handleQuickDone() {
+    const today = todayISODate()
+    set('doneDate', today)
     doneDateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+    setError(null)
+    if (!validate()) return
+
+    await doSave(today)
   }
 
   // Calendar-reminder dialog (2026-09-17) — Add to Calendar now opens
@@ -991,7 +1001,12 @@ export default function TodoDetailForm() {
   // screen's own contentChanged flag (just below) doesn't distinguish
   // which one changed, so both collapse into a single 'Content' label
   // rather than overclaiming both changed when only one did.
-  function computeChangedFieldLabels(): string[] {
+  // effectiveDoneDate defaults to the live state so handleSubmit's own call
+  // site needs no change; "Done, Save" (handleQuickDone below) passes
+  // today's date explicitly instead, since a set('doneDate', today) call
+  // moments earlier in the same click handler wouldn't be visible yet
+  // through form.doneDate's own closure.
+  function computeChangedFieldLabels(effectiveDoneDate: string = form.doneDate): string[] {
     if (!initialFormRef.current) return []
     const snap = initialFormRef.current
     const labels: string[] = []
@@ -999,7 +1014,7 @@ export default function TodoDetailForm() {
     if (form.dueDate !== snap.dueDate) labels.push('Due Date')
     if (form.description !== snap.description) labels.push('Description')
     if ((selectedCategory?.id ?? null) !== snap.categoryId) labels.push('Category')
-    if (form.doneDate !== snap.doneDate || todoStatus !== snap.todoStatus) labels.push('Done Date')
+    if (effectiveDoneDate !== snap.doneDate || todoStatus !== snap.todoStatus) labels.push('Done Date')
     if (contentChanged) labels.push('Content')
     return labels
   }
@@ -1008,8 +1023,16 @@ export default function TodoDetailForm() {
     e.preventDefault()
     setError(null)
     if (!validate()) return
+    await doSave()
+  }
 
-    const changedFieldLabels = computeChangedFieldLabels()
+  // Shared by handleSubmit (above) and the "Done, Save" quick-action button
+  // (handleQuickDone, below) — doneDateOverride lets Done, Save supply
+  // today's date as an explicit parameter rather than reading form.doneDate
+  // back out of state.
+  async function doSave(doneDateOverride?: string) {
+    const rawDoneDate = doneDateOverride ?? form.doneDate
+    const changedFieldLabels = computeChangedFieldLabels(rawDoneDate)
     const wasAlreadyDone = (initialFormRef.current?.doneDate ?? '') !== ''
     setSaving(true)
 
@@ -1021,8 +1044,8 @@ export default function TodoDetailForm() {
     // it's simply not shown or editable, same "hidden, not cleared"
     // convention as Category/Due Time elsewhere in this app.
     const effectiveDoneDate = todoDatesEnabled
-      ? (form.doneDate.trim() === '' ? null : form.doneDate)
-      : (todoStatus === 'done' ? (form.doneDate.trim() === '' ? todayISODate() : form.doneDate) : null)
+      ? (rawDoneDate.trim() === '' ? null : rawDoneDate)
+      : (todoStatus === 'done' ? (rawDoneDate.trim() === '' ? todayISODate() : rawDoneDate) : null)
 
     const { error: updateError } = await supabase
       .from('requests')
@@ -1250,12 +1273,18 @@ export default function TodoDetailForm() {
                 {/* Quick-Done band (§6.31, added here 2026-08-11) — same
                     "donerow"/"donenote" pattern as Create ToDo and Request
                     Response, purely reactive to whether Done Date already holds
-                    a value, however it got there. Owner's own wording, verbatim,
-                    matching Create ToDo's. */}
+                    a value, however it got there.
+
+                    Relabeled "Done, Save," 2026-11-10 — owner's own correction,
+                    matching the donenote's own long-standing "click Done and
+                    Save" wording: clicking it now actually saves (and leaves
+                    the screen, same as the band's own Save button) in the
+                    same click, rather than only filling the field below and
+                    leaving Save as a separate second step. */}
                 <div className="donerow">
                   <span className="donenote">
                     {form.doneDate.trim() === '' ? (
-                      <><b>Note:</b> To quickly complete this ToDo, click Done and Save.</>
+                      <><b>Note:</b> To quickly complete this ToDo, click Done, Save.</>
                     ) : (
                       'This ToDo is now marked as Done.'
                     )}
@@ -1264,9 +1293,9 @@ export default function TodoDetailForm() {
                     className="btn"
                     type="button"
                     onClick={handleQuickDone}
-                    disabled={form.doneDate.trim() !== ''}
+                    disabled={form.doneDate.trim() !== '' || saving}
                   >
-                    Done
+                    {saving ? 'Saving…' : 'Done, Save'}
                   </button>
                 </div>
 
