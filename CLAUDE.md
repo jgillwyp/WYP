@@ -8252,3 +8252,26 @@ link is built only after the stack is proven on Add Contact.
   Request screens' quick-Done button disables while sending ("Sending…").
   `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this feature
   family has never had one.
+- **Same-day follow-up: Send (and "Done, Send") now navigates away on
+  success, matching the ToDo screens' own Save (2026-11-10).**
+  Jim-reported, testing the batch above: clicking "Done, Send" on a
+  Request only greyed out the Done/Send buttons and left Close as a
+  separate required click — unlike the ToDo screens, where Save/"Done,
+  Save" leaves the screen on its own. This was never a bug in the Done,
+  Send batch itself — the plain Send button had always worked this way
+  on these two screens (confirm-and-stay, Close as its own click) — but
+  confirmed, Jim wanted both Send and Done, Send to behave like the ToDo
+  screens' Save instead. Added to the end of each screen's `performSend`
+  (shared by Send and Done, Send, so neither needed a second change):
+  `ResponseDetailForm.tsx` (the signed-in recipient's own screen, always
+  reachable from a real account) now unconditionally calls
+  `router.push('/')` after a successful write — the same destination its
+  own Close/Cancel button already uses (2026-11-10's earlier "nowhere to
+  go" fix, since this screen is also reachable with no prior in-app
+  history via an emailed/texted link, ruling out `router.back()`).
+  `RequestResponseForm.tsx` (the anonymous `/r/[token]` path) only
+  navigates when `isSignedIn` is true — an anonymous visitor has no
+  account or Main Screen to go to, and was never offered a Close button
+  either, so they still just see the confirmation banner and stay; a
+  signed-in visitor now gets the identical `router.push('/')`. `npx tsc
+  --noEmit`/`npm run lint` both clean.

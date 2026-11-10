@@ -926,6 +926,15 @@ export default function ResponseDetailForm() {
 
     setSentHadRealChanges(changedFieldLabels.length > 0)
     setSendConfirmed(true)
+
+    // Auto-navigate away once sent, matching the ToDo screens' own Save
+    // behavior (owner's own follow-up correction, 2026-11-10 — Send/
+    // "Done, Send" previously just confirmed and left Close as a separate
+    // click). router.push('/'), not router.back() — same destination the
+    // Close/Cancel button above already uses (2026-11-10's own "nowhere
+    // to go" fix), since this screen is also reachable with no prior
+    // in-app history via an emailed/texted link.
+    router.push('/')
   }
 
   // Same quick-Done band as Request Response (§6.31, built 2026-08-10).

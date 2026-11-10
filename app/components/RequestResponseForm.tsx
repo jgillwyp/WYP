@@ -702,6 +702,18 @@ export default function RequestResponseForm() {
 
     setSentHadRealChanges(changedFieldLabels.length > 0)
     setSendConfirmed(true)
+
+    // Auto-navigate away once sent, matching the ToDo screens' own Save
+    // behavior (owner's own follow-up correction, 2026-11-10 — Send/
+    // "Done, Send" previously just confirmed and left Close as a separate
+    // click). Only for a signed-in visitor, who has a real Main Screen to
+    // return to — same destination the Close button above already uses.
+    // A genuinely anonymous visitor has no account and nothing to
+    // navigate to; Close has never been offered to them either, so they
+    // still just see the confirmation banner and stay.
+    if (isSignedIn) {
+      router.push('/')
+    }
   }
 
   // Owner's ask (2026-08-10): mark a Request Done in as few keystrokes as
