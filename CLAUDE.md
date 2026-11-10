@@ -8101,3 +8101,67 @@ link is built only after the stack is proven on Add Contact.
   from this sandbox). **Not yet retested after the `/stripe-return` fix**
   — awaiting Jim's next live Sign Up/Cancel Renewal attempt to confirm it
   actually lands on the plain confirmation screen instead of `/login`.
+  **Confirmed working, same conversation**: Sign Up completed correctly and
+  the `/stripe-return` fix landed on the plain confirmation screen as
+  intended — Jim separately noted he bounced back to Stripe once more
+  closing the Account Status page from Private Tester state and had to
+  return again, flagged as something to document more precisely through
+  further testing before it needs a fix, not acted on in this batch.
+
+- **"Renew Subscription" once Cancel Renewal has been used — new
+  `/api/stripe/renew-subscription`, no migration (2026-11-11).** Jim, after
+  the Stripe-in-Safari flow was confirmed working end to end: once
+  `cancel_at_period_end` is set, `SubscriberStatus`'s status line should
+  read "My Status: Subscriber (until `<date>`)" and its paragraph's Cancel
+  link should become a Renew link instead — his own exact wording for both
+  — un-scheduling the cancellation rather than opening a new Checkout. He
+  flagged the real open question himself: "I am not sure if this has to be
+  a Stripe transaction with a $0 charge or just a confirmation dialog and
+  an api call to update Stripe." It's the latter —
+  `cancel_at_period_end: true` only ever un-schedules an already-live
+  subscription's own end-of-period non-renewal; the subscription itself
+  never stopped, so reversing it is a plain `subscriptions.update(id, {
+  cancel_at_period_end: false })`, no Checkout/payment involved at all
+  (same distinction Stripe's own Billing Portal already makes when Cancel
+  is clicked there). New `app/api/stripe/renew-subscription/route.ts`
+  (forwarded-JWT, same posture `update-storage/route.ts` already
+  established) does exactly that, writes the flag back directly (not a
+  wait-for-the-webhook race — same reasoning `update-storage`'s own
+  identical comment gives, since the webhook's `customer.subscription.
+  updated` handler will write the same value again moments later,
+  harmlessly), and logs a `subscription_renewed` row to
+  `stripe_billing_audit` (migration 092, already exists — free-form
+  `event_type text`, no new column or migration needed). New
+  `RenewSubscriptionLink` (`SubscriptionPanels.tsx`) is `CancelRenewalLink`'s
+  own counterpart — a quiet inline text link, but with its own small
+  `.scrim`/`.modal` confirm dialog first (matching
+  `AttachmentStoragePanel`'s own confirm-before-charging precedent), since
+  reversing a deliberate cancellation is a real billing-affecting action
+  and, unlike Cancel, has no Stripe-hosted page of its own to confirm it.
+  `profiles.stripe_cancel_at_period_end` (already kept in sync by the
+  webhook's existing `customer.subscription.updated` handler, migration
+  088 — no new write path needed) is now read and threaded through all
+  three `AccountStatusSection` call sites — `AccountForm.tsx`,
+  `SubscriptionForm.tsx`, `AdminTestStripeForm.tsx` — each via a new
+  `cancelAtPeriodEnd` state and `onRenewed` callback, mirroring the
+  existing `storageGb`/`onStorageUpdated` pair exactly.
+  **A real bug caught and fixed via Next's own SWC transform, not just
+  code inspection** — the same tool and reasoning this file's own
+  2026-09-02/09-03 "5GB"/Cancel-link investigations already established as
+  necessary for this exact class of bug: compiling the new status
+  sentence showed two of its three text/expression junctions silently
+  dropped their leading space (the Cancel branch's own `<CancelRenewalLink
+  />` immediately followed by `"anytime"` with no space at all, despite a
+  clear literal space in the source on the same line) — an unpredictable,
+  no-simple-rule SWC quirk, not something that correlates with line
+  wrapping or any pattern found so far. Fixed by making every text segment
+  in both branches a full `{'...'}` string-literal expression rather than
+  relying on literal JSX text adjacency to a component or another
+  expression, then reverified by re-running the fixed source through the
+  same SWC transform and confirming the compiled output's string literals
+  now carry the correct leading/trailing spaces in all three spots (the
+  "(until ...)" title suffix included). `npx tsc --noEmit`/`npm run lint`
+  both clean. No mockup — this feature family has never had one. **Not yet
+  tested live** — awaiting Jim's next Cancel Renewal / Renew round trip on
+  a real device to confirm the wording and the actual Stripe un-cancel
+  both work end to end.
