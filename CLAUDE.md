@@ -8525,3 +8525,56 @@ link is built only after the stack is proven on Add Contact.
   Account Options given the symptom was 100% reproducible rather than
   refresh-dependent, but both are fixed regardless. `npx tsc --noEmit`/
   `npm run lint` both clean.
+- **Cancel rebuilt as a direct in-app action, mirroring Renew exactly — no
+  more Stripe Billing Portal hand-off; `create-portal-session/route.ts`
+  deleted — (2026-11-11), no migration.** Jim, after actually canceling
+  through Stripe's own hosted Portal: "it stops at 'Don't cancel
+  subscription' and at the top has in small print 'Return to Would You
+  Please sandbox.' It would be a better UI to just return to the app with
+  a dialog confirming the cancellation." Asked first whether this would
+  undermine the Safari/external-browser strategy the Sign Up and real
+  storage-capacity-increase flows depend on for Apple's Guideline 3.1.1
+  External Purchase Link exception — it doesn't: that exception only
+  governs flows that actually collect payment/complete a purchase, and
+  Cancel (same as Renew, already built as a direct in-app action earlier
+  the same day) collects no payment and charges nothing at the moment it
+  runs — `cancel_at_period_end: true` only schedules a future non-renewal,
+  the subscription itself keeps running through the already-paid-for
+  period exactly as before. New `app/api/stripe/cancel-subscription/
+  route.ts` is an exact mirror of `renew-subscription/route.ts`'s own
+  shape (forwarded-JWT, `stripe.subscriptions.update(id, {
+  cancel_at_period_end: true })`, a direct write to `profiles.
+  stripe_cancel_at_period_end` rather than waiting on the webhook, and a
+  `stripe_billing_audit` row — `event_type: 'subscription_cancel_
+  scheduled'`, deliberately distinct from the webhook's own
+  `subscription_canceled` full-deletion event type). `CancelRenewalLink`
+  (`SubscriptionPanels.tsx`) rebuilt into the same `.scrim`/`.modal`
+  confirm-dialog shape `RenewSubscriptionLink` already uses — "Cancel Your
+  Subscription?" / "Your Subscriber features will stay active through
+  `<date>`... You won't be charged again after that unless you Renew
+  first." / Keep Subscription / Cancel Subscription — instead of a
+  `startStripeFlow` redirect; gained a new `onCanceled` callback prop
+  (`AccountStatusSection` → `SubscriberStatus` → `CancelRenewalLink`,
+  threaded the identical way `onRenewed` already was) so
+  `AccountForm.tsx`/`SubscriptionForm.tsx` flip their own
+  `cancelAtPeriodEnd` state to `true` the instant the call succeeds — no
+  webhook round-trip dependency for this path going forward.
+  `create-portal-session/route.ts` had exactly one caller (this link) and
+  is deleted outright now that it's gone, per this file's own "dead code
+  never stays in `app/`" rule — its one other incidental benefit, a path
+  to Stripe's own payment-method-update/invoice-history screens, has no
+  replacement yet; flagged, not silently dropped, in case that's ever
+  actually needed later. **A separate, still-open question from the same
+  report**: whether `profiles.stripe_cancel_at_period_end` (and therefore
+  the Cancel-vs-Renew wording) ever correctly flipped to show "Renew"
+  after Jim's earlier Portal-based cancellation — Jim: "I recall seeing
+  the 'Renew' at one point, but not recently," not a clear confirmation
+  either way. Going forward, Cancel's own direct write makes this moot for
+  that one path (no webhook dependency at all), but the underlying
+  question of whether the webhook's `customer.subscription.updated`
+  handler reliably syncs this flag for *other* paths (a cancellation made
+  directly from the Stripe Dashboard, say) is unverified — worth checking
+  if a similar stale-Cancel-wording symptom recurs from a path other than
+  this app's own two buttons. `npx tsc --noEmit`/`npm run lint` both
+  clean. **Not yet tested live** — awaiting Jim's own confirmation that
+  the new in-app Cancel dialog/flow works end to end.

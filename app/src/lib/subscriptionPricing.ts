@@ -21,19 +21,24 @@ export const MONTHLY_PRICE = 5
 
 export type SubscriptionPlan = 'annual' | 'monthly'
 
-// Where a Stripe Checkout/Billing Portal hand-off should return to once it's
-// done (2026-11-11, owner-reported: "private tester Stripe session returns
-// to Account Options instead of to the private tester 'account' screen") —
-// create-checkout-session/create-portal-session route.ts had always
-// hardcoded /account/subscription regardless of which AccountStatusSection
-// call site actually started the flow. Each caller now passes its own real
-// path; both the route handlers and /stripe-return/page.tsx validate
-// against this exact allowlist (never trust an arbitrary client-supplied
-// path as a redirect target) and fall back to /account/subscription on
-// anything else. '/admin/stripe-test' dropped the same day, once the
-// Account Status merge retired that screen entirely (AdminTestStripeForm.tsx
-// deleted) — a private tester now reaches the same real Stripe controls
-// directly on Account Options/the full-page screen.
+// Where a Stripe Checkout hand-off should return to once it's done
+// (2026-11-11, owner-reported: "private tester Stripe session returns to
+// Account Options instead of to the private tester 'account' screen") —
+// create-checkout-session/route.ts had always hardcoded /account/
+// subscription regardless of which AccountStatusSection call site actually
+// started the flow. Each caller now passes its own real path; both the
+// route handler and /stripe-return/page.tsx validate against this exact
+// allowlist (never trust an arbitrary client-supplied path as a redirect
+// target) and fall back to /account/subscription on anything else.
+// '/admin/stripe-test' dropped the same day, once the Account Status merge
+// retired that screen entirely (AdminTestStripeForm.tsx deleted) — a
+// private tester now reaches the same real Stripe controls directly on
+// Account Options/the full-page screen. create-portal-session/route.ts
+// (Cancel's old Stripe Billing Portal redirect) is gone entirely as of the
+// same day's follow-up — Cancel is now a direct in-app action
+// (cancel-subscription/route.ts) with no redirect/returnPath of its own, so
+// Sign Up (create-checkout-session) is this constant's only remaining
+// consumer.
 export const STRIPE_RETURN_PATHS = ['/account', '/account/subscription'] as const
 export type StripeReturnPath = (typeof STRIPE_RETURN_PATHS)[number]
 export function sanitizeStripeReturnPath(value: unknown): StripeReturnPath {

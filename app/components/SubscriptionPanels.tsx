@@ -180,6 +180,7 @@ export function AccountStatusSection({
   onStorageUpdated,
   cancelAtPeriodEnd = false,
   onRenewed,
+  onCanceled,
   saving = false,
   onTierToggle,
   storageOverrideBytes = null,
@@ -205,6 +206,11 @@ export function AccountStatusSection({
   // link from Cancel to Renew (2026-11-11, owner-asked).
   cancelAtPeriodEnd?: boolean
   onRenewed?: () => void
+  // profiles.stripe_cancel_at_period_end's own opposite flip (2026-11-11) —
+  // CancelRenewalLink's own direct in-app action calls this once the real
+  // cancel_at_period_end:true write succeeds, same immediate-local-update
+  // pattern onRenewed already uses.
+  onCanceled?: () => void
   saving?: boolean
   onTierToggle?: (next: boolean) => void | Promise<void>
   storageOverrideBytes?: number | null
@@ -247,7 +253,7 @@ export function AccountStatusSection({
           onStorageUpdated={onStorageUpdated}
           cancelAtPeriodEnd={cancelAtPeriodEnd}
           onRenewed={onRenewed}
-          returnPath={returnPath}
+          onCanceled={onCanceled}
         />
       ) : (
         <FreeStatus isTester={isBetaTester} returnPath={returnPath} />
@@ -571,37 +577,100 @@ function formatRenewalDateShort(iso: string | null): string {
 // is gone). Jim's own stated trigger for this whole redesign: "One of the
 // first things that got me going down this path is the current 'Cancel
 // Renewal' button being such a prominent feature of a Subscriber's page."
-// Errors surface through onError so the parent can show them below the
-// status paragraph, not nested inside it (a <p> can't validly contain a
-// block-level error line).
+//
+// Rebuilt 2026-11-11 as a direct in-app action, mirroring
+// RenewSubscriptionLink exactly — no more redirect to Stripe's own hosted
+// Billing Portal. Jim, after using the Portal's own Cancel flow: "It would
+// be a better UI to just return to the app with a dialog confirming the
+// cancellation." Same reasoning Renew already established the same day:
+// cancel_at_period_end only schedules a non-renewal, no Checkout/charge/
+// payment method involved, so there's a real .scrim/.modal confirm dialog
+// here instead of a Stripe hand-off. Errors surface through onError so the
+// parent can show them below the status paragraph, not nested inside it (a
+// <p> can't validly contain a block-level error line).
 function CancelRenewalLink({
+  renewalDate,
   onError,
-  returnPath = '/account/subscription',
+  onCanceled,
 }: {
+  renewalDate: string | null
   onError: (message: string | null) => void
-  returnPath?: StripeReturnPath
+  onCanceled?: () => void
 }) {
+  const [showConfirm, setShowConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  async function handleClick() {
+  async function handleConfirm() {
+    setShowConfirm(false)
     setBusy(true)
     onError(null)
-    // Redirects to Stripe's own hosted Billing Portal — it already shows
-    // this same renewal date and offers Cancel there, so there's nothing
-    // further to build here beyond starting that session.
-    const result = await startStripeFlow('/api/stripe/create-portal-session', { returnPath })
-    if (!result.ok) {
-      onError(result.message)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      onError('Your sign-in has expired — please sign in again and retry.')
+      setBusy(false)
+      return
     }
-    // Same fix as SubscriptionCheckoutButton's own handleClick above —
-    // always reset, not just on failure.
+
+    let res: Response
+    try {
+      res = await fetch('/api/stripe/cancel-subscription', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {
+      onError('Could not reach the server — check your connection and try again.')
+      setBusy(false)
+      return
+    }
+
+    let json: { ok?: boolean; error?: string; detail?: string }
+    try {
+      json = await res.json()
+    } catch {
+      json = {}
+    }
+
+    if (!res.ok || !json.ok) {
+      onError(json.detail ?? 'Something went wrong — please try again.')
+      setBusy(false)
+      return
+    }
+
+    onCanceled?.()
     setBusy(false)
   }
 
   return (
-    <button type="button" className="linkbtn" onClick={handleClick} disabled={busy}>
-      {busy ? 'opening…' : 'Cancel'}
-    </button>
+    <>
+      <button type="button" className="linkbtn" onClick={() => setShowConfirm(true)} disabled={busy}>
+        {busy ? 'canceling…' : 'Cancel'}
+      </button>
+      {showConfirm && (
+        <>
+          <div className="scrim" onClick={() => setShowConfirm(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="cancel-confirm-title">
+            <div className="modalhead">
+              <p className="modal-title" id="cancel-confirm-title">
+                Cancel Your Subscription?
+              </p>
+            </div>
+            <p className="subnote">
+              {`Your Subscriber features will stay active through ${formatRenewalDateShort(renewalDate)} — the end of the period you've already paid for. You won't be charged again after that unless you Renew first.`}
+            </p>
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn-secondary" type="button" onClick={() => setShowConfirm(false)}>
+                Keep Subscription
+              </button>
+              <button className="btn" type="button" onClick={handleConfirm}>
+                Cancel Subscription
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   )
 }
 
@@ -1307,7 +1376,7 @@ function SubscriberStatus({
   onStorageUpdated,
   cancelAtPeriodEnd,
   onRenewed,
-  returnPath,
+  onCanceled,
 }: {
   canToggleTier: boolean
   hasRealSubscription: boolean
@@ -1316,7 +1385,7 @@ function SubscriberStatus({
   onStorageUpdated: (newStorageGb: number) => void
   cancelAtPeriodEnd: boolean
   onRenewed?: () => void
-  returnPath: StripeReturnPath
+  onCanceled?: () => void
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -1367,7 +1436,7 @@ function SubscriberStatus({
           </>
         ) : (
           <>
-            <CancelRenewalLink onError={setCancelError} returnPath={returnPath} />
+            <CancelRenewalLink renewalDate={renewalDate} onError={setCancelError} onCanceled={onCanceled} />
             {' anytime — your Subscriber features stay active through the end of the period you’ve already paid for.'}
           </>
         )}

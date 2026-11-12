@@ -8,10 +8,12 @@ import { supabase } from '@/lib/supabaseClient'
 import { sanitizeStripeReturnPath } from '@/lib/subscriptionPricing'
 
 /**
- * /stripe-return — the one redirect target for every Stripe hand-off
- * (create-checkout-session's success_url/cancel_url, create-portal-session's
- * return_url), replacing a direct redirect to /account/subscription
- * (2026-11-10, owner-reported real bug).
+ * /stripe-return — the one redirect target for every real Stripe hand-off
+ * that still happens (create-checkout-session's success_url/cancel_url),
+ * replacing a direct redirect to /account/subscription (2026-11-10,
+ * owner-reported real bug). Cancel no longer redirects to Stripe at all as
+ * of 2026-11-11 (cancel-subscription/route.ts, a direct in-app action) —
+ * Sign Up is this page's only remaining real-world trigger.
  *
  * On web/Android, Stripe's redirect happens in the same browsing context the
  * app's own session already lives in (plain window.location.href, see

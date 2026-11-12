@@ -398,6 +398,7 @@ export default function SubscriptionForm() {
               onStorageUpdated={setStorageGb}
               cancelAtPeriodEnd={cancelAtPeriodEnd}
               onRenewed={() => setCancelAtPeriodEnd(false)}
+              onCanceled={() => setCancelAtPeriodEnd(true)}
               saving={saving}
               onTierToggle={handleTierToggle}
               storageOverrideBytes={storageOverrideBytes}
