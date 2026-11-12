@@ -1269,7 +1269,7 @@ comment on table public.stripe_billing_audit is
 
 -- ============================================================================
 -- Migration 093 (2026-11-12) -- admin_get_stripe_audit(): the "Stripe Audit"
--- admin screen's own RPC. DRAFTED, NOT YET CONFIRMED RUN.
+-- admin screen's own RPC. CONFIRMED RUN by Jim, 2026-11-12.
 --
 -- Jim: "create an audit of purchase/cancel/reduction transactions that can
 -- be tied to Stripe by some form of a 'transaction ID' and expose it as a

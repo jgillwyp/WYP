@@ -8633,7 +8633,7 @@ link is built only after the stack is proven on Add Contact.
 - **Four more Account Status items — label shortening for Android, a new
   Admin "Stripe Audit" screen, a real root-cause fix for a stray-credit
   bug, and Monthly → Annual upgrade built end to end — migration 093
-  DRAFTED, NOT YET CONFIRMED RUN (2026-11-12).** Jim's own four-part
+  confirmed run by Jim, 2026-11-12.** Jim's own four-part
   message, each addressed in order.
   **(1) Label shortening for a narrower Android screen.** "My Account
   Status:" → **"Status:"** (the section's own band title already says
@@ -8759,6 +8759,6 @@ link is built only after the stack is proven on Add Contact.
   text, used verbatim.
   `npx tsc --noEmit`/`npm run lint` both clean across the whole batch. No
   mockup — this feature family has none beyond Jim's own chat messages.
-  **Not yet tested live** — awaiting Jim's own confirmation that the
-  Upgrade flow, the Stripe Audit screen, and the stray-credit fix all work
-  end to end; migration 093 also still needs to be run.
+  **Migration 093 confirmed run by Jim, 2026-11-12.** **Not yet tested
+  live** — awaiting Jim's own confirmation that the Upgrade flow, the
+  Stripe Audit screen, and the stray-credit fix all work end to end.
