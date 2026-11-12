@@ -8470,3 +8470,58 @@ link is built only after the stack is proven on Add Contact.
   already paid for" copy) — nothing in the code restricts or hides it.
   `npx tsc --noEmit`/`npm run lint` both clean across items 1–3. No mockup
   changes beyond what Jim's own pasted image already specified.
+  **Item 4's Stripe Dashboard check confirmed harmless** — Jim found
+  Cancellations already correctly configured (on, at end of billing
+  period). Investigated live with him instead: his Supabase `profiles` row
+  had a real, correctly-synced `stripe_customer_id`/`stripe_subscription_id`
+  with status `active`, and retrying Cancel against that same state worked
+  — Stripe's own Billing Portal showed "Current Subscription" with a real
+  "Cancel subscription" button, exactly as designed. His original attempt
+  most likely hit the portal while our `profiles` row still pointed at an
+  earlier test cycle's subscription that was no longer active in Stripe at
+  that moment (the Subscriptions page showed 8 already-canceled test
+  subscriptions from earlier the same day) — the portal correctly shows no
+  Subscriptions section at all when there's nothing active to manage. Not a
+  code bug; no fix needed for this specific symptom.
+- **Account Options' own Close button never had Stripe checkout-redirect
+  awareness at all — real, 100%-reproducible bug, fixed; same hardening
+  ported into `/account/subscription` for a refresh edge case
+  (2026-11-11), no migration.** Jim, subscribing via Stripe from Account
+  Options (not the standalone `/account/subscription` screen): "it returns
+  me to the Account Status screen showing Subscribed checked, when I click
+  'Close' it returns me to the Stripe Checkout and says 'You're all done
+  here...'" Root cause: `SubscriptionForm.tsx`'s own `handleClose` was
+  fixed for exactly this symptom back on 2026-11-05 (`checkoutStatus`
+  captured from `?checkout=` at mount, Close pushes to `/` instead of
+  `router.back()` when set) — but that fix was only ever built into the
+  standalone `/account/subscription` page. `AccountForm.tsx` (Account
+  Options' own embedded Account Status section) never got it: it had zero
+  `?checkout=` awareness, no stripped-query effect, no banner, and its own
+  `handleClose` was unconditionally `router.back()` — meaning every single
+  Sign Up completed from Account Options landed the browser's Back
+  history on the now-completed Stripe Checkout page itself (Stripe's own
+  "You're all done here" confirmation for a revisited finished session),
+  100% of the time, not an edge case. Ported the identical mechanism from
+  `SubscriptionForm.tsx` into `AccountForm.tsx`: `checkoutStatus` state,
+  a query-stripping `useEffect`, the same two "Thanks — your payment was
+  received"/"Checkout was cancelled" `.noticeband`s at the top of
+  `.scroll`, and `handleClose` now pushes to `/` when `checkoutStatus` is
+  set, same as `SubscriptionForm.tsx`.
+  **Also hardened both files against a real refresh edge case** found
+  while reasoning through the fix: `checkoutStatus` was only ever captured
+  once, from the URL, at the component's first mount — a genuine page
+  refresh after the query-stripping effect has already removed
+  `?checkout=` from the address bar (e.g. prompted by this same banner's
+  own "refresh if it still shows Free" wording) would remount the
+  component with no `?checkout=` to read, silently losing the signal and
+  falling back to the exact same `router.back()`-onto-Stripe bug. Both
+  files now also mirror the real value to a `sessionStorage` key
+  (`wyp.stripeCheckoutStatus`) the moment it's read from the URL, fall back
+  to that key on a remount with no `?checkout=` present (reading and
+  clearing it in the same step, so a later, unrelated visit never
+  mistakenly inherits it), and clear it again on a normal unmount (Close
+  navigating away without ever needing the refresh fallback). Not yet
+  confirmed which of the two screens Jim actually used — flagged as likely
+  Account Options given the symptom was 100% reproducible rather than
+  refresh-dependent, but both are fixed regardless. `npx tsc --noEmit`/
+  `npm run lint` both clean.

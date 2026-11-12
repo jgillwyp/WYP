@@ -69,11 +69,38 @@ export default function SubscriptionForm() {
   // browser navigation (Stripe's hosted page sending the browser back),
   // never a same-instance client-router reuse, so there's no staleness
   // risk the way /login's own ?intent=signup once had.
+  //
+  // Also falls back to a sessionStorage copy (2026-11-11, owner-reported —
+  // this same symptom, "Close returns me to the Stripe Checkout page,"
+  // traced to AccountForm.tsx's own embedded Account Options screen, which
+  // had no checkoutStatus handling at all until this same batch — ported
+  // the identical hardening here too, since a plain page refresh after the
+  // query-stripping effect below has already removed ?checkout= from the
+  // address bar would hit the exact same gap on this screen): read-and-
+  // clear in the fallback branch only, so a later, unrelated visit never
+  // keeps seeing it. The unmount effect further down clears it for the
+  // non-refresh case, once this instance is the one that set it.
   const [checkoutStatus] = useState<'success' | 'cancelled' | null>(() => {
     if (typeof window === 'undefined') return null
-    const params = new URLSearchParams(window.location.search)
-    const value = params.get('checkout')
-    return value === 'success' || value === 'cancelled' ? value : null
+    const fromUrl = new URLSearchParams(window.location.search).get('checkout')
+    if (fromUrl === 'success' || fromUrl === 'cancelled') {
+      try {
+        window.sessionStorage.setItem('wyp.stripeCheckoutStatus', fromUrl)
+      } catch {
+        // ignore — refresh-survival is best-effort, not required for correctness
+      }
+      return fromUrl
+    }
+    try {
+      const stored = window.sessionStorage.getItem('wyp.stripeCheckoutStatus')
+      if (stored === 'success' || stored === 'cancelled') {
+        window.sessionStorage.removeItem('wyp.stripeCheckoutStatus')
+        return stored
+      }
+    } catch {
+      // ignore
+    }
+    return null
   })
 
   useEffect(() => {
@@ -150,6 +177,23 @@ export default function SubscriptionForm() {
     // re-fires.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Clears the sessionStorage fallback once this instance (the one that set
+  // it) goes away normally — e.g. Close navigates off — so a later,
+  // unrelated visit within the same tab session never mistakenly inherits
+  // it. The checkoutStatus useState's own fallback branch already clears it
+  // for the refresh case; this covers the non-refresh case.
+  useEffect(() => {
+    return () => {
+      if (checkoutStatus) {
+        try {
+          window.sessionStorage.removeItem('wyp.stripeCheckoutStatus')
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [checkoutStatus])
 
   // Same shape as AccountForm.tsx's own handleTierToggle — goes through
   // set_tier_for_testing() (migration 035/047) or /api/stripe/testing-

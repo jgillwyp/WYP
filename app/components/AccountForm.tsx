@@ -343,6 +343,47 @@ export default function AccountForm() {
   const [storageOverrideSaving, setStorageOverrideSaving] = useState(false)
   const [storageOverrideError, setStorageOverrideError] = useState<string | null>(null)
 
+  // Stripe Checkout/Billing Portal both redirect back here with
+  // ?checkout=success|cancelled (create-checkout-session/create-portal-
+  // session route.ts's own success_url/cancel_url) — same mechanism
+  // SubscriptionForm.tsx's own copy already had (2026-11-05), ported here
+  // for the first time (2026-11-11, owner-reported): this screen had no
+  // checkoutStatus awareness at all, so its Close button was always
+  // router.back() unconditionally — landing back on the just-completed
+  // Stripe Checkout page's own "You're all done here" screen every time
+  // Sign Up was reached from Account Options rather than /account/
+  // subscription. Also falls back to a sessionStorage copy for the case
+  // where this component remounts via a plain page refresh after the
+  // query-stripping effect below has already removed ?checkout= from the
+  // address bar — e.g. the banner's own "refresh if it still shows Free"
+  // hint leading straight into exactly that. Read-and-clear in the
+  // fallback branch only, so a later, unrelated visit never keeps seeing
+  // it; the unmount effect further down clears it once this instance is
+  // the one that set it and goes away normally (Close navigates off, no
+  // refresh ever needed).
+  const [checkoutStatus] = useState<'success' | 'cancelled' | null>(() => {
+    if (typeof window === 'undefined') return null
+    const fromUrl = new URLSearchParams(window.location.search).get('checkout')
+    if (fromUrl === 'success' || fromUrl === 'cancelled') {
+      try {
+        window.sessionStorage.setItem('wyp.stripeCheckoutStatus', fromUrl)
+      } catch {
+        // ignore — refresh-survival is best-effort, not required for correctness
+      }
+      return fromUrl
+    }
+    try {
+      const stored = window.sessionStorage.getItem('wyp.stripeCheckoutStatus')
+      if (stored === 'success' || stored === 'cancelled') {
+        window.sessionStorage.removeItem('wyp.stripeCheckoutStatus')
+        return stored
+      }
+    } catch {
+      // ignore
+    }
+    return null
+  })
+
   // Collapsible section state (2026-08-23) — all three hidden by default;
   // persists per Jim's own "remain as last-used" wording within a session
   // (sessionStorage), resets on the next fresh tab. Lazy useState
@@ -397,6 +438,33 @@ export default function AccountForm() {
     router.replace('/account')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Strip ?checkout= from the address bar once read above — checkoutStatus
+  // itself stays set in React state for this instance's whole lifetime
+  // regardless of the URL change.
+  useEffect(() => {
+    if (checkoutStatus) {
+      router.replace('/account')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Clears the sessionStorage fallback once this instance (the one that set
+  // it) goes away normally — e.g. Close navigates off — so a later,
+  // unrelated visit within the same tab session never mistakenly inherits
+  // it. The checkoutStatus useState's own fallback branch already clears it
+  // for the refresh case; this covers the non-refresh case.
+  useEffect(() => {
+    return () => {
+      if (checkoutStatus) {
+        try {
+          window.sessionStorage.removeItem('wyp.stripeCheckoutStatus')
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [checkoutStatus])
 
   useEffect(() => {
     let cancelled = false
@@ -694,6 +762,15 @@ export default function AccountForm() {
   }
 
   function handleClose() {
+    // A Stripe redirect is a real top-level browser navigation, not an
+    // in-app one — it breaks the history continuity router.back() normally
+    // relies on, same reasoning as SubscriptionForm.tsx's own identical fix
+    // (2026-11-05), ported here for the first time (2026-11-11,
+    // owner-reported) since this screen never had it.
+    if (checkoutStatus) {
+      router.push('/')
+      return
+    }
     router.back()
   }
 
@@ -780,6 +857,17 @@ export default function AccountForm() {
         </div>
 
         <div className="scroll">
+          {checkoutStatus === 'success' && (
+            <div className="noticeband" style={{ margin: '4px var(--pad) 14px' }}>
+              Thanks — your payment was received. This can take a few seconds to show
+              below; refresh if it still shows Free after a moment.
+            </div>
+          )}
+          {checkoutStatus === 'cancelled' && (
+            <div className="noticeband" style={{ margin: '4px var(--pad) 14px' }}>
+              Checkout was cancelled — nothing was charged.
+            </div>
+          )}
           {/* ---------------------------------------------------- Request */}
           {/* Retitled "Requests (sent)," 2026-09-30 — Jim: some of these
               options relate specifically to being in a Requests Sent state.
