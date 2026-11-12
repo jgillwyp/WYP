@@ -1236,6 +1236,32 @@ body {
   color: var(--ink-soft);
 }
 
+/* Spinner (2026-11-11) — a small rotating activity indicator, the web
+   equivalent of iOS's own UIActivityIndicatorView/SwiftUI ProgressView.
+   Jim's own suggestion: a brief "Calculating…" line of text that gets
+   swapped out moments later for a longer, different sentence reads as a
+   confusing flash rather than a clear "working on it" state — a spinner
+   makes the in-progress state visually distinct instead of just more text.
+   First use: AttachmentStoragePanel's own exact-charge-preview dialog;
+   reusable anywhere else a brief async wait needs the same treatment. */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  border: 2px solid var(--rule);
+  border-top-color: var(--brand-blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ============================================================================
    LOOKUP RESULTS — PROPOSED (§6.24)
    Pull-down list under a §6.16 lookup field. Neither the Create Request

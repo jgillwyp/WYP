@@ -1126,12 +1126,21 @@ function AttachmentStoragePanel({
                 source formatting) is used here from the start rather than
                 risking it and finding out from a Jim bug report. */}
             <p className="subnote">
-              {needsExactPreview
-                ? previewLoading
-                  ? 'Calculating the exact charge…'
-                  : previewError
-                    ? `Increase your Attachment Storage Capacity to ${target} GB — this is prorated and charged now, then $${computeStoragePreviewTotal('annual', target)}/yr starting your next renewal. (${previewError})`
-                    : `The increase of ${target - storageGb} GB for a new capacity of ${target} GB, for the remainder of this annual subscription period, will be charged now at $${chargeNowAmount !== null ? formatDollarAmount(chargeNowAmount) : '—'} and will be billed thereafter at $${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per ${STORAGE_BLOCK_GB} GB. Including the increased storage capacity of ${target} GB, your annual renewal cost will increase from $${computeStoragePreviewTotal('annual', storageGb)} to $${computeStoragePreviewTotal('annual', target)}.`
+              {needsExactPreview && previewLoading ? (
+                // Spinner, not just text (2026-11-11, Jim-reported) — this
+                // "Calculating…" line gets replaced moments later by a much
+                // longer sentence, which otherwise read as a confusing flash
+                // rather than a clear "working on it" state. .spinner is the
+                // web equivalent of iOS's own UIActivityIndicatorView/
+                // SwiftUI ProgressView (globals.css's own comment).
+                <>
+                  <span className="spinner" aria-hidden="true" />
+                  Calculating the exact charge…
+                </>
+              ) : needsExactPreview
+                ? previewError
+                  ? `Increase your Attachment Storage Capacity to ${target} GB — this is prorated and charged now, then $${computeStoragePreviewTotal('annual', target)}/yr starting your next renewal. (${previewError})`
+                  : `The increase of ${target - storageGb} GB for a new capacity of ${target} GB, for the remainder of this annual subscription period, will be charged now at $${chargeNowAmount !== null ? formatDollarAmount(chargeNowAmount) : '—'} and will be billed thereafter at $${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per ${STORAGE_BLOCK_GB} GB. Including the increased storage capacity of ${target} GB, your annual renewal cost will increase from $${computeStoragePreviewTotal('annual', storageGb)} to $${computeStoragePreviewTotal('annual', target)}.`
                 : cadence === 'annual'
                   ? `The decrease from ${storageGb} GB to ${target} GB will reduce your annual renewal cost from $${computeStoragePreviewTotal('annual', storageGb)} to $${computeStoragePreviewTotal('annual', target)}.`
                   : cadence === 'monthly' && isIncrease

@@ -8578,3 +8578,22 @@ link is built only after the stack is proven on Add Contact.
   this app's own two buttons. `npx tsc --noEmit`/`npm run lint` both
   clean. **Not yet tested live** — awaiting Jim's own confirmation that
   the new in-app Cancel dialog/flow works end to end.
+- **New `.spinner` CSS component — a real rotating activity indicator for
+  the storage-increase confirm dialog's brief "Calculating…" state
+  (2026-11-11), no migration.** Jim: the "Increase Attachment Storage
+  Capacity?" dialog's loading text ("Calculating the exact charge…") gets
+  overwritten moments later by a much longer sentence once the real Stripe
+  preview resolves — "too quick to read, but seems to indicate that it is
+  'working on it'" — and asked whether a platform spinner (citing iOS's
+  own `UIActivityIndicatorView`/SwiftUI `ProgressView`) could make that
+  clearer. This is a web app rendered in a WebView even inside the
+  Capacitor wrapper, not native Swift UI, so the actual equivalent is a
+  small CSS-animated spinner rather than a native API call — built one:
+  `.spinner` (`app/globals.css`), a 14px rotating ring using the existing
+  `--rule`/`--brand-blue` tokens (no new color), reusable anywhere else a
+  brief async wait could use the same "working on it" signal. Shown only
+  for the `needsExactPreview && previewLoading` branch of
+  `AttachmentStoragePanel`'s confirm dialog (`SubscriptionPanels.tsx`) —
+  every other branch is unchanged, still a single flat template-literal
+  string per this file's own established SWC-whitespace-bug mitigation.
+  `npx tsc --noEmit`/`npm run lint` both clean.
