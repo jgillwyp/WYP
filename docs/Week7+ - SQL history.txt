@@ -1352,4 +1352,233 @@ grant execute on function public.admin_get_stripe_audit(integer) to authenticate
 --   -- invoice id for invoice_paid, a checkout session id for
 --   -- checkout_completed, a subscription id for cancel/renew/storage/
 --   -- upgrade events).
+
+-- ============================================================================
+-- Migration 094 (2026-11-12) -- CONFIRMED RUN by Jim, 2026-11-12. Fixes a
+-- real bug in migration 093's
+-- admin_get_stripe_audit(): "column reference 'id' is ambiguous," reported
+-- by Jim opening the live Stripe Audit screen the same day it shipped.
+--
+-- Root cause: `returns table (id bigint, ...)` makes `id` an implicit
+-- PL/pgSQL variable throughout the WHOLE function body, not just inside the
+-- final RETURN QUERY -- so the admin check's own
+--   select is_admin into v_is_admin from public.profiles where id = auth.uid();
+-- has an unqualified `id` that Postgres can't tell apart from the OUT
+-- parameter `id`, even though it's a completely separate statement earlier
+-- in the function. Every reference inside the RETURN QUERY itself (a.id,
+-- u.id) was already correctly qualified with a table alias -- this one bare
+-- `id` was the only gap. No signature change, so a plain
+-- `create or replace function` fixes it in place.
+-- ============================================================================
+
+create or replace function public.admin_get_stripe_audit(
+  p_limit integer default 200
+)
+returns table (
+  id bigint,
+  created_at timestamptz,
+  user_email text,
+  event_type text,
+  amount_cents integer,
+  currency text,
+  stripe_transaction_id text,
+  detail jsonb
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  return query
+  select
+    a.id,
+    a.created_at,
+    u.email,
+    a.event_type,
+    a.amount_cents,
+    a.currency,
+    coalesce(
+      a.detail->>'stripe_invoice_id',
+      a.detail->>'invoice_id',
+      a.detail->>'stripe_checkout_session_id',
+      a.detail->>'stripe_subscription_id',
+      a.detail->>'subscription_id'
+    ) as stripe_transaction_id,
+    a.detail
+  from public.stripe_billing_audit a
+  left join auth.users u on u.id = a.user_id
+  order by a.created_at desc
+  limit greatest(1, least(p_limit, 1000));
+end;
+$$;
+
+-- No grant change needed -- same signature, same revoke/grant already in
+-- place from migration 093.
+
+-- Verify after running:
+--   select * from admin_get_stripe_audit(50); -- as the admin account, via
+--   the live Admin > Stripe Audit screen -- should list rows with no error.
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 095 (2026-11-12) -- CONFIRMED RUN by Jim, 2026-11-12. Fixes a
+-- second real bug in
+-- admin_get_stripe_audit(), surfaced the moment migration 094 cleared the
+-- first one: "structure of query does not match function result type."
+--
+-- Root cause: the SELECT list's column count and order already matched the
+-- declared `returns table (...)` shape exactly, so this was a TYPE
+-- mismatch, not a missing/extra/reordered column -- most likely `u.email`
+-- (auth.users.email is `character varying(255)` in Supabase's own schema,
+-- not `text`), though RETURN QUERY's automatic coercion should normally
+-- handle varchar->text without complaint, so it's not fully certain that's
+-- the only culprit. Rather than keep guessing column-by-column with no
+-- direct database access to confirm, every selected column is now cast
+-- explicitly to its declared OUT type -- this guarantees the row Postgres
+-- actually returns always matches `returns table` byte-for-byte, regardless
+-- of whatever the real underlying column type turns out to be (now or if
+-- stripe_billing_audit/auth.users ever changes later).
+-- ============================================================================
+
+create or replace function public.admin_get_stripe_audit(
+  p_limit integer default 200
+)
+returns table (
+  id bigint,
+  created_at timestamptz,
+  user_email text,
+  event_type text,
+  amount_cents integer,
+  currency text,
+  stripe_transaction_id text,
+  detail jsonb
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  return query
+  select
+    a.id::bigint,
+    a.created_at::timestamptz,
+    u.email::text,
+    a.event_type::text,
+    a.amount_cents::integer,
+    a.currency::text,
+    coalesce(
+      a.detail->>'stripe_invoice_id',
+      a.detail->>'invoice_id',
+      a.detail->>'stripe_checkout_session_id',
+      a.detail->>'stripe_subscription_id',
+      a.detail->>'subscription_id'
+    )::text as stripe_transaction_id,
+    a.detail::jsonb
+  from public.stripe_billing_audit a
+  left join auth.users u on u.id = a.user_id
+  order by a.created_at desc
+  limit greatest(1, least(p_limit, 1000));
+end;
+$$;
+
+-- No grant change needed -- same signature, same revoke/grant already in
+-- place from migration 093.
+
+-- Verify after running:
+--   select * from admin_get_stripe_audit(50); -- as the admin account, via
+--   the live Admin > Stripe Audit screen -- should list rows with no error.
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 096 (2026-11-12) -- CONFIRMED RUN by Jim, 2026-11-12. Adds
+-- From/To date-range filtering to
+-- admin_get_stripe_audit(), matching the From/To filter every other Admin
+-- Activity report already has (AdminStatsFilterBar, admin_stats_contacts/
+-- requests/todos/accounts -- same p_from date, p_to date convention, and
+-- the same `e.at::date between p_from and p_to` idiom those RPCs already
+-- use, here as `a.created_at::date between p_from and p_to`).
+--
+-- Signature change (two new required parameters ahead of the existing
+-- p_limit, which has a default and so must stay last) -- Postgres can't
+-- apply this via a plain `create or replace function` the way 094/095
+-- could (those never changed the parameter list), so this needs the same
+-- drop-then-create treatment this file's own RETURNS TABLE precedents
+-- already established for a signature change (migrations 017/021/027/040/
+-- 069, etc.).
+-- ============================================================================
+
+drop function if exists public.admin_get_stripe_audit(integer);
+
+create function public.admin_get_stripe_audit(
+  p_from date,
+  p_to date,
+  p_limit integer default 200
+)
+returns table (
+  id bigint,
+  created_at timestamptz,
+  user_email text,
+  event_type text,
+  amount_cents integer,
+  currency text,
+  stripe_transaction_id text,
+  detail jsonb
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  return query
+  select
+    a.id::bigint,
+    a.created_at::timestamptz,
+    u.email::text,
+    a.event_type::text,
+    a.amount_cents::integer,
+    a.currency::text,
+    coalesce(
+      a.detail->>'stripe_invoice_id',
+      a.detail->>'invoice_id',
+      a.detail->>'stripe_checkout_session_id',
+      a.detail->>'stripe_subscription_id',
+      a.detail->>'subscription_id'
+    )::text as stripe_transaction_id,
+    a.detail::jsonb
+  from public.stripe_billing_audit a
+  left join auth.users u on u.id = a.user_id
+  where a.created_at::date between p_from and p_to
+  order by a.created_at desc
+  limit greatest(1, least(p_limit, 1000));
+end;
+$$;
+
+revoke all on function public.admin_get_stripe_audit(date, date, integer) from public;
+grant execute on function public.admin_get_stripe_audit(date, date, integer) to authenticated;
+
+-- Verify after running:
+--   select * from admin_get_stripe_audit('2026-01-01', '2026-12-31', 50);
+--   -- as the admin account, via the live Admin > Stripe Audit screen --
+--   should list rows within the chosen From/To range, no error.
 -- ============================================================================

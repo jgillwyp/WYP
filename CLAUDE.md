@@ -8762,3 +8762,81 @@ link is built only after the stack is proven on Add Contact.
   **Migration 093 confirmed run by Jim, 2026-11-12.** **Not yet tested
   live** — awaiting Jim's own confirmation that the Upgrade flow, the
   Stripe Audit screen, and the stray-credit fix all work end to end.
+- **Migration 094 — fixes a real bug in migration 093's
+  `admin_get_stripe_audit()`, found immediately on first live use
+  (2026-11-12). Confirmed run by Jim, 2026-11-12.** Jim opened the new
+  Stripe Audit screen and hit `column reference "id" is ambiguous.` Root
+  cause: `returns table (id bigint, ...)` makes `id` an implicit PL/pgSQL
+  variable throughout the *whole* function body, not just inside the
+  final `RETURN QUERY` — so the admin check's own `select is_admin into
+  v_is_admin from public.profiles where id = auth.uid();` had an
+  unqualified `id` Postgres couldn't tell apart from the OUT parameter,
+  even in a completely separate statement earlier in the function. Every
+  reference inside the actual query (`a.id`, `u.id`) was already
+  correctly qualified with a table alias — this one bare `id` was the
+  only gap. Fixed with a plain `create or replace function` (no signature
+  change, so no grant/drop needed) — the admin check now reads `select
+  p.is_admin into v_is_admin from public.profiles p where p.id =
+  auth.uid();`. `docs/Week7+ - SQL history.txt`'s own migration 093 entry
+  is left as originally written (CLAUDE.md's own convention never edits a
+  past entry's quoted history) — migration 094 is appended after it
+  instead.
+- **Migration 095 — fixes a second, different real bug in
+  `admin_get_stripe_audit()`, surfaced the moment migration 094 cleared
+  the first one: `structure of query does not match function result
+  type` (2026-11-12). Confirmed run by Jim, 2026-11-12** (after one
+  false start — the first retest still showed the error because the
+  migration hadn't actually been run yet, confirmed via
+  `pg_get_functiondef`, then re-run for real). The `RETURN QUERY
+  SELECT` list's column count and order already matched `returns table
+  (...)` exactly, so this is a type mismatch, not a missing/extra/
+  reordered column — the prime suspect is `u.email` (Supabase's own
+  `auth.users.email` is `character varying(255)`, not `text`), though
+  RETURN QUERY's automatic coercion should normally handle varchar->text
+  without complaint, so it isn't fully certain that's the only culprit
+  with no direct database access to confirm it. Fixed by casting every
+  selected column explicitly to its declared OUT type (`a.id::bigint`,
+  `u.email::text`, `a.amount_cents::integer`, etc.) — guarantees the row
+  Postgres actually returns matches `returns table` byte-for-byte
+  regardless of what the real underlying column types turn out to be,
+  now or later.
+- **Stripe Audit gains Export .xlsx + Close buttons matching the other
+  Admin reports, and a From/To date-range filter — migration 096
+  confirmed run by Jim, 2026-11-12.** Jim: "modify the Stripe Audit to
+  show the Export.xlsx and Close buttons as on the other Admin reports,"
+  then "Please also add a filter for From and To dates - as in the other
+  activity reports." `AdminStripeAuditForm.tsx`'s band now matches
+  `AdminContactsStatsForm.tsx`'s own exactly — `.bandcluster` holding
+  `.btn-secondary` "Export .xlsx"/"Exporting…" then `.btn` "Close" —
+  instead of its original single plain Close button. New From/To filter
+  bar reuses `AdminStatsShared.tsx`'s existing `defaultFromMonth`/
+  `defaultToMonth`/`monthToFromDate`/`monthToToDate` helpers and the same
+  `.statfilters`/`.statfiltergroup`/`.statfilterlabel`/`.statfilterinput`
+  classes every other report's filter bar uses — built inline rather than
+  reusing `AdminStatsFilterBar` itself, since that component's
+  Granularity/Cohort chips don't apply here: this screen has no per-period
+  aggregation or account-cohort concept, only a flat, date-bounded
+  transaction list.
+
+  **Migration 096** adds `p_from date, p_to date` to `admin_get_stripe_
+  audit()`, ahead of the existing `p_limit` (which has a default and so
+  has to stay last) — the same `a.created_at::date between p_from and
+  p_to` idiom `admin_stats_contacts()`/etc. already use for their own
+  `e.at::date between p_from and p_to` filter. A genuine parameter-list
+  change, so (unlike migrations 094/095, which only touched the function
+  body) this needed the established drop-then-create treatment for a
+  signature change, not a plain `create or replace`.
+
+  **Export route** (`app/api/admin/stats/export/route.ts`) gained a new
+  `entity === 'stripe_audit'` branch and `exportStripeAudit()` — mirrors
+  `exportSummary()`'s own shape (forwarded-JWT client, re-checks
+  `auth.getUser()`, lets the RPC's own `is_admin` check be the real
+  authority) but calls `admin_get_stripe_audit()` directly rather than
+  `ENTITY_CONFIG`'s shared per-period shape, since this is a flat
+  transaction list, not an aggregated table. One sheet, one row per
+  transaction, the same Date/Type/User/Amount/Txn ID columns the
+  on-screen cards show — `STRIPE_EVENT_TYPE_LABEL` duplicated from
+  `AdminStripeAuditForm.tsx`'s own `EVENT_TYPE_LABEL`, per this codebase's
+  established per-file-duplication convention. `npx tsc --noEmit`/`npm
+  run lint` both clean. No mockup — this feature has none beyond the
+  other Admin reports' own live screens as the reference.

@@ -16,6 +16,12 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
+import {
+  defaultFromMonth,
+  defaultToMonth,
+  monthToFromDate,
+  monthToToDate,
+} from './AdminStatsShared'
 
 type AuditRow = {
   id: number
@@ -62,19 +68,34 @@ function formatAmount(cents: number | null, currency: string | null): string {
   return currency ? `$${dollars} ${currency.toUpperCase()}` : `$${dollars}`
 }
 
+const AUDIT_EXPORT_LIMIT = 200
+
 export default function AdminStripeAuditForm() {
   const router = useRouter()
 
   const [rows, setRows] = useState<AuditRow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  // From/To filter — same month-picker treatment and defaults as every
+  // other Admin Activity report (AdminStatsFilterBar/AdminContactsStatsForm
+  // etc.), just without that bar's Granularity/Cohort chips: this screen
+  // has no per-period aggregation or account-cohort concept to filter by,
+  // only a flat, date-bounded transaction list.
+  const [fromMonth, setFromMonth] = useState(defaultFromMonth())
+  const [toMonth, setToMonth] = useState(defaultToMonth())
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
       setError(null)
-      const { data, error: rpcError } = await supabase.rpc('admin_get_stripe_audit', { p_limit: 200 })
+      const { data, error: rpcError } = await supabase.rpc('admin_get_stripe_audit', {
+        p_from: monthToFromDate(fromMonth),
+        p_to: monthToToDate(toMonth),
+        p_limit: AUDIT_EXPORT_LIMIT,
+      })
       if (cancelled) return
       if (rpcError) {
         setError(rpcError.message)
@@ -88,10 +109,47 @@ export default function AdminStripeAuditForm() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [fromMonth, toMonth])
 
   function handleClose() {
     router.back()
+  }
+
+  // Export .xlsx — same shape as the other Admin report screens
+  // (AdminContactsStatsForm.tsx/etc., app/api/admin/stats/export/route.ts):
+  // a forwarded-JWT fetch to the one shared export route, which re-runs
+  // admin_get_stripe_audit() itself rather than trusting any client-side
+  // data, so the download can never drift from what the RPC actually
+  // returns. Same AUDIT_EXPORT_LIMIT the on-screen fetch above already uses,
+  // so the export always matches what's currently on screen.
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) return
+      const params = new URLSearchParams({
+        entity: 'stripe_audit',
+        from: monthToFromDate(fromMonth),
+        to: monthToToDate(toMonth),
+        limit: String(AUDIT_EXPORT_LIMIT),
+      })
+      const res = await fetch(`/api/admin/stats/export?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'wyp-stripe-audit.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -101,9 +159,37 @@ export default function AdminStripeAuditForm() {
 
         <div className="band">
           <span className="glabel">Stripe Audit</span>
-          <button className="btn-secondary" type="button" onClick={handleClose}>
-            Close
-          </button>
+          <span className="bandcluster">
+            <button className="btn-secondary" type="button" onClick={handleExport} disabled={exporting || loading}>
+              {exporting ? 'Exporting…' : 'Export .xlsx'}
+            </button>
+            <button className="btn" type="button" onClick={handleClose}>
+              Close
+            </button>
+          </span>
+        </div>
+
+        <div className="statfilters no-print">
+          <div className="statfiltergroup">
+            <label className="statfilterlabel" htmlFor="stripe-audit-from">From</label>
+            <input
+              id="stripe-audit-from"
+              type="month"
+              className="statfilterinput"
+              value={fromMonth}
+              max={toMonth}
+              onChange={(e) => setFromMonth(e.target.value)}
+            />
+            <label className="statfilterlabel" htmlFor="stripe-audit-to">To</label>
+            <input
+              id="stripe-audit-to"
+              type="month"
+              className="statfilterinput"
+              value={toMonth}
+              min={fromMonth}
+              onChange={(e) => setToMonth(e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="scroll">

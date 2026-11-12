@@ -119,6 +119,9 @@ export async function GET(request: Request) {
   if (entity === 'summary') {
     return exportSummary(request, url)
   }
+  if (entity === 'stripe_audit') {
+    return exportStripeAudit(request, url)
+  }
 
   const config = ENTITY_CONFIG[entity]
   if (!config) {
@@ -329,6 +332,104 @@ async function exportSummary(request: Request, url: URL): Promise<Response> {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="wyp-sum-and-averages.xlsx"',
+    },
+  })
+}
+
+/**
+ * Stripe Audit export — mirrors AdminStripeAuditForm.tsx's own on-screen
+ * list exactly: same admin_get_stripe_audit() RPC (migration 093/096),
+ * same From/To date-range params, same AUDIT_EXPORT_LIMIT. One flat sheet
+ * (no per-period aggregation here, unlike ENTITY_CONFIG's screens) — one
+ * row per transaction, the same Date/Type/User/Amount/Txn ID columns the
+ * on-screen cards show. EVENT_TYPE_LABEL duplicated from
+ * AdminStripeAuditForm.tsx per this codebase's own per-file-duplication
+ * convention.
+ */
+const STRIPE_EVENT_TYPE_LABEL: Record<string, string> = {
+  checkout_completed: 'Sign Up',
+  invoice_paid: 'Invoice Paid',
+  subscription_canceled: 'Subscription Ended',
+  subscription_cancel_scheduled: 'Cancel Scheduled',
+  subscription_renewed: 'Renewed',
+  subscription_upgraded_to_annual: 'Upgraded to Annual',
+  storage_update_confirmed: 'Storage Update',
+}
+
+async function exportStripeAudit(request: Request, url: URL): Promise<Response> {
+  const from = url.searchParams.get('from')
+  const to = url.searchParams.get('to')
+  const limit = Number(url.searchParams.get('limit') ?? '200')
+  if (!from || !to) {
+    return Response.json({ error: 'bad_request' }, { status: 400 })
+  }
+
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader) {
+    return Response.json({ error: 'unauthenticated' }, { status: 401 })
+  }
+
+  const sb = getForwardedClient(authHeader)
+  const { data: userData } = await sb.auth.getUser()
+  if (!userData.user) {
+    return Response.json({ error: 'unauthenticated' }, { status: 401 })
+  }
+
+  const { data, error } = await sb.rpc('admin_get_stripe_audit', {
+    p_from: from,
+    p_to: to,
+    p_limit: limit,
+  })
+
+  if (error) {
+    // The RPC itself raises 'Not authorized.' for a non-admin caller —
+    // surfaced here as a plain 403 rather than a generic 500.
+    const status = error.message?.includes('authorized') ? 403 : 500
+    return Response.json({ error: 'query_failed', detail: error.message }, { status })
+  }
+
+  type AuditRow = {
+    created_at: string
+    user_email: string | null
+    event_type: string
+    amount_cents: number | null
+    currency: string | null
+    stripe_transaction_id: string | null
+  }
+  const rows = (data ?? []) as AuditRow[]
+
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'Would You Please — Admin Statistics'
+  workbook.created = new Date()
+  const sheet = workbook.addWorksheet('Stripe Audit')
+  sheet.columns = [
+    { header: 'Date', key: 'date', width: 20 },
+    { header: 'Type', key: 'type', width: 22 },
+    { header: 'User', key: 'user', width: 28 },
+    { header: 'Amount', key: 'amount', width: 14 },
+    { header: 'Txn ID', key: 'txn_id', width: 32 },
+  ]
+  sheet.getRow(1).font = { bold: true }
+  rows.forEach((r) => {
+    sheet.addRow({
+      date: new Date(r.created_at),
+      type: STRIPE_EVENT_TYPE_LABEL[r.event_type] ?? r.event_type,
+      user: r.user_email ?? '',
+      amount:
+        r.amount_cents === null
+          ? ''
+          : `$${(r.amount_cents / 100).toFixed(2)}${r.currency ? ' ' + r.currency.toUpperCase() : ''}`,
+      txn_id: r.stripe_transaction_id ?? '',
+    })
+  })
+  sheet.getColumn('date').numFmt = 'mm/dd/yy hh:mm AM/PM'
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  return new Response(buffer, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="wyp-stripe-audit.xlsx"',
     },
   })
 }
