@@ -8411,3 +8411,62 @@ link is built only after the stack is proven on Add Contact.
   to confirm a real `npm run build` locally before this is treated as
   fully verified. No mockup — this feature family has none beyond Jim's
   own "WYP dev changes" doc.
+- **Four fixes to the merged Account Status screen from Jim's first real
+  test (2026-11-11), no migration.** (1) **Test Storage Cap's Clear button
+  couldn't reset unsaved typed MBs** — it was `disabled` whenever
+  `storageOverrideBytes` was still `null` (nothing ever saved), so typing a
+  number and changing your mind had no way back short of saving it first.
+  `handleClearStorageOverride` (`AccountForm.tsx`, `SubscriptionForm.tsx`)
+  now resets the field immediately regardless, and only hits the
+  `set_storage_limit_override` RPC when there's a real saved override to
+  actually clear; `SubscriptionPanels.tsx`'s Clear button is now enabled
+  whenever either a saved override or unsaved input exists. (2)
+  **Attachment Storage Capacity rebuilt to match Jim's own pasted mockup.**
+  "Manage Storage" renamed **"Manage Use"** (the shared button plus its two
+  textual mentions). A new **"Modify Capacity"** subtitle (smaller,
+  `--ink-soft`, distinct from the brand-blue "Attachment Storage Capacity"
+  heading above it) now sits right after the "Current: ..." line. The two
+  small buttons dropped their "− 5 GB"/"+ 5 GB" labels for plain
+  **"Decrease"/"Increase"**, and the "xx GB" text that used to sit between
+  them is gone — the action button already states the target. The action
+  button itself changed from "Increase/Decrease Capacity to X GB" to
+  **"Modify Capacity to X GB"** (plain "Modify Capacity" when nothing's
+  pending) — Jim's own reasoning: "I see a problem with the words
+  Increase/Decrease being used both for the 'modify' and 'buy' buttons...
+  The action 'buy' button could use 'Modify' instead," which also shortens
+  the button so it stops wrapping onto a second line. The two trailing
+  explanatory paragraphs (the real floor, and reducing it via Manage
+  Use/Storage) are merged into the single paragraph the pasted mockup
+  showed. (3) **Real bug, not just wording: the "Awaiting..." action button
+  read as a normal clickable blue button instead of greyed** — Jim:
+  "the 'Awaiting...' version of the button should be greyed." Root cause:
+  Decrease's floor state and the action button's "nothing changed" state
+  both had their `disabled` condition gated behind `!realPurchaseDisabled`
+  — meaning a private tester with no real Stripe subscription
+  (`realPurchaseDisabled`) never saw either button actually disabled,
+  regardless of whether there was anything to do, which directly
+  contradicted this same screen's own stated design goal ("what you see is
+  a normal Free/Subscriber page"). A real Subscriber page disables Decrease
+  at the floor and the action button with nothing changed no matter what —
+  fixed by dropping the `!realPurchaseDisabled &&` guard from both disabled
+  checks entirely; `realPurchaseDisabled` now only ever intercepts a click
+  that would otherwise be genuinely enabled (Increase always, Decrease off
+  the floor, or the action button once something's changed), matching the
+  three `handle*Click` functions' own existing logic. This incidentally
+  fixes the identical issue on Decrease's own "N/A" floor state, which
+  Jim's report didn't call out directly but shared the same root cause. (4)
+  **Flagged, not a code change: Cancel opened Stripe's own hosted Billing
+  Portal with no Cancel option at all** — Jim: "there was no option to
+  cancel, only 'Return to Would You Please sandbox.'" `create-portal-
+  session/route.ts` only ever calls `stripe.billingPortal.sessions.create`
+  with the customer id and a return URL — which buttons/features the
+  resulting Portal page actually shows (Cancel subscription, update payment
+  method, invoice history) is governed entirely by the Customer Portal's
+  own active configuration in the Stripe Dashboard (Settings → Billing →
+  Customer portal), not by anything this route passes. Recommended Jim
+  check that configuration in the sandbox/test-mode account and confirm
+  "Cancellations" is turned on there (set to cancel at period end, matching
+  this app's own "stays active through the end of the period you've
+  already paid for" copy) — nothing in the code restricts or hides it.
+  `npx tsc --noEmit`/`npm run lint` both clean across items 1–3. No mockup
+  changes beyond what Jim's own pasted image already specified.

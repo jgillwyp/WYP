@@ -673,8 +673,15 @@ export default function AccountForm() {
 
   async function handleClearStorageOverride() {
     if (!userId) return
-    setStorageOverrideSaving(true)
+    // Reset the typed field immediately, whether or not anything was ever
+    // saved (2026-11-11, owner-reported: unsaved typed MBs couldn't be
+    // cleared without first saving them, since Clear used to be disabled
+    // whenever storageOverrideBytes was still null). Only hit the server
+    // when there's a real saved override to actually clear.
+    setStorageOverrideInput('')
     setStorageOverrideError(null)
+    if (storageOverrideBytes === null) return
+    setStorageOverrideSaving(true)
 
     const { error: rpcError } = await supabase.rpc('set_storage_limit_override', { p_bytes: null })
 
@@ -684,7 +691,6 @@ export default function AccountForm() {
       return
     }
     setStorageOverrideBytes(null)
-    setStorageOverrideInput('')
   }
 
   function handleClose() {

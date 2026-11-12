@@ -257,8 +257,13 @@ export default function SubscriptionForm() {
 
   async function handleClearStorageOverride() {
     if (!userId) return
-    setStorageOverrideSaving(true)
+    // See AccountForm.tsx's own identical handler for the full reasoning
+    // (2026-11-11) — reset the field immediately, only hit the server when
+    // there's a real saved override to clear.
+    setStorageOverrideInput('')
     setStorageOverrideError(null)
+    if (storageOverrideBytes === null) return
+    setStorageOverrideSaving(true)
 
     const { error: rpcError } = await supabase.rpc('set_storage_limit_override', { p_bytes: null })
 
@@ -268,7 +273,6 @@ export default function SubscriptionForm() {
       return
     }
     setStorageOverrideBytes(null)
-    setStorageOverrideInput('')
   }
 
   function handleClose() {

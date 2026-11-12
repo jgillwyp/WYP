@@ -486,15 +486,16 @@ function SubscriptionFeaturesAndCost({ isTester = false }: { isTester?: boolean 
   )
 }
 
-// Manage Storage — a title-row button right-aligned with "Attachment
-// Storage Capacity" itself, shown this way on every Account Status state
-// (Private Tester, Free, Subscriber) and on both call sites (Account
-// Options' embedded section, /account/subscription).
+// Manage Use — a title-row button right-aligned with "Attachment Storage
+// Capacity" itself, shown this way on every Account Status state (Private
+// Tester, Free, Subscriber) and on both call sites (Account Options'
+// embedded section, /account/subscription). Renamed from "Manage Storage"
+// 2026-11-11 (Jim's own mockup).
 function ManageStorageButton() {
   const router = useRouter()
   return (
     <button type="button" className="btn-secondary" onClick={() => router.push('/account/storage')}>
-      Manage Storage
+      Manage Use
     </button>
   )
 }
@@ -523,7 +524,7 @@ function StorageCapacityExplainer() {
       provided a {STORAGE_BLOCK_GB} GB capacity and are offered the ability to add increments
       of {STORAGE_BLOCK_GB} GB for ${STORAGE_MONTHLY_RATE_PER_BLOCK}/month. Attachment Storage
       can be managed with an ability to download and/or delete selected Attachments (the
-      &ldquo;Manage Storage&rdquo; button above).
+      &ldquo;Manage Use&rdquo; button above).
     </p>
   )
 }
@@ -943,7 +944,16 @@ function AttachmentStoragePanel({
   const extraGb = storageGb - STORAGE_BLOCK_GB
   const atFloor = target <= minGb
   const isIncrease = target > storageGb
-  const actionLabel = !changed ? 'Awaiting Increase/Decrease' : isIncrease ? `Increase Capacity to ${target} GB` : `Decrease Capacity to ${target} GB`
+  // "Modify" rather than "Increase"/"Decrease" on the action button
+  // (2026-11-11, Jim: "I see a problem with the words Increase/Decrease
+  // being used both for the 'modify' and 'buy' buttons... The action 'buy'
+  // button could use 'Modify' instead") — the two small Increase/Decrease
+  // buttons keep those names; only the action button's own wording changed,
+  // so the two don't collide. Also drops the "xx GB" text that used to sit
+  // between the small buttons, per the same message — the action button
+  // already states the target, so it was redundant and was why that button
+  // could wrap onto a second line.
+  const actionLabel = changed ? `Modify Capacity to ${target} GB` : 'Modify Capacity'
   const needsExactPreview = cadence === 'annual' && isIncrease
 
   function handleIncreaseClick() {
@@ -983,28 +993,45 @@ function AttachmentStoragePanel({
   return (
     <>
       <StorageCapacityTitleRow title="Attachment Storage Capacity" />
-      <p className="promo-p" style={{ margin: '4px 0 8px' }}>
+      <p className="promo-p" style={{ margin: '4px 0 0' }}>
         Current: <strong>{storageGb} Gigabytes</strong>
         {extraGb > 0 && (
           <> ({STORAGE_BLOCK_GB} GB included, {extraGb} GB additional)</>
         )}
       </p>
+      {/* "Modify Capacity" subtitle (2026-11-11, Jim's own mockup) — smaller
+          and a softer color than the "Attachment Storage Capacity" heading
+          above, so the two read as heading/subheading rather than two
+          headings of equal weight. */}
+      <p
+        className="promo-sub"
+        style={{ margin: '6px 0 8px', fontSize: 12.5, fontWeight: 700, color: 'var(--ink-soft)' }}
+      >
+        Modify Capacity
+      </p>
+      {/* disabled is never gated on realPurchaseDisabled here — a real
+          Subscriber page would disable Decrease at the floor and the action
+          button with nothing changed regardless of billing status, so
+          testers see the identical disabled/greyed states a real page
+          would show (2026-11-11, owner-reported: "the 'Awaiting...' version
+          of the button should be greyed - it is currently shown as a
+          button to click"). realPurchaseDisabled only ever intercepts a
+          click that would otherwise be ENABLED (Increase always, Decrease
+          off the floor, or the action button once something's changed) —
+          see the three handle*Click functions above. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" className="btn-secondary" onClick={handleDecreaseClick} disabled={busy || (!realPurchaseDisabled && atFloor)}>
-          {!realPurchaseDisabled && atFloor ? 'N/A' : `− ${STORAGE_BLOCK_GB} GB`}
-        </button>
-        <span style={{ minWidth: 64, textAlign: 'center' }}>
-          <strong>{target} GB</strong>
-        </span>
         <button type="button" className="btn-secondary" onClick={handleIncreaseClick} disabled={busy}>
-          + {STORAGE_BLOCK_GB} GB
+          Increase
+        </button>
+        <button type="button" className="btn-secondary" onClick={handleDecreaseClick} disabled={busy || atFloor}>
+          {atFloor ? 'N/A' : 'Decrease'}
         </button>
         <button
           type="button"
           className="btn"
           style={{ marginLeft: 'auto' }}
           onClick={handleActionClick}
-          disabled={busy || (!realPurchaseDisabled && !changed)}
+          disabled={busy || !changed}
         >
           {busy ? 'Updating…' : actionLabel}
         </button>
@@ -1093,12 +1120,12 @@ function AttachmentStoragePanel({
         <strong>Monthly</strong> plan, a change takes effect on your next billing date — no charge today — at $
         {STORAGE_MONTHLY_RATE_PER_BLOCK}/mo per {STORAGE_BLOCK_GB} GB from then on.
       </p>
+      {/* Merged from two separate paragraphs into one (2026-11-11, Jim's own
+          mockup pasted-in image) — same substance (the real floor is
+          whatever's actually in use, and Manage Use is how to lower that),
+          one paragraph instead of two. */}
       <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        {`A reduction can’t currently go below ${minGb} GB — the greater of your plan’s base ${STORAGE_BLOCK_GB} GB allowance and however much capacity your Attachments actually require right now, rounded up to the nearest ${STORAGE_BLOCK_GB} GB.`}
-      </p>
-      <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        Storage capacity can be reduced further once less is in use — the &ldquo;Manage Storage&rdquo; button
-        above offers the ability to download and/or delete selected Attachments.
+        {`If storage capacity has been increased above the base ${STORAGE_BLOCK_GB} GB, it can be reduced back down as long as the reduction does not go below the actual storage being used. The storage being used can be reduced by clicking the "Manage Use" button above and deleting selected Attachments.`}
       </p>
       {confirmation && (
         <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--brand-blue)' }}>
@@ -1201,7 +1228,7 @@ function PrivateTesterBox({
           <button
             className="btn-secondary"
             type="button"
-            disabled={storageOverrideSaving || storageOverrideBytes === null}
+            disabled={storageOverrideSaving || (storageOverrideBytes === null && storageOverrideInput === '')}
             onClick={onClearStorageOverride}
           >
             Clear
