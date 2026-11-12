@@ -756,7 +756,7 @@ type MainChipPrefs = {
   sentFilter?: FilterValue
   receivedFilter?: FilterValue
   todoFilter?: FilterValue
-  hkTab?: 'tasks' | 'videos' | 'statistics'
+  hkTab?: 'tasks' | 'videos' | 'statistics' | 'tester'
 }
 
 function readStoredChip<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -1011,17 +1011,18 @@ export default function MainScreen() {
   // see the main load() effect's own header comment for why a manual retry
   // needed to exist at all.
   const [reloadTick, setReloadTick] = useState(0)
-  const [hkTab, setHkTab] = useState<'tasks' | 'videos' | 'statistics'>(() =>
-    readStoredChip(HK_TAB_KEY, ['tasks', 'videos', 'statistics'] as const, 'tasks')
+  const [hkTab, setHkTab] = useState<'tasks' | 'videos' | 'statistics' | 'tester'>(() =>
+    readStoredChip(HK_TAB_KEY, ['tasks', 'videos', 'statistics', 'tester'] as const, 'tasks')
   )
   const [signingOut, setSigningOut] = useState(false)
 
-  // Private Tester menu (2026-10-26) — replaces the standalone "Private
-  // Tester Feedback" button with a small menu offering Feedback and the
-  // new in-app Checklist (app/testers/checklist), per Jim's own request to
-  // group both under one Housekeeping entry rather than growing the band
-  // with a second button.
-  const [testerMenuOpen, setTesterMenuOpen] = useState(false)
+  // Private Tester menu (2026-10-26, moved onto its own Housekeeping chip
+  // 2026-11-11 — see the chip row's own comment below) — Feedback and the
+  // in-app Checklist (app/testers/checklist) are now plain rows under a
+  // fourth "Private Tester" chip, same shape as Tasks/Help/Admin, rather
+  // than a separate modal menu opened from a standalone button. Jim: "a
+  // 'cleaner' approach would be to add a chip for 'Private Tester' and show
+  // the two remaining options as menu items as are offered in Tasks/Help."
 
   // Private Tester Feedback (2026-10-21) — see openFeedbackDialog's own
   // comment below.
@@ -1362,7 +1363,7 @@ export default function MainScreen() {
       if (prefs.todoFilter && (FILTER_VALUES as readonly string[]).includes(prefs.todoFilter)) {
         setTodoFilter(prefs.todoFilter)
       }
-      if (prefs.hkTab === 'tasks' || prefs.hkTab === 'videos') {
+      if (prefs.hkTab === 'tasks' || prefs.hkTab === 'videos' || prefs.hkTab === 'tester') {
         setHkTab(prefs.hkTab)
       } else if (prefs.hkTab === 'statistics' && data?.is_admin === true) {
         setHkTab(prefs.hkTab)
@@ -2233,23 +2234,18 @@ export default function MainScreen() {
             <>
           {/* Owner-reported, 2026-10-21: "Housekeeping" + both buttons
               crammed onto one row overflowed a phone's width, pushing Log
-              Out off-screen with no way to scroll to it. Private Tester
-              Feedback (temporary, testing-period-only) now gets its own
-              second row, right-aligned, below the title/Log Out row — same
-              grey .band background throughout, same stacking idea as
-              Archive's .archsecband (2026-09-03), applied here with its own
-              scoped classes since this is two full button rows, not a
-              title+subtitle pair. */}
+              Out off-screen with no way to scroll to it — fixed at the time
+              by giving the standalone "Private Tester" button its own
+              second row. That button is gone now (2026-11-11, moved onto
+              its own chip below, next to Tasks/Help/Admin — Jim: "the
+              current button location does not look good"), so this band is
+              back to one row; the hk-band/hk-band-row classes stay in case
+              a future addition needs the same stacking idea again. */}
           <div className="band hk-band">
             <div className="hk-band-row">
               <span className="glabel">Housekeeping</span>
               <button className="btn-quiet" type="button" onClick={handleLogOut} disabled={signingOut}>
                 {signingOut ? 'Logging out…' : 'Log Out'}
-              </button>
-            </div>
-            <div className="hk-band-row hk-band-row-end">
-              <button className="btn" type="button" onClick={() => setTesterMenuOpen(true)}>
-                Private Tester
               </button>
             </div>
           </div>
@@ -2296,6 +2292,23 @@ export default function MainScreen() {
                       Admin
                     </button>
                   )}
+                  {/* Private Tester chip (2026-11-11) — replaces the
+                      standalone blue "Private Tester" button; unconditional,
+                      matching that button's own availability (every signed-in
+                      account during this testing period, not isAdmin-gated
+                      like Admin above). Jim: "I wanted to be sure Private
+                      Testers realize these options are not part of the
+                      normal application - but the title does that and the
+                      current button location does not look good." */}
+                  <button
+                    className={`chip${hkTab === 'tester' ? ' sel' : ''}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={hkTab === 'tester'}
+                    onClick={() => setHkTab('tester')}
+                  >
+                    Private Tester
+                  </button>
                 </div>
               </div>
             </div>
@@ -2524,6 +2537,41 @@ export default function MainScreen() {
                   </div>
                 </div>
               </div>
+            ) : hkTab === 'tester' ? (
+              // Private Tester tab (2026-11-11) — replaces the old
+              // testerMenuOpen modal with two plain rows, same shape as
+              // Tasks/Help's own rows. Test Stripe Payments is gone
+              // outright (not moved here) — the Account Status merge made
+              // that screen unnecessary, see SubscriptionPanels.tsx's own
+              // header comment.
+              <div className="subbody">
+                <div className="hkrows">
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openFeedbackDialog()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') openFeedbackDialog() }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Feedback</span>
+                      <span className="hknote"> — send comments or report an issue by email</span>
+                    </span>
+                  </div>
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/testers/checklist')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/testers/checklist') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Checklist</span>
+                      <span className="hknote"> — track your own testing progress</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
             ) : (
               // Admin tab (2026-09-07, relabeled from "Statistics" and
               // gained Add Private Tester 2026-11-06) — admin-only
@@ -2551,23 +2599,6 @@ export default function MainScreen() {
                     <span className="hktext">
                       <span className="hktitle">Add Private Tester</span>
                       <span className="hknote"> — allow someone new to sign in and test</span>
-                    </span>
-                  </div>
-                  {/* Test Stripe Payments (2026-11-06) — the Private Tester
-                      Account Status page is informational only, no live
-                      Stripe control on it; this is the one path left to
-                      click through the real Free/Subscriber panels (and
-                      their real Stripe calls) against your own account. */}
-                  <div
-                    className="hkrow"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => router.push('/admin/stripe-test')}
-                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stripe-test') }}
-                  >
-                    <span className="hktext">
-                      <span className="hktitle">Test Stripe Payments</span>
-                      <span className="hknote"> — preview the real Free/Subscriber pages</span>
                     </span>
                   </div>
                   <div
@@ -3083,68 +3114,6 @@ export default function MainScreen() {
         </>
       )}
 
-      {/* Private Tester menu (2026-10-26, gained a third choice 2026-11-09)
-          — see testerMenuOpen's own comment above. Same .scrim/.modal
-          pattern as every other dialog on this screen. */}
-      {testerMenuOpen && (
-        <>
-          <div className="scrim" onClick={() => setTesterMenuOpen(false)} />
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="tester-menu-title">
-            <div className="modalhead">
-              <p className="modal-title" id="tester-menu-title">
-                Private Tester
-              </p>
-            </div>
-            <div className="modalacts" style={{ marginTop: 12, flexDirection: 'column', alignItems: 'stretch' }}>
-              <button
-                type="button"
-                className="btn"
-                style={{ marginBottom: 8 }}
-                onClick={() => {
-                  setTesterMenuOpen(false)
-                  openFeedbackDialog()
-                }}
-              >
-                Feedback
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{ marginBottom: 8 }}
-                onClick={() => {
-                  setTesterMenuOpen(false)
-                  router.push('/testers/checklist')
-                }}
-              >
-                Checklist
-              </button>
-              {/* Test Stripe Payments (2026-11-09) — Jim: "place the 'Test
-                  Stripe Payments' choice on the Private Tester menu... if
-                  testers wanted to use it they could do so." Same screen the
-                  Admin tab's own row already links to (/admin/stripe-test,
-                  AdminTestStripeForm.tsx) — now gated by RequireTester
-                  (can_toggle_tier()) instead of RequireAdmin, so any real
-                  private tester can reach it here, not just the admin
-                  account. Left on the Admin tab too, same "reachable two
-                  ways" precedent as Storage Management/Archive/Install. */}
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{ marginBottom: 8 }}
-                onClick={() => {
-                  setTesterMenuOpen(false)
-                  router.push('/admin/stripe-test')
-                }}
-              >
-                Test Stripe Payments
-              </button>
-              <button type="button" className="btn-secondary" onClick={() => setTesterMenuOpen(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Private Tester Feedback (2026-10-21, owner's own mockup) — see
           openFeedbackDialog's own comment above. Same .scrim/.modal

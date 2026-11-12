@@ -25,13 +25,16 @@ export type SubscriptionPlan = 'annual' | 'monthly'
 // done (2026-11-11, owner-reported: "private tester Stripe session returns
 // to Account Options instead of to the private tester 'account' screen") —
 // create-checkout-session/create-portal-session route.ts had always
-// hardcoded /account/subscription regardless of which of the three
-// AccountStatusSection call sites actually started the flow. Each caller now
-// passes its own real path; both the route handlers and /stripe-return/
-// page.tsx validate against this exact allowlist (never trust an arbitrary
-// client-supplied path as a redirect target) and fall back to
-// /account/subscription on anything else.
-export const STRIPE_RETURN_PATHS = ['/account', '/account/subscription', '/admin/stripe-test'] as const
+// hardcoded /account/subscription regardless of which AccountStatusSection
+// call site actually started the flow. Each caller now passes its own real
+// path; both the route handlers and /stripe-return/page.tsx validate
+// against this exact allowlist (never trust an arbitrary client-supplied
+// path as a redirect target) and fall back to /account/subscription on
+// anything else. '/admin/stripe-test' dropped the same day, once the
+// Account Status merge retired that screen entirely (AdminTestStripeForm.tsx
+// deleted) — a private tester now reaches the same real Stripe controls
+// directly on Account Options/the full-page screen.
+export const STRIPE_RETURN_PATHS = ['/account', '/account/subscription'] as const
 export type StripeReturnPath = (typeof STRIPE_RETURN_PATHS)[number]
 export function sanitizeStripeReturnPath(value: unknown): StripeReturnPath {
   return (STRIPE_RETURN_PATHS as readonly string[]).includes(value as string)

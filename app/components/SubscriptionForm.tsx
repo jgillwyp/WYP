@@ -43,6 +43,9 @@ export default function SubscriptionForm() {
   // profiles.stripe_cancel_at_period_end -- same as AccountForm.tsx's own
   // copy (2026-11-11), drives SubscriberStatus's Cancel-vs-Renew wording.
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false)
+  // profiles.stripe_subscription_id != null — same as AccountForm.tsx's own
+  // copy (2026-11-11 Account Status merge); see that file's own comment.
+  const [hasRealSubscription, setHasRealSubscription] = useState(false)
   const [canToggleTier, setCanToggleTier] = useState(false)
   const [isTester, setIsTester] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -94,7 +97,7 @@ export default function SubscriptionForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end'
+          'tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end, stripe_subscription_id'
         )
         .eq('id', userData.user.id)
         .single()
@@ -111,6 +114,7 @@ export default function SubscriptionForm() {
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
       setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
+      setHasRealSubscription(data?.stripe_subscription_id != null)
       const overrideBytes = data?.storage_limit_override_bytes ?? null
       setStorageOverrideBytes(overrideBytes)
       setStorageOverrideInput(
@@ -198,6 +202,7 @@ export default function SubscriptionForm() {
       }
       setRenewalDate(null)
       setStorageGb(5)
+      setHasRealSubscription(false)
       setSaving(false)
       return
     }
@@ -339,6 +344,7 @@ export default function SubscriptionForm() {
               tier={tier}
               isBetaTester={isTester}
               canToggleTier={canToggleTier}
+              hasRealSubscription={hasRealSubscription}
               renewalDate={renewalDate}
               storageGb={storageGb}
               onStorageUpdated={setStorageGb}

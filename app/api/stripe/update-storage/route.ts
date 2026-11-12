@@ -104,22 +104,25 @@ export async function POST(request: Request) {
   }
   const subscriptionId = profile.stripe_subscription_id as string | null
   if (!subscriptionId) {
+    // A tester with no real subscription (the "Subscribed?" checkbox alone)
+    // gets a more specific message — re-checked here regardless of what the
+    // client shows, same "the locked button is a courtesy" rule every other
+    // gated write in this app already follows. A tester who HAS a real
+    // subscription (did a real Sign Up with the test-only card) is NOT
+    // blocked by can_toggle_tier() alone anymore (2026-11-11, Jim's own
+    // Account Status merge) — only the absence of a real subscription ever
+    // blocks this route now.
+    const { data: isTestingAccount } = await sb.rpc('can_toggle_tier')
+    if (isTestingAccount) {
+      return Response.json(
+        {
+          error: 'testing_account_blocked',
+          detail: 'Real storage purchases need a real subscription — use the test-only credit card to subscribe first.',
+        },
+        { status: 403 }
+      )
+    }
     return Response.json({ error: 'no_subscription' }, { status: 404 })
-  }
-
-  // Testing accounts (can_toggle_tier()) are blocked from real storage
-  // purchases client-side (SubscriptionPanels.tsx greys out the controls)
-  // — re-checked here regardless, same "the locked button is a courtesy"
-  // rule every other gated write in this app already follows.
-  const { data: isTestingAccount } = await sb.rpc('can_toggle_tier')
-  if (isTestingAccount) {
-    return Response.json(
-      {
-        error: 'testing_account_blocked',
-        detail: 'Real storage purchases are disabled for testing accounts.',
-      },
-      { status: 403 }
-    )
   }
 
   // Floor: never let a reduction go below what's actually occupied, via the

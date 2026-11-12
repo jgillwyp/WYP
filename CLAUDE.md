@@ -8275,3 +8275,139 @@ link is built only after the stack is proven on Add Contact.
   either, so they still just see the confirmation banner and stay; a
   signed-in visitor now gets the identical `router.push('/')`. `npx tsc
   --noEmit`/`npm run lint` both clean.
+- **Account Status merged into one screen; storage Increase/Decrease UI
+  rebuilt with exact proration; Private Tester moved onto its own
+  Housekeeping chip — no migration (2026-11-11).** Jim's own "WYP dev
+  changes" doc: "I have continued to struggle with how we present the
+  account options and payment testing methods with 3 screens... I have
+  come up with just two screens (perhaps only one — with the bottom part
+  presented in alignment with subscriber/free status — including
+  switching it on-the-fly related to the 'Subscribed?' check box)." A
+  design discussion preceded the build (recommendation → two follow-up
+  rounds of clarifying answers), all reflected below.
+  **`AccountStatusSection` (`SubscriptionPanels.tsx`) rebuilt from three
+  mutually-exclusive states into one additive stack**: a dashed-border
+  `PrivateTesterBox` (`can_toggle_tier()` true — unchanged allowlist)
+  renders ABOVE the real `SubscriberStatus`/`FreeStatus` content, never
+  instead of it — the real Sign Up/Cancel/storage controls are now
+  always the genuine ones, available to a private tester exactly like
+  anyone else. This retires the whole reason Admin > Test Stripe Payments
+  existed (a separate screen whose only job was bypassing the old
+  exclusive Private Tester branch) — **`AdminTestStripeForm.tsx`,
+  `app/admin/stripe-test/page.tsx`, and `RequireTester.tsx` are all
+  deleted outright**, and `'/admin/stripe-test'` dropped from
+  `subscriptionPricing.ts`'s `STRIPE_RETURN_PATHS` allowlist.
+  `PrivateTesterBox`'s own content was stripped down to just the
+  explanatory paragraphs + Test Storage Cap field + checkbox (no longer
+  duplicating its own "My Status"/Attachment Storage Capacity/
+  Subscription Details — those belong to the real state underneath now)
+  and reordered to match Jim's own mockup verbatim: explanatory
+  paragraph, Stripe test-card paragraph, Attachment Storage Capacity
+  testing field, **then** the Subscribed? checkbox last (previously
+  first) — wording copied from his doc near-verbatim.
+  **Real distinguishing signal added**: a tester with no real Stripe
+  subscription still can't touch Increase/Decrease (there's no real
+  subscription item to modify), but a tester who HAS actually subscribed
+  for real (the test-only card) now gets fully real storage controls —
+  directly answering Jim's own closing question from the first round
+  ("even the increased storage capacity for an annual subscription could
+  be available to private testers... Your thoughts?"). This needed a
+  real new signal, since the old gate (`canToggleTier` alone) conflated
+  "is a tester" with "has no real subscription": new
+  `hasRealSubscription` prop (`profiles.stripe_subscription_id != null`,
+  added to `AccountForm.tsx`'s and `SubscriptionForm.tsx`'s own profile
+  selects, reset to `false` on the testing-downgrade path alongside
+  `renewalDate`/`storageGb`) threads down to `SubscriberStatus`, which
+  now computes `realStoragePurchaseDisabled = canToggleTier &&
+  !hasRealSubscription` — deliberately NOT derived from the `cadence`
+  fetch (`/api/stripe/plan-summary` "deliberately degrades to cadence:
+  null on anything short of a clean answer," including a transient
+  Stripe error, per that route's own header comment — the wrong signal
+  for an all-or-nothing gate). **Real pre-existing bug fixed as part of
+  this**: `update-storage/route.ts` had always blocked ANY
+  `can_toggle_tier()` account outright, regardless of whether they had a
+  real subscription — meaning even the OLD Admin "Test Stripe Payments"
+  screen's own real storage purchases would have silently failed
+  server-side the whole time this was live. Fixed to only block when
+  `stripe_subscription_id` is absent.
+  **Heading made cadence-specific**: Jim, same-day follow-up — "I just
+  realized that the 'My Account Status: Subscriber' should be more
+  specific, e.g., 'My Account Status: Annual Subscriber' or '...Monthly
+  Subscriber'." `cadence` is now fetched unconditionally in
+  `SubscriberStatus` (previously skipped whenever storage purchases were
+  already known to be disabled) and passed down to `AttachmentStoragePanel`
+  as a prop instead of that component fetching its own second copy. Both
+  "My Status: Subscriber"/"My Status: Free Account" headings renamed "My
+  Account Status: ..." for consistency.
+  **Storage Increase/Decrease UI rebuilt per Jim's own spec** (§ "Modified
+  increase/decrease storage capacity UI"): the action button's own label
+  now names the pending result ("Increase Capacity to 10 GB"/"Decrease
+  Capacity to 5 GB") or reads "Awaiting Increase/Decrease" (disabled) when
+  nothing is pending, replacing the old static "Update Capacity" text.
+  **A real annual increase's confirm dialog now states the exact prorated
+  dollar amount** that will be charged right now — Jim: "Yes, please for
+  an annual subscription capacity increase calculate it to advise the
+  user what the charge will be... if it is easier to exactly calculate it
+  - that is fine." New `app/api/stripe/preview-storage-update/route.ts`
+  calls a genuine Stripe invoice preview
+  (`stripe.invoices.createPreview` with the same
+  `subscription_details.items`/`proration_behavior: 'always_invoice'`
+  `update-storage/route.ts` would actually apply) rather than a
+  hand-rolled day-count estimate — this is the one number on this screen
+  that has to exactly match what Stripe is about to charge. Only called
+  for an annual increase; an annual decrease only ever credits (never
+  charges) under `always_invoice`, and a monthly change is
+  `proration_behavior: 'none'` either direction (no charge today) — both
+  already fully known from the existing recurring-rate math. Guarded by a
+  `previewRequestIdRef` so a stale response from an abandoned click can't
+  clobber a newer one. New `formatDollarAmount()` shows a whole dollar
+  plainly ("$49") and a real cents-level proration with two decimals
+  ("$8.50") rather than risking a dropped trailing zero.
+  **Disabled-purchase mode no longer greys the controls or shows a
+  special paragraph** — Jim's own follow-up: "To keep the above statement
+  accurate 'what you see is a normal Free/Subscriber page', when only the
+  'Subscriber?' was checked, the same dialog could present for each of
+  the three buttons as 'Modify Capacity is only available when the
+  test-only credit card is used to subscribe...'." All three buttons
+  (Increase, Decrease, the action button) now render and behave exactly
+  like a real subscriber's page; clicking any of them when
+  `realPurchaseDisabled` instead opens a small explanatory dialog with
+  Jim's own wording verbatim, rather than disabling anything. The three
+  educational paragraphs below the buttons are now always shown (the old
+  `realPurchaseDisabled`-only special paragraph is gone) — the server
+  (`update-storage/route.ts`, `preview-storage-update/route.ts`)
+  independently refuses the real write regardless of what the UI shows
+  either way, same "the locked button is a courtesy" doctrine this app
+  already applies everywhere else.
+  **Dialog wording built as flat template-literal strings, not JSX text
+  interleaved with `{expressions}`** — this file's own history
+  (2026-09-02/09-03 entries) documents a real, confirmed Next/SWC
+  compiler bug that can silently drop a space at exactly this kind of
+  number+word junction when it wraps across source lines, with no simple
+  rule for which junctions it hits; these sentences state real dollar
+  amounts during live Stripe testing, so the established mitigation was
+  applied from the start rather than risking the same bug a fourth time.
+  **Private Tester moved off a standalone button onto its own
+  Housekeeping chip** (`MainScreen.tsx`), per Jim's own follow-up: "a
+  'cleaner' approach would be to add a chip for 'Private Tester' and show
+  the two remaining options as menu items as are offered in Tasks/Help...
+  I wanted to be sure Private Testers realize these options are not part
+  of the normal application - but the title does that and the current
+  button location does not look good." The old `testerMenuOpen` modal
+  (Feedback/Checklist/Test Stripe Payments) is gone; a fourth "Private
+  Tester" chip sits beside Tasks/Help/Admin (unconditional, matching the
+  old button's own availability — not `isAdmin`-gated like Admin), and
+  selecting it shows two plain rows, same shape as every other
+  Housekeeping tab: Feedback (`openFeedbackDialog()`) and Checklist
+  (`/testers/checklist`). Test Stripe Payments isn't moved here — it's
+  gone outright, per the merge above. `hkTab`'s type gained `'tester'`
+  everywhere it's threaded (local state, `MainChipPrefs`, `readStoredChip`,
+  the restore-from-profile branch — unconditional, same as `'tasks'`/
+  `'videos'`, not gated like the admin-only `'statistics'` restore). The
+  Housekeeping band's own second row (previously just this one button) is
+  gone, back to a single title+Log Out row.
+  `npx tsc --noEmit`/`npm run lint` both clean across the whole batch;
+  `npm run build` not run (known sandbox SWC-binary limitation) — ask Jim
+  to confirm a real `npm run build` locally before this is treated as
+  fully verified. No mockup — this feature family has none beyond Jim's
+  own "WYP dev changes" doc.

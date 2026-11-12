@@ -1,6 +1,6 @@
 'use client'
 
-import { type CSSProperties, useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { Capacitor } from '@capacitor/core'
@@ -115,75 +115,66 @@ async function startStripeFlow(
 }
 
 /**
- * Account Status (2026-11-06) — supersedes the earlier "Subscriber" section
- * (2026-08-26 on). Jim, reviewing the testing-only controls stacked under
- * the real Stripe pitch: "to simplify its use for respective users, I
- * renamed the page/section 'Account Status' instead of 'Subscriber' (since
- * all users of that page are not subscribers) and redesigned it to be
- * three pages, one for testers which does not offer the Stripe payment
- * option... one for Free Accounts, and one for Subscribers." Confirmed
- * via AskUserQuestion: "Private Tester" (not his own suggested "Product
- * Tester" — matches every other existing reference in this codebase), and
- * the split applies to both call sites — Account Options' embedded section
- * (AccountForm.tsx) and the full-page /account/subscription
- * (SubscriptionForm.tsx).
+ * Account Status (2026-11-06, merged 2026-11-11). Jim, reviewing the
+ * testing-only controls stacked under the real Stripe pitch: "to simplify
+ * its use for respective users, I renamed the page/section 'Account Status'
+ * instead of 'Subscriber'... and redesigned it to be three pages, one for
+ * testers which does not offer the Stripe payment option... one for Free
+ * Accounts, and one for Subscribers." That three-way split (plus a fourth,
+ * Admin-only "Test Stripe Payments" screen just to preview the real panels)
+ * turned out awkward on its own terms — Jim's own follow-up: showing a real
+ * tester a wholly separate page just to use real Stripe felt indirect, and
+ * the Free-account Stripe screen had nothing telling a tester how to toggle
+ * Subscribed at all. **Redesigned into a single merged layout**, his own
+ * mockup ("WYP dev changes" doc, 2026-11-11): a dashed-border Private
+ * Tester box — informational, plus the self-toggle "Subscribed? (testing
+ * only)" checkbox and Test Storage Cap field (migration 051) — shown ABOVE
+ * the real tier content, not instead of it. The real Subscriber/Free panel
+ * underneath is always the genuine one: its own Sign Up/Cancel buttons are
+ * real Stripe calls, available to a private tester exactly like anyone
+ * else. This answers Jim's own closing question from the first round of
+ * this design ("even the increased storage capacity for an annual
+ * subscription could be available to private testers") — yes: a tester who
+ * actually subscribes for real (the test-only card) gets the real storage
+ * controls too, gated only by hasRealSubscription below, never by
+ * canToggleTier alone. Supersedes the old exclusive three-state branch and
+ * retires the separate Admin > Test Stripe Payments screen entirely
+ * (AdminTestStripeForm.tsx, deleted) — there is no longer a second page
+ * whose only job was to bypass state 1.
  *
- * AccountStatusSection is the one shared entry point both call sites (and
- * the new Admin > Test Stripe Payments screen, AdminTestStripeForm.tsx) now
- * render through, replacing the old exported BecomeSubscriberPitch/
- * MySubscriptionSummary pair and their own tier-only branch. Three states,
- * chosen in order:
+ * PrivateTesterBox renders additively (canToggleTier true), always
+ * followed by the real SubscriberStatus or FreeStatus — never branching
+ * instead of it.
  *
- *   1. Private Tester — can_toggle_tier() true (migration 035's
- *      tier_toggle_allowlist, not is_beta_tester()'s beta_allowlist — the
- *      two lists overlap for a tester added via migration 091's Add Private
- *      Tester screen going forward, but are NOT the same population: the
- *      owner's own account is seeded into tier_toggle_allowlist but was
- *      never added to beta_allowlist, since the signup gate never needed
- *      it. Gating on is_beta_tester() here (as first shipped 2026-11-06)
- *      sent the owner's own account to the Subscriber state instead of this
- *      one — fixed 2026-11-07, Jim-reported.). Informational only: no live
- *      Stripe button anywhere on this page (that's exactly the overlap Jim
- *      flagged — a real Sign Up button sitting right above a testing-only
- *      checkbox). The self-toggle "Subscribed? (testing only)" checkbox and
- *      Test Storage Cap field (migration 051) are shown within this same
- *      state, since canToggleTier is now what decides the state itself.
- *   2. Subscriber — real tier (or a testing-toggle "subscriber", handled via
- *      realStoragePurchaseDisabled below). Jim's own confirmed
- *      simplification: no separate dynamic "Your Plan Summary" box — the
- *      status paragraph itself states the plan type (annual/monthly) and
- *      renewal date, Cancel is an inline text link in that same sentence
- *      (not a standalone prominent button — Jim's original complaint), and
- *      Attachment Storage Capacity's existing stepper is the one place
- *      capacity gets modified. "Subscription Details" below is the same
- *      static reference content every state shows.
- *   3. Free — the real pitch, unchanged in substance from the old
- *      BecomeSubscriberPitch, just reusing the same "Subscription Details"
- *      box heading/content the other two states use instead of its own.
- *
- * forceRealVariant (Admin > Test Stripe Payments, 2026-11-06) skips state 1
- * even when can_toggle_tier() is true, so an admin can click through the
- * real Free/Subscriber panels — and their real Stripe calls — against
- * their own account. No separate write-back plumbing: it's the same
- * profiles row, so a real purchase there is simply the account's real
- * tier/renewal/storage the next time the ordinary page (not forced) reads
- * them — ordinarily landing back on the Private Tester variant, which
- * reflects it directly (the checkbox tracks tier === 'subscriber' either
- * way).
+ * hasRealSubscription (profiles.stripe_subscription_id != null) is the one
+ * thing that still needs distinguishing for a tester: Increase/Decrease on
+ * Attachment Storage Capacity write to a REAL Stripe subscription item, so
+ * they can't do anything for a checkbox-only "subscriber" with no real
+ * subscription on file. SubscriberStatus computes
+ * realStoragePurchaseDisabled = canToggleTier && !hasRealSubscription — a
+ * tester who has actually subscribed for real sees fully real controls,
+ * same as anyone else. Per Jim's own follow-up ("the same dialog could
+ * present for each of the three buttons... to keep the above statement
+ * accurate 'what you see is a normal Free/Subscriber page'"), the disabled
+ * case does NOT greyed out or hide the controls — they look and behave
+ * like a normal page, and only clicking one reveals, via a small dialog,
+ * that modifying capacity needs a real subscription. See
+ * AttachmentStoragePanel's own comment for that behavior.
  *
  * returnPath (2026-11-11, owner-reported: "private tester Stripe session
  * returns to Account Options instead of to the private tester 'account'
  * screen") carries each call site's own real path through Stripe's
  * Checkout/Billing Portal redirect (create-checkout-session/create-portal-
  * session route.ts, then /stripe-return/page.tsx) so it returns to
- * wherever the flow actually started — Account Options ("/account"),
- * /account/subscription, or this Admin screen ("/admin/stripe-test") —
- * rather than always landing on /account/subscription regardless.
+ * wherever the flow actually started — Account Options ("/account") or
+ * /account/subscription — rather than always landing on
+ * /account/subscription regardless.
  */
 export function AccountStatusSection({
   tier,
   isBetaTester,
   canToggleTier = false,
+  hasRealSubscription = false,
   renewalDate,
   storageGb,
   onStorageUpdated,
@@ -198,12 +189,14 @@ export function AccountStatusSection({
   onStorageOverrideInputChange,
   onSaveStorageOverride,
   onClearStorageOverride,
-  forceRealVariant = false,
   returnPath = '/account/subscription',
 }: {
   tier: 'free' | 'subscriber'
   isBetaTester: boolean
   canToggleTier?: boolean
+  // profiles.stripe_subscription_id != null (2026-11-11) — see this file's
+  // header comment above.
+  hasRealSubscription?: boolean
   renewalDate: string | null
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
@@ -221,7 +214,6 @@ export function AccountStatusSection({
   onStorageOverrideInputChange?: (value: string) => void
   onSaveStorageOverride?: () => void
   onClearStorageOverride?: () => void
-  forceRealVariant?: boolean
   // The screen this call site actually renders on (2026-11-11) — carried
   // through Stripe's own Checkout/Billing Portal redirect so it returns to
   // wherever the flow started, not always /account/subscription. Each
@@ -229,39 +221,39 @@ export function AccountStatusSection({
   // STRIPE_RETURN_PATHS comment.
   returnPath?: StripeReturnPath
 }) {
-  if (canToggleTier && !forceRealVariant) {
-    return (
-      <PrivateTesterStatus
-        tier={tier}
-        canToggleTier={canToggleTier}
-        saving={saving}
-        onTierToggle={onTierToggle}
-        storageOverrideBytes={storageOverrideBytes}
-        storageOverrideInput={storageOverrideInput}
-        storageOverrideSaving={storageOverrideSaving}
-        storageOverrideError={storageOverrideError}
-        onStorageOverrideInputChange={onStorageOverrideInputChange}
-        onSaveStorageOverride={onSaveStorageOverride}
-        onClearStorageOverride={onClearStorageOverride}
-      />
-    )
-  }
+  return (
+    <div style={{ margin: '0 0 4px' }}>
+      {canToggleTier && (
+        <PrivateTesterBox
+          tier={tier}
+          saving={saving}
+          onTierToggle={onTierToggle}
+          storageOverrideBytes={storageOverrideBytes}
+          storageOverrideInput={storageOverrideInput}
+          storageOverrideSaving={storageOverrideSaving}
+          storageOverrideError={storageOverrideError}
+          onStorageOverrideInputChange={onStorageOverrideInputChange}
+          onSaveStorageOverride={onSaveStorageOverride}
+          onClearStorageOverride={onClearStorageOverride}
+        />
+      )}
 
-  if (tier === 'subscriber') {
-    return (
-      <SubscriberStatus
-        renewalDate={renewalDate}
-        storageGb={storageGb}
-        onStorageUpdated={onStorageUpdated}
-        cancelAtPeriodEnd={cancelAtPeriodEnd}
-        onRenewed={onRenewed}
-        realStoragePurchaseDisabled={!forceRealVariant && canToggleTier}
-        returnPath={returnPath}
-      />
-    )
-  }
-
-  return <FreeStatus isTester={isBetaTester} returnPath={returnPath} />
+      {tier === 'subscriber' ? (
+        <SubscriberStatus
+          canToggleTier={canToggleTier}
+          hasRealSubscription={hasRealSubscription}
+          renewalDate={renewalDate}
+          storageGb={storageGb}
+          onStorageUpdated={onStorageUpdated}
+          cancelAtPeriodEnd={cancelAtPeriodEnd}
+          onRenewed={onRenewed}
+          returnPath={returnPath}
+        />
+      ) : (
+        <FreeStatus isTester={isBetaTester} returnPath={returnPath} />
+      )}
+    </div>
+  )
 }
 
 // Title Case throughout. Replaced 2026-10-08 with Jim's own revised list
@@ -712,6 +704,13 @@ function RenewSubscriptionLink({
   )
 }
 
+// Whole dollars display plain ("$49"); a real cents-level proration (from
+// preview-storage-update/route.ts) displays with exactly two decimals
+// ("$8.50") rather than risking a dropped trailing zero.
+function formatDollarAmount(amount: number): string {
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2)
+}
+
 // Client-side preview only, for the confirm dialog below — the server
 // (update-storage/route.ts) always recomputes this for real from the
 // actual Stripe subscription, never trusts this value.
@@ -738,45 +737,68 @@ function computeStoragePreviewTotal(cadence: SubscriptionCadence, targetTotalGb:
 // starting the next billing date with no charge today, matching
 // update-storage/route.ts's own cadence-conditional proration_behavior.
 //
-// Confirm dialog added the same day, same conversation — Jim: "Since there
-// will not be an immediate Stripe interaction for a monthly subscription
-// incremental Attachment capacity - there should be a dialog confirming the
-// additional storage and additional charge." Clicking Update Capacity now
-// opens a .scrim/.modal (§6.12) confirmation instead of charging
-// immediately, for both cadences (not just Monthly) — the dialog states the
-// real target GB and, once cadence is known, the real resulting price and
-// timing (charged now vs. next billing date). cadence is fetched the same
-// way SubscriberStatus's own status sentence fetches it, so the dialog can
-// show accurate wording before the server call, not just after.
+// Rebuilt 2026-11-11, same conversation as the Account Status merge above,
+// per Jim's own "Modified increase/decrease storage capacity UI" spec:
+//   1. The action button's own label now names the pending result
+//      ("Increase Capacity to 10 GB" / "Decrease Capacity to 5 GB"), or
+//      reads "Awaiting Increase/Decrease" (greyed) when nothing is pending
+//      — replacing the old static "Update Capacity" label.
+//   2. For a real annual INCREASE, the confirm dialog states the exact
+//      prorated dollar amount that will be charged right now — computed via
+//      a genuine Stripe invoice preview (new preview-storage-update/
+//      route.ts), not a hand-rolled day-count estimate, per Jim: "Yes,
+//      please for an annual subscription capacity increase calculate it...
+//      I am not hung up on the calculation needing to be in whole dollars
+//      related to starting in the next month, if it is easier to exactly
+//      calculate it - that is fine." An annual DECREASE and every monthly
+//      change need no such preview — Stripe's always_invoice proration on
+//      a decrease only ever credits the account (never charges), and a
+//      monthly change is proration_behavior: 'none' (no charge today
+//      either way) — both already fully known from the plain recurring-
+//      rate math below.
+//   3. realPurchaseDisabled (a tester with no real Stripe subscription,
+//      see SubscriberStatus's own comment) no longer greys the controls or
+//      shows a special "disabled for testing" paragraph — Jim: "the same
+//      dialog could present for each of the three buttons... to keep the
+//      above statement accurate 'what you see is a normal Free/Subscriber
+//      page'." All three buttons render and behave exactly like a real
+//      subscriber's page; clicking any of them instead opens a small
+//      explanatory dialog pointing at the test-only card / Sign Up path.
+//      The server (update-storage/route.ts, preview-storage-update/
+//      route.ts) independently refuses the real write regardless of this
+//      prop either way — "the locked button is a courtesy."
 function AttachmentStoragePanel({
   storageGb,
   onStorageUpdated,
+  cadence,
   realPurchaseDisabled = false,
 }: {
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
-  // Testing accounts (can_toggle_tier()) use the separate "Test Storage Cap
-  // (MB, testing only)" override field instead of touching real recurring
-  // billing — Jim's own call, 2026-11-05, after testing the real feature
-  // surfaced several real-Stripe side effects (orphaned subscriptions from
-  // repeated Sign Up tests) that a testing account shouldn't be creating in
-  // the first place. The controls stay visible, just disabled — never
-  // hidden — so "Current: X Gigabytes" is still legible. The server
-  // (update-storage/route.ts) independently refuses the same request
-  // regardless of this prop, same "the locked button is a courtesy" rule
-  // this app already applies everywhere else.
+  // Fetched once by the caller (SubscriberStatus), not here — avoids a
+  // second /api/stripe/plan-summary round trip and any chance of the two
+  // disagreeing (2026-11-11).
+  cadence: SubscriptionCadence | null
   realPurchaseDisabled?: boolean
 }) {
   const [target, setTarget] = useState(storageGb)
   const [minGb, setMinGb] = useState(STORAGE_BLOCK_GB)
-  const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showDisabledInfo, setShowDisabledInfo] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<string | null>(null)
 
+  // Exact prorated "charged now" amount for an annual increase — fetched
+  // only when the confirm dialog actually needs it (see handleActionClick).
+  // requestIdRef guards against a stale response landing after the user has
+  // already cancelled and reopened on a different target.
+  const [chargeNowAmount, setChargeNowAmount] = useState<number | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const previewRequestIdRef = useRef(0)
+
   useEffect(() => {
-    if (realPurchaseDisabled) return
     let cancelled = false
     async function loadUsage() {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -800,34 +822,59 @@ function AttachmentStoragePanel({
     return () => {
       cancelled = true
     }
-  }, [realPurchaseDisabled])
+  }, [])
 
-  useEffect(() => {
-    if (realPurchaseDisabled) return
-    let cancelled = false
-    async function loadCadence() {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) return
-      try {
-        const res = await fetch('/api/stripe/plan-summary', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const json: { cadence?: SubscriptionCadence | null } = await res.json()
-        if (!cancelled) setCadence(json.cadence ?? null)
-      } catch {
-        // cadence stays null — the confirm dialog falls back to generic wording.
+  async function fetchChargePreview(forTarget: number) {
+    const requestId = ++previewRequestIdRef.current
+    setPreviewLoading(true)
+    setPreviewError(null)
+    setChargeNowAmount(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      if (requestId === previewRequestIdRef.current) {
+        setPreviewError('Your sign-in has expired — please sign in again and retry.')
+        setPreviewLoading(false)
       }
+      return
     }
-    loadCadence()
-    return () => {
-      cancelled = true
+
+    let res: Response
+    try {
+      res = await fetch('/api/stripe/preview-storage-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ targetTotalGb: forTarget }),
+      })
+    } catch {
+      if (requestId === previewRequestIdRef.current) {
+        setPreviewError('Could not reach the server to calculate the exact charge.')
+        setPreviewLoading(false)
+      }
+      return
     }
-  }, [realPurchaseDisabled])
+
+    let json: { ok?: boolean; chargeNowAmount?: number; detail?: string }
+    try {
+      json = await res.json()
+    } catch {
+      json = {}
+    }
+
+    if (requestId !== previewRequestIdRef.current) return // stale — a newer click superseded this one
+
+    if (!res.ok || !json.ok || typeof json.chargeNowAmount !== 'number') {
+      setPreviewError(json.detail ?? 'Could not calculate the exact charge.')
+      setPreviewLoading(false)
+      return
+    }
+
+    setChargeNowAmount(json.chargeNowAmount)
+    setPreviewLoading(false)
+  }
 
   async function handleUpdate() {
-    if (realPurchaseDisabled) return
     setBusy(true)
     setError(null)
     setConfirmation(null)
@@ -895,7 +942,43 @@ function AttachmentStoragePanel({
   const changed = target !== storageGb
   const extraGb = storageGb - STORAGE_BLOCK_GB
   const atFloor = target <= minGb
-  const controlsDisabled = realPurchaseDisabled || busy
+  const isIncrease = target > storageGb
+  const actionLabel = !changed ? 'Awaiting Increase/Decrease' : isIncrease ? `Increase Capacity to ${target} GB` : `Decrease Capacity to ${target} GB`
+  const needsExactPreview = cadence === 'annual' && isIncrease
+
+  function handleIncreaseClick() {
+    if (realPurchaseDisabled) {
+      setShowDisabledInfo(true)
+      return
+    }
+    setTarget((t) => t + STORAGE_BLOCK_GB)
+  }
+
+  function handleDecreaseClick() {
+    if (realPurchaseDisabled) {
+      setShowDisabledInfo(true)
+      return
+    }
+    setTarget((t) => Math.max(minGb, t - STORAGE_BLOCK_GB))
+  }
+
+  function handleActionClick() {
+    if (realPurchaseDisabled) {
+      setShowDisabledInfo(true)
+      return
+    }
+    setShowConfirm(true)
+    if (needsExactPreview) {
+      void fetchChargePreview(target)
+    }
+  }
+
+  function closeConfirm() {
+    setShowConfirm(false)
+    setChargeNowAmount(null)
+    setPreviewError(null)
+    setPreviewLoading(false)
+  }
 
   return (
     <>
@@ -907,71 +990,68 @@ function AttachmentStoragePanel({
         )}
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setTarget((t) => Math.max(minGb, t - STORAGE_BLOCK_GB))}
-          disabled={controlsDisabled || atFloor}
-        >
-          {atFloor ? 'N/A' : `− ${STORAGE_BLOCK_GB} GB`}
+        <button type="button" className="btn-secondary" onClick={handleDecreaseClick} disabled={busy || (!realPurchaseDisabled && atFloor)}>
+          {!realPurchaseDisabled && atFloor ? 'N/A' : `− ${STORAGE_BLOCK_GB} GB`}
         </button>
         <span style={{ minWidth: 64, textAlign: 'center' }}>
           <strong>{target} GB</strong>
         </span>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setTarget((t) => t + STORAGE_BLOCK_GB)}
-          disabled={controlsDisabled}
-        >
+        <button type="button" className="btn-secondary" onClick={handleIncreaseClick} disabled={busy}>
           + {STORAGE_BLOCK_GB} GB
         </button>
         <button
           type="button"
           className="btn"
           style={{ marginLeft: 'auto' }}
-          onClick={() => setShowConfirm(true)}
-          disabled={controlsDisabled || !changed}
+          onClick={handleActionClick}
+          disabled={busy || (!realPurchaseDisabled && !changed)}
         >
-          {busy ? 'Updating…' : 'Update Capacity'}
+          {busy ? 'Updating…' : actionLabel}
         </button>
       </div>
       {showConfirm && (
         <>
-          <div className="scrim" onClick={() => setShowConfirm(false)} />
+          <div className="scrim" onClick={closeConfirm} />
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="storage-confirm-title">
             <div className="modalhead">
               <p className="modal-title" id="storage-confirm-title">
-                {target > storageGb ? 'Increase' : 'Reduce'} Attachment Storage Capacity?
+                {isIncrease ? 'Increase' : 'Reduce'} Attachment Storage Capacity?
               </p>
             </div>
+            {/* Each branch is one flat JS template-literal string, not
+                JSX text interleaved with {expressions} — this file's own
+                history (CLAUDE.md, 2026-09-02/09-03) documents a real,
+                confirmed Next/SWC compiler bug that can silently drop a
+                space at exactly this kind of number+word junction when it
+                wraps across source lines, with no simple rule for which
+                junctions it hits. These dialog sentences state real dollar
+                amounts during live Stripe testing, so the established fix
+                (a single string expression, verified correct regardless of
+                source formatting) is used here from the start rather than
+                risking it and finding out from a Jim bug report. */}
             <p className="subnote">
-              {target > storageGb ? 'Increase' : 'Reduce'} your Attachment Storage Capacity to{' '}
-              <strong>{target} GB</strong>
-              {cadence === 'annual' && (
-                <>
-                  {' '}
-                  — this is prorated and charged now, then{' '}
-                  <strong>${computeStoragePreviewTotal('annual', target)}/yr</strong> starting your next renewal.
-                </>
-              )}
-              {cadence === 'monthly' && (
-                <>
-                  {' '}
-                  — this takes effect on your next billing date, with no charge today. Your subscription will
-                  become <strong>${computeStoragePreviewTotal('monthly', target)}/mo</strong> from then on.
-                </>
-              )}
-              {!cadence && <> This will change your billed amount.</>}
+              {needsExactPreview
+                ? previewLoading
+                  ? 'Calculating the exact charge…'
+                  : previewError
+                    ? `Increase your Attachment Storage Capacity to ${target} GB — this is prorated and charged now, then $${computeStoragePreviewTotal('annual', target)}/yr starting your next renewal. (${previewError})`
+                    : `The increase of ${target - storageGb} GB for a new capacity of ${target} GB, for the remainder of this annual subscription period, will be charged now at $${chargeNowAmount !== null ? formatDollarAmount(chargeNowAmount) : '—'} and will be billed thereafter at $${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per ${STORAGE_BLOCK_GB} GB. Including the increased storage capacity of ${target} GB, your annual renewal cost will increase from $${computeStoragePreviewTotal('annual', storageGb)} to $${computeStoragePreviewTotal('annual', target)}.`
+                : cadence === 'annual'
+                  ? `The decrease from ${storageGb} GB to ${target} GB will reduce your annual renewal cost from $${computeStoragePreviewTotal('annual', storageGb)} to $${computeStoragePreviewTotal('annual', target)}.`
+                  : cadence === 'monthly' && isIncrease
+                    ? `The increase of ${target - storageGb} GB for a new capacity of ${target} GB, for your monthly subscription, will be charged next month and thereafter at the rate of $${STORAGE_MONTHLY_RATE_PER_BLOCK}/month. Including the increased storage capacity of ${target} GB, your monthly renewal cost will be increased from $${computeStoragePreviewTotal('monthly', storageGb)} to $${computeStoragePreviewTotal('monthly', target)}.`
+                    : cadence === 'monthly'
+                      ? `Starting next month, the decrease from ${storageGb} GB to ${target} GB will reduce your monthly renewal cost from $${computeStoragePreviewTotal('monthly', storageGb)} to $${computeStoragePreviewTotal('monthly', target)}.`
+                      : `${isIncrease ? 'Increase' : 'Reduce'} your Attachment Storage Capacity to ${target} GB. This will change your billed amount.`}
             </p>
             <div className="modalacts" style={{ marginTop: 12 }}>
-              <button className="btn-secondary" type="button" onClick={() => setShowConfirm(false)} disabled={busy}>
+              <button className="btn-secondary" type="button" onClick={closeConfirm} disabled={busy}>
                 Cancel
               </button>
               <button
                 className="btn"
                 type="button"
-                disabled={busy}
+                disabled={busy || (needsExactPreview && previewLoading)}
                 onClick={() => {
                   setShowConfirm(false)
                   handleUpdate()
@@ -983,34 +1063,43 @@ function AttachmentStoragePanel({
           </div>
         </>
       )}
-      {realPurchaseDisabled ? (
-        <p className="promo-p" style={{ margin: '8px 0 0' }}>
-          Real storage purchases are disabled for testing accounts — no Stripe billing
-          applies. Use <strong>Test Storage Cap (MB, testing only)</strong> below to simulate a
-          different storage cap instead.
-        </p>
-      ) : (
+      {showDisabledInfo && (
         <>
-          <p className="promo-p" style={{ margin: '8px 0 0' }}>
-            Subscribers are provided {STORAGE_BLOCK_GB} GB of storage space for Attachments.
-            Additional storage capacity can be added in increments of {STORAGE_BLOCK_GB} GB for
-            ${STORAGE_MONTHLY_RATE_PER_BLOCK}/month. On an <strong>Annual</strong> plan, a
-            change is prorated for the remainder of your current year and charged now, then $
-            {STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per {STORAGE_BLOCK_GB} GB each year thereafter.
-            On a <strong>Monthly</strong> plan, a change takes effect on your next billing
-            date — no charge today — at ${STORAGE_MONTHLY_RATE_PER_BLOCK}/mo per{' '}
-            {STORAGE_BLOCK_GB} GB from then on.
-          </p>
-          <p className="promo-p" style={{ margin: '8px 0 0' }}>
-            {`A reduction can’t currently go below ${minGb} GB — the greater of your plan’s base ${STORAGE_BLOCK_GB} GB allowance and however much capacity your Attachments actually require right now, rounded up to the nearest ${STORAGE_BLOCK_GB} GB.`}
-          </p>
-          <p className="promo-p" style={{ margin: '8px 0 0' }}>
-            Storage capacity can be reduced further once less is in use — the &ldquo;Manage
-            Storage&rdquo; button above offers the ability to download and/or delete selected
-            Attachments.
-          </p>
+          <div className="scrim" onClick={() => setShowDisabledInfo(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="storage-disabled-title">
+            <div className="modalhead">
+              <p className="modal-title" id="storage-disabled-title">
+                Modify Capacity Not Available
+              </p>
+            </div>
+            <p className="subnote">
+              Modify Capacity is only available when the test-only credit card is used to subscribe. You can
+              uncheck the &ldquo;Subscribed?&rdquo; check box above and then use the normal &ldquo;Sign up&rdquo;
+              for a monthly or annual subscription to use this feature.
+            </p>
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn" type="button" onClick={() => setShowDisabledInfo(false)}>
+                Close
+              </button>
+            </div>
+          </div>
         </>
       )}
+      <p className="promo-p" style={{ margin: '8px 0 0' }}>
+        Subscribers are provided {STORAGE_BLOCK_GB} GB of storage space for Attachments. Additional storage
+        capacity can be added in increments of {STORAGE_BLOCK_GB} GB for ${STORAGE_MONTHLY_RATE_PER_BLOCK}/month.
+        On an <strong>Annual</strong> plan, a change is prorated for the remainder of your current year and
+        charged now, then ${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per {STORAGE_BLOCK_GB} GB each year thereafter. On a{' '}
+        <strong>Monthly</strong> plan, a change takes effect on your next billing date — no charge today — at $
+        {STORAGE_MONTHLY_RATE_PER_BLOCK}/mo per {STORAGE_BLOCK_GB} GB from then on.
+      </p>
+      <p className="promo-p" style={{ margin: '8px 0 0' }}>
+        {`A reduction can’t currently go below ${minGb} GB — the greater of your plan’s base ${STORAGE_BLOCK_GB} GB allowance and however much capacity your Attachments actually require right now, rounded up to the nearest ${STORAGE_BLOCK_GB} GB.`}
+      </p>
+      <p className="promo-p" style={{ margin: '8px 0 0' }}>
+        Storage capacity can be reduced further once less is in use — the &ldquo;Manage Storage&rdquo; button
+        above offers the ability to download and/or delete selected Attachments.
+      </p>
       {confirmation && (
         <p className="promo-p" style={{ margin: '6px 0 0', color: 'var(--brand-blue)' }}>
           {confirmation}
@@ -1025,15 +1114,17 @@ function AttachmentStoragePanel({
   )
 }
 
-// State 1 — Private Tester. is_beta_tester() true. Informational only: no
-// live Stripe control anywhere on this page. canToggleTier gates the
-// self-toggle checkbox + Test Storage Cap field (migration 051) — moved
-// here verbatim from AccountForm.tsx/SubscriptionForm.tsx's own former
-// inline copies, now driven by props so both call sites (and their own
-// Supabase calls, unchanged) can share this one presentation.
-function PrivateTesterStatus({
+// Private Tester box (2026-11-11 Account Status merge, renamed/simplified
+// from the old exclusive PrivateTesterStatus). Renders ABOVE the real
+// Subscriber/Free content, never instead of it — see AccountStatusSection's
+// own header comment. No longer carries its own "My Status"/Attachment
+// Storage Capacity/Subscription Details; those belong to whichever real
+// state renders underneath. Wording and field order match Jim's own
+// mockup verbatim (the checkbox comes LAST in the box, after the
+// explanatory text and the storage-cap tester field — not first, as the
+// old exclusive layout had it).
+function PrivateTesterBox({
   tier,
-  canToggleTier,
   saving,
   onTierToggle,
   storageOverrideBytes,
@@ -1045,7 +1136,6 @@ function PrivateTesterStatus({
   onClearStorageOverride,
 }: {
   tier: 'free' | 'subscriber'
-  canToggleTier: boolean
   saving: boolean
   onTierToggle?: (next: boolean) => void | Promise<void>
   storageOverrideBytes: number | null
@@ -1057,108 +1147,94 @@ function PrivateTesterStatus({
   onClearStorageOverride?: () => void
 }) {
   return (
-    <div style={{ margin: '0 0 4px' }}>
-      {canToggleTier && (
-        // .testernote (2026-11-10) — Jim's own request: a deliberately
-        // off-brand look for this to-tester control, "clearly-not-part-of-
-        // WYP," distinguishing testing-only scaffolding from the app's own
-        // real UI. See globals.css's own comment at .testernote for why
-        // (sharp corners, dashed border, monospace — nothing Palette 1
-        // itself ever uses).
-        <label className="checkrow testernote" style={{ marginBottom: 10 }}>
-          <input
-            type="checkbox"
-            checked={tier === 'subscriber'}
-            disabled={saving}
-            onChange={(e) => onTierToggle?.(e.target.checked)}
-          />
-          <span className="checktext">
-            Subscribed? (testing only)
-            <span className="checknote">
-              Sets your account to the Subscriber tier so subscriber-only features like
-              Attachments can be tested. This status only lasts for the testing period —
-              once testing ends, this checkbox goes away. Off by default.
-            </span>
-          </span>
-        </label>
-      )}
-
-      <div className="promo-sub" style={{ marginTop: 4 }}>
-        My Status: Private Tester
-      </div>
-      <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        Thank you for helping us launch Would You Please. As a private tester, you can
-        temporarily turn on Subscriber features without charge. Your feedback is important
-        and appreciated — please use the Housekeeping &ldquo;Private Tester&rdquo; button to
-        provide feedback by email and to monitor your own progress through various features.
+    // .testernote (2026-11-10, now wrapping the whole box rather than just
+    // the checkbox, 2026-11-11) — Jim's own request: a deliberately
+    // off-brand look, "clearly-not-part-of-WYP," distinguishing this
+    // testing-only scaffolding from the app's own real UI below it. See
+    // globals.css's own comment at .testernote.
+    <div className="testernote" style={{ marginBottom: 14 }}>
+      <p className="checktext" style={{ margin: 0 }}>
+        As a Private Tester, what you see below is a normal Free/Subscriber page based on how
+        you may have checked or unchecked the &ldquo;Subscribed?&rdquo; check box below and how
+        you may have &ldquo;paid for&rdquo; subscriptions or storage with a test-only credit
+        card.
+      </p>
+      <p className="checktext" style={{ margin: '8px 0 0' }}>
+        We use the Stripe payment platform. They provide a test-only credit card as follows: ID
+        4242 4242 4242 4242, any future month and year for a card renewal date, and a made-up
+        3-digit number for a CVC code. You can test &ldquo;purchasing&rdquo; activities with
+        this card.
       </p>
 
-      <StorageCapacityTitleRow title="Attachment Storage Capacity" />
-      <StorageCapacityExplainer />
-
-      {canToggleTier && (
-        <>
-          <p className="promo-p" style={{ margin: '8px 0 0' }}>
-            If you want to see what happens when you exceed the provided Attachment storage
-            capacity, you can set a limit to exceed below. Unless you change it below, the
-            Tester Attachment storage capacity is based on the Subscribed check box above
-            (unchecked — 100 MB, or checked — {STORAGE_BLOCK_GB} GB).
+      <p className="checktext" style={{ margin: '10px 0 0', fontWeight: 700 }}>
+        Attachment Storage Capacity testing
+      </p>
+      <p className="checktext" style={{ margin: '4px 0 0' }}>
+        You can reduce the storage capacity limit to a small number of Megabytes below to see
+        how Would You Please handles that issue.
+      </p>
+      <div className="fgroup" style={{ marginTop: 10 }}>
+        <label className="flabel" htmlFor="tester-storage-override-mb">
+          Test Storage Cap (MB, testing only)
+        </label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            id="tester-storage-override-mb"
+            className="finput"
+            style={{ maxWidth: 120 }}
+            type="number"
+            min={0}
+            step="0.1"
+            placeholder="e.g. 2"
+            value={storageOverrideInput}
+            disabled={storageOverrideSaving}
+            onChange={(e) => onStorageOverrideInputChange?.(e.target.value)}
+          />
+          <button
+            className="btn-secondary"
+            type="button"
+            disabled={storageOverrideSaving || storageOverrideInput === ''}
+            onClick={onSaveStorageOverride}
+          >
+            Save
+          </button>
+          <button
+            className="btn-secondary"
+            type="button"
+            disabled={storageOverrideSaving || storageOverrideBytes === null}
+            onClick={onClearStorageOverride}
+          >
+            Clear
+          </button>
+        </div>
+        {storageOverrideBytes != null && (
+          <span className="checknote" style={{ display: 'block', marginTop: 6 }}>
+            {`Overriding your real storage cap with ${formatBytesForOverride(storageOverrideBytes)} for testing.`}
+          </span>
+        )}
+        {storageOverrideError && (
+          <p className="ferror" role="alert" style={{ marginTop: 6 }}>
+            {storageOverrideError}
           </p>
-          <div className="fgroup" style={{ marginTop: 10 }}>
-            <label className="flabel" htmlFor="tester-storage-override-mb">
-              Test Storage Cap (MB, testing only)
-            </label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                id="tester-storage-override-mb"
-                className="finput"
-                style={{ maxWidth: 120 }}
-                type="number"
-                min={0}
-                step="0.1"
-                placeholder="e.g. 2"
-                value={storageOverrideInput}
-                disabled={storageOverrideSaving}
-                onChange={(e) => onStorageOverrideInputChange?.(e.target.value)}
-              />
-              <button
-                className="btn-secondary"
-                type="button"
-                disabled={storageOverrideSaving || storageOverrideInput === ''}
-                onClick={onSaveStorageOverride}
-              >
-                Save
-              </button>
-              <button
-                className="btn-secondary"
-                type="button"
-                disabled={storageOverrideSaving || storageOverrideBytes === null}
-                onClick={onClearStorageOverride}
-              >
-                Clear
-              </button>
-            </div>
-            {storageOverrideBytes != null && (
-              // 2026-11-11, owner-asked: drop the "Not overridden..." paragraph —
-              // only the active-override state is worth a note now; the quiet
-              // default case (nothing set) no longer states so explicitly.
-              <span className="checknote" style={{ display: 'block', marginTop: 6 }}>
-                {`Overriding your real storage cap with ${formatBytesForOverride(storageOverrideBytes)} for testing.`}
-              </span>
-            )}
-            {storageOverrideError && (
-              <p className="ferror" role="alert" style={{ marginTop: 6 }}>
-                {storageOverrideError}
-              </p>
-            )}
-          </div>
-        </>
-      )}
-
-      <div className="promo" style={{ marginTop: 14, marginLeft: 0, marginRight: 0 }}>
-        <div className="promo-h">Subscription Details</div>
-        <SubscriptionFeaturesAndCost />
+        )}
       </div>
+
+      <label className="checkrow" style={{ marginTop: 14, marginBottom: 0 }}>
+        <input
+          type="checkbox"
+          checked={tier === 'subscriber'}
+          disabled={saving}
+          onChange={(e) => onTierToggle?.(e.target.checked)}
+        />
+        <span className="checktext">
+          Subscribed? (testing only)
+          <span className="checknote">
+            Sets your account to the Subscriber tier so subscriber-only features like
+            Attachments can be tested. This status only lasts for the testing period —
+            once testing ends, this checkbox goes away. Off by default.
+          </span>
+        </span>
+      </label>
     </div>
   )
 }
@@ -1174,33 +1250,53 @@ function formatBytesForOverride(bytes: number): string {
 }
 
 // State 2 — Subscriber (real tier, or a testing-toggle "subscriber" via
-// realStoragePurchaseDisabled). No separate dynamic plan/cadence box — the
-// status paragraph itself states the plan type and renewal date (Jim's own
-// confirmed simplification, 2026-11-06), Cancel is the inline link above,
-// and Attachment Storage Capacity's existing stepper is the one place
-// capacity gets modified.
+// realStoragePurchaseDisabled, now derived from hasRealSubscription rather
+// than canToggleTier alone — see AccountStatusSection's own header comment,
+// 2026-11-11). No separate dynamic plan/cadence box — the status paragraph
+// itself states the plan type and renewal date (Jim's own confirmed
+// simplification, 2026-11-06), Cancel is the inline link above, and
+// Attachment Storage Capacity's existing stepper is the one place capacity
+// gets modified. The heading itself now names the cadence ("My Account
+// Status: Annual Subscriber" / "...Monthly Subscriber") per Jim's own
+// follow-up — "I just realized that the 'My Account Status: Subscriber'
+// should be more specific."
+//
+// cadence is fetched here UNCONDITIONALLY now (previously skipped whenever
+// realStoragePurchaseDisabled was already known up front via the old
+// forceRealVariant plumbing) — it's now the very thing that determines
+// whether a tester has a real subscription, via hasRealSubscription (a
+// plain profiles.stripe_subscription_id != null check, passed down from the
+// caller, never derived from this fetch — plan-summary/route.ts's own
+// header comment says it "deliberately degrades to cadence: null on
+// anything short of a clean answer," including a transient Stripe error,
+// so it would be the wrong signal for an all-or-nothing gate like this
+// one). cadence is passed down to AttachmentStoragePanel too, so it only
+// ever fetches it once here, not a second time there.
 function SubscriberStatus({
+  canToggleTier,
+  hasRealSubscription,
   renewalDate,
   storageGb,
   onStorageUpdated,
   cancelAtPeriodEnd,
   onRenewed,
-  realStoragePurchaseDisabled,
   returnPath,
 }: {
+  canToggleTier: boolean
+  hasRealSubscription: boolean
   renewalDate: string | null
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
   cancelAtPeriodEnd: boolean
   onRenewed?: () => void
-  realStoragePurchaseDisabled: boolean
   returnPath: StripeReturnPath
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
 
+  const realStoragePurchaseDisabled = canToggleTier && !hasRealSubscription
+
   useEffect(() => {
-    if (realStoragePurchaseDisabled) return
     let cancelled = false
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -1221,12 +1317,15 @@ function SubscriberStatus({
     return () => {
       cancelled = true
     }
-  }, [realStoragePurchaseDisabled])
+  }, [])
+
+  const cadenceWord = cadence === 'annual' ? 'Annual' : cadence === 'monthly' ? 'Monthly' : null
 
   return (
     <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
-        My Status: Subscriber{cancelAtPeriodEnd && <> (until {formatRenewalDateShort(renewalDate)})</>}
+        My Account Status: {cadenceWord ? `${cadenceWord} ` : ''}Subscriber
+        {cancelAtPeriodEnd && <> (until {formatRenewalDateShort(renewalDate)})</>}
       </div>
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
         Thank you for being {cadence === 'annual' ? 'an annual' : cadence === 'monthly' ? 'a monthly' : 'a'}{' '}
@@ -1255,6 +1354,7 @@ function SubscriberStatus({
       <AttachmentStoragePanel
         storageGb={storageGb}
         onStorageUpdated={onStorageUpdated}
+        cadence={cadence}
         realPurchaseDisabled={realStoragePurchaseDisabled}
       />
 
@@ -1268,17 +1368,17 @@ function SubscriberStatus({
 
 // State 3 — Free Account. The real Sign Up pitch, unchanged in substance
 // from the old exported BecomeSubscriberPitch — just reusing the same
-// "Subscription Details" box heading/content every state now shows.
-// isTester only matters here via Admin > Test Stripe Payments
-// (forceRealVariant) — an ordinary real Free user is never a tester under
-// this routing (is_beta_tester() true always routes to PrivateTesterStatus
-// instead), so isTester reflects the real $19-vs-$39 price Stripe will
-// actually charge in that one admin-preview case.
+// "Subscription Details" box heading/content every state now shows. isTester
+// (is_beta_tester(), a separate allowlist from canToggleTier — see
+// AccountStatusSection's own header comment) reflects the real $19-vs-$39
+// price Stripe will actually charge — true independent of whether the
+// Private Tester box above is also showing, since a tester may have one
+// allowlist membership without the other.
 function FreeStatus({ isTester, returnPath }: { isTester: boolean; returnPath: StripeReturnPath }) {
   return (
     <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
-        My Status: Free Account
+        My Account Status: Free Account
       </div>
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
         Thank you for using Would You Please. The advantages and costs for a Subscription are

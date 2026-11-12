@@ -313,6 +313,15 @@ export default function AccountForm() {
   // webhook/route.ts's own customer.subscription.updated handler) — drives
   // SubscriberStatus's Cancel-vs-Renew wording (2026-11-11).
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false)
+  // profiles.stripe_subscription_id != null — whether this account has a
+  // REAL Stripe subscription on file, as opposed to a testing-toggle
+  // "subscriber" (tier set via the Subscribed? checkbox alone). Drives
+  // AccountStatusSection's realStoragePurchaseDisabled gate (2026-11-11
+  // Account Status merge) — a private tester who has actually subscribed
+  // for real (the test-only card) gets the real storage controls, same as
+  // anyone else; only a checkbox-only tester is routed to the explanatory
+  // "use the test-only card to enable this" dialog instead.
+  const [hasRealSubscription, setHasRealSubscription] = useState(false)
   // Locked down, migration 035 — the whole Subscriber Options section is
   // hidden unless this is true, rather than shown and failing on click.
   // Defaults false so there is no flash of the section before
@@ -410,7 +419,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'request_category_enabled, todo_category_enabled, request_time_enabled, request_repeat_enabled, todo_repeat_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end'
+          'request_category_enabled, todo_category_enabled, request_time_enabled, request_repeat_enabled, todo_repeat_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end, stripe_subscription_id'
         )
         .eq('id', userData.user.id)
         .single()
@@ -450,6 +459,7 @@ export default function AccountForm() {
       setRenewalDate(data?.subscription_renewal_date ?? null)
       setStorageGb(data?.subscription_storage_gb ?? 5)
       setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
+      setHasRealSubscription(data?.stripe_subscription_id != null)
       const overrideBytes = data?.storage_limit_override_bytes ?? null
       setStorageOverrideBytes(overrideBytes)
       setStorageOverrideInput(
@@ -604,6 +614,7 @@ export default function AccountForm() {
       }
       setRenewalDate(null)
       setStorageGb(5)
+      setHasRealSubscription(false)
       setSaving(false)
       return
     }
@@ -1336,6 +1347,7 @@ export default function AccountForm() {
                   tier={tier}
                   isBetaTester={isTester}
                   canToggleTier={canToggleTier}
+                  hasRealSubscription={hasRealSubscription}
                   renewalDate={renewalDate}
                   storageGb={storageGb}
                   onStorageUpdated={setStorageGb}
