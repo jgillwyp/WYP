@@ -115,6 +115,7 @@ body {
 .logo {
   flex: 0 0 auto;
   display: flex;
+  text-decoration: none;
 }
 
 .logo svg {

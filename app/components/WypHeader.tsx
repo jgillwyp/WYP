@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 /**
  * Header band (§6.8) — logo lockup + wordmark + tagline.
  * Shared by every screen; the SVG lives here so there is exactly one copy.
@@ -8,11 +10,19 @@
  * screen title on narrow Android widths. The header has the room; Main
  * Screen's Log Out moved the opposite direction (out of its header) for the
  * same underlying reason — see that screen's mockup for the sibling fix.
+ *
+ * The logo links to '/' (2026-11-12) — Main Screen when signed in, the
+ * public landing page otherwise. No confirm-before-leaving dialog, even on
+ * a screen with real unsaved staged data (Create Request's Dialog/
+ * Attachments, etc.) — matches this app's own established precedent that
+ * Close/Cancel always navigates immediately with no confirmation anywhere
+ * else in the app (the dynamic Close-vs-Cancel label exists instead of a
+ * confirm step, not alongside one).
  */
 export default function WypHeader({ action }: { action?: React.ReactNode }) {
   return (
     <div className="hdr">
-      <span className="logo" aria-hidden="true">
+      <Link href="/" className="logo" aria-label="Would You Please — go to Main Screen">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="16 8 212 200">
           <g>
             <path
@@ -44,7 +54,7 @@ export default function WypHeader({ action }: { action?: React.ReactNode }) {
             />
           </g>
         </svg>
-      </span>
+      </Link>
       <span className="brand">
         <span className="word">Would You Please</span>
         <span className="tag">Tracking Requests and ToDos</span>

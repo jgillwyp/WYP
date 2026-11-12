@@ -8868,3 +8868,21 @@ link is built only after the stack is proven on Add Contact.
   before this fix were never retroactively logged (Stripe doesn't
   redeliver past events to a newly-subscribed event type) — a one-time,
   harmless gap in the audit trail for those two test charges only.
+- **WYP logo now links to Main Screen, app-wide — no confirm dialog
+  (2026-11-12), no migration.** Jim: should the logo navigate to Main
+  Screen, and does any screen need a confirmation prompt first? No —
+  every screen with real at-risk unsaved data (Create Request's staged
+  Dialog/Attachments, Create ToDo, etc.) already lets its own Close/
+  Cancel navigate away immediately with zero confirmation; the dynamic
+  Close-vs-Cancel label (2026-08-20) was built *instead of* a confirm
+  step, not alongside one. The logo now follows that same precedent.
+  `WypHeader.tsx` (shared by nearly every screen, signed-in and
+  anonymous alike) wraps the logo `<svg>` in a `next/link` `<Link
+  href="/">` — Main Screen when signed in, the public landing page
+  otherwise, same destination `/` already resolves to everywhere else.
+  Dropped the old `aria-hidden="true"` (no longer purely decorative) for
+  a real `aria-label`. New `.logo { text-decoration: none; }` in
+  `app/globals.css`, defensive only (no text inside the link to
+  underline). `npx tsc --noEmit`/`npm run lint` both clean. No mockup —
+  none of this app's 17 `design/screens/*.html` mockups has interactive
+  header JS to update.
