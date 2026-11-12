@@ -231,6 +231,7 @@ async function main() {
   console.log('       checkout.session.completed')
   console.log('       customer.subscription.updated')
   console.log('       customer.subscription.deleted')
+  console.log('       invoice.paid')
   console.log('  4. Copy the "Signing secret" (starts with whsec_) into')
   console.log('     .env.local / Vercel as STRIPE_WEBHOOK_SECRET.')
   console.log(

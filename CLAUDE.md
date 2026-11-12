@@ -8840,3 +8840,31 @@ link is built only after the stack is proven on Add Contact.
   established per-file-duplication convention. `npx tsc --noEmit`/`npm
   run lint` both clean. No mockup — this feature has none beyond the
   other Admin reports' own live screens as the reference.
+- **Root-caused via the Stripe Dashboard, not a code bug: a real Annual
+  storage-capacity charge was missing its own `Invoice Paid` row in
+  Stripe Audit (2026-11-12).** Jim confirmed (via Stripe's own Payments/
+  Invoices tabs) two genuine $12.00 charges had succeeded for two storage
+  increases, yet the app only ever logged the `Storage Update` row for
+  each — no corresponding `Invoice Paid` row. Traced to the live webhook
+  endpoint itself (`upbeat-excellence`, `/api/stripe/webhook`) via its own
+  **Event deliveries** log (Dashboard → Developers → Webhooks → the
+  endpoint): it was only ever subscribed to `checkout.session.completed`,
+  `customer.subscription.created`, and `customer.subscription.deleted` —
+  never `invoice.paid`, and never `customer.subscription.updated` either
+  — so Stripe never even attempted to send either event; our webhook
+  code (`handleInvoicePaid`/`handleSubscriptionUpsert`) was never given
+  the chance to run. **`docs/stripe-setup.mjs`'s own printed setup
+  instructions had a real, matching gap** — they list `checkout.session.
+  completed`/`customer.subscription.updated`/`customer.subscription.
+  deleted` but never mentioned `invoice.paid` at all, an oversight dating
+  from before migration 092 (the Stripe Audit trail) was added, never
+  updated afterward; fixed by adding `invoice.paid` to that printed list,
+  so a future re-setup gets the complete one. **No application code
+  needed changing** — the actual fix was entirely in the Stripe
+  Dashboard: Jim added `invoice.paid` (and `customer.subscription.
+  updated`) to the endpoint's subscribed-events list. Confirmed fixed —
+  a subsequent storage increase now logs a real `Invoice Paid $12.00
+  USD` row with its own real Txn ID. The two already-paid invoices from
+  before this fix were never retroactively logged (Stripe doesn't
+  redeliver past events to a newly-subscribed event type) — a one-time,
+  harmless gap in the audit trail for those two test charges only.
