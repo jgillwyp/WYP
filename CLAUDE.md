@@ -8597,3 +8597,36 @@ link is built only after the stack is proven on Add Contact.
   every other branch is unchanged, still a single flat template-literal
   string per this file's own established SWC-whitespace-bug mitigation.
   `npx tsc --noEmit`/`npm run lint` both clean.
+- **The same day's sessionStorage hardening for the checkout banner reverted
+  outright — it caused a real, worse bug: the "Thanks — your payment was
+  received" banner stuck permanently (2026-11-11), no migration.** Jim: the
+  banner "is stuck at the top of Account Options" — surviving Close,
+  reopening the screen, and a reload several minutes later, regardless of
+  unchecking Subscribed? and re-subscribing again in between. The earlier
+  fix this same day (the "Account Options' own Close button" entry above)
+  had added a `sessionStorage` fallback to `checkoutStatus` specifically to
+  survive a manual page refresh after the query-stripping effect had
+  already removed `?checkout=` from the address bar — meant as a narrow
+  defensive improvement, it introduced a real way for the flag to persist
+  indefinitely across normal navigation instead. Rather than keep chasing
+  exactly which unmount/remount timing assumption was wrong, reverted the
+  mechanism outright in both `AccountForm.tsx` and `SubscriptionForm.tsx` —
+  `checkoutStatus` is read once from the URL at mount only again, with no
+  `sessionStorage` persistence at all (the original 2026-11-05 design,
+  which never had this symptom) — and the unmount-cleanup effects that
+  existed only to maintain that persistence are removed along with it. A
+  banner that occasionally doesn't survive a manual refresh is a far
+  smaller cost than one that can get stuck forever.
+  **Also added, as a direct safety net regardless of root cause**: both
+  "Thanks — your payment was received"/"Checkout was cancelled" banners, on
+  both screens, now carry a small "×" dismiss button
+  (`checkoutBannerDismissed` state) — so any future edge case that leaves
+  one showing has an immediate, foolproof way to clear it without needing
+  a code fix or a guess about navigation timing. `npx tsc --noEmit`/`npm
+  run lint` both clean. **Not yet confirmed fixed live** — awaiting Jim's
+  own retest. Same-day follow-up, Jim asked what exactly "take a few
+  seconds to show below" referred to (the Subscribed? checkbox, Cancel, or
+  the status display — it's all three at once, since they all read the
+  one `profiles.tier` value the webhook writes asynchronously): wording
+  tightened to "show **as Subscribed** below" on both screens, to name the
+  actual thing that updates.

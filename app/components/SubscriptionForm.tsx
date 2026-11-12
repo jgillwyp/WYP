@@ -61,47 +61,33 @@ export default function SubscriptionForm() {
   const [storageOverrideError, setStorageOverrideError] = useState<string | null>(null)
 
   // Stripe Checkout/Billing Portal both redirect back here with
-  // ?checkout=success|cancelled (create-checkout-session/create-portal-
-  // session route.ts's own success_url/cancel_url/return_url). Read via
-  // window.location.search directly rather than useSearchParams(), same
-  // precedent AddContactForm.tsx's own ?from=create-request already
-  // established — safe here because this redirect is a real top-level
-  // browser navigation (Stripe's hosted page sending the browser back),
-  // never a same-instance client-router reuse, so there's no staleness
-  // risk the way /login's own ?intent=signup once had.
+  // ?checkout=success|cancelled (create-checkout-session's own success_url/
+  // cancel_url). Read via window.location.search directly rather than
+  // useSearchParams(), same precedent AddContactForm.tsx's own
+  // ?from=create-request already established — safe here because this
+  // redirect is a real top-level browser navigation (Stripe's hosted page
+  // sending the browser back), never a same-instance client-router reuse,
+  // so there's no staleness risk the way /login's own ?intent=signup once
+  // had.
   //
-  // Also falls back to a sessionStorage copy (2026-11-11, owner-reported —
-  // this same symptom, "Close returns me to the Stripe Checkout page,"
-  // traced to AccountForm.tsx's own embedded Account Options screen, which
-  // had no checkoutStatus handling at all until this same batch — ported
-  // the identical hardening here too, since a plain page refresh after the
-  // query-stripping effect below has already removed ?checkout= from the
-  // address bar would hit the exact same gap on this screen): read-and-
-  // clear in the fallback branch only, so a later, unrelated visit never
-  // keeps seeing it. The unmount effect further down clears it for the
-  // non-refresh case, once this instance is the one that set it.
+  // Read once from the URL at mount only — no sessionStorage persistence.
+  // A same-day attempt (2026-11-11) to survive a manual refresh via
+  // sessionStorage caused a real, worse bug (owner-reported, same day, on
+  // AccountForm.tsx's identical copy of this mechanism): the banner got
+  // stuck showing "Thanks — your payment was received" permanently,
+  // surviving Close, reopening the screen, and a reload several minutes
+  // later. Reverted outright here too rather than chased further — a
+  // banner that occasionally doesn't survive a manual refresh is a far
+  // smaller cost than one that can get stuck forever.
+  // checkoutBannerDismissed below gives a direct, foolproof way to clear
+  // it regardless.
   const [checkoutStatus] = useState<'success' | 'cancelled' | null>(() => {
     if (typeof window === 'undefined') return null
-    const fromUrl = new URLSearchParams(window.location.search).get('checkout')
-    if (fromUrl === 'success' || fromUrl === 'cancelled') {
-      try {
-        window.sessionStorage.setItem('wyp.stripeCheckoutStatus', fromUrl)
-      } catch {
-        // ignore — refresh-survival is best-effort, not required for correctness
-      }
-      return fromUrl
-    }
-    try {
-      const stored = window.sessionStorage.getItem('wyp.stripeCheckoutStatus')
-      if (stored === 'success' || stored === 'cancelled') {
-        window.sessionStorage.removeItem('wyp.stripeCheckoutStatus')
-        return stored
-      }
-    } catch {
-      // ignore
-    }
-    return null
+    const params = new URLSearchParams(window.location.search)
+    const value = params.get('checkout')
+    return value === 'success' || value === 'cancelled' ? value : null
   })
+  const [checkoutBannerDismissed, setCheckoutBannerDismissed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -177,23 +163,6 @@ export default function SubscriptionForm() {
     // re-fires.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Clears the sessionStorage fallback once this instance (the one that set
-  // it) goes away normally — e.g. Close navigates off — so a later,
-  // unrelated visit within the same tab session never mistakenly inherits
-  // it. The checkoutStatus useState's own fallback branch already clears it
-  // for the refresh case; this covers the non-refresh case.
-  useEffect(() => {
-    return () => {
-      if (checkoutStatus) {
-        try {
-          window.sessionStorage.removeItem('wyp.stripeCheckoutStatus')
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, [checkoutStatus])
 
   // Same shape as AccountForm.tsx's own handleTierToggle — goes through
   // set_tier_for_testing() (migration 035/047) or /api/stripe/testing-
@@ -370,15 +339,71 @@ export default function SubscriptionForm() {
         </div>
 
         <div className="scroll">
-          {checkoutStatus === 'success' && (
-            <div className="noticeband" style={{ margin: '4px var(--pad) 14px' }}>
-              Thanks — your payment was received. This can take a few seconds to show
-              below; refresh if it still shows Free after a moment.
+          {checkoutStatus === 'success' && !checkoutBannerDismissed && (
+            <div
+              className="noticeband"
+              style={{
+                margin: '4px var(--pad) 14px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <span>
+                Thanks — your payment was received. This can take a few seconds to show
+                as Subscribed below; refresh if it still shows Free after a moment.
+              </span>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setCheckoutBannerDismissed(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  flexShrink: 0,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  color: 'var(--ink-soft)',
+                  cursor: 'pointer',
+                }}
+              >
+                ×
+              </button>
             </div>
           )}
-          {checkoutStatus === 'cancelled' && (
-            <div className="noticeband" style={{ margin: '4px var(--pad) 14px' }}>
-              Checkout was cancelled — nothing was charged.
+          {checkoutStatus === 'cancelled' && !checkoutBannerDismissed && (
+            <div
+              className="noticeband"
+              style={{
+                margin: '4px var(--pad) 14px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <span>Checkout was cancelled — nothing was charged.</span>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setCheckoutBannerDismissed(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  flexShrink: 0,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  color: 'var(--ink-soft)',
+                  cursor: 'pointer',
+                }}
+              >
+                ×
+              </button>
             </div>
           )}
 
