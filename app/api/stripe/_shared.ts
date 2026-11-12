@@ -1,6 +1,6 @@
 import type Stripe from 'stripe'
 
-import { getAnnualPriceId, getMonthlyPriceId } from '@/lib/stripe'
+import { getAnnualPriceId, getMonthlyPriceId, getStorageAnnualPriceId, getStorageMonthlyPriceId } from '@/lib/stripe'
 import type { SubscriptionCadence } from '@/lib/subscriptionPricing'
 
 /**
@@ -20,4 +20,35 @@ export function resolveSubscriptionCadence(subscription: Stripe.Subscription): S
   )
   if (!baseItem) return null
   return baseItem.price.id === annualPriceId ? 'annual' : 'monthly'
+}
+
+/**
+ * The actual base-plan subscription item (not just its cadence) — needed
+ * by upgrade-to-annual/route.ts and its own preview to swap the item's
+ * price in place, same item id, rather than removing and re-adding one
+ * (2026-11-12).
+ */
+export function findBaseSubscriptionItem(subscription: Stripe.Subscription): Stripe.SubscriptionItem | null {
+  const annualPriceId = getAnnualPriceId()
+  const monthlyPriceId = getMonthlyPriceId()
+  return (
+    subscription.items.data.find((item) => item.price.id === annualPriceId || item.price.id === monthlyPriceId) ??
+    null
+  )
+}
+
+/**
+ * The Additional Storage subscription item, if one exists — update-storage/
+ * route.ts already does this inline at its own one call site; factored out
+ * here (2026-11-12) so upgrade-to-annual/route.ts can reuse it too, since an
+ * upgrade has to also switch a storage item already on the subscription
+ * from its Monthly price to the Annual one, not just the base plan item.
+ */
+export function findStorageSubscriptionItem(subscription: Stripe.Subscription): Stripe.SubscriptionItem | null {
+  const storageMonthlyId = getStorageMonthlyPriceId()
+  const storageAnnualId = getStorageAnnualPriceId()
+  return (
+    subscription.items.data.find((item) => item.price.id === storageMonthlyId || item.price.id === storageAnnualId) ??
+    null
+  )
 }

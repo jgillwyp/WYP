@@ -8630,3 +8630,135 @@ link is built only after the stack is proven on Add Contact.
   one `profiles.tier` value the webhook writes asynchronously): wording
   tightened to "show **as Subscribed** below" on both screens, to name the
   actual thing that updates.
+- **Four more Account Status items — label shortening for Android, a new
+  Admin "Stripe Audit" screen, a real root-cause fix for a stray-credit
+  bug, and Monthly → Annual upgrade built end to end — migration 093
+  DRAFTED, NOT YET CONFIRMED RUN (2026-11-12).** Jim's own four-part
+  message, each addressed in order.
+  **(1) Label shortening for a narrower Android screen.** "My Account
+  Status:" → **"Status:"** (the section's own band title already says
+  "Account Status," so the repetition was never load-bearing) in both
+  `SubscriberStatus` and `FreeStatus`. The "Increase"/"Decrease" small
+  buttons (renamed from "+ 5 GB"/"− 5 GB" only the day before, 2026-11-11)
+  reverted back to **"+ 5 GB"/"− 5 GB"** — the word-collision reason for
+  that rename (both the small buttons and the action button used
+  Increase/Decrease) no longer applies now that the action button says
+  "Modify Capacity to X GB," so the shorter labels are safe again and fit
+  on one line together with the action button on Jim's phone.
+  **(2) Admin "Stripe Audit" screen.** Jim: "create an audit of purchase/
+  cancel/reduction transactions that can be tied to Stripe by some form of
+  a 'transaction ID' and expose it as a view under the Admin chip." The
+  data already existed — `stripe_billing_audit` (migration 092) — just
+  `service_role`-only with no client read path and no single normalized
+  "transaction ID" field (each event type's own `detail` jsonb uses a
+  slightly different key: `stripe_invoice_id`/`stripe_checkout_session_id`/
+  `stripe_subscription_id`/`subscription_id`/`invoice_id`, depending on
+  which route logged it). New `admin_get_stripe_audit()` (migration 093,
+  same `is_admin`-checking posture every `admin_stats_*` RPC already uses)
+  is a pure read-side derivation — `coalesce()` across every key shape in
+  use — rather than a schema change touching six existing insert call
+  sites and backfilling old rows. New `app/components/
+  AdminStripeAuditForm.tsx` (`/admin/stripe-audit`, `RequireAdmin`-gated)
+  lists every row as a plain `.panel` card (Date/Type/User/Amount/Txn ID,
+  reusing `.metarow`/`.mlabel`/`.mval` — the app's own existing label:value
+  convention) — no chart, just a reverse-chronological list; a new
+  Housekeeping row under the Admin tab, right after Add Private Tester.
+  **(3) "$0 charge then $5/mo" on a Monthly Sign Up — real root cause
+  found and fixed.** Jim: "for monthly subscriptions the Stripe interaction
+  incorrectly shows '$0 charge then $5/mo.'" Audited every coupon
+  application point in the codebase first — confirmed the Monthly Checkout
+  Session (`create-checkout-session/route.ts`) never applies any coupon at
+  all, ruling out a leaked discount in this app's own code. Root cause:
+  `testing-downgrade/route.ts`'s immediate `stripe.subscriptions.cancel()`
+  (the "Subscribed? (testing only)" uncheck reset) never passed `prorate:
+  false` — Stripe's own default on an immediate cancel is `prorate: true`,
+  which generates a negative "unused time" invoice item that doesn't
+  vanish with the canceled subscription; it sits as a **pending invoice
+  item on the Customer** until the next invoice for that customer picks it
+  up — which, after a later test Sign Up creates a brand-new subscription,
+  is that new subscription's own first invoice. A large leftover credit
+  from canceling an earlier Annual test silently zeroed out (or deeply
+  discounted) the next Monthly plan's first charge — exactly the reported
+  symptom, and given how many Sign-Up/reset test cycles this account has
+  been through, very likely already sitting as a stray pending item on
+  Jim's own test customer. Fixed with `prorate: false` on the cancel call
+  (testing cleanup has no reason to generate this credit at all) plus a
+  belt-and-suspenders sweep — every pending (not-yet-invoiced) invoice item
+  on the customer is now deleted as part of the same reset, clearing out
+  any stray credit left over from BEFORE this fix, not just preventing new
+  ones. Both best-effort, matching the existing payment-method cleanup in
+  the same route — cosmetic/preventive, never worth failing the whole
+  reset over.
+  **(4) Monthly → Annual upgrade, built end to end.** Jim: "when an account
+  is on a monthly subscription there is currently no way to buy an annual
+  subscription — so, add 'Upgrade to 1st year discount' button [instead
+  of] 'Sign up for a 1st year discount'... do not show the 'Or sign up for
+  monthly instead' button — start the annual period on the day of the
+  upgrade and provide a discount for the unused portion of the paid-for
+  month [with] an intermediate dialog... 'Credit for unused monthly
+  subscription'... 'The 1st year annual subscription cost of $39 will be
+  reduced by $x.xx for the unused remainder of your monthly subscription -
+  resulting in a $xx.xx charge.' with Continue and Cancel buttons." New
+  `UpgradeToAnnualButton` (`SubscriptionPanels.tsx`) — a full-width primary
+  button shown in `SubscriberStatus`'s own Subscription Details box only
+  when `cadence === 'monthly'` (which, per `plan-summary/route.ts`'s own
+  gate, can only ever be true for a REAL subscription — so a tester with
+  the checkbox alone, no real card, never sees it; no secondary "sign up
+  monthly" link is shown beside it, matching Jim's own instruction). New
+  `app/api/stripe/preview-upgrade-to-annual/route.ts` computes the exact
+  numbers via a genuine Stripe invoice preview (never hand-rolled day-count
+  math, same reasoning `preview-storage-update/route.ts` already
+  established) — switches the subscription's base item from Monthly to
+  Annual, resets `billing_cycle_anchor` to `{ type: 'now' }` (Jim's own
+  "start the annual period on the day of the upgrade"), and applies the
+  same first-year coupon a brand-new annual Sign Up gets ($39 public rate,
+  $19 tester rate via `is_beta_tester()`, never trusted from the client).
+  `creditAmount` is derived from the preview's own negative proration
+  line(s) (the real unused-time credit Stripe is actually crediting), not a
+  subtraction from the displayed first-year price — if the account also
+  carries an Additional Storage item, that gets switched to its own Annual
+  price in the same preview/update, so the final charge can be higher than
+  "$39 minus the credit" alone in that case; the dialog states both real
+  numbers rather than implying they're the only two components. New
+  `app/api/stripe/upgrade-to-annual/route.ts` executes the identical
+  change for real (`findBaseSubscriptionItem()`/`findStorageSubscriptionItem()`,
+  new shared helpers in `_shared.ts`, factored out so the preview and the
+  real write can never disagree on which item is which) — writes the new
+  `subscription_renewal_date` directly rather than waiting on the webhook
+  (same established pattern every other Stripe-mutating route here already
+  uses) and resets `cancel_at_period_end` to false (upgrading implies
+  continuing, not canceling). Threaded a new `onUpgraded` callback the same
+  way `onStorageUpdated`/`onCanceled` already are — `AccountForm.tsx`/
+  `SubscriptionForm.tsx` update their own `renewalDate`/`cancelAtPeriodEnd`
+  state immediately from the route's own response, no reload needed for
+  the common case.
+  **Also, per Jim's own follow-up instruction**: "we should not allow
+  month-to-month subscribers to add storage capacity [since it] further
+  complicates the switch to an annual subscription... treat that in a
+  similar way to the Private Tester not having used a credit card
+  subscription" — `AttachmentStoragePanel`'s old boolean `realPurchaseDisabled`
+  prop is now `disabledReason: 'tester' | 'monthly' | null`, computed in
+  `SubscriberStatus` as `canToggleTier && !hasRealSubscription ? 'tester' :
+  cadence === 'monthly' ? 'monthly' : null` — the exact same
+  all-three-buttons-intercepted mechanism as the existing tester case,
+  with a different dialog message pointing at the new Upgrade button
+  instead of Sign Up, per Jim's own exact wording: "Modify Capacity is
+  only available for annual subscriptions. If you choose to 'Upgrade to
+  1st year discount' with the button below, this feature will be
+  available." `update-storage/route.ts` independently refuses a Monthly
+  write server-side regardless of what the UI shows, same "the locked
+  button is a courtesy" doctrine as the existing tester check.
+  **Same-day wording follow-up** (sent mid-batch): the Attachment Storage
+  Capacity explanatory paragraph's old two-cadence wording ("On an Annual
+  plan... On a Monthly plan...") is now Annual-only, matching the new
+  Monthly restriction above — "Subscribers are provided 5 GB of storage
+  space for Attachments. For Annual subscribers, additional storage
+  capacity can be added in increments of 5 GB for $1/month. The change is
+  prorated for the remainder of your current year and charged now, then
+  $12/yr per 5 GB each year thereafter." — Jim's own exact replacement
+  text, used verbatim.
+  `npx tsc --noEmit`/`npm run lint` both clean across the whole batch. No
+  mockup — this feature family has none beyond Jim's own chat messages.
+  **Not yet tested live** — awaiting Jim's own confirmation that the
+  Upgrade flow, the Stripe Audit screen, and the stray-credit fix all work
+  end to end; migration 093 also still needs to be run.

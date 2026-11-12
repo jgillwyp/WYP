@@ -2601,6 +2601,22 @@ export default function MainScreen() {
                       <span className="hknote"> — allow someone new to sign in and test</span>
                     </span>
                   </div>
+                  {/* Stripe Audit (2026-11-12, migration 093) — Jim: "create
+                      an audit of purchase/cancel/reduction transactions...
+                      expose it as a view under the Admin chip as
+                      'Account/Stripe Audit'." */}
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/stripe-audit')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/stripe-audit') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Stripe Audit</span>
+                      <span className="hknote"> — purchase, cancel, and capacity-change transactions</span>
+                    </span>
+                  </div>
                   <div
                     className="hkrow"
                     role="button"

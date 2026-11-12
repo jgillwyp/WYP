@@ -98,15 +98,45 @@ export async function POST(request: Request) {
     try {
       // Immediate cancellation (not cancel_at_period_end) — this is testing
       // cleanup, not a real customer letting a paid period run out.
+      //
+      // prorate: false (2026-11-12, owner-reported: "for monthly
+      // subscriptions the Stripe interaction incorrectly shows '$0 charge
+      // then $5/mo'") — Stripe's default on an immediate cancel is
+      // prorate: true, which generates a negative "unused time" invoice
+      // item for the canceled subscription. That credit doesn't vanish; it
+      // sits as a pending invoice item on the CUSTOMER (not the now-gone
+      // subscription) until the next invoice for that customer picks it
+      // up — which, after a later test Sign Up creates a brand-new
+      // subscription, is that new subscription's own first invoice. A
+      // large leftover credit from canceling an earlier Annual test then
+      // silently zeroes out (or deeply discounts) the new Monthly plan's
+      // first charge, exactly the reported symptom. Testing cleanup has no
+      // reason to generate this credit in the first place.
       for (const status of ['active', 'trialing', 'past_due', 'unpaid'] as const) {
         const subs = await stripe.subscriptions.list({ customer: customerId, status, limit: 100 })
         for (const sub of subs.data) {
-          await stripe.subscriptions.cancel(sub.id)
+          await stripe.subscriptions.cancel(sub.id, { prorate: false })
         }
       }
     } catch (err) {
       console.error('[stripe/testing-downgrade] subscription cleanup failed', err)
       return Response.json({ error: 'stripe_error' }, { status: 502 })
+    }
+
+    // Belt-and-suspenders (2026-11-12): also clear any pending (not yet
+    // invoiced) invoice items already sitting on the customer from BEFORE
+    // this fix — a stray credit or charge from an earlier test cycle would
+    // otherwise still corrupt the very next real Sign Up's first invoice,
+    // even with the prorate: false fix above only preventing NEW ones.
+    // Best-effort, matches the payment-method cleanup below — this is
+    // cosmetic/preventive cleanup, never worth failing the whole reset over.
+    try {
+      const pendingItems = await stripe.invoiceItems.list({ customer: customerId, pending: true, limit: 100 })
+      for (const item of pendingItems.data) {
+        await stripe.invoiceItems.del(item.id)
+      }
+    } catch (err) {
+      console.error('[stripe/testing-downgrade] pending invoice item cleanup failed', err)
     }
 
     // Each test Sign Up's Checkout session attaches a fresh PaymentMethod to

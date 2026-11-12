@@ -1266,3 +1266,90 @@ comment on table public.stripe_billing_audit is
 --   -- through the Billing Portal -- confirm a 'subscription_canceled' row
 --   -- appears.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 093 (2026-11-12) -- admin_get_stripe_audit(): the "Stripe Audit"
+-- admin screen's own RPC. DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Jim: "create an audit of purchase/cancel/reduction transactions that can
+-- be tied to Stripe by some form of a 'transaction ID' and expose it as a
+-- view under the Admin chip as 'Account/Stripe Audit'." The data already
+-- exists -- stripe_billing_audit (migration 092) -- but it's service_role
+-- only, with no grant for authenticated at all, and the "transaction ID"
+-- Jim wants is already present, just scattered across inconsistently-named
+-- keys in each row's own detail jsonb (webhook/route.ts logs
+-- stripe_invoice_id/stripe_checkout_session_id/stripe_subscription_id;
+-- cancel-subscription/renew-subscription/route.ts log the shorter
+-- subscription_id; update-storage/route.ts and the new
+-- subscription_upgraded_to_annual event log subscription_id/invoice_id).
+--
+-- Rather than a schema migration touching six existing insert call sites
+-- (and backfilling every already-logged row), this is a pure read-side
+-- VIEW -- a SECURITY DEFINER function that derives one normalized
+-- stripe_transaction_id per row via coalesce() across every key shape
+-- actually in use, picking whichever is present. Same is_admin-checking
+-- posture as every admin_stats_* RPC already uses (migration 053 on) --
+-- needs no service_role and no new API route, called directly via a
+-- forwarded-JWT supabase.rpc() from the new Admin screen.
+-- ============================================================================
+
+create or replace function public.admin_get_stripe_audit(
+  p_limit integer default 200
+)
+returns table (
+  id bigint,
+  created_at timestamptz,
+  user_email text,
+  event_type text,
+  amount_cents integer,
+  currency text,
+  stripe_transaction_id text,
+  detail jsonb
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  return query
+  select
+    a.id,
+    a.created_at,
+    u.email,
+    a.event_type,
+    a.amount_cents,
+    a.currency,
+    coalesce(
+      a.detail->>'stripe_invoice_id',
+      a.detail->>'invoice_id',
+      a.detail->>'stripe_checkout_session_id',
+      a.detail->>'stripe_subscription_id',
+      a.detail->>'subscription_id'
+    ) as stripe_transaction_id,
+    a.detail
+  from public.stripe_billing_audit a
+  left join auth.users u on u.id = a.user_id
+  order by a.created_at desc
+  limit greatest(1, least(p_limit, 1000));
+end;
+$$;
+
+revoke all on function public.admin_get_stripe_audit(integer) from public;
+grant execute on function public.admin_get_stripe_audit(integer) to authenticated;
+
+-- Verify after running:
+--   select has_function_privilege('authenticated', 'admin_get_stripe_audit(integer)', 'execute');
+--     -- should be true
+--   -- As the admin account: select * from admin_get_stripe_audit(50);
+--   -- confirm stripe_transaction_id is populated for existing rows (an
+--   -- invoice id for invoice_paid, a checkout session id for
+--   -- checkout_completed, a subscription id for cancel/renew/storage/
+--   -- upgrade events).
+-- ============================================================================

@@ -181,6 +181,7 @@ export function AccountStatusSection({
   cancelAtPeriodEnd = false,
   onRenewed,
   onCanceled,
+  onUpgraded,
   saving = false,
   onTierToggle,
   storageOverrideBytes = null,
@@ -211,6 +212,9 @@ export function AccountStatusSection({
   // cancel_at_period_end:true write succeeds, same immediate-local-update
   // pattern onRenewed already uses.
   onCanceled?: () => void
+  // "Upgrade to 1st year discount" (2026-11-12) — see SubscriberStatus's
+  // own comment; threaded the same way onStorageUpdated already is.
+  onUpgraded?: (renewalDate: string | null) => void
   saving?: boolean
   onTierToggle?: (next: boolean) => void | Promise<void>
   storageOverrideBytes?: number | null
@@ -254,6 +258,7 @@ export function AccountStatusSection({
           cancelAtPeriodEnd={cancelAtPeriodEnd}
           onRenewed={onRenewed}
           onCanceled={onCanceled}
+          onUpgraded={onUpgraded}
         />
       ) : (
         <FreeStatus isTester={isBetaTester} returnPath={returnPath} />
@@ -781,6 +786,199 @@ function formatDollarAmount(amount: number): string {
   return Number.isInteger(amount) ? String(amount) : amount.toFixed(2)
 }
 
+// "Upgrade to 1st year discount" (2026-11-12) — a Monthly subscriber's own
+// equivalent of the Free pitch's Sign Up button, only ever shown once a
+// real Monthly subscription exists (SubscriberStatus gates on
+// cadence === 'monthly'). Jim: "add 'Upgrade to 1st year discount' button
+// [instead of] 'Sign up for a 1st year discount'... start the annual
+// period on the day of the upgrade and provide a discount for the unused
+// portion of the paid-for month [with] an intermediate dialog... 'Credit
+// for unused monthly subscription'... 'The 1st year annual subscription
+// cost of $39 will be reduced by $x.xx for the unused remainder of your
+// monthly subscription - resulting in a $xx.xx charge.' with Continue and
+// Cancel buttons."
+//
+// Same two-step shape as the storage-increase confirm dialog: a real
+// Stripe invoice preview (new preview-upgrade-to-annual/route.ts) computes
+// the exact numbers — never hand-rolled day-count math — fetched the
+// moment the dialog opens, with a spinner while it loads (the same
+// .spinner component built for the identical "Calculating…" wait on the
+// storage dialog). Confirming calls upgrade-to-annual/route.ts, which
+// actually switches the subscription's base item from Monthly to Annual
+// (resetting billing_cycle_anchor to today, per Jim's own "start the
+// annual period on the day of the upgrade") and applies the same
+// first-year coupon a brand-new annual Sign Up would get.
+function UpgradeToAnnualButton({ onUpgraded }: { onUpgraded?: (renewalDate: string | null) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [preview, setPreview] = useState<{
+    chargeNowAmount: number
+    creditAmount: number
+    firstYearPrice: number
+  } | null>(null)
+
+  async function openConfirm() {
+    setShowConfirm(true)
+    setPreview(null)
+    setPreviewError(null)
+    setPreviewLoading(true)
+    setError(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setPreviewError('Your sign-in has expired — please sign in again and retry.')
+      setPreviewLoading(false)
+      return
+    }
+
+    let res: Response
+    try {
+      res = await fetch('/api/stripe/preview-upgrade-to-annual', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {
+      setPreviewError('Could not reach the server to calculate the exact charge.')
+      setPreviewLoading(false)
+      return
+    }
+
+    let json: { ok?: boolean; chargeNowAmount?: number; creditAmount?: number; firstYearPrice?: number; detail?: string }
+    try {
+      json = await res.json()
+    } catch {
+      json = {}
+    }
+
+    if (!res.ok || !json.ok || typeof json.chargeNowAmount !== 'number') {
+      setPreviewError(json.detail ?? 'Could not calculate the exact charge.')
+      setPreviewLoading(false)
+      return
+    }
+
+    setPreview({
+      chargeNowAmount: json.chargeNowAmount,
+      creditAmount: json.creditAmount ?? 0,
+      firstYearPrice: json.firstYearPrice ?? ANNUAL_FIRST_YEAR_PRICE,
+    })
+    setPreviewLoading(false)
+  }
+
+  function closeConfirm() {
+    setShowConfirm(false)
+    setPreview(null)
+    setPreviewError(null)
+    setPreviewLoading(false)
+  }
+
+  async function handleConfirm() {
+    setShowConfirm(false)
+    setBusy(true)
+    setError(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setError('Your sign-in has expired — please sign in again and retry.')
+      setBusy(false)
+      return
+    }
+
+    let res: Response
+    try {
+      res = await fetch('/api/stripe/upgrade-to-annual', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {
+      setError('Could not reach the server — check your connection and try again.')
+      setBusy(false)
+      return
+    }
+
+    let json: { ok?: boolean; renewalDate?: string | null; error?: string; detail?: string }
+    try {
+      json = await res.json()
+    } catch {
+      json = {}
+    }
+
+    if (!res.ok || !json.ok) {
+      setError(json.detail ?? 'Something went wrong — please try again.')
+      setBusy(false)
+      return
+    }
+
+    onUpgraded?.(json.renewalDate ?? null)
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="btn"
+        style={{ width: '100%', marginTop: 12 }}
+        onClick={openConfirm}
+        disabled={busy}
+      >
+        {busy ? 'Upgrading…' : 'Upgrade to 1st year discount'}
+      </button>
+      {error && (
+        <p className="promo-p" style={{ margin: '8px 0 0', color: 'var(--alert-red)' }}>
+          {error}
+        </p>
+      )}
+      {showConfirm && (
+        <>
+          <div className="scrim" onClick={closeConfirm} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="upgrade-confirm-title">
+            <div className="modalhead">
+              <p className="modal-title" id="upgrade-confirm-title">
+                Credit for Unused Monthly Subscription
+              </p>
+            </div>
+            {/* Flat template-literal string, not JSX text interleaved with
+                {expressions} — this file's own established SWC-whitespace-
+                bug mitigation (CLAUDE.md, 2026-09-02/09-03/11-07); these
+                sentences state real dollar amounts during live Stripe
+                testing. */}
+            <p className="subnote">
+              {previewLoading ? (
+                <>
+                  <span className="spinner" aria-hidden="true" />
+                  Calculating the exact charge…
+                </>
+              ) : previewError ? (
+                previewError
+              ) : preview ? (
+                `The 1st year annual subscription cost of $${formatDollarAmount(preview.firstYearPrice)} will be reduced by $${formatDollarAmount(preview.creditAmount)} for the unused remainder of your monthly subscription, resulting in a $${formatDollarAmount(preview.chargeNowAmount)} charge.`
+              ) : null}
+            </p>
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn-secondary" type="button" onClick={closeConfirm} disabled={busy}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                type="button"
+                disabled={busy || previewLoading || !preview}
+                onClick={handleConfirm}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 // Client-side preview only, for the confirm dialog below — the server
 // (update-storage/route.ts) always recomputes this for real from the
 // actual Stripe subscription, never trusts this value.
@@ -837,11 +1035,20 @@ function computeStoragePreviewTotal(cadence: SubscriptionCadence, targetTotalGb:
 //      The server (update-storage/route.ts, preview-storage-update/
 //      route.ts) independently refuses the real write regardless of this
 //      prop either way — "the locked button is a courtesy."
+//   4. disabledReason (2026-11-12, replacing the plain boolean) — a second,
+//      genuinely different reason a real subscriber can't modify capacity:
+//      a Monthly plan. Jim: "we should not allow month-to-month subscribers
+//      to add storage capacity [and treat that in a similar way to the
+//      Private Tester not having used a credit card subscription]" — same
+//      all-three-buttons-intercepted mechanism, different dialog wording,
+//      pointing at the new Upgrade to 1st year discount button instead of
+//      Sign Up. update-storage/route.ts independently refuses a Monthly
+//      write server-side regardless of this prop, same as the tester case.
 function AttachmentStoragePanel({
   storageGb,
   onStorageUpdated,
   cadence,
-  realPurchaseDisabled = false,
+  disabledReason = null,
 }: {
   storageGb: number
   onStorageUpdated: (newStorageGb: number) => void
@@ -849,8 +1056,9 @@ function AttachmentStoragePanel({
   // second /api/stripe/plan-summary round trip and any chance of the two
   // disagreeing (2026-11-11).
   cadence: SubscriptionCadence | null
-  realPurchaseDisabled?: boolean
+  disabledReason?: 'tester' | 'monthly' | null
 }) {
+  const realPurchaseDisabled = disabledReason !== null
   const [target, setTarget] = useState(storageGb)
   const [minGb, setMinGb] = useState(STORAGE_BLOCK_GB)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -1088,12 +1296,17 @@ function AttachmentStoragePanel({
           click that would otherwise be ENABLED (Increase always, Decrease
           off the floor, or the action button once something's changed) —
           see the three handle*Click functions above. */}
+      {/* "Increase"/"Decrease" shortened back to "+ 5 GB"/"- 5 GB"
+          (2026-11-12, owner-reported — the longer labels, plus the action
+          button, didn't fit on one line on a narrower Android screen). No
+          word collision with the action button's own "Modify Capacity to
+          X GB" wording, so the earlier rename's whole reason is moot. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" className="btn-secondary" onClick={handleIncreaseClick} disabled={busy}>
-          Increase
+          {`+ ${STORAGE_BLOCK_GB} GB`}
         </button>
         <button type="button" className="btn-secondary" onClick={handleDecreaseClick} disabled={busy || atFloor}>
-          {atFloor ? 'N/A' : 'Decrease'}
+          {atFloor ? 'N/A' : `− ${STORAGE_BLOCK_GB} GB`}
         </button>
         <button
           type="button"
@@ -1178,9 +1391,9 @@ function AttachmentStoragePanel({
               </p>
             </div>
             <p className="subnote">
-              Modify Capacity is only available when the test-only credit card is used to subscribe. You can
-              uncheck the &ldquo;Subscribed?&rdquo; check box above and then use the normal &ldquo;Sign up&rdquo;
-              for a monthly or annual subscription to use this feature.
+              {disabledReason === 'monthly'
+                ? 'Modify Capacity is only available for annual subscriptions. If you choose to "Upgrade to 1st year discount" with the button below, this feature will be available.'
+                : 'Modify Capacity is only available when the test-only credit card is used to subscribe. You can uncheck the "Subscribed?" check box above and then use the normal "Sign up" for a monthly or annual subscription to use this feature.'}
             </p>
             <div className="modalacts" style={{ marginTop: 12 }}>
               <button className="btn" type="button" onClick={() => setShowDisabledInfo(false)}>
@@ -1190,13 +1403,14 @@ function AttachmentStoragePanel({
           </div>
         </>
       )}
+      {/* Reworded 2026-11-12 (Jim's own exact wording), dropping the old
+          Monthly-plan sentence outright now that Monthly subscribers can't
+          modify capacity at all (see disabledReason === 'monthly' above) —
+          a single flat template-literal string, this file's own established
+          SWC-whitespace-bug mitigation for a sentence mixing dollar amounts
+          with wrapped source lines. */}
       <p className="promo-p" style={{ margin: '8px 0 0' }}>
-        Subscribers are provided {STORAGE_BLOCK_GB} GB of storage space for Attachments. Additional storage
-        capacity can be added in increments of {STORAGE_BLOCK_GB} GB for ${STORAGE_MONTHLY_RATE_PER_BLOCK}/month.
-        On an <strong>Annual</strong> plan, a change is prorated for the remainder of your current year and
-        charged now, then ${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per {STORAGE_BLOCK_GB} GB each year thereafter. On a{' '}
-        <strong>Monthly</strong> plan, a change takes effect on your next billing date — no charge today — at $
-        {STORAGE_MONTHLY_RATE_PER_BLOCK}/mo per {STORAGE_BLOCK_GB} GB from then on.
+        {`Subscribers are provided ${STORAGE_BLOCK_GB} GB of storage space for Attachments. For Annual subscribers, additional storage capacity can be added in increments of ${STORAGE_BLOCK_GB} GB for $${STORAGE_MONTHLY_RATE_PER_BLOCK}/month. The change is prorated for the remainder of your current year and charged now, then $${STORAGE_ANNUAL_RATE_PER_BLOCK}/yr per ${STORAGE_BLOCK_GB} GB each year thereafter.`}
       </p>
       {/* Merged from two separate paragraphs into one (2026-11-11, Jim's own
           mockup pasted-in image) — same substance (the real floor is
@@ -1386,6 +1600,7 @@ function SubscriberStatus({
   cancelAtPeriodEnd,
   onRenewed,
   onCanceled,
+  onUpgraded,
 }: {
   canToggleTier: boolean
   hasRealSubscription: boolean
@@ -1395,11 +1610,25 @@ function SubscriberStatus({
   cancelAtPeriodEnd: boolean
   onRenewed?: () => void
   onCanceled?: () => void
+  // 2026-11-12 — "Upgrade to 1st year discount" (Monthly -> Annual). Same
+  // immediate-local-update pattern onStorageUpdated already uses: the
+  // server computes the real new subscription_renewal_date synchronously
+  // (no webhook wait) and hands it back, so the parent's own renewalDate
+  // state stays correct without a full reload.
+  onUpgraded?: (renewalDate: string | null) => void
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
 
-  const realStoragePurchaseDisabled = canToggleTier && !hasRealSubscription
+  // Two independent reasons AttachmentStoragePanel's three buttons can be
+  // real-Stripe-disabled (2026-11-12) — see that component's own header
+  // comment for the full reasoning on each. 'monthly' only ever applies to
+  // a REAL monthly subscription (cadence only resolves once a real
+  // stripe_subscription_id exists, see plan-summary/route.ts), so this
+  // never collides with the tester-no-subscription case, which always
+  // leaves cadence null.
+  const storageDisabledReason: 'tester' | 'monthly' | null =
+    canToggleTier && !hasRealSubscription ? 'tester' : cadence === 'monthly' ? 'monthly' : null
 
   useEffect(() => {
     let cancelled = false
@@ -1429,7 +1658,11 @@ function SubscriberStatus({
   return (
     <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
-        My Account Status: {cadenceWord ? `${cadenceWord} ` : ''}Subscriber
+        {/* "My Account Status:" shortened to "Status:" (2026-11-12,
+            owner-reported — wraps to two lines on a narrower Android
+            screen); the section's own band title already says "Account
+            Status," so the repetition was never load-bearing. */}
+        Status: {cadenceWord ? `${cadenceWord} ` : ''}Subscriber
         {cancelAtPeriodEnd && <> (until {formatRenewalDateShort(renewalDate)})</>}
       </div>
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
@@ -1460,12 +1693,27 @@ function SubscriberStatus({
         storageGb={storageGb}
         onStorageUpdated={onStorageUpdated}
         cadence={cadence}
-        realPurchaseDisabled={realStoragePurchaseDisabled}
+        disabledReason={storageDisabledReason}
       />
 
       <div className="promo" style={{ marginTop: 14, marginLeft: 0, marginRight: 0 }}>
         <div className="promo-h">Subscription Details</div>
         <SubscriptionFeaturesAndCost />
+        {/* Upgrade to 1st year discount (2026-11-12) — only a real Monthly
+            subscriber ever sees this (cadence only resolves 'monthly' once
+            a real subscription exists). Jim: "add 'Upgrade to 1st year
+            discount' [instead of] 'Sign up for a 1st year discount'... and
+            do not show the 'Or sign up for monthly instead' button" — this
+            is the one button shown, no secondary link beside it, unlike
+            FreeStatus's own Sign Up pair. */}
+        {cadence === 'monthly' && (
+          <UpgradeToAnnualButton
+            onUpgraded={(newRenewalDate) => {
+              setCadence('annual')
+              onUpgraded?.(newRenewalDate)
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -1483,7 +1731,7 @@ function FreeStatus({ isTester, returnPath }: { isTester: boolean; returnPath: S
   return (
     <div style={{ margin: '0 0 4px' }}>
       <div className="promo-sub" style={{ marginTop: 0 }}>
-        My Account Status: Free Account
+        Status: Free Account
       </div>
       <p className="promo-p" style={{ margin: '4px 0 0' }}>
         Thank you for using Would You Please. The advantages and costs for a Subscription are

@@ -154,6 +154,23 @@ export async function POST(request: Request) {
     console.error('[stripe/update-storage] No recognizable base plan item on subscription', subscriptionId)
     return Response.json({ error: 'stripe_error', detail: 'Could not identify your subscription plan.' }, { status: 502 })
   }
+  // Monthly subscribers can't modify capacity at all (2026-11-12, Jim:
+  // "we should not allow month-to-month subscribers to add storage
+  // capacity [since it] further complicates the switch to an annual
+  // subscription... treat that in a similar way to the Private Tester not
+  // having used a credit card subscription") — same "the locked button is
+  // a courtesy" enforcement AttachmentStoragePanel's own client-side
+  // disabledReason already shows, independently re-checked here regardless
+  // of what the UI displayed.
+  if (cadence === 'monthly') {
+    return Response.json(
+      {
+        error: 'monthly_not_allowed',
+        detail: 'Modify Capacity is only available for annual subscriptions. Upgrade to annual to use this feature.',
+      },
+      { status: 403 }
+    )
+  }
   const storagePriceId = cadence === 'annual' ? getStorageAnnualPriceId() : getStorageMonthlyPriceId()
 
   const desiredBlocks = (targetTotalGb - STORAGE_BLOCK_GB) / STORAGE_BLOCK_GB
