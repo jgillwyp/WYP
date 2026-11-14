@@ -414,6 +414,117 @@ function matchesDateRange(dueDate: string | null, from: string, to: string): boo
   return true
 }
 
+// Advanced Search Filters (2026-11-13, owner's own mockup) — a third scope
+// alongside All/Date Range, reached by its own "Advanced" chip rather than
+// an inline field set, since it needs more room than the search band gives.
+// Applied (not live-as-typed): a draft is edited inside the dialog and only
+// takes effect on Search, so a half-finished edit never narrows the lists
+// behind it. Date Range here matches ANY checked date type (Created/Due/
+// Done), not all of them — confirmed with the owner — same as Text below
+// matching ANY checked field (Dialog/Description). Contact Type doubles as
+// the Sent/Received scope gate (From -> Received, To -> Sent, confirmed),
+// so Requests/Contact Type/Contact Name together decide which of those two
+// sections participate at all, independent of ToDos.
+type AdvancedStatusValue = 'all' | 'open' | 'overdue' | 'done'
+
+type AdvancedSearchFilter = {
+  dateCreated: boolean
+  dateDue: boolean
+  dateDone: boolean
+  fromDate: string
+  toDate: string
+  // category (2026-11-14, owner: "I forgot to add Category") — a plain
+  // substring match, same convention as contactName below, not a lookup
+  // dropdown; only ever matches a Sent row (when sentCategoriesEnabled)
+  // or a ToDo (when todoCategoriesEnabled) — Received never has one, PRD
+  // §2.3. Narrows on top of everything else rather than gating a whole
+  // section's participation the way Contact Type does, since there's no
+  // paired "is Category even relevant" checkbox for it to cascade from.
+  category: string
+  status: AdvancedStatusValue
+  textDialog: boolean
+  textDescription: boolean
+  searchText: string
+  requests: boolean
+  contactTo: boolean
+  contactFrom: boolean
+  contactName: string
+  todos: boolean
+}
+
+const ADVANCED_SEARCH_DEFAULT: AdvancedSearchFilter = {
+  dateCreated: true,
+  dateDue: true,
+  dateDone: true,
+  fromDate: '',
+  toDate: '',
+  category: '',
+  status: 'all',
+  textDialog: true,
+  textDescription: true,
+  searchText: '',
+  requests: true,
+  contactTo: true,
+  contactFrom: true,
+  contactName: '',
+  todos: true,
+}
+
+function inDateRange(dateStr: string, from: string, to: string): boolean {
+  if (from && dateStr < from) return false
+  if (to && dateStr > to) return false
+  return true
+}
+
+// ANY of the checked date types matching the range counts as a match — the
+// owner's own confirmed answer ("ANY Created, Due, Done"). No range entered
+// at all (both sides blank) means Date Range isn't constraining this search,
+// regardless of which boxes are checked.
+function matchesAdvancedDateRange(
+  f: AdvancedSearchFilter,
+  createdAt: string,
+  dueDate: string | null,
+  doneDate: string | null
+): boolean {
+  if (!f.fromDate && !f.toDate) return true
+  const checks: boolean[] = []
+  if (f.dateCreated) checks.push(inDateRange(createdAt.slice(0, 10), f.fromDate, f.toDate))
+  if (f.dateDue) checks.push(dueDate != null && inDateRange(dueDate.slice(0, 10), f.fromDate, f.toDate))
+  if (f.dateDone) checks.push(doneDate != null && inDateRange(doneDate.slice(0, 10), f.fromDate, f.toDate))
+  if (checks.length === 0) return true
+  return checks.some(Boolean)
+}
+
+// Same ANY-of-checked-types logic as dates above, confirmed by the owner
+// for Text (Dialog/Description) too. dialogBlob is the lowercased, joined
+// body text of every Dialog entry on this item — see loadOwnedPrintDetail/
+// loadReceivedPrintDetail above, reused rather than a new fetch path, and
+// fetchAdvancedDialogText below, which builds this map only when Dialog
+// text matching is actually requested.
+function matchesAdvancedText(f: AdvancedSearchFilter, description: string, dialogBlob: string): boolean {
+  const q = f.searchText.trim().toLowerCase()
+  if (!q) return true
+  const checks: boolean[] = []
+  if (f.textDescription) checks.push(description.toLowerCase().includes(q))
+  if (f.textDialog) checks.push(dialogBlob.includes(q))
+  if (checks.length === 0) return true
+  return checks.some(Boolean)
+}
+
+const MAIN_SEARCH_ADVANCED_KEY = 'wyp.mainSearchAdvanced'
+
+function readStoredAdvancedFilter(): AdvancedSearchFilter | null {
+  if (typeof window === 'undefined') return null
+  const raw = window.sessionStorage.getItem(MAIN_SEARCH_ADVANCED_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<AdvancedSearchFilter>
+    return { ...ADVANCED_SEARCH_DEFAULT, ...parsed }
+  } catch {
+    return null
+  }
+}
+
 function dialogCount(dialog: { count: number }[] | null): number {
   return dialog?.[0]?.count ?? 0
 }
@@ -470,6 +581,33 @@ async function loadReceivedPrintDetail(ids: string[]): Promise<PrintDetailMap> {
     map[row.request_id] = { dialog: row.dialog ?? [], attachments: row.attachments ?? [] }
   }
   return map
+}
+
+// Advanced Search's own Dialog-text matching (2026-11-13) — reuses
+// loadOwnedPrintDetail/loadReceivedPrintDetail verbatim rather than a new
+// fetch path or RPC: those already fetch full Dialog content, lazily, for
+// whatever ids are passed, which is exactly what's needed here. Owned ids
+// cover both Sent and ToDos (same `requests` table, same owner-RLS read);
+// Received goes through the same RPC the Print feature already uses.
+// Called only when Search is clicked with real search text AND the Dialog
+// checkbox on — skipped entirely otherwise, so an ordinary Advanced Search
+// (Description-only, or no text at all) never pays for this fetch.
+async function fetchAdvancedDialogText(
+  ownedIds: string[],
+  receivedIds: string[]
+): Promise<Record<string, string>> {
+  const [ownedMap, receivedMap] = await Promise.all([
+    loadOwnedPrintDetail(ownedIds),
+    loadReceivedPrintDetail(receivedIds),
+  ])
+  const blob: Record<string, string> = {}
+  for (const [id, detail] of Object.entries(ownedMap)) {
+    blob[id] = detail.dialog.map((d) => d.body).join(' ').toLowerCase()
+  }
+  for (const [id, detail] of Object.entries(receivedMap)) {
+    blob[id] = detail.dialog.map((d) => d.body).join(' ').toLowerCase()
+  }
+  return blob
 }
 
 // Column-header sorting (2026-08-11) — owner: "Main screen sorting was
@@ -1074,9 +1212,18 @@ export default function MainScreen() {
   // searchText on entry and All clears fromDate/toDate on entry, so only one
   // field-set is ever "live" at a time — no stale hidden criteria silently
   // narrowing a result set the person can no longer see.
-  const [searchScope, setSearchScope] = useState<'all' | 'daterange'>(() =>
+  // 'advanced' added 2026-11-13 — see AdvancedSearchFilter's own header
+  // comment above. Mutual exclusivity with All/Date Range is unchanged in
+  // spirit (only one scope's fields are ever "live"), just reached through
+  // its own dialog rather than instant field-clearing on the chip click —
+  // Advanced only actually takes effect once Search is pressed inside it.
+  const [searchScope, setSearchScope] = useState<'all' | 'daterange' | 'advanced'>(() =>
     isMainSearchRoundTrip()
-      ? (readStoredString(MAIN_SEARCH_SCOPE_KEY) === 'daterange' ? 'daterange' : 'all')
+      ? (readStoredString(MAIN_SEARCH_SCOPE_KEY) === 'daterange'
+          ? 'daterange'
+          : readStoredString(MAIN_SEARCH_SCOPE_KEY) === 'advanced'
+          ? 'advanced'
+          : 'all')
       : 'all'
   )
   const [fromDate, setFromDate] = useState(() =>
@@ -1085,6 +1232,32 @@ export default function MainScreen() {
   const [toDate, setToDate] = useState(() =>
     isMainSearchRoundTrip() ? readStoredString(MAIN_SEARCH_TO_KEY) : ''
   )
+  // The *applied* Advanced Search — null means no advanced search is active.
+  // Round-trip-restored the same way as searchText/fromDate/toDate above,
+  // just as one serialized JSON blob instead of several separate keys,
+  // since it's a single structured value rather than a handful of scalars.
+  const [advancedFilter, setAdvancedFilter] = useState<AdvancedSearchFilter | null>(() =>
+    isMainSearchRoundTrip() ? readStoredAdvancedFilter() : null
+  )
+  // Dialog state — a *draft* copy, edited freely while the dialog is open
+  // and only committed to advancedFilter on a valid Search click; Cancel
+  // discards it with no effect on whatever search (if any) was already
+  // applied. advDialogText is the lazily-fetched per-id Dialog-body blob
+  // (see fetchAdvancedDialogText above), rebuilt fresh each time a search
+  // with Dialog-text matching actually runs.
+  const [advDialogOpen, setAdvDialogOpen] = useState(false)
+  const [advDraft, setAdvDraft] = useState<AdvancedSearchFilter>(ADVANCED_SEARCH_DEFAULT)
+  const [advError, setAdvError] = useState<string | null>(null)
+  const [advSearching, setAdvSearching] = useState(false)
+  const [advDialogText, setAdvDialogText] = useState<Record<string, string>>({})
+  // Snapshot of each section's own status chip, taken once right before an
+  // Advanced search first overwrites them with its own Status choice —
+  // Clear Search restores from this (2026-11-13, owner: the chips "need to
+  // reflect the setting in the search" and "be changed to the prior
+  // settings upon clearing"). A ref, not state: it's never rendered, only
+  // read back by clearSearch — written once per Advanced search, not on
+  // every render.
+  const advPriorFiltersRef = useRef<{ sent: FilterValue; received: FilterValue; todo: FilterValue } | null>(null)
 
   // Persist every change so the round-trip restore above always reads the
   // latest values, not just whatever was live at the moment of navigation.
@@ -1100,6 +1273,13 @@ export default function MainScreen() {
   useEffect(() => {
     window.sessionStorage.setItem(MAIN_SEARCH_TO_KEY, toDate)
   }, [toDate])
+  useEffect(() => {
+    if (advancedFilter) {
+      window.sessionStorage.setItem(MAIN_SEARCH_ADVANCED_KEY, JSON.stringify(advancedFilter))
+    } else {
+      window.sessionStorage.removeItem(MAIN_SEARCH_ADVANCED_KEY)
+    }
+  }, [advancedFilter])
 
   // Consumed-once marker: clears on every mount so the *next* mount defaults
   // back to "fresh" (blank search) unless openDetailRow() below runs again
@@ -1159,6 +1339,7 @@ export default function MainScreen() {
 
   function selectSearchScope(next: 'all' | 'daterange') {
     setSearchScope(next)
+    setAdvancedFilter(null)
     if (next === 'daterange') {
       setSearchText('')
     } else {
@@ -1172,14 +1353,115 @@ export default function MainScreen() {
   // search mode immediately") falls out for free this way: there is no mode
   // flag to separately reset, so the instant the relevant field(s) go empty,
   // every downstream isSearching read (filters, chip-row swap, Archived
-  // inclusion) reverts on the very next render.
-  const isSearching = searchScope === 'all' ? searchText.trim() !== '' : fromDate !== '' || toDate !== ''
+  // inclusion) reverts on the very next render. Advanced's own equivalent is
+  // whether a search has actually been applied (advancedFilter !== null) —
+  // the dialog being open with an unsubmitted draft doesn't count.
+  const isSearching =
+    searchScope === 'all'
+      ? searchText.trim() !== ''
+      : searchScope === 'daterange'
+      ? fromDate !== '' || toDate !== ''
+      : advancedFilter !== null
 
   function clearSearch() {
     setSearchText('')
     setFromDate('')
     setToDate('')
+    setAdvancedFilter(null)
     setSearchScope('all')
+    // Restore each section's own status chip to whatever it held right
+    // before Advanced Search first overwrote it (2026-11-13, owner) — a
+    // no-op when no Advanced search was ever active (the ref stays null).
+    if (advPriorFiltersRef.current) {
+      setSentFilter(advPriorFiltersRef.current.sent)
+      setReceivedFilter(advPriorFiltersRef.current.received)
+      setTodoFilter(advPriorFiltersRef.current.todo)
+      advPriorFiltersRef.current = null
+    }
+  }
+
+  // Opens the Advanced Search Filters dialog — seeded from whatever's
+  // already applied (so reopening it to tweak an active search starts from
+  // the real current state), or the owner's own documented defaults
+  // otherwise. Clicking the chip itself never applies or clears anything by
+  // itself, unlike All/Date Range's selectSearchScope — only a successful
+  // Search click inside the dialog does that (see handleAdvancedSearch).
+  function openAdvancedSearch() {
+    setAdvDraft(advancedFilter ?? ADVANCED_SEARCH_DEFAULT)
+    setAdvError(null)
+    setAdvDialogOpen(true)
+  }
+
+  function closeAdvancedSearch() {
+    setAdvDialogOpen(false)
+    setAdvError(null)
+  }
+
+  // Requests checkbox cascades to Contact Type (owner, confirmed): checking
+  // it checks both To and From; unchecking it unchecks both. Either can
+  // still be independently toggled afterward while Requests stays checked.
+  function setAdvRequests(checked: boolean) {
+    setAdvDraft((d) => ({ ...d, requests: checked, contactTo: checked, contactFrom: checked }))
+  }
+
+  // Validates, then — only if Dialog-text matching is actually needed —
+  // fetches the Dialog-body blob for every currently-loaded owned (Sent +
+  // ToDos) and Received id before applying, so the very first render under
+  // the new filter already has real data to match against rather than a
+  // flash of too-broad (or empty) results. Skipped entirely when there's no
+  // search text to match, or the Dialog checkbox is off — the common case
+  // pays no fetch cost at all.
+  async function handleAdvancedSearch() {
+    const d = advDraft
+    if ((d.fromDate || d.toDate) && !d.dateCreated && !d.dateDue && !d.dateDone) {
+      setAdvError('Please select at least one of Created, Due, or Done to apply the date range.')
+      return
+    }
+    if (d.contactName.trim() !== '' && !d.contactTo && !d.contactFrom) {
+      setAdvError('Please select To and/or From to search by Contact Name.')
+      return
+    }
+    if (d.searchText.trim() !== '' && !d.textDialog && !d.textDescription) {
+      setAdvError('Please select Dialog and/or Description to search by that text.')
+      return
+    }
+    if (!d.requests && !d.todos) {
+      setAdvError('Please select Requests and/or ToDos.')
+      return
+    }
+    setAdvError(null)
+
+    if (d.searchText.trim() !== '' && d.textDialog) {
+      setAdvSearching(true)
+      const ownedIds = [...sent.map((r) => r.id), ...todos.map((t) => t.id)]
+      const receivedIds = received.map((r) => r.id)
+      const blob = await fetchAdvancedDialogText(ownedIds, receivedIds)
+      setAdvDialogText(blob)
+      setAdvSearching(false)
+    }
+
+    // Chips reflect the search (owner, confirmed) — each section's own
+    // status chip becomes a live, further-adjustable filter seeded from
+    // the dialog's own Status choice, shown in place of the "Search
+    // Results" notice while this scope is active (see the per-section chip
+    // ternaries and matchesStatusFilter calls below). The pre-search
+    // values are snapshotted only the first time Advanced actually takes
+    // effect (advancedFilter was still null) — reapplying an edit to an
+    // already-active Advanced search must not clobber that original
+    // snapshot, or Clear Search would restore the wrong thing.
+    if (!advancedFilter) {
+      advPriorFiltersRef.current = { sent: sentFilter, received: receivedFilter, todo: todoFilter }
+    }
+    setSentFilter(d.status)
+    setReceivedFilter(d.status)
+    setTodoFilter(d.status)
+
+    setAdvancedFilter(d)
+    setSearchScope('advanced')
+    setSearchText('')
+    setFromDate('')
+    setToDate('')
+    setAdvDialogOpen(false)
   }
 
   // Print Reports (2026-08-13) — owner: the current Print buttons print the
@@ -1633,13 +1915,36 @@ export default function MainScreen() {
         if (sentFilter === 'repeating') return repeatingSentIds.has(r.id)
         return matchesStatusFilter(sentStatus(r), sentFilter)
       }
+      if (searchScope === 'advanced' && advancedFilter) {
+        const f = advancedFilter
+        // Contact Type doubles as the Sent/Received scope gate (owner,
+        // confirmed: "To -> Sent") — Requests has to be checked too, since
+        // unchecking it already forces both To/From off (setAdvRequests).
+        if (!f.requests || !f.contactTo) return false
+        if (!matchesAdvancedDateRange(f, r.created_at, r.due_date, r.done_date)) return false
+        // Status now reads the live sentFilter chip, not f.status directly
+        // — the dialog's own Status choice only ever seeds that chip once
+        // (handleAdvancedSearch); from then on the chip itself is the real,
+        // further-adjustable status filter (owner, confirmed: "the section
+        // chips need to reflect the setting in the search"). 'repeating' is
+        // special-cased the same way the "at rest" branch above already
+        // does — matchesStatusFilter alone would otherwise reject it
+        // outright and hide every row with no explanation.
+        if (sentFilter === 'repeating' ? !repeatingSentIds.has(r.id) : !matchesStatusFilter(sentStatus(r), sentFilter)) return false
+        if (!matchesAdvancedText(f, r.description, advDialogText[r.id] ?? '')) return false
+        const name = f.contactName.trim().toLowerCase()
+        if (name && !(r.contacts?.display_name ?? '').toLowerCase().includes(name)) return false
+        const cat = f.category.trim().toLowerCase()
+        if (sentCategoriesEnabled && cat && !(r.categories?.name ?? '').toLowerCase().includes(cat)) return false
+        return true
+      }
       if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
       return (
         r.description.toLowerCase().includes(query) ||
         (r.contacts?.display_name ?? '').toLowerCase().includes(query)
       )
     })
-  }, [sent, sentFilter, query, isSearching, searchScope, fromDate, toDate, repeatingSentIds])
+  }, [sent, sentFilter, query, isSearching, searchScope, fromDate, toDate, repeatingSentIds, advancedFilter, advDialogText, sentCategoriesEnabled])
 
   const filteredReceived = useMemo(() => {
     return received.filter((r) => {
@@ -1647,13 +1952,28 @@ export default function MainScreen() {
         if (r.received_archived_at) return false
         return matchesStatusFilter(receivedStatus(r), receivedFilter)
       }
+      if (searchScope === 'advanced' && advancedFilter) {
+        const f = advancedFilter
+        // "From -> Received" (owner, confirmed) — same gate as Sent above,
+        // mirrored onto the From side of Contact Type instead of To.
+        if (!f.requests || !f.contactFrom) return false
+        if (!matchesAdvancedDateRange(f, r.created_at, r.due_date, r.done_date)) return false
+        // Live receivedFilter chip, not f.status — see Sent's identical
+        // comment above.
+        if (!matchesStatusFilter(receivedStatus(r), receivedFilter)) return false
+        if (!matchesAdvancedText(f, r.description, advDialogText[r.id] ?? '')) return false
+        const name = f.contactName.trim().toLowerCase()
+        if (name && !(r.owner_name ?? '').toLowerCase().includes(name)) return false
+        // No Category check here — Received never has one (PRD §2.3).
+        return true
+      }
       if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
       return (
         r.description.toLowerCase().includes(query) ||
         (r.owner_name ?? '').toLowerCase().includes(query)
       )
     })
-  }, [received, receivedFilter, query, isSearching, searchScope, fromDate, toDate])
+  }, [received, receivedFilter, query, isSearching, searchScope, fromDate, toDate, advancedFilter, advDialogText])
 
   // Hidden fields excluded from search (2026-08-22, owner) — a ToDo's
   // due_date/category_id can still hold a value from before the owner
@@ -1674,13 +1994,45 @@ export default function MainScreen() {
         if (todoFilter === 'repeating') return repeatingTodoIds.has(t.id)
         return matchesStatusFilter(todoStatus(t), todoFilter)
       }
+      if (searchScope === 'advanced' && advancedFilter) {
+        const f = advancedFilter
+        if (!f.todos) return false
+        // Due Date only participates when the account's own Show Due/Done
+        // Dates (ToDos) toggle is on — same "hidden field, excluded from
+        // search" rule the existing Date Range scope already enforces below
+        // — but Created/Done are always shown regardless of that toggle
+        // (TodoRow's own comment), so only Due is conditioned here rather
+        // than excluding the whole ToDo the way the simple Date Range scope
+        // does.
+        if (!matchesAdvancedDateRange(f, t.created_at, todoDatesEnabled ? t.due_date : null, t.done_date)) return false
+        // Live todoFilter chip, not f.status — see Sent's identical
+        // comment above, 'repeating' special-case included.
+        if (todoFilter === 'repeating' ? !repeatingTodoIds.has(t.id) : !matchesStatusFilter(todoStatus(t), todoFilter)) return false
+        if (!matchesAdvancedText(f, t.description, advDialogText[t.id] ?? '')) return false
+        const cat = f.category.trim().toLowerCase()
+        if (todoCategoriesEnabled && cat && !(t.categories?.name ?? '').toLowerCase().includes(cat)) return false
+        return true
+      }
       if (searchScope === 'daterange') return todoDatesEnabled && matchesDateRange(t.due_date, fromDate, toDate)
       return (
         t.description.toLowerCase().includes(query) ||
         (todoCategoriesEnabled && (t.categories?.name ?? '').toLowerCase().includes(query))
       )
     })
-  }, [todos, todoFilter, query, isSearching, searchScope, fromDate, toDate, todoDatesEnabled, todoCategoriesEnabled, repeatingTodoIds])
+  }, [
+    todos,
+    todoFilter,
+    query,
+    isSearching,
+    searchScope,
+    fromDate,
+    toDate,
+    todoDatesEnabled,
+    todoCategoriesEnabled,
+    repeatingTodoIds,
+    advancedFilter,
+    advDialogText,
+  ])
 
   // Sorted on top of the already-filtered rows — filtering and sorting are
   // independent concerns (which rows show vs. what order they show in), so
@@ -1854,7 +2206,7 @@ export default function MainScreen() {
                   <button className="iconbtn" type="button" aria-label="Calendar View: Sent" onClick={() => router.push(`/calendar?section=sent&status=${sentFilter}`)}><CalendarIcon /></button>
                 </span>
               </div>
-              {isSearching ? (
+              {isSearching && searchScope !== 'advanced' ? (
                 <div className="chips searchresultsrow">
                   <span className="searchnotice">Search Results</span>
                   <button className="clearsearch" type="button" onClick={clearSearch}>
@@ -1891,7 +2243,7 @@ export default function MainScreen() {
                     <ColSort className="c-cat" label="Category" active={sentSort.key === 'category'} dir={sentSort.dir} onClick={() => sortSent('category')} />
                   )}
                 </span>
-                <ColSort className="c-dt" label="Date" active={sentSort.key === 'date'} dir={sentSort.dir} onClick={() => sortSent('date')} />
+                <ColSort className="c-dt" label="Created" active={sentSort.key === 'date'} dir={sentSort.dir} onClick={() => sortSent('date')} />
                 <ColSort className="c-due" label="Due" active={sentSort.key === 'due'} dir={sentSort.dir} onClick={() => sortSent('due')} />
                 <ColSort
                   className="c-dn"
@@ -1899,7 +2251,11 @@ export default function MainScreen() {
                   active={sentSort.key === 'done'}
                   dir={sentSort.dir}
                   onClick={() => sortSent('done')}
-                  disabled={!isSearching && sentFilter !== 'all' && sentFilter !== 'done'}
+                  disabled={
+                    searchScope === 'advanced'
+                      ? sentFilter !== 'all' && sentFilter !== 'done'
+                      : !isSearching && sentFilter !== 'all' && sentFilter !== 'done'
+                  }
                 />
               </div>
               <div className="rows">
@@ -1995,7 +2351,7 @@ export default function MainScreen() {
                   <button className="iconbtn" type="button" aria-label="Calendar View: Received" onClick={() => router.push(`/calendar?section=received&status=${receivedFilter}`)}><CalendarIcon /></button>
                 </span>
               </div>
-              {isSearching ? (
+              {isSearching && searchScope !== 'advanced' ? (
                 <div className="chips searchresultsrow">
                   <span className="searchnotice">Search Results</span>
                   <button className="clearsearch" type="button" onClick={clearSearch}>
@@ -2021,7 +2377,7 @@ export default function MainScreen() {
                       shows Category (PRD §2.3), so there is nothing left for
                       this heading to become — it's just dropped. */}
                 </span>
-                <ColSort className="c-dt" label="Date" active={receivedSort.key === 'date'} dir={receivedSort.dir} onClick={() => sortReceived('date')} />
+                <ColSort className="c-dt" label="Created" active={receivedSort.key === 'date'} dir={receivedSort.dir} onClick={() => sortReceived('date')} />
                 <ColSort className="c-due" label="Due" active={receivedSort.key === 'due'} dir={receivedSort.dir} onClick={() => sortReceived('due')} />
                 <ColSort
                   className="c-dn"
@@ -2029,7 +2385,11 @@ export default function MainScreen() {
                   active={receivedSort.key === 'done'}
                   dir={receivedSort.dir}
                   onClick={() => sortReceived('done')}
-                  disabled={!isSearching && receivedFilter !== 'all' && receivedFilter !== 'done'}
+                  disabled={
+                    searchScope === 'advanced'
+                      ? receivedFilter !== 'all' && receivedFilter !== 'done'
+                      : !isSearching && receivedFilter !== 'all' && receivedFilter !== 'done'
+                  }
                 />
               </div>
               <div className="rows">
@@ -2103,7 +2463,7 @@ export default function MainScreen() {
 
           <div className="subcard">
             <div className="subhead todos-head">
-              {isSearching ? (
+              {isSearching && searchScope !== 'advanced' ? (
                 <div className="chips searchresultsrow">
                   <span className="searchnotice">Search Results</span>
                   <button className="clearsearch" type="button" onClick={clearSearch}>
@@ -2149,7 +2509,7 @@ export default function MainScreen() {
                     <ColSort className="c-cat" label="Category" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
                   )}
                 </span>
-                <ColSort className="c-dt" label="Date" active={todoSort.key === 'date'} dir={todoSort.dir} onClick={() => sortTodos('date')} />
+                <ColSort className="c-dt" label="Created" active={todoSort.key === 'date'} dir={todoSort.dir} onClick={() => sortTodos('date')} />
                 {todoDatesEnabled && (
                   <ColSort className="c-due" label="Due" active={todoSort.key === 'due'} dir={todoSort.dir} onClick={() => sortTodos('due')} />
                 )}
@@ -2159,7 +2519,11 @@ export default function MainScreen() {
                   active={todoSort.key === 'done'}
                   dir={todoSort.dir}
                   onClick={() => sortTodos('done')}
-                  disabled={!isSearching && todoFilter !== 'all' && todoFilter !== 'done'}
+                  disabled={
+                    searchScope === 'advanced'
+                      ? todoFilter !== 'all' && todoFilter !== 'done'
+                      : !isSearching && todoFilter !== 'all' && todoFilter !== 'done'
+                  }
                 />
               </div>
               <div className="rows">
@@ -2730,12 +3094,30 @@ export default function MainScreen() {
                 >
                   Dates
                 </button>
+                {/* Advanced Search Filters (2026-11-13, owner's own mockup) —
+                    a third scope, reached through its own dialog rather than
+                    an inline field set: clicking the chip opens it (seeded
+                    from whatever's already applied), it never itself applies
+                    or clears a search the way the two chips above do. */}
+                <button
+                  className={`chip${searchScope === 'advanced' ? ' sel' : ''}`}
+                  type="button"
+                  onClick={openAdvancedSearch}
+                >
+                  Advanced
+                </button>
               </div>
             </span>
           </div>
 
           <div className="searchbar sb">
-            {searchScope === 'all' ? (
+            {searchScope === 'advanced' ? (
+              <div className="fieldwrap">
+                <button className="btn-secondary" type="button" onClick={openAdvancedSearch}>
+                  Edit Advanced Filters
+                </button>
+              </div>
+            ) : searchScope === 'all' ? (
               <div className="fieldwrap">
                 <input
                   className="field"
@@ -2853,7 +3235,7 @@ export default function MainScreen() {
                     <span className="c-desc">Category{sentSort.key === 'category' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                   )}
                 </span>
-                <span className="c-dt">Date{sentSort.key === 'date' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-dt">Created{sentSort.key === 'date' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-due">Due{sentSort.key === 'due' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-dn">Done{sentSort.key === 'done' ? (sentSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               </div>
@@ -2911,7 +3293,7 @@ export default function MainScreen() {
                       Received never shows Category (PRD §2.3, see the
                       pr2/pdesc comment below). */}
                 </span>
-                <span className="c-dt">Date{receivedSort.key === 'date' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-dt">Created{receivedSort.key === 'date' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-due">Due{receivedSort.key === 'due' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 <span className="c-dn">Done{receivedSort.key === 'done' ? (receivedSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               </div>
@@ -2981,7 +3363,7 @@ export default function MainScreen() {
                     <span className="c-desc">Category{todoSort.key === 'category' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                   )}
                 </span>
-                <span className="c-dt">Date{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                <span className="c-dt">Created{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 {todoDatesEnabled && (
                   <span className="c-due">Due{todoSort.key === 'due' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 )}
@@ -3016,6 +3398,200 @@ export default function MainScreen() {
             </>
           )}
         </div>
+      )}
+
+      {/* Advanced Search Filters (2026-11-13, owner's own mockup, §6.4x
+          PROPOSED) — reuses .scrim/.modal (§6.12) verbatim, with its own
+          .advsearch-modal modifier for the extra height/scroll this dialog
+          needs over every other modal in the app (Repeat's Add/Edit modal,
+          the closest existing precedent for this many fields, has never
+          needed one — but it's noticeably shorter than this). A draft, not
+          the live applied search: Cancel discards every change here with no
+          effect on whatever search (if any) is already showing; only Search
+          commits advDraft to advancedFilter, after validation. */}
+      {advDialogOpen && (
+        <>
+          <div className="scrim" onClick={closeAdvancedSearch} />
+          <div className="modal advsearch-modal" role="dialog" aria-modal="true" aria-labelledby="advsearch-title">
+            <p className="modal-title" id="advsearch-title">
+              Advanced Search Filters
+            </p>
+
+            <div className="fgroup">
+              <span className="flabel">Date Range</span>
+              <div className="advcheckrow">
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    checked={advDraft.dateCreated}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, dateCreated: e.target.checked }))}
+                  />
+                  Created
+                </label>
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    checked={advDraft.dateDue}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, dateDue: e.target.checked }))}
+                  />
+                  Due
+                </label>
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    checked={advDraft.dateDone}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, dateDone: e.target.checked }))}
+                  />
+                  Done
+                </label>
+              </div>
+              <div className="daterange-fields" style={{ marginTop: 6 }}>
+                <label className="drfield">
+                  <span className="drlabel">From</span>
+                  <input
+                    type="date"
+                    value={advDraft.fromDate}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, fromDate: e.target.value }))}
+                    aria-label="Advanced search date from"
+                  />
+                </label>
+                <label className="drfield">
+                  <span className="drlabel">To</span>
+                  <input
+                    type="date"
+                    value={advDraft.toDate}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, toDate: e.target.value }))}
+                    aria-label="Advanced search date to"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Category (2026-11-14, owner: "I forgot to add Category") —
+                shown only if the account actually uses Private Category for
+                at least one of Requests/ToDos; a plain substring match, same
+                as Contact Name below, not a lookup dropdown. Never shown for
+                Received regardless — that section never has a Category at
+                all (PRD §2.3), so it's narrowed against Sent/ToDos only. */}
+            {(sentCategoriesEnabled || todoCategoriesEnabled) && (
+              <div className="fgroup">
+                <span className="flabel">Category</span>
+                <input
+                  className="finput"
+                  type="text"
+                  placeholder="Private Category"
+                  value={advDraft.category}
+                  onChange={(e) => setAdvDraft((d) => ({ ...d, category: e.target.value }))}
+                  aria-label="Advanced search category"
+                />
+              </div>
+            )}
+
+            <div className="fgroup stopgroup">
+              <p className="stopgroup-title">Status</p>
+              {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
+                <label className="stoprow" key={s}>
+                  <input
+                    type="radio"
+                    name="advsearch-status"
+                    checked={advDraft.status === s}
+                    onChange={() => setAdvDraft((d) => ({ ...d, status: s }))}
+                  />
+                  <span>{s === 'all' ? 'All' : s === 'open' ? 'Open' : s === 'overdue' ? 'Overdue' : 'Done'}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="fgroup">
+              <span className="flabel">Text</span>
+              <div className="advcheckrow">
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    checked={advDraft.textDialog}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, textDialog: e.target.checked }))}
+                  />
+                  Dialog
+                </label>
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    checked={advDraft.textDescription}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, textDescription: e.target.checked }))}
+                  />
+                  Description
+                </label>
+              </div>
+              <input
+                className="finput"
+                type="text"
+                style={{ marginTop: 6 }}
+                placeholder="Search text"
+                value={advDraft.searchText}
+                onChange={(e) => setAdvDraft((d) => ({ ...d, searchText: e.target.value }))}
+                aria-label="Advanced search text"
+              />
+            </div>
+
+            <label className="checkrow" style={{ marginBottom: 6 }}>
+              <input type="checkbox" checked={advDraft.requests} onChange={(e) => setAdvRequests(e.target.checked)} />
+              <span className="checktext">Requests</span>
+            </label>
+            <div className={`fgroup adv-contacttype${advDraft.requests ? '' : ' is-disabled'}`}>
+              <span className="flabel">Contact Type</span>
+              <div className="advcheckrow">
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    disabled={!advDraft.requests}
+                    checked={advDraft.contactTo}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, contactTo: e.target.checked }))}
+                  />
+                  To
+                </label>
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    disabled={!advDraft.requests}
+                    checked={advDraft.contactFrom}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, contactFrom: e.target.checked }))}
+                  />
+                  From
+                </label>
+              </div>
+              <input
+                className="finput"
+                type="text"
+                style={{ marginTop: 6 }}
+                placeholder="Contact Name"
+                disabled={!advDraft.requests}
+                value={advDraft.contactName}
+                onChange={(e) => setAdvDraft((d) => ({ ...d, contactName: e.target.value }))}
+                aria-label="Advanced search contact name"
+              />
+            </div>
+
+            <label className="checkrow" style={{ marginBottom: 6 }}>
+              <input
+                type="checkbox"
+                checked={advDraft.todos}
+                onChange={(e) => setAdvDraft((d) => ({ ...d, todos: e.target.checked }))}
+              />
+              <span className="checktext">ToDos</span>
+            </label>
+
+            {advError && <p className="ferror">{advError}</p>}
+
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn-secondary" type="button" onClick={closeAdvancedSearch}>
+                Cancel
+              </button>
+              <button className="btn" type="button" disabled={advSearching} onClick={handleAdvancedSearch}>
+                {advSearching ? 'Searching…' : 'Search'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Apple/Safari install-instructions modal (2026-09-03) — Jim's own

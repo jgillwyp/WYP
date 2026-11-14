@@ -1763,7 +1763,7 @@ export default function ArchiveForm() {
                     </span>
                     <ColSort
                       className="c-dt"
-                      label="Date"
+                      label="Created"
                       active={todoSort.key === 'date'}
                       dir={todoSort.dir}
                       onClick={() => sortTodoColumn('date')}
@@ -1812,7 +1812,7 @@ export default function ArchiveForm() {
                     </span>
                     <ColSort
                       className="c-dt"
-                      label="Date"
+                      label="Created"
                       active={currentReqSort.key === 'date'}
                       dir={currentReqSort.dir}
                       onClick={() => sortReqColumn('date')}
@@ -2028,7 +2028,7 @@ export default function ArchiveForm() {
                   <span className="c-desc">Category{todoSort.key === 'category' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 )}
               </span>
-              <span className="c-dt">Date{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              <span className="c-dt">Created{todoSort.key === 'date' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               {todoDatesEnabled && (
                 <span className="c-due">Due{todoSort.key === 'due' ? (todoSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               )}
@@ -2044,7 +2044,7 @@ export default function ArchiveForm() {
                   <span className="c-desc">Category{currentReqSort.key === 'category' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
                 )}
               </span>
-              <span className="c-dt">Date{currentReqSort.key === 'date' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+              <span className="c-dt">Created{currentReqSort.key === 'date' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               <span className="c-due">Due{currentReqSort.key === 'due' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
               <span className="c-dn">Done{currentReqSort.key === 'done' ? (currentReqSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
             </div>

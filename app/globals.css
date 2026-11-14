@@ -1697,6 +1697,61 @@ body {
   font-size: 13.5px;
 }
 
+/* ============================================================================
+   ADVANCED SEARCH FILTERS — PROPOSED (§6.4x), Main Screen, 2026-11-13.
+   .advsearch-modal is a .modal modifier: this dialog has noticeably more
+   fields than any other in the app (Repeat's Add/Edit modal is the closest
+   precedent, and even it has never needed a scroll), so unlike every other
+   modal, this one gets a max-height + internal scroll rather than risking
+   its own Cancel/Search buttons landing off-screen on a short phone.
+   .advcheck/.advcheckrow are a new compact inline checkbox+label pair —
+   .checkrow's own block shape (full-width, padded, one toggle per row) is
+   right for a single standalone preference but wrong for "Created / Due /
+   Done" sitting on one line together, which is what this dialog's Date
+   Range and Text sections both need.
+   ========================================================================= */
+.advsearch-modal {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.advcheckrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.advcheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.advcheck input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand-blue);
+  cursor: pointer;
+}
+
+.advcheck input:disabled {
+  cursor: not-allowed;
+}
+
+/* Contact Type/Contact Name grey out together when the Requests checkbox
+   above them is off — same cascade .checkrow-disabled already establishes
+   elsewhere, just scoped to this one nested block rather than a whole row. */
+.adv-contacttype.is-disabled .flabel,
+.adv-contacttype.is-disabled .advcheck,
+.adv-contacttype.is-disabled .finput {
+  opacity: 0.55;
+}
+
 /* Repeat band's own visible disabled-state text (2026-11-02) — replaces a
    title-attribute tooltip, unreachable on touch, with real on-screen text.
    repeatband-note reuses .checknote's own sizing/color; the embedded

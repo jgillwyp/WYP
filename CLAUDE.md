@@ -8886,3 +8886,80 @@ link is built only after the stack is proven on Add Contact.
   underline). `npx tsc --noEmit`/`npm run lint` both clean. No mockup —
   none of this app's 17 `design/screens/*.html` mockups has interactive
   header JS to update.
+- **Main Screen's "Date" column heading renamed "Created"; new Advanced
+  Search Filters dialog — section chips reflect the search and revert on
+  Clear, Category added (2026-11-13/14), no migration.** Jim: "the column
+  heading on the Main screen for 'Date' should be 'Created'" — a straight
+  rename across every on-screen/printed occurrence that actually means
+  creation date: Main Screen's and Archive's three/two `ColSort` labels
+  and matching print-colbar spans, plus ToDo Detail's single-item print
+  header (9 occurrences total, 3 files). `RequestDetailForm.tsx`/
+  `ResponseDetailForm.tsx` needed no change — their single-item print
+  reports never had a Date column at all (the `.detail3`/`.detail2`
+  shape, 2026-08-18).
+
+  **Advanced Search Filters** — a third "Advanced" chip beside All/Dates
+  on Main Screen's own Search band, opening a dialog (reusing the app's
+  own `.scrim`/`.modal` §6.12 pattern, new `.advsearch-modal` modifier for
+  the extra height/scroll none of this app's other modals have needed)
+  instead of an inline field set, per Jim's own mockup, refined across
+  several rounds of confirmed answers before building: Date Range
+  (Created/Due/Done, ANY-checked-type OR logic — entering a date with
+  none checked is a validation error), Status (single-select All/Open/
+  Overdue/Done, "Override" in the mockup confirmed a typo for "Overdue"),
+  Text (Dialog/Description, same OR logic — same validation if text is
+  typed with neither checked), Requests (checkbox cascading to a nested
+  Contact Type To/From pair — To maps to Sent, From to Received,
+  confirmed — plus Contact Name, validated the same way if typed with
+  neither direction checked), and ToDos (plain checkbox; validated that
+  at least one of Requests/ToDos must stay checked). Dropped the mockup's
+  resize handle and mic icon on the Description field, per Jim's own
+  stated lean (exact-match search risks silent zero-result mismatches
+  from a mis-transcription, unlike every other Description field in the
+  app, which a person reads). It's a draft until Search is clicked —
+  editing fields has no effect until then, Cancel discards everything,
+  and all three validation cases show as inline `.ferror` text inside the
+  same dialog rather than a second stacked dialog (flagged as a reading
+  of Jim's word "dialog," not confirmed literally). Dialog-text matching
+  reuses the existing Print feature's own `loadOwnedPrintDetail`/
+  `loadReceivedPrintDetail` functions verbatim (new shared
+  `fetchAdvancedDialogText`) — fetched once, only when Search is clicked
+  with real text typed and Dialog checked, never per keystroke. Survives
+  the Detail-screen round trip and gets cleared by Clear Search or by
+  switching to All/Dates, via one new JSON-serialized `AdvancedSearchFilter`
+  sessionStorage key (`wyp.mainSearchAdvanced`) rather than several
+  separate scalar keys, since it's one structured value.
+
+  **Same-day follow-up, two more items from Jim**: (1) "The section chips
+  need to reflect the setting in the search and be changed to the prior
+  settings upon clearing the search." The per-section status chip row
+  (All/Open/Overdue/Done) now shows instead of the "Search Results"
+  notice while an Advanced search is active — pre-set from the dialog's
+  own Status choice (seeded once into `sentFilter`/`receivedFilter`/
+  `todoFilter` directly, via `handleAdvancedSearch`) and then genuinely
+  live/adjustable afterward: clicking a different chip re-narrows that
+  section without reopening the dialog, same as at rest, and the Done
+  column's sortability follows the identical "disabled unless All or
+  Done" rule it already uses there. A new `advPriorFiltersRef` snapshots
+  each section's own chip value once, right before an Advanced search
+  first overwrites it — not re-snapshotted on a later re-edit of an
+  already-active search — and `clearSearch()` restores from it. Caught
+  and fixed a real edge case while building this: clicking Repeating
+  during an active Advanced search would otherwise have silently hidden
+  every row, since status-matching rejects `'repeating'` outright —
+  special-cased in `filteredSent`/`filteredTodos`'s advanced branch the
+  same way the "at rest" branch already handles it, via `repeatingSentIds`/
+  `repeatingTodoIds`. (2) "I meant to, but forgot to add Category (if it
+  is used by the account holder)." New `category` field on
+  `AdvancedSearchFilter`, placed between Date Range and Status per Jim's
+  own mockup — shown only when `sentCategoriesEnabled || todoCategoriesEnabled`
+  (migration 073's independent Requests/ToDos split), narrowing each type
+  independently rather than gating a whole section's participation the
+  way Contact Type does (no paired "is Category relevant" checkbox to
+  cascade from). Built as a plain substring-match text field, same
+  convention as Contact Name, not a lookup dropdown — flagged, since the
+  mockup's icon could be read either way. Never applies to Received (PRD
+  §2.3, no Category there at all).
+
+  `npx tsc --noEmit`/`npm run lint` both clean across the whole batch. No
+  mockup — this feature has none beyond Jim's own pasted images.

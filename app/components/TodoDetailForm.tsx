@@ -1848,7 +1848,7 @@ export default function TodoDetailForm() {
               <span>Priority</span>
               <span className="c-desc">Description</span>
             </span>
-            <span className="c-dt">Date</span>
+            <span className="c-dt">Created</span>
             {todoDatesEnabled && <span className="c-due">Due</span>}
             <span className="c-dn">Done</span>
           </div>
