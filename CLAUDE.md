@@ -9029,3 +9029,15 @@ link is built only after the stack is proven on Add Contact.
   "Suggested" mockup's own wording) — the Search band's "Edit Advanced
   Filters" button wins as the more important consistency to match. `npx
   tsc --noEmit`/`npm run lint` both clean.
+- **Same-day follow-up: Text Type sat too close to the Status box above it
+  (2026-11-15), no migration.** Jim: "the vertical spacing for the Text
+  Type should match the Contact Type - it is a little too close to its
+  'above' field." Root cause: `.stopgroup`'s own base rule sets
+  `margin-bottom: 4px` and wins the cascade over `.fgroup`'s 12px (equal
+  specificity, defined later in the file) — so Status's box (`.fgroup
+  stopgroup advstatus-inline`) only ever contributed a 4px gap below it,
+  while Contact Type sits below a plain `.checkrow` (`margin-bottom: 14px`)
+  instead. `.stopgroup.advstatus-inline` now sets its own `margin-bottom:
+  14px`, specific enough to win without touching `.stopgroup` itself —
+  RepeatControl.tsx's Stops Repeating modal still uses that class
+  unmodified. `npx tsc --noEmit`/`npm run lint` both clean.

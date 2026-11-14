@@ -1791,6 +1791,17 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 14px;
+  /* margin-bottom: 14px, not .stopgroup's own 4px (2026-11-15,
+     owner-reported: "the vertical spacing for the Text Type should match
+     the Contact Type - it is a little too close to its 'above' field").
+     .stopgroup's base rule sets margin-bottom:4px and wins the cascade
+     over .fgroup's 12px (same specificity, later in the file) — so Text
+     Type, right after this Status box, sat closer to it than Contact
+     Type does to the .checkrow (margin-bottom:14px) above it. This
+     modifier is specific enough to override that without touching
+     .stopgroup itself, which RepeatControl.tsx's Stops Repeating modal
+     still relies on unchanged. */
+  margin-bottom: 14px;
 }
 
 .stopgroup.advstatus-inline .stoprow {
