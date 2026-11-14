@@ -8994,3 +8994,38 @@ link is built only after the stack is proven on Add Contact.
   partial, free-typed name with no exact pick still works. `npx tsc
   --noEmit`/`npm run lint` both clean. No mockup file — Jim's own pasted
   screenshots are the only reference.
+- **Three more fixes to the same dialog, from a real Android screenshot
+  (2026-11-15), no migration.** (1) **Dates search wrapping bug**: the
+  FROM/TO date fields in the main search band's own "Dates" scope could
+  render truncated ("11/" instead of a full date) — root cause was
+  `.searchbar`'s own `flex-wrap`: Clear Search and the magnifying-glass
+  icon were two separate flex children, so a wrap could split them —
+  Clear Search staying on the FROM/TO line (squeezing the date fields)
+  while only the icon dropped to a second line below. Jim's own diagnosis
+  was exactly right: "If the 'Clear Search X'... was forced to the next
+  line if the magnifying glass breaks to the second line - the dates
+  would display correctly." Fixed by grouping both into one new
+  `.searchbar-actions` flex child (`app/globals.css`) — a nested flex
+  container can't be split by its parent's own wrap decision, so the pair
+  now always wraps together, leaving `.daterange-fields` the whole line
+  (and its own `flex-grow`) to itself whenever they don't both fit.
+  (2) **Advanced Search Filters dialog positioned too high on phones** —
+  Jim: "The Windows Advanced Search dialog displays with space above it.
+  The Android and iOS are both too high... under the camera on iOS - on
+  Android the dialog title is only half-shown... under the camera."
+  `.modal`'s own `top: 34%` + `translate(-50%, -50%)` centers around a
+  fixed point regardless of the modal's actual height — fine on Windows'
+  much taller viewport, but on a phone this particular dialog (tall
+  enough to brush its own `max-height: 80vh`) had its top edge pushed
+  above y:0, under the status bar/camera cutout. `.advsearch-modal` now
+  overrides `top`/`transform` to anchor from the top instead of
+  centering, using the same `env(safe-area-inset-top)` pattern `.hdr`
+  already established (2026-10-29) — the title can never land under the
+  unsafe area again, regardless of how tall the dialog's content turns
+  out to be. (3) **Title reverted to "Advanced Search Filters"** — Jim:
+  "The Edit Advanced Filters button is a good idea - but to match that,
+  the dialog should be titled 'Advance[d] Search Filters.'" Supersedes
+  the prior day's shortening to "Advanced Search" (done to match the
+  "Suggested" mockup's own wording) — the Search band's "Edit Advanced
+  Filters" button wins as the more important consistency to match. `npx
+  tsc --noEmit`/`npm run lint` both clean.

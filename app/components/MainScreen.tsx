@@ -3321,13 +3321,25 @@ export default function MainScreen() {
               </div>
             )}
 
-            {isSearching && (
-              <button className="clearsearch" type="button" onClick={clearSearch}>
-                Clear&nbsp;Search&nbsp;×
-              </button>
-            )}
-
-            <span className="iconbtn" role="button" tabIndex={0} aria-label="Search"><SearchIcon /></span>
+            {/* Clear Search + the magnifying glass wrapped together as one
+                flex item (2026-11-15, owner-reported on a Dates search,
+                phone screenshot): previously two separate .searchbar
+                children, so a wrap could split them — Clear Search staying
+                on the FROM/TO line while only the icon dropped to its own
+                line below, squeezing the date fields (one showed "11/"
+                truncated) in the process. Grouped, the pair can only wrap
+                as a unit — when there isn't room for both beside the date
+                fields, they move down together, leaving .daterange-fields
+                the full line (and its own flex-grow:1) to itself, same fix
+                for the All/Advanced scopes' field+button pairing too. */}
+            <span className="searchbar-actions">
+              {isSearching && (
+                <button className="clearsearch" type="button" onClick={clearSearch}>
+                  Clear&nbsp;Search&nbsp;×
+                </button>
+              )}
+              <span className="iconbtn" role="button" tabIndex={0} aria-label="Search"><SearchIcon /></span>
+            </span>
           </div>
 
           <div className="scroll-pad" />
@@ -3551,7 +3563,7 @@ export default function MainScreen() {
           <div className="scrim" onClick={closeAdvancedSearch} />
           <div className="modal advsearch-modal" role="dialog" aria-modal="true" aria-labelledby="advsearch-title">
             <p className="modal-title" id="advsearch-title">
-              Advanced Search
+              Advanced Search Filters
             </p>
 
             <div className="fgroup">

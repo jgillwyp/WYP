@@ -1719,10 +1719,25 @@ body {
    vertical space on a phone, the owner's stated goal. .advrow-label is
    also reused for Status's own label, replacing .stopgroup-title here
    (that class is unchanged and still used by RepeatControl.tsx's own
-   Stops Repeating modal, which keeps its stacked layout). */
+   Stops Repeating modal, which keeps its stacked layout).
+
+   Position fixed 2026-11-15 (owner-reported, real Android/iOS screenshots)
+   — .modal's own top:34%/translate(-50%,-50%) vertically centers around a
+   fixed point regardless of the modal's own height, so this one (tall
+   enough to actually hit its own max-height:80vh on a phone) had its top
+   edge pushed above y:0 — under the status bar/camera cutout on Android,
+   under the notch on iOS. Windows never showed this (a much taller
+   viewport there means this dialog's real height is nowhere near half of
+   34%, so centering left visible space above). Overridden here to anchor
+   from the top instead of the center, with the same env(safe-area-inset-
+   top) pattern .hdr already uses — guarantees the title is always below
+   the unsafe area, on any device, regardless of how tall the dialog's own
+   content turns out to be. */
 .advsearch-modal {
   max-height: 80vh;
   overflow-y: auto;
+  top: max(24px, calc(env(safe-area-inset-top, 0px) + 16px));
+  transform: translateX(-50%);
 }
 
 .advlabelrow {
@@ -3523,6 +3538,20 @@ body {
 
 .drfield input[type='date']:focus {
   outline: none;
+}
+
+/* Clear Search + the magnifying glass, grouped as one flex item inside
+   .searchbar (2026-11-15) — see MainScreen.tsx's own comment above this
+   markup for the real bug this fixes (a Dates search could wrap the icon
+   alone, leaving Clear Search squeezed onto the FROM/TO line and
+   truncating a date). flex:0 0 auto so the pair never stretches; keeping
+   them in one nested flex container means the parent .searchbar can only
+   wrap them together, never split between lines. */
+.searchbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 /* Clear Search — always-visible exit from Search Results mode, next to the
