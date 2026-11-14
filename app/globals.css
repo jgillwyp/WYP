@@ -1709,10 +1709,35 @@ body {
    right for a single standalone preference but wrong for "Created / Due /
    Done" sitting on one line together, which is what this dialog's Date
    Range and Text sections both need.
-   ========================================================================= */
+
+   Redesigned 2026-11-14 — owner, comparing a real Windows/Android
+   screenshot against his own "Suggested" mockup: each section's own label
+   ("Date Type"/"Text Type"/"Contact Type") now sits inline with its own
+   checkbox row (.advlabelrow/.advrow-label) instead of stacked above it,
+   and Status's own radios lay out horizontally in one row
+   (.stopgroup.advstatus-inline) instead of stacked — both conserve
+   vertical space on a phone, the owner's stated goal. .advrow-label is
+   also reused for Status's own label, replacing .stopgroup-title here
+   (that class is unchanged and still used by RepeatControl.tsx's own
+   Stops Repeating modal, which keeps its stacked layout). */
 .advsearch-modal {
   max-height: 80vh;
   overflow-y: auto;
+}
+
+.advlabelrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 8px;
+}
+
+.advrow-label {
+  color: var(--brand-blue);
+  font-weight: 700;
+  font-size: 12.5px;
+  flex: 0 0 auto;
 }
 
 .advcheckrow {
@@ -1743,11 +1768,29 @@ body {
   cursor: not-allowed;
 }
 
+/* Status's radios inline on one row, inside the same .stopgroup Strip-tint
+   box — a modifier, not a change to .stopgroup/.stoprow themselves, which
+   RepeatControl.tsx's Stops Repeating modal still uses stacked/vertical. */
+.stopgroup.advstatus-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.stopgroup.advstatus-inline .stoprow {
+  margin-bottom: 0;
+}
+
 /* Contact Type/Contact Name grey out together when the Requests checkbox
    above them is off — same cascade .checkrow-disabled already establishes
-   elsewhere, just scoped to this one nested block rather than a whole row. */
-.adv-contacttype.is-disabled .flabel,
+   elsewhere, just scoped to this one nested block rather than a whole row.
+   .flabel covers both the "Contact Type" section label pre-2026-11-14 and,
+   now, Contact Name's own floating field label (LookupGlyph + text) — both
+   still need to dim. */
+.adv-contacttype.is-disabled .advrow-label,
 .adv-contacttype.is-disabled .advcheck,
+.adv-contacttype.is-disabled .flabel,
 .adv-contacttype.is-disabled .finput {
   opacity: 0.55;
 }

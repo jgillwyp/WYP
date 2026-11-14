@@ -8963,3 +8963,34 @@ link is built only after the stack is proven on Add Contact.
 
   `npx tsc --noEmit`/`npm run lint` both clean across the whole batch. No
   mockup — this feature has none beyond Jim's own pasted images.
+- **Advanced Search Filters redesigned for vertical space and real lookup
+  fields, same day (2026-11-14), no migration.** Jim pasted real Windows
+  and Android screenshots of the just-shipped dialog alongside a
+  "Suggested" redesign mockup: each section's own label ("Date Range"/
+  "Text"/"Contact Type") sat on its own row above its checkboxes, and
+  Status's four radios stacked vertically — both cost more phone screen
+  than needed. New `.advlabelrow`/`.advrow-label` (`app/globals.css`) put
+  a section's bold-blue label inline with its own checkbox row instead of
+  stacking it above — applied to Date Type (renamed from "Date Range"),
+  Text Type (renamed from "Text"), and Contact Type; a new
+  `.stopgroup.advstatus-inline` modifier lays Status's radios out
+  horizontally in one row instead of stacked, reusing `.stopgroup`/
+  `.stoprow` as-is (RepeatControl.tsx's own Stops Repeating modal keeps
+  its stacked layout, untouched) rather than a second pair of classes.
+  Dialog title shortened to "Advanced Search," matching the mockup.
+  **Category and Contact Name converted to real lookup fields** — Jim:
+  "the Contact Name and Category should interact as is done on the
+  Create Request and Create Todo - with a pull-down and/or lookup."
+  Reuses `CreateRequestForm.tsx`'s own Recipient/Category pattern
+  verbatim (`.ffloat`/`.flabel`/`.lookup-results`/`.lookup-item`, the
+  "exact match shown as `.selected`" convention, focus-shows-full-list-
+  until-first-keystroke `*Browsing` behavior) via a new shared
+  `LookupGlyph()` icon function and two new lazily-fetched lists
+  (`advContacts`/`advCategories`, fetched once on first dialog open, not
+  on every Main Screen mount) — **a pure UI/interaction change, not a
+  matching-semantics one**: picking a row just fills the field with that
+  exact name; the underlying search is still the same plain substring
+  match against `advDraft.contactName`/`category` as before, so a
+  partial, free-typed name with no exact pick still works. `npx tsc
+  --noEmit`/`npm run lint` both clean. No mockup file — Jim's own pasted
+  screenshots are the only reference.

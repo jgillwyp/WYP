@@ -425,6 +425,24 @@ function matchesDateRange(dueDate: string | null, from: string, to: string): boo
 // the Sent/Received scope gate (From -> Received, To -> Sent, confirmed),
 // so Requests/Contact Type/Contact Name together decide which of those two
 // sections participate at all, independent of ToDos.
+//
+// Layout redesign (2026-11-14, owner's own "Suggested" mockup, comparing a
+// real Windows/Android screenshot against it) — each section's own label
+// ("Date Type," renamed from "Date Range"; "Text Type," renamed from "Text";
+// "Contact Type") now sits inline with its own checkbox row instead of
+// stacked above it (new .advlabelrow/.advrow-label, globals.css), and the
+// Status radios lay out horizontally in one row instead of stacked
+// (.stopgroup.advstatus-inline) — both conserve vertical space on a phone,
+// the owner's stated goal; the underlying matching logic (ANY-of-checked OR
+// logic, Contact Type's Sent/Received cascade) is unchanged, this is a pure
+// layout pass. Category and Contact Name are now real lookup fields
+// (LookupGlyph, .ffloat/.flabel/.lookup-results — the exact pattern Create
+// Request/Create ToDo already use for Recipient/Category), per the owner's
+// own explicit request — but the underlying match stays a plain substring
+// against advDraft.category/contactName, same as before: picking a row from
+// the dropdown just fills the field with that exact name rather than
+// narrowing to one id, so free-typed partial text (no exact match required)
+// still works exactly as it always has.
 type AdvancedStatusValue = 'all' | 'open' | 'overdue' | 'done'
 
 type AdvancedSearchFilter = {
@@ -433,11 +451,13 @@ type AdvancedSearchFilter = {
   dateDone: boolean
   fromDate: string
   toDate: string
-  // category (2026-11-14, owner: "I forgot to add Category") — a plain
-  // substring match, same convention as contactName below, not a lookup
-  // dropdown; only ever matches a Sent row (when sentCategoriesEnabled)
-  // or a ToDo (when todoCategoriesEnabled) — Received never has one, PRD
-  // §2.3. Narrows on top of everything else rather than gating a whole
+  // category (2026-11-14, owner: "I forgot to add Category") — the field
+  // itself is a lookup/dropdown picker (same as contactName below, added
+  // same day), but the stored value and its match are still a plain
+  // substring, same convention as contactName; only ever matches a Sent
+  // row (when sentCategoriesEnabled) or a ToDo (when todoCategoriesEnabled)
+  // — Received never has one, PRD §2.3. Narrows on top of everything else
+  // rather than gating a whole
   // section's participation the way Contact Type does, since there's no
   // paired "is Category even relevant" checkbox for it to cascade from.
   category: string
@@ -469,6 +489,20 @@ const ADVANCED_SEARCH_DEFAULT: AdvancedSearchFilter = {
   contactName: '',
   todos: true,
 }
+
+// Advanced Search's own Category/Contact Name lookup lists (2026-11-14) —
+// a plain id+name/display_name shape, same fields CreateRequestForm.tsx
+// fetches for its own Recipient/Category lookups, lazily loaded once on
+// first dialog open (see openAdvancedSearch below) rather than on every
+// Main Screen mount, since most visits never open this dialog at all.
+type AdvLookupContact = { id: string; display_name: string }
+type AdvLookupCategory = { id: string; name: string }
+
+// Same browse-on-focus-when-short threshold as CreateRequestForm.tsx's own
+// LOOKUP_BROWSE_THRESHOLD (2026-08-09/08-10) — duplicated here rather than
+// imported, matching this codebase's established per-file convention for
+// small shared constants.
+const ADV_LOOKUP_BROWSE_THRESHOLD = 12
 
 function inDateRange(dateStr: string, from: string, to: string): boolean {
   if (from && dateStr < from) return false
@@ -1110,6 +1144,25 @@ function SearchIcon() {
   )
 }
 
+// Advanced Search's own Category/Contact Name lookup fields (2026-11-14,
+// owner: "the Contact Name and Category should interact as is done on the
+// Create Request and Create Todo - with a pull-down and/or lookup") reuse
+// this exact icon verbatim from CreateRequestForm.tsx's Recipient/Category
+// fields — factored into one shared function here since both usages live
+// in this same file, unlike those two screens' own per-file duplication.
+function LookupGlyph() {
+  return (
+    <span className="lglyph" aria-hidden="true">
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="21" r="12" fill="none" stroke="#7E8A9A" strokeWidth="3.5" />
+        <line x1="24.5" y1="29.5" x2="36" y2="41" stroke="#7E8A9A" strokeWidth="3.5" strokeLinecap="round" />
+        <polygon points="17.5,14 42.5,14 28.5,25" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="5" strokeLinejoin="round" />
+        <polygon points="17.5,14 42.5,14 28.5,25" fill="#1F2933" />
+      </svg>
+    </span>
+  )
+}
+
 // VoiceSearchIcon removed 2026-08-19 — owner: drop the mic icon from Search
 // now, both to reclaim horizontal space and because it was never wired to
 // anything (always decorative); voice input on Description fields, where it
@@ -1250,6 +1303,19 @@ export default function MainScreen() {
   const [advError, setAdvError] = useState<string | null>(null)
   const [advSearching, setAdvSearching] = useState(false)
   const [advDialogText, setAdvDialogText] = useState<Record<string, string>>({})
+  // Category/Contact Name lookup state (2026-11-14) — null means "not yet
+  // fetched," distinct from an empty list; see loadAdvLookupLists below.
+  // *ResultsOpen/*Browsing mirror CreateRequestForm.tsx's own
+  // showContactResults/contactBrowsing pair exactly (focus shows the full
+  // list regardless of the field's current value, until the first
+  // keystroke narrows it) — kept outside advDraft since they're ephemeral
+  // dropdown-open UI state, never part of the committed filter.
+  const [advContacts, setAdvContacts] = useState<AdvLookupContact[] | null>(null)
+  const [advCategories, setAdvCategories] = useState<AdvLookupCategory[] | null>(null)
+  const [advContactResultsOpen, setAdvContactResultsOpen] = useState(false)
+  const [advContactBrowsing, setAdvContactBrowsing] = useState(false)
+  const [advCategoryResultsOpen, setAdvCategoryResultsOpen] = useState(false)
+  const [advCategoryBrowsing, setAdvCategoryBrowsing] = useState(false)
   // Snapshot of each section's own status chip, taken once right before an
   // Advanced search first overwrites them with its own Status choice —
   // Clear Search restores from this (2026-11-13, owner: the chips "need to
@@ -1390,6 +1456,26 @@ export default function MainScreen() {
     setAdvDraft(advancedFilter ?? ADVANCED_SEARCH_DEFAULT)
     setAdvError(null)
     setAdvDialogOpen(true)
+    // Lazy-fetch Category/Contact Name's own lookup lists once, the first
+    // time this dialog is actually opened — most visits never open it, so
+    // this avoids an unconditional extra query on every Main Screen load.
+    // Owner-RLS-scoped, same as every other contacts/categories read in the
+    // app; fire-and-forget, the dropdown just shows "Loading…" until it
+    // resolves.
+    if (advContacts === null) {
+      supabase
+        .from('contacts')
+        .select('id, display_name')
+        .order('display_name')
+        .then(({ data }) => setAdvContacts(data ?? []))
+    }
+    if (advCategories === null) {
+      supabase
+        .from('categories')
+        .select('id, name')
+        .order('name')
+        .then(({ data }) => setAdvCategories(data ?? []))
+    }
   }
 
   function closeAdvancedSearch() {
@@ -2178,6 +2264,51 @@ export default function MainScreen() {
     if (value !== 'all' && value !== 'done') {
       setTodoSort((s) => (s.key === 'done' ? TODO_SORT_LIST_DEFAULT : s))
     }
+  }
+
+  // Advanced Search's own Category/Contact Name lookup dropdowns
+  // (2026-11-14) — same filtering shape as CreateRequestForm.tsx's own
+  // filteredContacts/filteredCategories: focus (advContactBrowsing/
+  // advCategoryBrowsing) shows the whole list regardless of what's typed;
+  // otherwise an empty field shows the whole list only if it's short
+  // enough to browse, and a non-empty field narrows by substring. The
+  // *committed* match (matchesAdvancedText's callers) stays a plain
+  // substring against advDraft.contactName/category either way — picking a
+  // row here is a UI convenience, not a switch to exact-id matching.
+  const advContactQueryEmpty = advDraft.contactName.trim() === ''
+  const advContactsBrowsable = (advContacts?.length ?? 0) < ADV_LOOKUP_BROWSE_THRESHOLD
+  const filteredAdvContacts = advContactBrowsing
+    ? advContacts ?? []
+    : advContactQueryEmpty
+      ? advContactsBrowsable
+        ? advContacts ?? []
+        : []
+      : (advContacts ?? []).filter((c) =>
+          c.display_name.toLowerCase().includes(advDraft.contactName.trim().toLowerCase())
+        )
+  const showAdvContactDropdown = !advContactQueryEmpty || advContactsBrowsable
+
+  const advCategoryQueryEmpty = advDraft.category.trim() === ''
+  const advCategoriesBrowsable = (advCategories?.length ?? 0) < ADV_LOOKUP_BROWSE_THRESHOLD
+  const filteredAdvCategories = advCategoryBrowsing
+    ? advCategories ?? []
+    : advCategoryQueryEmpty
+      ? advCategoriesBrowsable
+        ? advCategories ?? []
+        : []
+      : (advCategories ?? []).filter((c) =>
+          c.name.toLowerCase().includes(advDraft.category.trim().toLowerCase())
+        )
+  const showAdvCategoryDropdown = !advCategoryQueryEmpty || advCategoriesBrowsable
+
+  function selectAdvContact(name: string) {
+    setAdvDraft((d) => ({ ...d, contactName: name }))
+    setAdvContactResultsOpen(false)
+  }
+
+  function selectAdvCategory(name: string) {
+    setAdvDraft((d) => ({ ...d, category: name }))
+    setAdvCategoryResultsOpen(false)
   }
 
   return (
@@ -3408,42 +3539,50 @@ export default function MainScreen() {
           needed one — but it's noticeably shorter than this). A draft, not
           the live applied search: Cancel discards every change here with no
           effect on whatever search (if any) is already showing; only Search
-          commits advDraft to advancedFilter, after validation. */}
+          commits advDraft to advancedFilter, after validation.
+
+          Redesigned 2026-11-14 (owner's own "Suggested" mockup, comparing a
+          real Windows/Android screenshot against it) — see the comment
+          above the AdvancedSearchFilter type for the full reasoning behind
+          .advlabelrow/.advrow-label and the Category/Contact Name lookup
+          fields. */}
       {advDialogOpen && (
         <>
           <div className="scrim" onClick={closeAdvancedSearch} />
           <div className="modal advsearch-modal" role="dialog" aria-modal="true" aria-labelledby="advsearch-title">
             <p className="modal-title" id="advsearch-title">
-              Advanced Search Filters
+              Advanced Search
             </p>
 
             <div className="fgroup">
-              <span className="flabel">Date Range</span>
-              <div className="advcheckrow">
-                <label className="advcheck">
-                  <input
-                    type="checkbox"
-                    checked={advDraft.dateCreated}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, dateCreated: e.target.checked }))}
-                  />
-                  Created
-                </label>
-                <label className="advcheck">
-                  <input
-                    type="checkbox"
-                    checked={advDraft.dateDue}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, dateDue: e.target.checked }))}
-                  />
-                  Due
-                </label>
-                <label className="advcheck">
-                  <input
-                    type="checkbox"
-                    checked={advDraft.dateDone}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, dateDone: e.target.checked }))}
-                  />
-                  Done
-                </label>
+              <div className="advlabelrow">
+                <span className="advrow-label">Date Type</span>
+                <div className="advcheckrow">
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.dateCreated}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateCreated: e.target.checked }))}
+                    />
+                    Created
+                  </label>
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.dateDue}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateDue: e.target.checked }))}
+                    />
+                    Due
+                  </label>
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.dateDone}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateDone: e.target.checked }))}
+                    />
+                    Done
+                  </label>
+                </div>
               </div>
               <div className="daterange-fields" style={{ marginTop: 6 }}>
                 <label className="drfield">
@@ -3467,28 +3606,77 @@ export default function MainScreen() {
               </div>
             </div>
 
-            {/* Category (2026-11-14, owner: "I forgot to add Category") —
-                shown only if the account actually uses Private Category for
-                at least one of Requests/ToDos; a plain substring match, same
-                as Contact Name below, not a lookup dropdown. Never shown for
-                Received regardless — that section never has a Category at
-                all (PRD §2.3), so it's narrowed against Sent/ToDos only. */}
+            {/* Category (2026-11-14, owner: "I forgot to add Category," then
+                "the Contact Name and Category should interact as is done on
+                the Create Request and Create Todo - with a pull-down and/or
+                lookup") — shown only if the account actually uses Private
+                Category for at least one of Requests/ToDos. The dropdown is
+                purely a picking convenience (LookupGlyph, .ffloat/.flabel/
+                .lookup-results — the same components Create Request/Create
+                ToDo already use for their own Category field); the actual
+                match stays a plain substring against advDraft.category, so
+                free-typed partial text still works with no exact match
+                required. Never shown for Received regardless — that section
+                never has a Category at all (PRD §2.3), so it's narrowed
+                against Sent/ToDos only. */}
             {(sentCategoriesEnabled || todoCategoriesEnabled) && (
               <div className="fgroup">
-                <span className="flabel">Category</span>
-                <input
-                  className="finput"
-                  type="text"
-                  placeholder="Private Category"
-                  value={advDraft.category}
-                  onChange={(e) => setAdvDraft((d) => ({ ...d, category: e.target.value }))}
-                  aria-label="Advanced search category"
-                />
+                <div className="frow" style={{ position: 'relative' }}>
+                  <span className="ffloat">
+                    <input
+                      className={`finput${advDraft.category.trim() === '' ? ' opt' : ''}`}
+                      id="adv-category"
+                      type="text"
+                      autoComplete="off"
+                      placeholder=" "
+                      value={advDraft.category}
+                      onChange={(e) => {
+                        setAdvDraft((d) => ({ ...d, category: e.target.value }))
+                        setAdvCategoryBrowsing(false)
+                        setAdvCategoryResultsOpen(true)
+                      }}
+                      onFocus={(e) => {
+                        e.target.select()
+                        setAdvCategoryBrowsing(true)
+                        setAdvCategoryResultsOpen(true)
+                      }}
+                      onBlur={() => setTimeout(() => setAdvCategoryResultsOpen(false), 120)}
+                      aria-label="Advanced search category"
+                    />
+                    <label className="flabel" htmlFor="adv-category">
+                      <LookupGlyph />
+                      Private Category
+                    </label>
+                  </span>
+
+                  {advCategoryResultsOpen && showAdvCategoryDropdown && (
+                    <div className="lookup-results" role="listbox">
+                      {advCategories === null ? (
+                        <div className="lookup-empty">Loading…</div>
+                      ) : filteredAdvCategories.length === 0 ? (
+                        <div className="lookup-empty">No matching category.</div>
+                      ) : (
+                        filteredAdvCategories.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`lookup-item${c.name.toLowerCase() === advDraft.category.trim().toLowerCase() ? ' selected' : ''}`}
+                            role="option"
+                            aria-selected={c.name.toLowerCase() === advDraft.category.trim().toLowerCase()}
+                            onMouseDown={() => selectAdvCategory(c.name)}
+                          >
+                            {c.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            <div className="fgroup stopgroup">
-              <p className="stopgroup-title">Status</p>
+            <div className="fgroup stopgroup advstatus-inline">
+              <span className="advrow-label">Status</span>
               {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
                 <label className="stoprow" key={s}>
                   <input
@@ -3503,24 +3691,26 @@ export default function MainScreen() {
             </div>
 
             <div className="fgroup">
-              <span className="flabel">Text</span>
-              <div className="advcheckrow">
-                <label className="advcheck">
-                  <input
-                    type="checkbox"
-                    checked={advDraft.textDialog}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, textDialog: e.target.checked }))}
-                  />
-                  Dialog
-                </label>
-                <label className="advcheck">
-                  <input
-                    type="checkbox"
-                    checked={advDraft.textDescription}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, textDescription: e.target.checked }))}
-                  />
-                  Description
-                </label>
+              <div className="advlabelrow">
+                <span className="advrow-label">Text Type</span>
+                <div className="advcheckrow">
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.textDialog}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, textDialog: e.target.checked }))}
+                    />
+                    Dialog
+                  </label>
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.textDescription}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, textDescription: e.target.checked }))}
+                    />
+                    Description
+                  </label>
+                </div>
               </div>
               <input
                 className="finput"
@@ -3538,37 +3728,81 @@ export default function MainScreen() {
               <span className="checktext">Requests</span>
             </label>
             <div className={`fgroup adv-contacttype${advDraft.requests ? '' : ' is-disabled'}`}>
-              <span className="flabel">Contact Type</span>
-              <div className="advcheckrow">
-                <label className="advcheck">
-                  <input
-                    type="checkbox"
-                    disabled={!advDraft.requests}
-                    checked={advDraft.contactTo}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, contactTo: e.target.checked }))}
-                  />
-                  To
-                </label>
-                <label className="advcheck">
-                  <input
-                    type="checkbox"
-                    disabled={!advDraft.requests}
-                    checked={advDraft.contactFrom}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, contactFrom: e.target.checked }))}
-                  />
-                  From
-                </label>
+              <div className="advlabelrow">
+                <span className="advrow-label">Contact Type</span>
+                <div className="advcheckrow">
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      disabled={!advDraft.requests}
+                      checked={advDraft.contactTo}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, contactTo: e.target.checked }))}
+                    />
+                    To
+                  </label>
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      disabled={!advDraft.requests}
+                      checked={advDraft.contactFrom}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, contactFrom: e.target.checked }))}
+                    />
+                    From
+                  </label>
+                </div>
               </div>
-              <input
-                className="finput"
-                type="text"
-                style={{ marginTop: 6 }}
-                placeholder="Contact Name"
-                disabled={!advDraft.requests}
-                value={advDraft.contactName}
-                onChange={(e) => setAdvDraft((d) => ({ ...d, contactName: e.target.value }))}
-                aria-label="Advanced search contact name"
-              />
+              <div className="frow" style={{ position: 'relative', marginTop: 6 }}>
+                <span className="ffloat">
+                  <input
+                    className={`finput${advDraft.contactName.trim() === '' ? ' opt' : ''}`}
+                    id="adv-contactname"
+                    type="text"
+                    autoComplete="off"
+                    placeholder=" "
+                    disabled={!advDraft.requests}
+                    value={advDraft.contactName}
+                    onChange={(e) => {
+                      setAdvDraft((d) => ({ ...d, contactName: e.target.value }))
+                      setAdvContactBrowsing(false)
+                      setAdvContactResultsOpen(true)
+                    }}
+                    onFocus={(e) => {
+                      e.target.select()
+                      setAdvContactBrowsing(true)
+                      setAdvContactResultsOpen(true)
+                    }}
+                    onBlur={() => setTimeout(() => setAdvContactResultsOpen(false), 120)}
+                    aria-label="Advanced search contact name"
+                  />
+                  <label className="flabel" htmlFor="adv-contactname">
+                    <LookupGlyph />
+                    Contact Name
+                  </label>
+                </span>
+
+                {advDraft.requests && advContactResultsOpen && showAdvContactDropdown && (
+                  <div className="lookup-results" role="listbox">
+                    {advContacts === null ? (
+                      <div className="lookup-empty">Loading…</div>
+                    ) : filteredAdvContacts.length === 0 ? (
+                      <div className="lookup-empty">No matching contact.</div>
+                    ) : (
+                      filteredAdvContacts.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={`lookup-item${c.display_name.toLowerCase() === advDraft.contactName.trim().toLowerCase() ? ' selected' : ''}`}
+                          role="option"
+                          aria-selected={c.display_name.toLowerCase() === advDraft.contactName.trim().toLowerCase()}
+                          onMouseDown={() => selectAdvContact(c.display_name)}
+                        >
+                          {c.display_name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <label className="checkrow" style={{ marginBottom: 6 }}>
