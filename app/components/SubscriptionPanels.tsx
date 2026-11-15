@@ -1481,7 +1481,7 @@ function PrivateTesterBox({
       <p className="checktext" style={{ margin: '8px 0 0' }}>
         We use the Stripe payment platform. They provide a test-only credit card as follows: ID
         4242 4242 4242 4242, any future month and year for a card renewal date, and a made-up
-        3-digit number for a CVC code. You can test &ldquo;purchasing&rdquo; activities with
+        3-digit number for a CVV code. You can test &ldquo;purchasing&rdquo; activities with
         this card.
       </p>
 

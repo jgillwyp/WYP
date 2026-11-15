@@ -445,7 +445,23 @@ function matchesDateRange(dueDate: string | null, from: string, to: string): boo
 // still works exactly as it always has.
 type AdvancedStatusValue = 'all' | 'open' | 'overdue' | 'done'
 
+// Any/All match mode (2026-11-16, owner's own "Suggested" mockup) — governs
+// how the four *value* criteria below (Date Range, Category, Text,
+// Contact Name) combine: 'any' (OR, the new default) counts a record as a
+// match if it satisfies at least one of whichever of those four actually
+// has something entered; 'all' (AND) requires every one of them that has
+// something entered. Status, Requests/ToDos participation, and Contact
+// Type (To/From) are NOT part of this combinator — they stay hard,
+// always-enforced gates exactly as before, since Status in particular
+// keeps living on as the section's own live chip after the dialog closes
+// (see the "Status now reads the live sentFilter chip" comments below),
+// not a one-shot value snapshotted here. That's a judgment call, not an
+// explicit instruction — flagged here rather than silently assumed, in
+// case the owner wants Status folded into Any/All too.
+type AdvancedMatchMode = 'any' | 'all'
+
 type AdvancedSearchFilter = {
+  matchMode: AdvancedMatchMode
   dateCreated: boolean
   dateDue: boolean
   dateDone: boolean
@@ -473,6 +489,7 @@ type AdvancedSearchFilter = {
 }
 
 const ADVANCED_SEARCH_DEFAULT: AdvancedSearchFilter = {
+  matchMode: 'any',
   dateCreated: true,
   dateDue: true,
   dateDone: true,
@@ -543,6 +560,18 @@ function matchesAdvancedText(f: AdvancedSearchFilter, description: string, dialo
   if (f.textDialog) checks.push(dialogBlob.includes(q))
   if (checks.length === 0) return true
   return checks.some(Boolean)
+}
+
+// Any/All combinator for the four value criteria (Date Range, Category,
+// Text, Contact Name) — see AdvancedMatchMode's own comment above for what
+// does and doesn't participate. An empty `checks` array means none of the
+// four actually had a value entered, so this search isn't constraining
+// anything beyond its hard gates — matches regardless of mode, same as
+// every individual sub-matcher above already does when it has nothing to
+// check against.
+function combineAdvancedValueChecks(mode: AdvancedMatchMode, checks: boolean[]): boolean {
+  if (checks.length === 0) return true
+  return mode === 'any' ? checks.some(Boolean) : checks.every(Boolean)
 }
 
 const MAIN_SEARCH_ADVANCED_KEY = 'wyp.mainSearchAdvanced'
@@ -1515,6 +1544,24 @@ export default function MainScreen() {
       setAdvError('Please select Requests and/or ToDos.')
       return
     }
+    // "technically if a search was done with no entered values it would
+    // show All Requests and ToDos - or a dialog could advise the user to
+    // 'Please set at least one filter value.'" (owner, 2026-11-16) — his
+    // own proposed wording, used verbatim. Checked against the same five
+    // value criteria the Any/All combinator above actually reads (Status
+    // counts once it's off 'all', even though it isn't part of that
+    // combinator itself — it's still a real value the owner selected).
+    if (
+      !d.fromDate &&
+      !d.toDate &&
+      d.category.trim() === '' &&
+      d.status === 'all' &&
+      d.searchText.trim() === '' &&
+      d.contactName.trim() === ''
+    ) {
+      setAdvError('Please set at least one filter value.')
+      return
+    }
     setAdvError(null)
 
     if (d.searchText.trim() !== '' && d.textDialog) {
@@ -2007,7 +2054,6 @@ export default function MainScreen() {
         // confirmed: "To -> Sent") — Requests has to be checked too, since
         // unchecking it already forces both To/From off (setAdvRequests).
         if (!f.requests || !f.contactTo) return false
-        if (!matchesAdvancedDateRange(f, r.created_at, r.due_date, r.done_date)) return false
         // Status now reads the live sentFilter chip, not f.status directly
         // — the dialog's own Status choice only ever seeds that chip once
         // (handleAdvancedSearch); from then on the chip itself is the real,
@@ -2015,14 +2061,29 @@ export default function MainScreen() {
         // chips need to reflect the setting in the search"). 'repeating' is
         // special-cased the same way the "at rest" branch above already
         // does — matchesStatusFilter alone would otherwise reject it
-        // outright and hide every row with no explanation.
+        // outright and hide every row with no explanation. Status, like
+        // Contact Type above, is a hard gate — not part of the Any/All
+        // combinator below (see AdvancedMatchMode's own comment).
         if (sentFilter === 'repeating' ? !repeatingSentIds.has(r.id) : !matchesStatusFilter(sentStatus(r), sentFilter)) return false
-        if (!matchesAdvancedText(f, r.description, advDialogText[r.id] ?? '')) return false
-        const name = f.contactName.trim().toLowerCase()
-        if (name && !(r.contacts?.display_name ?? '').toLowerCase().includes(name)) return false
+
+        // Any/All value combinator (2026-11-16) — each of these four only
+        // contributes a check when the owner actually entered something for
+        // it; Category's own check is "active" the moment a value is typed,
+        // regardless of whether Private Category is even shown for Sent —
+        // fixes a real bug (owner-reported, 2026-11-16): with Show
+        // Categories off for Requests, a Category search was matching every
+        // Sent Request instead of none, because the old code only ever
+        // excluded a row when the feature was ALSO on. A hidden field can
+        // never satisfy a typed value, same as ToDos' own hidden-Due-Date
+        // handling below.
+        const checks: boolean[] = []
+        if (f.fromDate || f.toDate) checks.push(matchesAdvancedDateRange(f, r.created_at, r.due_date, r.done_date))
         const cat = f.category.trim().toLowerCase()
-        if (sentCategoriesEnabled && cat && !(r.categories?.name ?? '').toLowerCase().includes(cat)) return false
-        return true
+        if (cat) checks.push(sentCategoriesEnabled && (r.categories?.name ?? '').toLowerCase().includes(cat))
+        if (f.searchText.trim()) checks.push(matchesAdvancedText(f, r.description, advDialogText[r.id] ?? ''))
+        const name = f.contactName.trim().toLowerCase()
+        if (name) checks.push((r.contacts?.display_name ?? '').toLowerCase().includes(name))
+        return combineAdvancedValueChecks(f.matchMode, checks)
       }
       if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
       return (
@@ -2043,15 +2104,18 @@ export default function MainScreen() {
         // "From -> Received" (owner, confirmed) — same gate as Sent above,
         // mirrored onto the From side of Contact Type instead of To.
         if (!f.requests || !f.contactFrom) return false
-        if (!matchesAdvancedDateRange(f, r.created_at, r.due_date, r.done_date)) return false
         // Live receivedFilter chip, not f.status — see Sent's identical
-        // comment above.
+        // comment above. A hard gate, not part of Any/All.
         if (!matchesStatusFilter(receivedStatus(r), receivedFilter)) return false
-        if (!matchesAdvancedText(f, r.description, advDialogText[r.id] ?? '')) return false
-        const name = f.contactName.trim().toLowerCase()
-        if (name && !(r.owner_name ?? '').toLowerCase().includes(name)) return false
+
+        // Any/All value combinator — see Sent's identical comment above.
         // No Category check here — Received never has one (PRD §2.3).
-        return true
+        const checks: boolean[] = []
+        if (f.fromDate || f.toDate) checks.push(matchesAdvancedDateRange(f, r.created_at, r.due_date, r.done_date))
+        if (f.searchText.trim()) checks.push(matchesAdvancedText(f, r.description, advDialogText[r.id] ?? ''))
+        const name = f.contactName.trim().toLowerCase()
+        if (name) checks.push((r.owner_name ?? '').toLowerCase().includes(name))
+        return combineAdvancedValueChecks(f.matchMode, checks)
       }
       if (searchScope === 'daterange') return matchesDateRange(r.due_date, fromDate, toDate)
       return (
@@ -2083,21 +2147,28 @@ export default function MainScreen() {
       if (searchScope === 'advanced' && advancedFilter) {
         const f = advancedFilter
         if (!f.todos) return false
-        // Due Date only participates when the account's own Show Due/Done
-        // Dates (ToDos) toggle is on — same "hidden field, excluded from
-        // search" rule the existing Date Range scope already enforces below
-        // — but Created/Done are always shown regardless of that toggle
-        // (TodoRow's own comment), so only Due is conditioned here rather
-        // than excluding the whole ToDo the way the simple Date Range scope
-        // does.
-        if (!matchesAdvancedDateRange(f, t.created_at, todoDatesEnabled ? t.due_date : null, t.done_date)) return false
         // Live todoFilter chip, not f.status — see Sent's identical
-        // comment above, 'repeating' special-case included.
+        // comment above, 'repeating' special-case included. A hard gate,
+        // not part of Any/All.
         if (todoFilter === 'repeating' ? !repeatingTodoIds.has(t.id) : !matchesStatusFilter(todoStatus(t), todoFilter)) return false
-        if (!matchesAdvancedText(f, t.description, advDialogText[t.id] ?? '')) return false
+
+        // Any/All value combinator — see Sent's identical comment above,
+        // including the same "a hidden field can never satisfy a typed
+        // value" fix for Category. Due Date only participates when the
+        // account's own Show Due/Done Dates (ToDos) toggle is on — same
+        // "hidden field, excluded from search" rule the simple Date Range
+        // scope already enforces below — but Created/Done are always shown
+        // regardless of that toggle (TodoRow's own comment), so only Due is
+        // conditioned here rather than excluding the whole ToDo. No Contact
+        // Name check — a ToDo has no Contact at all.
+        const checks: boolean[] = []
+        if (f.fromDate || f.toDate) {
+          checks.push(matchesAdvancedDateRange(f, t.created_at, todoDatesEnabled ? t.due_date : null, t.done_date))
+        }
         const cat = f.category.trim().toLowerCase()
-        if (todoCategoriesEnabled && cat && !(t.categories?.name ?? '').toLowerCase().includes(cat)) return false
-        return true
+        if (cat) checks.push(todoCategoriesEnabled && (t.categories?.name ?? '').toLowerCase().includes(cat))
+        if (f.searchText.trim()) checks.push(matchesAdvancedText(f, t.description, advDialogText[t.id] ?? ''))
+        return combineAdvancedValueChecks(f.matchMode, checks)
       }
       if (searchScope === 'daterange') return todoDatesEnabled && matchesDateRange(t.due_date, fromDate, toDate)
       return (
@@ -3557,7 +3628,23 @@ export default function MainScreen() {
           real Windows/Android screenshot against it) — see the comment
           above the AdvancedSearchFilter type for the full reasoning behind
           .advlabelrow/.advrow-label and the Category/Contact Name lookup
-          fields. */}
+          fields.
+
+          Redesigned again 2026-11-16, owner's own pasted "modified mockup":
+          (a) a new Any/All match-mode band at the very top (.advmatchmode,
+          light grey/--row-tint, a different color from every "value"
+          section's own Strip-blue box — see AdvancedMatchMode's own comment
+          for what it governs); (b) Date Type now sits inside that same
+          Strip-blue box (.stopgroup) the Status/Requests/ToDos sections
+          already use, with From/To nested inside it too, rather than a
+          plain unstyled .fgroup; (c) Status's radios became chips, reusing
+          .chips/.chip/.chip.sel/.chip.over/.chip.done verbatim — the exact
+          same component Main Screen's own Sent/Received/ToDos filter rows
+          already use, "for app consistency" (owner's own words); (d) the
+          plain Search text field now gets the same .opt Row-Tint-while-
+          empty treatment Category/Contact Name already had, so every text
+          entry field in this dialog is visually consistent about being
+          optional. */}
       {advDialogOpen && (
         <>
           <div className="scrim" onClick={closeAdvancedSearch} />
@@ -3566,7 +3653,29 @@ export default function MainScreen() {
               Advanced Search Filters
             </p>
 
-            <div className="fgroup">
+            <div className="advmatchmode">
+              <div className="chips" style={{ marginTop: 0 }}>
+                <button
+                  type="button"
+                  className={`chip${advDraft.matchMode === 'any' ? ' sel' : ''}`}
+                  onClick={() => setAdvDraft((d) => ({ ...d, matchMode: 'any' }))}
+                >
+                  Any
+                </button>
+                <button
+                  type="button"
+                  className={`chip${advDraft.matchMode === 'all' ? ' sel' : ''}`}
+                  onClick={() => setAdvDraft((d) => ({ ...d, matchMode: 'all' }))}
+                >
+                  All
+                </button>
+              </div>
+              <span className="advmatchnote">
+                Match {advDraft.matchMode === 'any' ? 'Any' : 'All'} of the selected values
+              </span>
+            </div>
+
+            <div className="fgroup stopgroup advdate-group">
               <div className="advlabelrow">
                 <span className="advrow-label">Date Type</span>
                 <div className="advcheckrow">
@@ -3689,17 +3798,19 @@ export default function MainScreen() {
 
             <div className="fgroup stopgroup advstatus-inline">
               <span className="advrow-label">Status</span>
-              {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
-                <label className="stoprow" key={s}>
-                  <input
-                    type="radio"
-                    name="advsearch-status"
-                    checked={advDraft.status === s}
-                    onChange={() => setAdvDraft((d) => ({ ...d, status: s }))}
-                  />
-                  <span>{s === 'all' ? 'All' : s === 'open' ? 'Open' : s === 'overdue' ? 'Overdue' : 'Done'}</span>
-                </label>
-              ))}
+              <div className="chips" style={{ marginTop: 0 }} role="radiogroup" aria-label="Advanced search status">
+                {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`chip${s === 'overdue' ? ' over' : s === 'done' ? ' done' : ''}${advDraft.status === s ? ' sel' : ''}`}
+                    aria-pressed={advDraft.status === s}
+                    onClick={() => setAdvDraft((d) => ({ ...d, status: s }))}
+                  >
+                    {s === 'all' ? 'All' : s === 'open' ? 'Open' : s === 'overdue' ? 'Overdue' : 'Done'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="fgroup">
@@ -3725,7 +3836,7 @@ export default function MainScreen() {
                 </div>
               </div>
               <input
-                className="finput"
+                className={`finput${advDraft.searchText.trim() === '' ? ' opt' : ''}`}
                 type="text"
                 style={{ marginTop: 6 }}
                 placeholder="Search text"

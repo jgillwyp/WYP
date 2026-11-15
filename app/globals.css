@@ -1732,7 +1732,16 @@ body {
    from the top instead of the center, with the same env(safe-area-inset-
    top) pattern .hdr already uses — guarantees the title is always below
    the unsafe area, on any device, regardless of how tall the dialog's own
-   content turns out to be. */
+   content turns out to be.
+
+   Redesigned again 2026-11-16, owner's own pasted "modified mockup" — see
+   .advmatchmode's own comment below for the new Any/All match-mode band,
+   .stopgroup.advdate-group's for Date Type moving into the same Strip-blue
+   box Status/Requests/ToDos already use, and .stopgroup.advstatus-inline's
+   own updated comment for Status's radios becoming chips. The plain
+   Search text field also picked up the same .opt Row-Tint-while-empty
+   treatment Category/Contact Name already had (MainScreen.tsx only, no
+   new CSS needed — .opt already exists). */
 .advsearch-modal {
   max-height: 80vh;
   overflow-y: auto;
@@ -1783,9 +1792,15 @@ body {
   cursor: not-allowed;
 }
 
-/* Status's radios inline on one row, inside the same .stopgroup Strip-tint
-   box — a modifier, not a change to .stopgroup/.stoprow themselves, which
-   RepeatControl.tsx's Stops Repeating modal still uses stacked/vertical. */
+/* Status's chips inline on one row, inside the same .stopgroup Strip-tint
+   box — a modifier, not a change to .stopgroup itself, which
+   RepeatControl.tsx's Stops Repeating modal still uses stacked/vertical.
+   Status itself switched from radios to .chips/.chip buttons 2026-11-16
+   (owner: "the Status All/Open/Overdue/Done choices should be chips
+   instead of radio buttons for app consistency") — reuses the exact same
+   component Main Screen's own Sent/Received/ToDos filter rows already use
+   (.chips/.chip/.chip.sel/.chip.over/.chip.done), so .stoprow no longer
+   appears inside this box at all. */
 .stopgroup.advstatus-inline {
   display: flex;
   align-items: center;
@@ -1804,8 +1819,43 @@ body {
   margin-bottom: 14px;
 }
 
-.stopgroup.advstatus-inline .stoprow {
-  margin-bottom: 0;
+/* Any/All match-mode band (2026-11-16, owner's own "modified mockup") — a
+   light grey (--row-tint) box, deliberately a different color from every
+   "value" section's own Strip-blue box (.stopgroup/.checkrow) below it, so
+   it reads as governing them rather than being one of them. Holds the
+   Any/All .chips pair plus an adjoining caption that names whichever is
+   currently selected. */
+.advmatchmode {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  background: var(--row-tint);
+  border-radius: 9px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+
+.advmatchnote {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  flex: 1 1 auto;
+}
+
+/* Date Type now sits inside the same Strip-blue box Status/Requests/ToDos
+   already use, From/To nested inside it too (2026-11-16, owner: "the Date
+   type/range should have the 1st instance of the colored choices
+   background"), rather than a plain unstyled .fgroup — .stopgroup itself
+   supplies the background/padding; this modifier just fixes the same
+   margin-bottom cascade issue advstatus-inline's own comment above
+   already explains (.stopgroup's 4px would otherwise win over .fgroup's
+   12px), so Category below it keeps the same 14px gap every other section
+   here uses. The From/To fields read "shorter" against this box's own
+   10px padding than they did against the unstyled, unpadded .fgroup
+   before — no separate width override needed. */
+.stopgroup.advdate-group {
+  margin-bottom: 14px;
 }
 
 /* Contact Type/Contact Name grey out together when the Requests checkbox

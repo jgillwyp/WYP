@@ -9041,3 +9041,79 @@ link is built only after the stack is proven on Add Contact.
   14px`, specific enough to win without touching `.stopgroup` itself —
   RepeatControl.tsx's Stops Repeating modal still uses that class
   unmodified. `npx tsc --noEmit`/`npm run lint` both clean.
+- **CVC → CVV typo fixed in the Private Tester Stripe test-card copy
+  (2026-11-16), no migration.** Jim: he'd written "CVC code" instead of
+  "CVV code" in the testing-only Account Status wording
+  (`SubscriptionPanels.tsx`, 2026-11-10 batch). One-word fix, no other
+  occurrence found anywhere else in the live app.
+- **Ad impressions/clicks report — answered, nothing built.** Jim asked
+  whether an Admin "Ad Activity" report (impressions/clicks by date, with
+  week/month totals) needs a real ad integration first, floating his own
+  idea of a "For testing" Product/Service ad-destination page linked to
+  the mock ad. Answered directly: the mock ad preview (`AppFooter.tsx`,
+  built 2026-11-06, recolored 2026-11-10) is a static, non-clickable
+  placeholder with no click handler and nothing logging an impression
+  anywhere — there's currently zero data for a report to show. His own
+  "For testing" destination-page idea is a workable path that doesn't
+  require a real ad network: render the mock ad as a real link to a new
+  placeholder page, log an `events`-table row (or a small dedicated table)
+  on each render (impression) and each click, then build the report off
+  that. Not started — flagged as a real, buildable follow-up pending Jim's
+  go-ahead, not assumed in scope for this batch.
+- **Real bug: a Category search matched every record instead of none when
+  Private Category is hidden for that record type (2026-11-16), no
+  migration.** Jim: "I did a Category search [the Show Categories is off
+  in acct options for requests] - but the unexpected result was to select
+  all requests - none of which matched the Category value in the search."
+  Root cause in `MainScreen.tsx`'s Advanced Search matching
+  (`filteredSent`/`filteredTodos`): the old guard was
+  `if (sentCategoriesEnabled && cat && !matches) return false` — when the
+  feature is off, the whole condition is `false` regardless of `cat`, so a
+  typed Category value never excluded anything, the opposite of every
+  other hidden-field precedent in this same function (e.g. a ToDo's own
+  hidden Due Date, which is excluded from ever matching, not auto-passed).
+  Fixed as part of the same-day Any/All rewrite below — a hidden Category
+  field can now never satisfy a typed value, matching that precedent.
+- **Any/All match-mode combinator for Advanced Search's four value
+  criteria (Date Range, Category, Text, Contact Name); Advanced Search
+  Filters dialog redesigned again per Jim's own pasted "modified mockup"
+  (2026-11-16), no migration.** Jim: "I realized it would be helpful to
+  offer a single choice of and/or logic for search values [as Any=OR,
+  All=AND]," with four specific layout changes. New
+  `AdvancedSearchFilter.matchMode: 'any' | 'all'` (default `'any'`, per
+  Jim's own instruction — a real behavior change from the prior implicit
+  AND-everywhere matching). New `combineAdvancedValueChecks()` governs
+  four of the dialog's fields — Date Range, Category, Text
+  (Dialog/Description), Contact Name — each only contributing a check when
+  the owner actually entered something for it; with `'any'`, a record
+  matches if it satisfies at least one entered value, with `'all'`, every
+  one entered. **A judgment call, flagged rather than silently assumed**:
+  Status, Requests/ToDos participation, and Contact Type (To/From) stay
+  hard, always-enforced gates outside this combinator — Status in
+  particular already lives on as the section's own live filter chip after
+  the dialog closes (2026-11-13's own "the dialog's own Status choice only
+  ever seeds that chip once" design), not a one-shot snapshot this
+  combinator could cleanly fold in. Revisit if Jim wants Status folded
+  into Any/All too. New validation, Jim's own proposed wording verbatim:
+  Search is refused with "Please set at least one filter value." when
+  every one of Date Range/Category/Status/Text/Contact Name is at its
+  default (previously an entirely-empty search silently returned
+  everything with no feedback).
+  **Layout, from Jim's own pasted mockup**: (a) new `.advmatchmode` band at
+  the very top — Any/All `.chips` pair + an adjoining caption that
+  switches wording live ("Match Any/All of the selected values") —
+  `var(--row-tint)` light grey, deliberately distinct from every "value"
+  section's own Strip-blue (`--strip`) box, per Jim's own description ("a
+  light grey intended to match what is currently used for headings in the
+  app"). (b) Date Type now sits inside the same Strip-blue box
+  (`.stopgroup`) Status/Requests/ToDos already use, From/To nested inside
+  it — new `.stopgroup.advdate-group` modifier, same margin-cascade fix
+  `advstatus-inline` already needed. (c) Status's radios became chips —
+  reuses `.chips`/`.chip`/`.chip.sel`/`.chip.over`/`.chip.done` verbatim,
+  the exact component Main Screen's own Sent/Received/ToDos filter rows
+  already use, per Jim's own "for app consistency." (d) The plain Search
+  text field now gets the same `.opt` Row-Tint-while-empty treatment
+  Category/Contact Name already had, so every text entry field in the
+  dialog reads consistently as optional. `npx tsc --noEmit`/`npm run lint`
+  both clean. No mockup file — Jim's own pasted image is the only
+  reference.
