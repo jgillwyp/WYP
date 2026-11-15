@@ -3644,7 +3644,24 @@ export default function MainScreen() {
           plain Search text field now gets the same .opt Row-Tint-while-
           empty treatment Category/Contact Name already had, so every text
           entry field in this dialog is visually consistent about being
-          optional. */}
+          optional.
+
+          Reordered same day, owner's own second pasted mockup — "None of
+          the logic changes, but the pasted-in layout and a slight AND/OR
+          wording change will more accurately reflect what is being
+          offered." Section order is now Status (Strip-blue) -> Any/All
+          (grey) -> Category (plain) -> Date Type (Strip-blue) -> Text Type
+          (plain) -> Search text -> Requests (Strip-blue) -> Contact Type
+          (plain) -> Contact Name -> ToDos (Strip-blue) — the owner's own
+          stated goal: having the optional Category field sit where it does
+          keeps the Strip-blue sections (Status/Date Type/Requests/ToDos)
+          alternating with plain ones (Any/All's own grey band, Category,
+          Text Type, Contact Type). Any/All's own caption changed from
+          "Match Any of the selected values" to "Match Any of the values
+          below," since the values it governs now visibly follow it rather
+          than sit above it. Pure reorder/wording —
+          matchesAdvancedDateRange/matchesAdvancedText/
+          combineAdvancedValueChecks and every handler are untouched. */}
       {advDialogOpen && (
         <>
           <div className="scrim" onClick={closeAdvancedSearch} />
@@ -3652,6 +3669,23 @@ export default function MainScreen() {
             <p className="modal-title" id="advsearch-title">
               Advanced Search Filters
             </p>
+
+            <div className="fgroup stopgroup advstatus-inline">
+              <span className="advrow-label">Status</span>
+              <div className="chips" style={{ marginTop: 0 }} role="radiogroup" aria-label="Advanced search status">
+                {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`chip${s === 'overdue' ? ' over' : s === 'done' ? ' done' : ''}${advDraft.status === s ? ' sel' : ''}`}
+                    aria-pressed={advDraft.status === s}
+                    onClick={() => setAdvDraft((d) => ({ ...d, status: s }))}
+                  >
+                    {s === 'all' ? 'All' : s === 'open' ? 'Open' : s === 'overdue' ? 'Overdue' : 'Done'}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="advmatchmode">
               <div className="chips" style={{ marginTop: 0 }}>
@@ -3671,60 +3705,8 @@ export default function MainScreen() {
                 </button>
               </div>
               <span className="advmatchnote">
-                Match {advDraft.matchMode === 'any' ? 'Any' : 'All'} of the selected values
+                Match {advDraft.matchMode === 'any' ? 'Any' : 'All'} of the values below
               </span>
-            </div>
-
-            <div className="fgroup stopgroup advdate-group">
-              <div className="advlabelrow">
-                <span className="advrow-label">Date Type</span>
-                <div className="advcheckrow">
-                  <label className="advcheck">
-                    <input
-                      type="checkbox"
-                      checked={advDraft.dateCreated}
-                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateCreated: e.target.checked }))}
-                    />
-                    Created
-                  </label>
-                  <label className="advcheck">
-                    <input
-                      type="checkbox"
-                      checked={advDraft.dateDue}
-                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateDue: e.target.checked }))}
-                    />
-                    Due
-                  </label>
-                  <label className="advcheck">
-                    <input
-                      type="checkbox"
-                      checked={advDraft.dateDone}
-                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateDone: e.target.checked }))}
-                    />
-                    Done
-                  </label>
-                </div>
-              </div>
-              <div className="daterange-fields" style={{ marginTop: 6 }}>
-                <label className="drfield">
-                  <span className="drlabel">From</span>
-                  <input
-                    type="date"
-                    value={advDraft.fromDate}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, fromDate: e.target.value }))}
-                    aria-label="Advanced search date from"
-                  />
-                </label>
-                <label className="drfield">
-                  <span className="drlabel">To</span>
-                  <input
-                    type="date"
-                    value={advDraft.toDate}
-                    onChange={(e) => setAdvDraft((d) => ({ ...d, toDate: e.target.value }))}
-                    aria-label="Advanced search date to"
-                  />
-                </label>
-              </div>
             </div>
 
             {/* Category (2026-11-14, owner: "I forgot to add Category," then
@@ -3739,7 +3721,14 @@ export default function MainScreen() {
                 free-typed partial text still works with no exact match
                 required. Never shown for Received regardless — that section
                 never has a Category at all (PRD §2.3), so it's narrowed
-                against Sent/ToDos only. */}
+                against Sent/ToDos only.
+
+                Placed here, between Any/All and Date Type (2026-11-16,
+                owner's own re-pasted mockup, pure layout — "None of the
+                logic changes") — keeps the colored (Strip-blue) sections
+                (Status/Date Type/Requests/ToDos) alternating with plain
+                ones (Any/All's own grey band, this field, Text Type,
+                Contact Type), the owner's own stated rhythm. */}
             {(sentCategoriesEnabled || todoCategoriesEnabled) && (
               <div className="fgroup">
                 <div className="frow" style={{ position: 'relative' }}>
@@ -3796,20 +3785,55 @@ export default function MainScreen() {
               </div>
             )}
 
-            <div className="fgroup stopgroup advstatus-inline">
-              <span className="advrow-label">Status</span>
-              <div className="chips" style={{ marginTop: 0 }} role="radiogroup" aria-label="Advanced search status">
-                {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`chip${s === 'overdue' ? ' over' : s === 'done' ? ' done' : ''}${advDraft.status === s ? ' sel' : ''}`}
-                    aria-pressed={advDraft.status === s}
-                    onClick={() => setAdvDraft((d) => ({ ...d, status: s }))}
-                  >
-                    {s === 'all' ? 'All' : s === 'open' ? 'Open' : s === 'overdue' ? 'Overdue' : 'Done'}
-                  </button>
-                ))}
+            <div className="fgroup stopgroup advdate-group">
+              <div className="advlabelrow">
+                <span className="advrow-label">Date Type</span>
+                <div className="advcheckrow">
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.dateCreated}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateCreated: e.target.checked }))}
+                    />
+                    Created
+                  </label>
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.dateDue}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateDue: e.target.checked }))}
+                    />
+                    Due
+                  </label>
+                  <label className="advcheck">
+                    <input
+                      type="checkbox"
+                      checked={advDraft.dateDone}
+                      onChange={(e) => setAdvDraft((d) => ({ ...d, dateDone: e.target.checked }))}
+                    />
+                    Done
+                  </label>
+                </div>
+              </div>
+              <div className="daterange-fields" style={{ marginTop: 6 }}>
+                <label className="drfield">
+                  <span className="drlabel">From</span>
+                  <input
+                    type="date"
+                    value={advDraft.fromDate}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, fromDate: e.target.value }))}
+                    aria-label="Advanced search date from"
+                  />
+                </label>
+                <label className="drfield">
+                  <span className="drlabel">To</span>
+                  <input
+                    type="date"
+                    value={advDraft.toDate}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, toDate: e.target.value }))}
+                    aria-label="Advanced search date to"
+                  />
+                </label>
               </div>
             </div>
 

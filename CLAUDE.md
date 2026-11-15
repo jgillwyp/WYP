@@ -9118,3 +9118,19 @@ link is built only after the stack is proven on Add Contact.
   dialog reads consistently as optional. `npx tsc --noEmit`/`npm run lint`
   both clean. No mockup file — Jim's own pasted image is the only
   reference.
+- **Same-day follow-up: Advanced Search Filters reordered per a second
+  pasted mockup; Any/All caption reworded (2026-11-16), pure layout, no
+  migration.** Jim: "None of the logic changes, but the pasted-in layout
+  and a slight AND/OR wording change will more accurately reflect what is
+  being offered... by having the optional Private Categories located
+  where shown, the alternating blue background and having the 'Requests'
+  and 'ToDos' with blue backgrounds remain consistent." Section order is
+  now Status (Strip-blue) → Any/All (grey) → Category (plain) → Date Type
+  (Strip-blue) → Text Type (plain) → Search text → Requests (Strip-blue) →
+  Contact Type (plain) → Contact Name → ToDos (Strip-blue) — a pure JSX
+  reorder, confirmed by re-running `npx tsc --noEmit`/`npm run lint` clean
+  with zero changes to `matchesAdvancedDateRange`/`matchesAdvancedText`/
+  `combineAdvancedValueChecks`/`handleAdvancedSearch` or any state hook.
+  Any/All's own caption changed from "Match Any of the selected values" to
+  "Match Any of the values below," since the values it governs now
+  visibly follow it in the dialog rather than sit above it.
