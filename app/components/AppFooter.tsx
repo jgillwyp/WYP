@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import Image from 'next/image'
 
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 
@@ -54,6 +56,26 @@ export default function AppFooter({
 
   const tier = providedTier ?? loadedTier
 
+  // Impression tracking (2026-11-15, migration 097) — one log_ad_event()
+  // call per real mount where the ad actually renders. AppFooter mounts
+  // fresh on almost every screen navigation (it isn't persisted across
+  // routes), so this naturally logs one impression per screen view that
+  // shows the ad — the ordinary meaning of "impression." loggedRef guards
+  // against a second call from React re-running this effect (e.g. Strict
+  // Mode's dev-only double-invoke) without actually unmounting first; the
+  // RPC call itself is fire-and-forget — a failed/slow log must never
+  // affect what's on screen.
+  const loggedImpressionRef = useRef(false)
+  useEffect(() => {
+    if (tier !== 'free' || loggedImpressionRef.current) return
+    loggedImpressionRef.current = true
+    supabase.rpc('log_ad_event', { p_kind: 'impression' })
+  }, [tier])
+
+  function handleAdClick() {
+    supabase.rpc('log_ad_event', { p_kind: 'click' })
+  }
+
   return (
     <footer className="app-footer">
       <div className="subbanner-row">
@@ -76,20 +98,53 @@ export default function AppFooter({
           year: 'numeric',
         }).format(new Date())} Would You Please, Inc. All rights reserved.`}
       </p>
-      {/* Simplified 2026-11-10 — was is_beta_tester()-gated (colored preview
-          for a registered tester, plain "AD — 320×50 RESERVED" placeholder
-          for anyone else), built 2026-11-06. Jim: "simplify now" — during
-          private testing essentially every real account is a tester in
-          spirit even when it isn't in beta_allowlist specifically (e.g. an
-          account set up before that list existed), so every Free account
-          sees the explanatory preview for now. The plain .adbox placeholder
-          CSS is left in globals.css, unreferenced here, for when the real
-          tester/public distinction is worth reinstating closer to actual
-          launch — see CLAUDE.md's own history for the exact prior
-          is_beta_tester() branch to restore. */}
+      {/* Real, accurately-sized sample ad (2026-11-15) — supersedes the
+          auto-height "ads will appear in this location" explanatory banner
+          (built 2026-11-06, simplified 2026-11-10) as what every Free
+          account now sees here. Jim: "The app should accurately represent
+          the intended size in live use - for the ads... We should create a
+          dummy landing page for an ad... and link the ad to that page."
+          This is a genuine 320x50 (the IAB mobile-banner standard this slot
+          was always sized for — see .adbox in globals.css) clickable
+          creative, built from the two images Jim supplied: the circular,
+          transparent-background crop as the ad's own icon
+          (public/ads/sample-ad-icon.png), and a wider landscape photo as the
+          hero on its destination, /ad-landing (public/ads/ad-landing-hero.jpg).
+          "Sunset River Outfitters" is placeholder sample copy, not a real
+          advertiser. The old .adslot-preview/.adbox-preview CSS (globals.css)
+          is left in place, unreferenced, same precedent as the even older
+          dashed "AD — 320×50 RESERVED" .adbox it itself superseded — all
+          three keep the gated is_beta_tester()/public distinction easy to
+          reinstate later if that ever matters again. There is still no real
+          ad network behind this — one hardcoded creative, no bidding or
+          rotation — but impression/click tracking is now real (2026-11-15,
+          migration 097): every render of this block logs one 'impression'
+          via log_ad_event() below, and the link itself logs a 'click' on
+          the way out. See Admin > Ad Activity (admin_get_ad_activity()) for
+          the resulting report. */}
       {tier === 'free' && (
-        <div className="adslot adslot-preview" aria-hidden="true">
-          <span className="adbox-preview">For Free Accounts, ads will appear in this location.</span>
+        <div className="adslot">
+          <Link
+            href="/ad-landing"
+            className="ad-live-link"
+            aria-label="Advertisement — Sunset River Outfitters — opens a sample landing page"
+            onClick={handleAdClick}
+          >
+            <span className="ad-live">
+              <Image
+                src="/ads/sample-ad-icon.png"
+                alt=""
+                width={40}
+                height={40}
+                className="ad-live-img"
+              />
+              <span className="ad-live-copy">
+                <span className="ad-live-label">Ad</span>
+                <span className="ad-live-title">Sunset River Outfitters</span>
+                <span className="ad-live-sub">Guided trips &amp; gear rentals</span>
+              </span>
+            </span>
+          </Link>
         </div>
       )}
     </footer>

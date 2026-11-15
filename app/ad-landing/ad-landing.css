@@ -1,0 +1,46 @@
+/* Ad landing page — new 2026-11-15, the real destination for the sample
+   ad shown in AppFooter.tsx to every Free account (see that file's own
+   comment for the full history). Scoped under .ad-landing, same convention
+   landing.css/privacy.css already use, rather than global rules. This page
+   sits inside the standard .frame-none/.app/.scroll shell every other app
+   screen uses (480px, mobile-first) — unlike /privacy's own wider
+   reading-width layout, this is reached from inside the app's own mobile
+   frame, not from a signed-out marketing context, so it matches that
+   frame's width instead. */
+
+.ad-landing {
+  padding: 18px var(--pad) 40px;
+}
+
+.ad-landing-hero {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+.ad-landing-title {
+  margin-top: 18px;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--brand-blue);
+}
+
+.ad-landing-tagline {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.ad-landing-body {
+  margin-top: 16px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.ad-landing-fineprint {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}

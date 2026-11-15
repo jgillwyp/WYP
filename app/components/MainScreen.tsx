@@ -3251,6 +3251,22 @@ export default function MainScreen() {
                       <span className="hknote"> — grand totals and per-account roster</span>
                     </span>
                   </div>
+                  {/* Ad Activity (2026-11-15, migration 097) — Jim: "please
+                      build the tracking," closing the gap flagged when the
+                      real sample ad + /ad-landing destination page shipped
+                      the same day. */}
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/ad-activity')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/ad-activity') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Ad Activity</span>
+                      <span className="hknote"> — impressions and clicks on the sample ad, by period</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

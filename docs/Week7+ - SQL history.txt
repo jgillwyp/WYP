@@ -1582,3 +1582,191 @@ grant execute on function public.admin_get_stripe_audit(date, date, integer) to 
 --   -- as the admin account, via the live Admin > Stripe Audit screen --
 --   should list rows within the chosen From/To range, no error.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 097 (2026-11-15) -- ad_events / log_ad_event() /
+-- admin_get_ad_activity(). CONFIRMED RUN by Jim, 2026-11-15.
+--
+-- Closes the gap flagged when the real 320x50 sample ad + /ad-landing
+-- destination page shipped the same day (AppFooter.tsx, app/ad-landing/
+-- page.tsx -- see CLAUDE.md's own entry): "no impression or click tracking
+-- exists yet... the Admin 'Ad Activity' report idea has no data to read
+-- yet." Jim: "please build the tracking."
+--
+-- New table ad_events logs one row per impression (the ad slot actually
+-- rendering for a signed-in Free account) and one per click (the link
+-- being followed). Same deny-all posture as public.events (migration 002)
+-- and public.stripe_billing_audit (migration 092) -- RLS on, no policies,
+-- every write goes through the one SECURITY DEFINER function below, which
+-- runs as its owner and so needs no grant to authenticated on the table
+-- itself. ad_slug (default 'sample-ad') exists so a future second
+-- real creative never needs a schema change -- just a new default/value
+-- passed through.
+--
+-- log_ad_event(p_kind, p_ad_slug) is granted to authenticated only, never
+-- anon -- the ad slot only ever renders for a signed-in user (AppFooter.tsx
+-- gates it on tier === 'free', which requires a resolved session), so there
+-- is no anonymous-caller case to support. It never trusts a client-supplied
+-- user id -- auth.uid() is read server-side, same as every other
+-- SECURITY DEFINER function in this file.
+--
+-- admin_get_ad_activity() mirrors admin_stats_contacts() (migration 056)
+-- almost exactly -- the same Sunday-anchored week / calendar month
+-- bucketing logic, the same From/To/granularity/cohort shape the other
+-- three Admin Activity screens already share via AdminStatsFilterBar, so
+-- this new "Ad Activity" screen can reuse that same shared component and
+-- the existing /api/admin/stats/export route's generic ENTITY_CONFIG path
+-- (one more entry, no new export branch needed) instead of a bespoke
+-- flat-list exporter like admin_get_stripe_audit() needed. Cohort here
+-- means "which signed-in viewers' own impressions/clicks count" -- 'free'/
+-- 'subscriber' are meaningless (every ad viewer is Free by construction,
+-- since the slot never renders for a Subscriber) and are therefore never
+-- offered by the on-screen filter bar (cohortOptions={['all','beta',
+-- 'profile']}), but the RPC still accepts them for schema-shape parity
+-- with the other three admin_stats_* functions -- they simply always
+-- return the same rows as 'all' would, since ad_events.user_id is never a
+-- Subscriber's id in practice.
+-- ============================================================================
+
+create table public.ad_events (
+  id       bigint generated always as identity primary key,
+  at       timestamptz not null default now(),
+  user_id  uuid references auth.users (id) on delete set null,
+  kind     text not null check (kind in ('impression', 'click')),
+  ad_slug  text not null default 'sample-ad'
+);
+
+create index ad_events_at_idx   on public.ad_events (at);
+create index ad_events_user_idx on public.ad_events (user_id, at desc);
+
+alter table public.ad_events enable row level security;
+-- No policies -- every access goes through log_ad_event()/
+-- admin_get_ad_activity() below, same posture as public.events.
+revoke all on public.ad_events from anon, authenticated;
+grant select, insert on public.ad_events to service_role;
+
+comment on table public.ad_events is
+  'Impression/click log for the in-app sample ad (AppFooter.tsx -> /ad-landing). Written only by log_ad_event(); read only by admin_get_ad_activity(). No client ever reads or writes this directly.';
+
+create or replace function public.log_ad_event(
+  p_kind    text,
+  p_ad_slug text default 'sample-ad'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+begin
+  if p_kind not in ('impression', 'click') then
+    raise exception 'Invalid kind.';
+  end if;
+  insert into public.ad_events (user_id, kind, ad_slug)
+  values (auth.uid(), p_kind, coalesce(p_ad_slug, 'sample-ad'));
+end;
+$$;
+
+revoke all on function public.log_ad_event(text, text) from public;
+grant execute on function public.log_ad_event(text, text) to authenticated;
+
+create or replace function public.admin_get_ad_activity(
+  p_from         date,
+  p_to           date,
+  p_granularity  text,
+  p_cohort       text,
+  p_profile_id   uuid default null
+)
+returns table (
+  period_start date,
+  period_end   date,
+  impressions  bigint,
+  clicks       bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_granularity not in ('week', 'month') then
+    raise exception 'Invalid granularity.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'free', 'subscriber', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id
+    from auth.users u
+    left join public.profiles pr on pr.id = u.id
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+       or (p_cohort = 'free' and coalesce(pr.tier, 'free') = 'free')
+       or (p_cohort = 'subscriber' and pr.tier = 'subscriber')
+  ),
+  periods as (
+    select
+      gs::date as period_start,
+      (case when p_granularity = 'week'
+         then (gs + interval '6 days')
+         else (date_trunc('month', gs) + interval '1 month' - interval '1 day')
+       end)::date as period_end_natural
+    from generate_series(
+      case when p_granularity = 'week'
+        then date_trunc('week', p_from::timestamp + interval '1 day') - interval '1 day'
+        else date_trunc('month', p_from::timestamp)
+      end,
+      p_to::timestamp,
+      case when p_granularity = 'week' then interval '7 days' else interval '1 month' end
+    ) as gs
+  ),
+  bucketed as (
+    select p.period_start, least(p.period_end_natural, p_to) as period_end
+    from periods p
+  ),
+  ev as (
+    select
+      (case when p_granularity = 'week'
+         then (date_trunc('week', a.at + interval '1 day') - interval '1 day')
+         else date_trunc('month', a.at)
+       end)::date as period_start,
+      count(*) filter (where a.kind = 'impression') as impressions,
+      count(*) filter (where a.kind = 'click') as clicks
+    from public.ad_events a
+    where a.user_id in (select id from cohort)
+      and a.at::date between p_from and p_to
+    group by 1
+  )
+  select
+    b.period_start,
+    b.period_end,
+    coalesce(e.impressions, 0) as impressions,
+    coalesce(e.clicks, 0) as clicks
+  from bucketed b
+  left join ev e on e.period_start = b.period_start
+  order by b.period_start;
+end;
+$$;
+
+revoke all on function public.admin_get_ad_activity(date, date, text, text, uuid) from public;
+grant execute on function public.admin_get_ad_activity(date, date, text, text, uuid) to authenticated;
+
+-- Verify after running:
+--   select has_table_privilege('authenticated', 'ad_events', 'select');
+--     -- should be false
+--   -- Signed in as any Free account: open Main Screen (or any screen with
+--   -- AppFooter's ad slot) -- confirm a new 'impression' row appears in
+--   -- select * from ad_events order by at desc; click the ad -- confirm a
+--   -- 'click' row follows it.
+--   -- As the admin account, via the new Admin > Ad Activity screen:
+--   -- select * from admin_get_ad_activity(current_date - 30, current_date,
+--   --   'week', 'all') -- should list weekly buckets with non-zero
+--   -- impressions/clicks once the above has happened at least once.
+-- ============================================================================

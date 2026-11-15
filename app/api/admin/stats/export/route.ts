@@ -110,6 +110,21 @@ const ENTITY_CONFIG: Record<
       { header: 'Dialog', key: 'dialog', width: 10 },
     ],
   },
+  // Ad Activity (2026-11-15, migration 097) — admin_get_ad_activity() takes
+  // the exact same p_from/p_to/p_granularity/p_cohort/p_profile_id shape
+  // every other entry here already does, so it fits ENTITY_CONFIG's generic
+  // path unmodified rather than needing a bespoke export branch the way
+  // Stripe Audit's own flat (non-periodized) shape did.
+  ad_activity: {
+    rpc: 'admin_get_ad_activity',
+    sheetName: 'Ad Activity',
+    columns: [
+      { header: 'Period Start', key: 'period_start', width: 14 },
+      { header: 'Period End', key: 'period_end', width: 14 },
+      { header: 'Impressions', key: 'impressions', width: 12 },
+      { header: 'Clicks', key: 'clicks', width: 10 },
+    ],
+  },
 }
 
 export async function GET(request: Request) {

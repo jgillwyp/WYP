@@ -9149,3 +9149,84 @@ link is built only after the stack is proven on Add Contact.
   never satisfy a typed value" rule, just with no toggle to check since
   Received has no Category concept at all to turn on. `npx tsc --noEmit`/
   `npm run lint` both clean.
+- **A real, accurately-sized sample ad; new `/ad-landing` destination page —
+  new (2026-11-15), no migration.** Jim: "The app should accurately
+  represent the intended size in live use - for the ads... We should
+  create a dummy landing page for an ad... and link the ad to that page...
+  I also attached the images used for the bottom of the app... and an
+  image for the ad link landing page." Supersedes the auto-height,
+  full-width "For Free Accounts, ads will appear in this location."
+  explanatory banner (`.adslot-preview`/`.adbox-preview`, built 2026-11-06,
+  simplified 2026-11-10) as what every Free account now sees in
+  `AppFooter.tsx` — that banner was a deliberately non-320x50 placeholder
+  ("the example I created earlier was from the copy/paste of a placeholder
+  section I saw on an app screen"); this is a genuine, clickable 320x50
+  (the IAB mobile-banner size the original dashed `.adbox` "AD — 320x50
+  RESERVED" placeholder was always sized for) ad, built from the two
+  images Jim supplied: a circular, transparent-background photo crop as
+  the ad's own icon (`public/ads/sample-ad-icon.png`, resized to 160x160
+  with `sharp` from his original) and the same photo's full rectangular
+  crop as the hero on its destination (`public/ads/ad-landing-hero.jpg`,
+  resized to 1200x675 and re-encoded as a compressed JPEG). New
+  `app/ad-landing/page.tsx` + `ad-landing.css` — no `RequireAuth`, same
+  posture as `/privacy`/`/login`: a link standing in for a real ad's
+  destination has to open for anyone who clicks it, same as a real
+  external advertiser's site would. Reuses the standard
+  `.frame-none`/`.app`/`.scroll`/`.band` shell every other screen uses (not
+  `/privacy`'s own wider reading-width layout), since this is reached from
+  inside the app's own mobile frame. Content is explicit placeholder —
+  "Sunset River Outfitters" is sample copy, not a real business, and the
+  page says so in its own `.noticeband`; the "Learn More" button is inert,
+  with its own fineprint saying there's nothing further to link to yet.
+  `.adslot-preview`/`.adbox-preview` (and the older dashed `.adbox` before
+  it) are left in `globals.css`, unreferenced, same precedent each already
+  set for the one it itself superseded. **Answering Jim's own closing
+  question — what's still missing for a genuinely "live" ad**: there is no
+  real ad network behind this (one hardcoded creative, no bidding/
+  rotation), no impression or click tracking anywhere (the Admin "Ad
+  Activity" report idea raised 2026-11-16 has no data to read yet — this
+  batch doesn't build that either, just the one real ad+destination pair
+  it would eventually measure), and no `is_beta_tester()`/real-public
+  gating (every Free account sees the same one ad, matching the preview
+  banner's own already-simplified behavior). This batch is scoped to
+  exactly what was asked: an accurately-sized, genuinely clickable ad
+  linking to a real destination page. `npx tsc --noEmit`/`npm run lint`
+  both clean. No mockup — built directly from Jim's own two supplied
+  photos.
+- **Ad impression/click tracking + new Admin "Ad Activity" report —
+  migration 097, confirmed run by Jim, 2026-11-15.** Jim:
+  "please build the tracking," closing the gap the same-day sample-ad
+  entry above flagged ("no impression or click tracking exists yet").
+  New `public.ad_events` table (`id`, `at`, `user_id`, `kind` —
+  `'impression'`/`'click'` — `ad_slug` default `'sample-ad'` so a future
+  second real creative never needs a schema change) — same deny-all
+  posture as `public.events`/`stripe_billing_audit`: RLS on, no policies,
+  every write goes through the one new `log_ad_event(p_kind, p_ad_slug)`
+  `SECURITY DEFINER` function (granted to `authenticated` only, never
+  `anon` — the ad slot only ever renders for a signed-in Free account, so
+  there's no anonymous-caller case; `auth.uid()` is read server-side, the
+  client never supplies its own user id). `AppFooter.tsx` now fires one
+  `log_ad_event('impression')` per real mount where the ad actually
+  renders (guarded by a ref against React's dev-only Strict Mode double-
+  invoke, fire-and-forget so a failed/slow log never affects what's on
+  screen) and one `log_ad_event('click')` on the ad link's own `onClick`.
+  New `admin_get_ad_activity(p_from, p_to, p_granularity, p_cohort,
+  p_profile_id)` mirrors `admin_stats_contacts()`'s own Sunday-week/
+  calendar-month bucketing almost exactly, letting the new Admin "Ad
+  Activity" screen reuse the existing shared `AdminStatsFilterBar`/
+  `StatTable` primitives and the generic `ENTITY_CONFIG` export path
+  (`/api/admin/stats/export`, one new `ad_activity` entry) rather than a
+  bespoke flat-list exporter the way Stripe Audit's own shape needed.
+  Cohort here means "whose impressions/clicks count" — `'free'`/
+  `'subscriber'` are meaningless (every ad viewer is Free by construction,
+  since the slot never renders for a Subscriber) and so are left out of
+  the on-screen filter's own `cohortOptions={['all', 'beta', 'profile']}`,
+  though the RPC still accepts them for schema-shape parity with the other
+  three `admin_stats_*` functions. New `app/components/
+  AdminAdActivityForm.tsx` (`/admin/ad-activity`, `RequireAdmin`-gated,
+  same wrapper shape as `/admin/stripe-audit`) adds a Click-Through-Rate
+  figure above the table (computed client-side from the same rows the
+  table renders, never a separate query) and a new Admin Housekeeping row,
+  "Ad Activity," right after "Sum and Averages." `npx tsc --noEmit`/`npm
+  run lint` both clean. No mockup — this feature family has none beyond
+  the other Admin reports' own live screens as the reference.
