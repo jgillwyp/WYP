@@ -455,9 +455,9 @@ type AdvancedStatusValue = 'all' | 'open' | 'overdue' | 'done'
 // always-enforced gates exactly as before, since Status in particular
 // keeps living on as the section's own live chip after the dialog closes
 // (see the "Status now reads the live sentFilter chip" comments below),
-// not a one-shot value snapshotted here. That's a judgment call, not an
-// explicit instruction — flagged here rather than silently assumed, in
-// case the owner wants Status folded into Any/All too.
+// not a one-shot value snapshotted here. Flagged as a judgment call, not
+// an explicit instruction, then confirmed correct by the owner the same
+// day: "You are correct, the Status needs to be and-gated."
 type AdvancedMatchMode = 'any' | 'all'
 
 type AdvancedSearchFilter = {

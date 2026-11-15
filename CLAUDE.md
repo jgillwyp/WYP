@@ -9087,14 +9087,15 @@ link is built only after the stack is proven on Add Contact.
   (Dialog/Description), Contact Name — each only contributing a check when
   the owner actually entered something for it; with `'any'`, a record
   matches if it satisfies at least one entered value, with `'all'`, every
-  one entered. **A judgment call, flagged rather than silently assumed**:
-  Status, Requests/ToDos participation, and Contact Type (To/From) stay
-  hard, always-enforced gates outside this combinator — Status in
-  particular already lives on as the section's own live filter chip after
-  the dialog closes (2026-11-13's own "the dialog's own Status choice only
-  ever seeds that chip once" design), not a one-shot snapshot this
-  combinator could cleanly fold in. Revisit if Jim wants Status folded
-  into Any/All too. New validation, Jim's own proposed wording verbatim:
+  one entered. Status, Requests/ToDos participation, and Contact Type
+  (To/From) stay hard, always-enforced gates outside this combinator —
+  flagged as a judgment call rather than silently assumed, then
+  **confirmed correct by Jim the same day** ("You are correct, the Status
+  needs to be and-gated."). Status in particular already lives on as the
+  section's own live filter chip after the dialog closes (2026-11-13's own
+  "the dialog's own Status choice only ever seeds that chip once" design),
+  not a one-shot snapshot this combinator could cleanly fold in. New
+  validation, Jim's own proposed wording verbatim:
   Search is refused with "Please set at least one filter value." when
   every one of Date Range/Category/Status/Text/Contact Name is at its
   default (previously an entirely-empty search silently returned
