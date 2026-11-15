@@ -2109,9 +2109,17 @@ export default function MainScreen() {
         if (!matchesStatusFilter(receivedStatus(r), receivedFilter)) return false
 
         // Any/All value combinator — see Sent's identical comment above.
-        // No Category check here — Received never has one (PRD §2.3).
+        // Received never has a Category at all (PRD §2.3) — same "a
+        // hidden field can never satisfy a typed value" rule Sent/ToDos
+        // apply when their own Show Categories toggle is off, just with no
+        // toggle to even check here. Owner-reported, 2026-11-16: Received
+        // hadn't gotten the identical fix — a Category search with nothing
+        // else active was matching every Received row instead of none,
+        // since Category previously contributed no check at all here, so
+        // the combinator saw zero active checks and matched vacuously.
         const checks: boolean[] = []
         if (f.fromDate || f.toDate) checks.push(matchesAdvancedDateRange(f, r.created_at, r.due_date, r.done_date))
+        if (f.category.trim() !== '') checks.push(false)
         if (f.searchText.trim()) checks.push(matchesAdvancedText(f, r.description, advDialogText[r.id] ?? ''))
         const name = f.contactName.trim().toLowerCase()
         if (name) checks.push((r.owner_name ?? '').toLowerCase().includes(name))

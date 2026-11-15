@@ -9134,3 +9134,18 @@ link is built only after the stack is proven on Add Contact.
   Any/All's own caption changed from "Match Any of the selected values" to
   "Match Any of the values below," since the values it governs now
   visibly follow it in the dialog rather than sit above it.
+- **Real bug: the Category-search fix above (filteredSent/filteredTodos)
+  never got applied to Requests Received (2026-11-16), no migration.**
+  Jim: "The Requests Received did not get the fix which was applied to
+  Requests Sent for Categories selection with the Requests Show Categories
+  option turned off." `filteredReceived`'s own Any/All combinator never
+  contributed a Category check at all — Received genuinely never has a
+  Category (PRD §2.3), so there was nothing to match against — but that
+  meant a Category search with no other active criterion saw zero checks
+  in the combinator and matched every Received row vacuously, the exact
+  same symptom the Sent fix closed. Fixed by pushing a hard `false` into
+  the combinator whenever a Category value is typed, since a Received row
+  can never satisfy it either way — same "a hidden/nonexistent field can
+  never satisfy a typed value" rule, just with no toggle to check since
+  Received has no Category concept at all to turn on. `npx tsc --noEmit`/
+  `npm run lint` both clean.
