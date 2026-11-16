@@ -1773,7 +1773,9 @@ grant execute on function public.admin_get_ad_activity(date, date, text, text, u
 
 -- ============================================================================
 -- Migration 098 (2026-11-16) -- open signup + Private Testing free trial,
--- with a committed 30-day close notice. DRAFTED, NOT YET CONFIRMED RUN.
+-- with a committed 30-day close notice. CONFIRMED RUN by Jim, 2026-11-16.
+-- signup_gate_enabled also confirmed flipped to false the same day --
+-- signup is genuinely open now.
 --
 -- Background: scoping Apple TestFlight External Testing readiness (see
 -- CLAUDE.md's 2026-11-16 entries) surfaced that a dedicated reviewer

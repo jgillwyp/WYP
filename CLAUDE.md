@@ -9319,8 +9319,8 @@ link is built only after the stack is proven on Add Contact.
   codebase needed to change for this — it's App Store Connect metadata
   plus one Admin &rarr; Add Private Tester call, not a build task.
 - **Open signup + a real Private Testing free trial, with a committed
-  30-day close notice — migration 098, DRAFTED, NOT YET CONFIRMED RUN
-  (2026-11-16).** Jim's own follow-up on the Apple-reviewer-sign-in
+  30-day close notice — migration 098, confirmed run by Jim, 2026-11-16.**
+  Jim's own follow-up on the Apple-reviewer-sign-in
   question above: the shared-mailbox plan was "awkward" — Apple's
   reviewer would have to check a foreign webmail UI. His fix, refined
   over two more messages: drop the invite-only signup gate entirely so
@@ -9423,14 +9423,15 @@ link is built only after the stack is proven on Add Contact.
   policy already covered the right to send that kind of email; it didn't
   explicitly, now it does.
 
-  **This migration does NOT itself open signup** — that's still Jim's own
-  one-line `update app_settings set value = false where key =
-  'signup_gate_enabled';`, run at his discretion once he's ready, same as
-  every other `app_settings` toggle in this project's history; the
-  migration's own "Managing this day to day" comment block gives the
-  exact statement. `npx tsc --noEmit`/`npm run lint` both clean across
-  the whole batch. No mockup — this feature family has none beyond Jim's
-  own chat messages.
+  **The migration itself does not open signup** — that's the separate
+  `update app_settings set value = false where key =
+  'signup_gate_enabled';` the migration's own "Managing this day to day"
+  comment block gives the exact statement for. **Both confirmed run by
+  Jim, 2026-11-16** — signup is genuinely open now; anyone (Apple's
+  TestFlight reviewer included) can create an account with their own
+  real email. `npx tsc --noEmit`/`npm run lint` both clean across the
+  whole batch. No mockup — this feature family has none beyond Jim's own
+  chat messages.
 - **`/login` itself now shows the trial close date too, before an account
   even exists (2026-11-16, same day).** Jim: "What about sign-ups after
   the 30-day notice, can we let them know the free-tester closing date
