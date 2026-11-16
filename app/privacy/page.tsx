@@ -76,6 +76,17 @@ import './privacy.css'
 // "contact us," which was the only path before this. Built to satisfy
 // Apple App Store Review Guideline 5.1.1(v) ahead of TestFlight External
 // Testing, not driven by this policy page itself.
+//
+// Private Testing free trial + account-notice email (2026-11-16, same
+// day, migration 098) — opening signup for Apple's reviewer (so they can
+// use their own real email instead of a shared mailbox) also meant new
+// signups now get a real, time-limited free trial of every Subscriber
+// feature. Jim asked directly whether sending an account-notice email
+// about that trial ending is already covered by this policy's own
+// wording — it wasn't explicitly; "How we use your information"'s
+// transactional-email bullet now names account/service notices
+// explicitly, including the 30-day close notice this trial is committed
+// to (see AdminTrialCloseForm.tsx / schedule_trial_close()).
 
 // Copyright-line year (2026-09-02, owner request) — computed live in
 // America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
@@ -142,9 +153,11 @@ export default function PrivacyPolicyPage() {
           <li>To operate the core product — creating, tracking, and displaying your Requests,
             ToDos, Dialog threads, and Attachments, and enforcing that each account can only see
             its own data.</li>
-          <li>To send you transactional email: sign-in links, a notification when someone sends
-            you a Request, and the Reminder emails you&rsquo;ve chosen (day-before, day-of, and/or
-            day-after a due date).</li>
+          <li>To send you transactional and account-service email: sign-in links, a notification
+            when someone sends you a Request, the Reminder emails you&rsquo;ve chosen (day-before,
+            day-of, and/or day-after a due date), and notices about your own account or changes to
+            the service &mdash; for example, if you joined during a free Private Testing period,
+            an advance notice (at least 30 days) before that period ends.</li>
           <li>To run scheduled background checks (roughly hourly) that look for Requests and
             ToDos coming due or overdue, so the Reminder emails above can go out automatically.</li>
           <li>To maintain the security of the service — for example, restricting access to

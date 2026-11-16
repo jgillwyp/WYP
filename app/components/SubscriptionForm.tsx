@@ -48,6 +48,11 @@ export default function SubscriptionForm() {
   const [hasRealSubscription, setHasRealSubscription] = useState(false)
   const [canToggleTier, setCanToggleTier] = useState(false)
   const [isTester, setIsTester] = useState(false)
+  // Private Testing free trial (2026-11-16, migration 098) — same shape as
+  // AccountForm.tsx's own copy; see SubscriberStatus's own comment
+  // (SubscriptionPanels.tsx) for the full reasoning.
+  const [onTrial, setOnTrial] = useState(false)
+  const [trialCloseDate, setTrialCloseDate] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -110,7 +115,7 @@ export default function SubscriptionForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end, stripe_subscription_id'
+          'tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end, stripe_subscription_id, trial_subscriber_granted_at'
         )
         .eq('id', userData.user.id)
         .single()
@@ -128,6 +133,7 @@ export default function SubscriptionForm() {
       setStorageGb(data?.subscription_storage_gb ?? 5)
       setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
       setHasRealSubscription(data?.stripe_subscription_id != null)
+      setOnTrial(!!data?.trial_subscriber_granted_at)
       const overrideBytes = data?.storage_limit_override_bytes ?? null
       setStorageOverrideBytes(overrideBytes)
       setStorageOverrideInput(
@@ -144,6 +150,9 @@ export default function SubscriptionForm() {
       // the $19-vs-$39 1st-year price.
       const { data: tester } = await supabase.rpc('is_beta_tester')
       if (!cancelled) setIsTester(tester === true)
+
+      const { data: closeDate } = await supabase.rpc('get_trial_close_date')
+      if (!cancelled) setTrialCloseDate((closeDate as string | null) ?? null)
 
       setLoading(false)
     }
@@ -438,6 +447,8 @@ export default function SubscriptionForm() {
               onSaveStorageOverride={handleSaveStorageOverride}
               onClearStorageOverride={handleClearStorageOverride}
               returnPath="/account/subscription"
+              onTrial={onTrial}
+              trialCloseDate={trialCloseDate}
             />
           </div>
 

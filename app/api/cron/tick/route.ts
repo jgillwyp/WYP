@@ -1212,6 +1212,33 @@ async function handle(request: Request) {
     counts.testersProvisioned = provisionedCount ?? 0
   }
 
+  // Phase G — Private Testing trial close, automatic revert (2026-11-16,
+  // migration 098). The 30-day notice email itself is sent once, by
+  // app/api/admin/schedule-trial-close/route.ts, the moment an admin
+  // schedules the close — not here. This phase only enforces the date
+  // once it actually arrives: every account still on the trial
+  // (trial_subscriber_granted_at set, tier = 'subscriber', no real
+  // stripe_subscription_id — anyone who subscribed for real in the
+  // meantime is left alone) reverts to tier = 'free'. Self-limiting via
+  // its own WHERE clause (a reverted row no longer matches), so running
+  // this every hour, forever, costs nothing once the sweep is done — no
+  // separate "already processed" marker needed. Jim's own manually-added
+  // testers (Admin > Add Private Tester) are never touched: they never
+  // get trial_subscriber_granted_at set in the first place, since that
+  // column is only ever written by handle_new_user()'s own signup-time
+  // grant.
+  const { data: closeDateRow } = await sb.from('app_settings_date').select('value').eq('key', 'trial_close_date').maybeSingle()
+  const trialCloseDate = (closeDateRow?.value as string | undefined) ?? null
+  if (trialCloseDate && localDateISO('UTC', now) >= trialCloseDate) {
+    const { error: revertError } = await sb
+      .from('profiles')
+      .update({ tier: 'free' })
+      .not('trial_subscriber_granted_at', 'is', null)
+      .eq('tier', 'subscriber')
+      .is('stripe_subscription_id', null)
+    if (revertError) counts.errors += 1
+  }
+
   return Response.json({ ok: true, counts }, { status: 200 })
 }
 

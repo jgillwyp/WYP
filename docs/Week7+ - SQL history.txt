@@ -1770,3 +1770,232 @@ grant execute on function public.admin_get_ad_activity(date, date, text, text, u
 --   --   'week', 'all') -- should list weekly buckets with non-zero
 --   -- impressions/clicks once the above has happened at least once.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 098 (2026-11-16) -- open signup + Private Testing free trial,
+-- with a committed 30-day close notice. DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Background: scoping Apple TestFlight External Testing readiness (see
+-- CLAUDE.md's 2026-11-16 entries) surfaced that a dedicated reviewer
+-- mailbox is awkward for Apple's reviewer to check (a foreign webmail UI).
+-- Jim's own fix, refined over two follow-ups: move off the invite-only
+-- Private Testing signup gate entirely and let anyone sign up -- so
+-- Apple's reviewer (or anyone else) can just use their own real email and
+-- check it the normal way -- framed to new signups as a Private Testing
+-- period with full, free Subscriber-tier access, closing on a date Jim
+-- will announce. Jim's own final instruction, verbatim: "commit to a
+-- 30-day notice for closing Private Tester status" -- rather than picking
+-- a fixed date now (his own earlier "January 15th" suggestion), the real
+-- commitment is that whenever Jim DOES decide to end it, every current
+-- trial account gets emailed the exact closing date at least 30 days
+-- before it happens.
+--
+-- Three new pieces:
+--
+-- 1. profiles.trial_subscriber_granted_at -- set once, at signup, only
+--    for an account that lands inside the open trial window
+--    (handle_new_user() below). NULL for every other account: Jim's own
+--    manually-added testers (Admin > Add Private Tester, migration 091),
+--    anyone with a real paid Stripe subscription, and any account created
+--    after the trial has actually closed. This is the one column the
+--    automatic revert (cron, see app/api/cron/tick/route.ts's new Phase G)
+--    keys off of -- deliberately NOT inferred from "tier = 'subscriber'
+--    with no real subscription" alone, since that same shape already
+--    describes a private tester's own "Subscribed? (testing only)"
+--    self-toggle (migration 035/051) and must never be swept by this.
+--
+-- 2. app_settings_date -- a plain sibling to app_settings (migration 015),
+--    same deny-all RLS posture, for a date-valued setting rather than a
+--    boolean one (app_settings.value is a plain `boolean not null`, which
+--    can't hold a date). One row, key 'trial_close_date', absent entirely
+--    until Jim schedules a close -- absent/NULL means "the trial is open-
+--    ended, no close date announced yet," not "closed."
+--
+-- 3. schedule_trial_close(p_close_date date) -- the ONLY way to set or
+--    change app_settings_date's 'trial_close_date' row. admin-only (same
+--    is_admin check every admin_stats_* RPC already uses) and enforces
+--    the 30-day commitment itself: p_close_date must be NULL (clears the
+--    schedule -- testing continues indefinitely, no validation, no email)
+--    or >= current_date + 30. Deliberately does NOT send any email itself
+--    -- SQL has no way to call out to SMTP -- that's
+--    app/api/admin/schedule-trial-close/route.ts's own job, immediately
+--    after this RPC's write succeeds: email every account currently on
+--    the trial (trial_subscriber_granted_at is not null, tier =
+--    'subscriber', no real stripe_subscription_id) the exact closing
+--    date. Calling this again later with a new date re-notifies everyone
+--    with the new date -- Jim's own "even if that had to be modified, we
+--    could advise users by email."
+--
+-- get_trial_close_date() -- read-only, granted to anon+authenticated
+-- (harmless public info), lets both the signed-out landing/login flow and
+-- CreateFreeAccountForm.tsx/SubscriptionPanels.tsx show the real
+-- scheduled date (or "no date set yet") without a second allowlist-style
+-- table to manage.
+--
+-- handle_new_user() (originally migration 002, recreated idempotently by
+-- migration 014) is extended, not replaced wholesale: if no close date is
+-- scheduled, or today is still before it, a brand-new profiles row is
+-- inserted with tier = 'subscriber' and trial_subscriber_granted_at =
+-- now() instead of just `insert into profiles (id) values (new.id)`.
+-- Once the close date has actually arrived, new signups fall through to
+-- the plain insert and get the ordinary column default (tier = 'free',
+-- migration 089) -- the trial grant self-expires with no further code
+-- needed for that half; profiles.trial_subscriber_granted_at needs no new
+-- client grant at all to be readable -- "profiles: read own" (migration
+-- 002) is a table-wide RLS policy, SELECT on the table itself was never
+-- column-restricted (only UPDATE was, migration 002's own tier lockdown),
+-- so a new column is selectable under the existing grant automatically.
+--
+-- Deliberately did NOT touch requests.* or any other table -- this is a
+-- signup-time grant only.
+--
+-- This migration does NOT itself open signup -- that's the one-line
+-- UPDATE in "Managing this day to day" below, run (or not) at Jim's own
+-- discretion, same as every other app_settings toggle in this app's
+-- history.
+-- ============================================================================
+
+alter table public.profiles
+  add column if not exists trial_subscriber_granted_at timestamptz;
+
+comment on column public.profiles.trial_subscriber_granted_at is
+  'Set once, at signup, only when the account landed inside the open Private Testing free-trial window (handle_new_user()). NULL for every other account -- a manually-added tester, a real paying subscriber, or any signup after the trial closed. The one column the automatic cron revert (Phase G, app/api/cron/tick/route.ts) keys off of.';
+
+create table if not exists public.app_settings_date (
+  key   text primary key,
+  value date not null
+);
+alter table public.app_settings_date enable row level security;
+-- No policies -- deny-all for every client role, same as app_settings
+-- itself. Only SECURITY DEFINER functions (running as the table owner)
+-- ever touch this.
+
+create or replace function public.get_trial_close_date()
+returns date
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select value from public.app_settings_date where key = 'trial_close_date';
+$$;
+
+revoke all on function public.get_trial_close_date() from public;
+grant execute on function public.get_trial_close_date() to anon, authenticated;
+
+create or replace function public.schedule_trial_close(p_close_date date)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  if p_close_date is null then
+    delete from public.app_settings_date where key = 'trial_close_date';
+    return;
+  end if;
+
+  if p_close_date < current_date + 30 then
+    raise exception 'The closing date must be at least 30 days from today.';
+  end if;
+
+  insert into public.app_settings_date (key, value)
+  values ('trial_close_date', p_close_date)
+  on conflict (key) do update set value = excluded.value;
+end;
+$$;
+
+revoke all on function public.schedule_trial_close(date) from public;
+grant execute on function public.schedule_trial_close(date) to authenticated;
+
+-- Read-only, admin-gated -- lets the new Admin > Private Testing Close
+-- screen show how many accounts a scheduled close would actually revert,
+-- before Jim commits to a date. Same is_admin check as every other
+-- admin_* RPC; a client can't enumerate other accounts' profiles any
+-- other way ("profiles: read own" only ever shows your own row).
+create or replace function public.admin_get_trial_subscriber_count()
+returns bigint
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_is_admin boolean;
+  v_count bigint;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+
+  select count(*) into v_count
+  from public.profiles
+  where trial_subscriber_granted_at is not null
+    and tier = 'subscriber'
+    and stripe_subscription_id is null;
+
+  return v_count;
+end;
+$$;
+
+revoke all on function public.admin_get_trial_subscriber_count() from public;
+grant execute on function public.admin_get_trial_subscriber_count() to authenticated;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_close_date date;
+begin
+  select value into v_close_date from public.app_settings_date where key = 'trial_close_date';
+
+  if v_close_date is null or current_date < v_close_date then
+    insert into public.profiles (id, tier, trial_subscriber_granted_at)
+    values (new.id, 'subscriber', now())
+    on conflict (id) do nothing;
+  else
+    insert into public.profiles (id) values (new.id)
+    on conflict (id) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Managing this day to day, once this migration has run:
+--
+--   -- open signup (what today's change is actually for -- Apple's
+--   -- reviewer, or anyone, can now sign up with their own email):
+--   update app_settings set value = false where key = 'signup_gate_enabled';
+--
+--   -- re-close signup later, if ever wanted:
+--   update app_settings set value = true where key = 'signup_gate_enabled';
+--
+--   -- schedule the Private Testing trial to close (must be >= 30 days out;
+--   -- do this from the new Admin > Private Testing Close screen instead,
+--   -- so the notice email actually goes out -- this RPC alone only
+--   -- changes the stored date):
+--   select schedule_trial_close('2027-01-15');
+--
+--   -- cancel a scheduled close (testing continues indefinitely, no email):
+--   select schedule_trial_close(null);
+--
+-- Verify after running:
+--   select has_table_privilege('authenticated', 'app_settings_date', 'select');
+--     -- should be false
+--   select get_trial_close_date();
+--     -- should return null until schedule_trial_close() is ever called
+--   -- Sign up with a brand-new email while no close date is scheduled --
+--   -- confirm the new profiles row shows tier = 'subscriber' and a real
+--   -- trial_subscriber_granted_at timestamp.
+-- ============================================================================

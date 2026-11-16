@@ -9318,3 +9318,116 @@ link is built only after the stack is proven on Add Contact.
   use either the link or the numeric sign-in code). Nothing in this
   codebase needed to change for this — it's App Store Connect metadata
   plus one Admin &rarr; Add Private Tester call, not a build task.
+- **Open signup + a real Private Testing free trial, with a committed
+  30-day close notice — migration 098, DRAFTED, NOT YET CONFIRMED RUN
+  (2026-11-16).** Jim's own follow-up on the Apple-reviewer-sign-in
+  question above: the shared-mailbox plan was "awkward" — Apple's
+  reviewer would have to check a foreign webmail UI. His fix, refined
+  over two more messages: drop the invite-only signup gate entirely so
+  anyone (Apple's reviewer included) can sign up with their own real
+  email and check it the normal way, framed to new signups as a free
+  Private Testing trial of every Subscriber feature. First proposed a
+  fixed date ("January 15th"); his own final instruction superseded
+  that: "commit to a 30-day notice for closing Private Tester status" —
+  no date picked in advance, just a standing promise that whenever the
+  trial does close, every current trial account gets emailed the exact
+  date at least 30 days before it happens.
+
+  New `profiles.trial_subscriber_granted_at timestamptz` — set once, at
+  signup, only when `handle_new_user()` (originally migration 002,
+  idempotently recreated by migration 014) finds no close date scheduled
+  yet, or today is still before it; in that case the new `profiles` row
+  is inserted with `tier = 'subscriber'` instead of the plain insert that
+  lands on the column's own `'free'` default (migration 089). NULL for
+  every other account — Jim's own manually-added testers (Admin &rarr;
+  Add Private Tester, migration 091, never touches this column), a real
+  paying subscriber, or any signup after the trial has actually closed.
+  This is the one column the automatic revert keys off of, deliberately
+  NOT inferred from "`tier = 'subscriber'` with no real subscription"
+  alone — that same shape already describes a private tester's own
+  "Subscribed? (testing only)" self-toggle (migrations 035/051), which
+  must never be swept by this.
+
+  New `app_settings_date` table (key/value, deny-all RLS, a plain sibling
+  to `app_settings` since that table's own `value` column is a strict
+  `boolean`, which can't hold a date) holds one row, `trial_close_date`,
+  absent entirely until an admin schedules a close — absent means "open-
+  ended," not "closed." `schedule_trial_close(p_close_date date)` is the
+  only way to set or change it: admin-gated (same `is_admin` check every
+  `admin_stats_*` RPC already uses), and enforces the 30-day floor itself
+  (`p_close_date >= current_date + 30`, or `null` to cancel the schedule
+  outright with no validation and no email). `get_trial_close_date()` is
+  the read-only counterpart, granted to `anon`+`authenticated` — harmless
+  public info, lets both signed-out and signed-in screens show the real
+  date. `admin_get_trial_subscriber_count()` (admin-gated) lets the new
+  Admin screen show how many accounts a close would actually affect
+  before committing to a date.
+
+  New `app/api/admin/schedule-trial-close/route.ts` — the only thing that
+  sends the actual notice email, since SQL can't call out to SMTP: calls
+  `schedule_trial_close()` with the caller's own forwarded JWT (that RPC
+  is the real gate; this route never duplicates the check), and only when
+  a real date was set (not a cancel), uses service_role to find every
+  account currently on the trial (`trial_subscriber_granted_at` set,
+  `tier = 'subscriber'`, no real `stripe_subscription_id` — the same
+  three conditions the count RPC checks), resolve each one's real account
+  email (`auth.admin.getUserById`), and email them the exact closing date
+  via two new templates in `email.ts` (`buildTrialClosingNoticeSubject/
+  Html/Text`) — the same branded `wrapEmailHtml()` shell every other
+  outbound email already uses. Rescheduling later re-notifies everyone
+  with the new date, per Jim's own "even if that had to be modified, we
+  could advise users by email"; canceling sends no email at all (a
+  deliberate, flagged scope decision — nobody's losing anything on a
+  cancel, so nothing urgent to notify).
+
+  New Phase G in `app/api/cron/tick/route.ts` enforces the date once it
+  actually arrives — reads `app_settings_date`'s own value and, once
+  today's (UTC) date has reached it, reverts every row still matching the
+  same three trial-grant conditions back to `tier = 'free'`. Self-
+  limiting via its own WHERE clause (a reverted row stops matching), so
+  running this every hour forever costs nothing once the sweep is done —
+  no separate "already processed" marker needed. The 30-day notice email
+  itself is never sent from here — only once, by the admin route above,
+  the moment the close is scheduled.
+
+  New Admin &rarr; **Private Testing Close** screen (`AdminTrialCloseForm.tsx`,
+  `/admin/trial-close`, `RequireAdmin`-gated) — a date field (client-side
+  `min` mirrors the 30-day floor as a courtesy; the real gate is server-
+  side), the live trial-subscriber count, the currently scheduled date
+  (or "None — open indefinitely"), and Schedule/Cancel buttons. New
+  Housekeeping row under the Admin tab (`MainScreen.tsx`), alongside Add
+  Private Tester/Stripe Audit/Ad Activity.
+
+  **Client-side trial messaging, two places**: `CreateFreeAccountForm.tsx`
+  (every brand-new account's own first-run welcome screen) shows a
+  `.noticeband` the moment `trial_subscriber_granted_at` comes back set,
+  naming the real close date if one's scheduled or the 30-day-notice
+  promise if not. `SubscriptionPanels.tsx`'s `SubscriberStatus` (read via
+  two new optional props, `onTrial`/`trialCloseDate`, threaded through
+  `AccountStatusSection` from both `AccountForm.tsx` and
+  `SubscriptionForm.tsx` — the two screens that render it) swaps its
+  whole renewal-date-oriented status line and paragraph (which assumes a
+  real Stripe subscription that a trial grant never has) for trial-
+  specific wording, and skips Cancel/Renew entirely — there's no real
+  subscription for either to act on. The Attachment Storage Capacity
+  panel and Subscription Details box underneath are left exactly as-is —
+  both already correctly treat a no-real-subscription account as
+  modify-disabled (the same `storageDisabledReason === 'tester'` path a
+  self-toggled private tester already hits), and `cadence` naturally
+  stays `null` for a trial grant, so `UpgradeToAnnualButton` never shows
+  either.
+
+  `/privacy`'s own "How we use your information" bullet on transactional
+  email now explicitly names account/service notices, including this
+  trial's own 30-day close notice — Jim asked directly whether the
+  policy already covered the right to send that kind of email; it didn't
+  explicitly, now it does.
+
+  **This migration does NOT itself open signup** — that's still Jim's own
+  one-line `update app_settings set value = false where key =
+  'signup_gate_enabled';`, run at his discretion once he's ready, same as
+  every other `app_settings` toggle in this project's history; the
+  migration's own "Managing this day to day" comment block gives the
+  exact statement. `npx tsc --noEmit`/`npm run lint` both clean across
+  the whole batch. No mockup — this feature family has none beyond Jim's
+  own chat messages.

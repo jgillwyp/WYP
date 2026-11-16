@@ -192,6 +192,8 @@ export function AccountStatusSection({
   onSaveStorageOverride,
   onClearStorageOverride,
   returnPath = '/account/subscription',
+  onTrial = false,
+  trialCloseDate = null,
 }: {
   tier: 'free' | 'subscriber'
   isBetaTester: boolean
@@ -230,6 +232,12 @@ export function AccountStatusSection({
   // caller passes its own real path; see subscriptionPricing.ts's own
   // STRIPE_RETURN_PATHS comment.
   returnPath?: StripeReturnPath
+  // Private Testing free trial (2026-11-16, migration 098) — see
+  // SubscriberStatus's own comment for the full reasoning. Each caller
+  // reads profiles.trial_subscriber_granted_at and get_trial_close_date()
+  // itself and passes the results through.
+  onTrial?: boolean
+  trialCloseDate?: string | null
 }) {
   return (
     <div style={{ margin: '0 0 4px' }}>
@@ -259,6 +267,8 @@ export function AccountStatusSection({
           onRenewed={onRenewed}
           onCanceled={onCanceled}
           onUpgraded={onUpgraded}
+          onTrial={onTrial}
+          trialCloseDate={trialCloseDate}
         />
       ) : (
         <FreeStatus isTester={isBetaTester} returnPath={returnPath} />
@@ -1601,6 +1611,8 @@ function SubscriberStatus({
   onRenewed,
   onCanceled,
   onUpgraded,
+  onTrial = false,
+  trialCloseDate = null,
 }: {
   canToggleTier: boolean
   hasRealSubscription: boolean
@@ -1616,6 +1628,14 @@ function SubscriberStatus({
   // (no webhook wait) and hands it back, so the parent's own renewalDate
   // state stays correct without a full reload.
   onUpgraded?: (renewalDate: string | null) => void
+  // Private Testing free trial (2026-11-16, migration 098) —
+  // profiles.trial_subscriber_granted_at set at signup; always implies
+  // !hasRealSubscription (the trial never touches Stripe). Replaces the
+  // renewal-date-oriented status line/paragraph below with trial-specific
+  // wording, and skips Cancel/Renew entirely — there's no real
+  // subscription for either to act on.
+  onTrial?: boolean
+  trialCloseDate?: string | null
 }) {
   const [cadence, setCadence] = useState<SubscriptionCadence | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -1662,27 +1682,35 @@ function SubscriberStatus({
             owner-reported — wraps to two lines on a narrower Android
             screen); the section's own band title already says "Account
             Status," so the repetition was never load-bearing. */}
-        Status: {cadenceWord ? `${cadenceWord} ` : ''}Subscriber
-        {cancelAtPeriodEnd && <> (until {formatRenewalDateShort(renewalDate)})</>}
+        {onTrial ? 'Status: Private Testing (Free Trial)' : `Status: ${cadenceWord ? `${cadenceWord} ` : ''}Subscriber`}
+        {!onTrial && cancelAtPeriodEnd && <> (until {formatRenewalDateShort(renewalDate)})</>}
       </div>
-      <p className="promo-p" style={{ margin: '4px 0 0' }}>
-        Thank you for being {cadence === 'annual' ? 'an annual' : cadence === 'monthly' ? 'a monthly' : 'a'}{' '}
-        Would You Please subscriber. Your Renewal Date is: <strong>{formatRenewalDate(renewalDate)}</strong>. If
-        you wish to do so, you can{' '}
-        {cancelAtPeriodEnd ? (
-          <>
-            <RenewSubscriptionLink renewalDate={renewalDate} onError={setCancelError} onRenewed={onRenewed} />
-            {' anytime — so your Subscriber features will stay active after '}
-            {formatRenewalDateShort(renewalDate)}
-            {'. The renewal will be charged at the end of the current subscription period.'}
-          </>
-        ) : (
-          <>
-            <CancelRenewalLink renewalDate={renewalDate} onError={setCancelError} onCanceled={onCanceled} />
-            {' anytime — your Subscriber features stay active through the end of the period you’ve already paid for.'}
-          </>
-        )}
-      </p>
+      {onTrial ? (
+        <p className="promo-p" style={{ margin: '4px 0 0' }}>
+          {trialCloseDate
+            ? `You have full, free Subscriber access during Would You Please's Private Testing period. This ends on ${trialCloseDate} — subscribe anytime before or after that date to keep every Subscriber feature.`
+            : `You have full, free Subscriber access during Would You Please's Private Testing period. We'll email you at least 30 days before this changes.`}
+        </p>
+      ) : (
+        <p className="promo-p" style={{ margin: '4px 0 0' }}>
+          Thank you for being {cadence === 'annual' ? 'an annual' : cadence === 'monthly' ? 'a monthly' : 'a'}{' '}
+          Would You Please subscriber. Your Renewal Date is: <strong>{formatRenewalDate(renewalDate)}</strong>. If
+          you wish to do so, you can{' '}
+          {cancelAtPeriodEnd ? (
+            <>
+              <RenewSubscriptionLink renewalDate={renewalDate} onError={setCancelError} onRenewed={onRenewed} />
+              {' anytime — so your Subscriber features will stay active after '}
+              {formatRenewalDateShort(renewalDate)}
+              {'. The renewal will be charged at the end of the current subscription period.'}
+            </>
+          ) : (
+            <>
+              <CancelRenewalLink renewalDate={renewalDate} onError={setCancelError} onCanceled={onCanceled} />
+              {' anytime — your Subscriber features stay active through the end of the period you’ve already paid for.'}
+            </>
+          )}
+        </p>
+      )}
       {cancelError && (
         <p className="ferror" role="alert" style={{ margin: '6px 0 0' }}>
           {cancelError}
