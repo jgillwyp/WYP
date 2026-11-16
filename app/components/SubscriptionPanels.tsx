@@ -1548,22 +1548,24 @@ function PrivateTesterBox({
         )}
       </div>
 
-      <label className="checkrow" style={{ marginTop: 14, marginBottom: 0 }}>
-        <input
-          type="checkbox"
-          checked={tier === 'subscriber'}
+      {/* .testertoggle (2026-11-16) — replaces the old plain checkbox with a
+          single highlighted action button, per Jim's own mockup. Still just
+          flips the same boolean via onTierToggle; the "ends after testing"
+          sentence now lives here only, dropped from the old checknote below
+          it to avoid saying it twice. */}
+      <div className="testertoggle">
+        <p className="checktext" style={{ margin: 0 }}>
+          After the close of Private Testing, normal sign-up options apply.
+        </p>
+        <button
+          className="btn"
+          type="button"
           disabled={saving}
-          onChange={(e) => onTierToggle?.(e.target.checked)}
-        />
-        <span className="checktext">
-          Subscribed? (testing only)
-          <span className="checknote">
-            Sets your account to the Subscriber tier so subscriber-only features like
-            Attachments can be tested. This status only lasts for the testing period —
-            once testing ends, this checkbox goes away. Off by default.
-          </span>
-        </span>
-      </label>
+          onClick={() => onTierToggle?.(tier !== 'subscriber')}
+        >
+          {tier === 'subscriber' ? 'Switch back to Free Account status' : 'Temporarily switch to Subscriber status'}
+        </button>
+      </div>
     </div>
   )
 }

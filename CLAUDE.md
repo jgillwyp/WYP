@@ -9486,3 +9486,19 @@ link is built only after the stack is proven on Add Contact.
   above the Delete My Account button (`AccountForm.tsx`, built 2026-11-16)
   read plain "Account" — changed to "Account Removal" to read as a section
   label for the control beneath it rather than a vague, unscoped word.
+- **`PrivateTesterBox`'s "Subscribed? (testing only)" checkbox replaced with
+  a single highlighted toggle button (2026-11-16), per Jim's own pasted
+  mockup, no migration.** New `.testertoggle` CSS (`app/globals.css`) — a
+  plain warning-yellow box (`#fff3cd`), same deliberately off-brand
+  reasoning as the surrounding `.testernote` panel it sits inside, not a
+  Palette 1 token. The button's label is dynamic and states the next
+  action directly — "Temporarily switch to Subscriber status" when Free,
+  "Switch back to Free Account status" when Subscriber — calling the same
+  `onTierToggle?.(next)` callback the old checkbox already used, just with
+  `next = tier !== 'subscriber'` instead of reading `e.target.checked`; no
+  other plumbing changed. The box's own static sentence ("After the close
+  of Private Testing, normal sign-up options apply.") now carries the
+  "this ends after testing" messaging alone — dropped from the old
+  checknote text under the control itself, so it's stated once, not twice.
+  `npx tsc --noEmit`/`npm run lint` both clean. No mockup file — Jim's own
+  pasted screenshot is the only reference.
