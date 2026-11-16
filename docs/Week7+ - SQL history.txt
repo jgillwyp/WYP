@@ -2001,3 +2001,79 @@ $$;
 --   -- confirm the new profiles row shows tier = 'subscriber' and a real
 --   -- trial_subscriber_granted_at timestamp.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 099 (2026-11-16) -- reverts migration 098's auto-grant.
+-- DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Same-day reversal: migration 098 auto-granted tier = 'subscriber' to
+-- every new signup during the open trial window. Scoping "how will an
+-- Apple tester see the Stripe process" surfaced the real problem this
+-- caused: a brand-new signup landing as tier = 'subscriber' never sees
+-- FreeStatus's own Sign Up pitch at all (it only renders for tier =
+-- 'free') -- so nobody signing up during the trial, Apple's reviewer
+-- included, could ever reach the real Stripe Checkout flow to actually
+-- test it. Jim's own fix: "Perhaps we should set the status of these
+-- sign-ups to be Free Account."
+--
+-- handle_new_user() reverts to the plain insert every new profiles row
+-- has always gotten before migration 098 (migration 002's original
+-- body) -- a brand-new signup now lands on the column's own 'free'
+-- default (migration 089) like any other account, with
+-- trial_subscriber_granted_at staying null. Anyone wanting the real
+-- Stripe/Subscribe experience -- a real tester, Apple's reviewer, or a
+-- genuine future customer -- sees it immediately and can go through it
+-- with Stripe's own 4242... test card, same as before migration 098 ever
+-- existed.
+--
+-- Everything else migration 098 built stays in place, now dormant rather
+-- than removed: app_settings_date, get_trial_close_date(),
+-- schedule_trial_close(), admin_get_trial_subscriber_count(), the Admin >
+-- Private Testing Close screen, cron Phase G's revert sweep, and the two
+-- client-side notices (CreateFreeAccountForm.tsx, /login) all still
+-- exist and still work correctly -- they simply have nothing to act on
+-- going forward, since no new signup ever sets trial_subscriber_granted_at
+-- again. Left in place rather than torn out: harmless, fully reversible
+-- (a future real trial/promotion could reuse this exact scaffolding), and
+-- removing five files' worth of just-built feature over one same-day
+-- reversal is more churn than the moment calls for. Flagged for Jim to
+-- decide whether to actually remove it later, once it's clear the trial
+-- idea is really shelved for good.
+--
+-- The open signup itself (app_settings.signup_gate_enabled = false) is
+-- UNCHANGED and UNAFFECTED by this migration -- that's a separate
+-- decision (letting anyone, including Apple's reviewer, sign up with
+-- their own real email) that still stands on its own, independent of
+-- whether a new signup also gets a free trial grant.
+-- ============================================================================
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id) values (new.id)
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+-- If any account already picked up the migration-098 auto-grant before
+-- this reversal ran (most likely just a test signup of Jim's own), it
+-- stays tier = 'subscriber' with no real subscription until the
+-- already-existing cron Phase G sweep reverts it (only once/if a close
+-- date is ever scheduled) -- OR clean it up immediately by hand:
+--
+--   update public.profiles set tier = 'free'
+--   where trial_subscriber_granted_at is not null
+--     and tier = 'subscriber'
+--     and stripe_subscription_id is null;
+--
+-- Verify after running:
+--   -- Sign up with a brand-new email -- confirm the new profiles row
+--   -- shows tier = 'free' and trial_subscriber_granted_at is null, and
+--   -- that Account Status's Free pitch (with a real Sign Up button) is
+--   -- what that account actually sees.
+-- ============================================================================

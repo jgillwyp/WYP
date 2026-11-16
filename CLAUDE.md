@@ -9446,3 +9446,37 @@ link is built only after the stack is proven on Add Contact.
   trial copy aimed at a brand-new signup. Shows nothing when no close
   date is scheduled yet — the open-ended case has no specific date to
   promise. `npx tsc --noEmit`/`npm run lint` both clean.
+- **Migration 098's auto-grant reverted the same day — migration 099,
+  DRAFTED, NOT YET CONFIRMED RUN (2026-11-16).** Scoping "how will an
+  Apple tester see the Stripe process" surfaced the real problem: a
+  brand-new signup landing as `tier = 'subscriber'` never sees
+  `FreeStatus`'s own Sign Up pitch (only renders for `tier === 'free'`)
+  — so nobody signing up during the open trial, Apple's reviewer
+  included, could ever reach the real Stripe Checkout flow to test it.
+  Jim's own fix: "Perhaps we should set the status of these sign-ups to
+  be Free Account." `handle_new_user()` reverts to the plain
+  insert (migration 002's original body) — a new signup now lands on
+  the column's own `'free'` default (migration 089) like any other
+  account, `trial_subscriber_granted_at` staying null. Anyone wanting the
+  real Stripe/Subscribe experience sees it immediately and can go
+  through it with the `4242...` test card, exactly as before migration
+  098 ever existed.
+
+  **Everything else migration 098 built stays in place, now dormant
+  rather than removed**: `app_settings_date`, `get_trial_close_date()`,
+  `schedule_trial_close()`, `admin_get_trial_subscriber_count()`, the
+  Admin &rarr; Private Testing Close screen, cron Phase G's revert sweep,
+  and the two client-side notices (`CreateFreeAccountForm.tsx`, `/login`)
+  all still exist and still work correctly — they simply have nothing to
+  act on going forward, since no new signup ever sets
+  `trial_subscriber_granted_at` again. Left in place deliberately rather
+  than torn out — harmless, fully reversible, and a future real trial or
+  timed promotion could reuse this exact scaffolding; flagged here for
+  Jim to decide whether to actually remove it once the trial idea is
+  clearly shelved for good, rather than silently deleted now. The open
+  signup itself (`signup_gate_enabled = false`) is unchanged and
+  unaffected — that decision stands on its own, independent of whether a
+  new signup also gets a free trial grant. Migration 099's own header
+  comment gives the one-line cleanup SQL for the handful of accounts
+  (most likely just Jim's own test signup) that already picked up the
+  migration-098 grant before this reversal ran.
