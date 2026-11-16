@@ -331,6 +331,17 @@ export default function AccountForm() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Delete My Account (2026-11-16) — see app/api/account/delete/route.ts's
+  // own header comment for the full reasoning (Apple Guideline 5.1.1(v):
+  // an app that creates accounts must let the user initiate deletion from
+  // inside the app, not only "contact us"). Same Cancel/Confirm modal shape
+  // as Contact Detail's existing Delete Contact (ContactDetailForm.tsx,
+  // 2026-09-01) — the closest precedent for a serious, irreversible,
+  // user-initiated delete already in this app.
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Test Storage Cap (migration 051, 2026-09-03) — a private-testing-only
   // override of the account's real Attachment storage allowance, gated by
   // the same canToggleTier flag above rather than a second allowlist (see
@@ -742,6 +753,37 @@ export default function AccountForm() {
       return
     }
     router.back()
+  }
+
+  async function handleDeleteAccountConfirmed() {
+    setDeleting(true)
+    setDeleteError(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setDeleteError('Not signed in.')
+      setDeleting(false)
+      return
+    }
+
+    const res = await fetch('/api/account/delete', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const json = await res.json().catch(() => ({}) as { ok?: boolean; error?: string; detail?: string })
+
+    if (!res.ok || !json.ok) {
+      setDeleteError(json.detail || json.error || 'Could not delete your account. Please try again.')
+      setDeleting(false)
+      return
+    }
+
+    // The account (and its session) no longer exists server-side — clear
+    // whatever local session state remains, same destination Log Out
+    // already uses (MainScreen.tsx's handleLogOut).
+    await supabase.auth.signOut()
+    router.replace('/login')
   }
 
   // Show/Hide chip pair for one section's header — reused four times below
@@ -1498,8 +1540,70 @@ export default function AccountForm() {
               {saveError}
             </p>
           )}
+
+          {/* Delete My Account (2026-11-16) — see app/api/account/delete/
+              route.ts's own header comment for the full reasoning. Always
+              visible, no Show/Hide chip — unlike the four collapsible
+              sections above, this is a single serious control, not a group
+              of settings to tuck away. Reuses .actsummary/.btn-danger
+              verbatim from Contact Detail's own Delete Contact. */}
+          <div
+            className="actsummary"
+            role="group"
+            aria-label="Delete My Account"
+            style={{ margin: '10px var(--pad) 0' }}
+          >
+            <span className="actsummary-label">Account</span>
+            <button className="btn-danger" type="button" onClick={() => setDeleteOpen(true)}>
+              Delete My Account
+            </button>
+          </div>
         </div>
         <AppFooter tier={tier} subscriptionDisabled={subscriberOpen} />
+
+        {deleteOpen && (
+          <>
+            <div className="scrim" onClick={() => (deleting ? null : setDeleteOpen(false))} />
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+              <div className="modalhead">
+                <p className="modal-title" id="delete-account-title">
+                  Delete your account?
+                </p>
+              </div>
+
+              <p className="subnote" style={{ marginTop: 10 }}>
+                This permanently deletes your sign-in and everything you own: every
+                Contact, Sent Request (with its full Dialog and Attachments history),
+                ToDo, and Private Category. Any active subscription is canceled
+                immediately — you will not be charged again.
+              </p>
+
+              <div className="deletewarn" role="alert">
+                {`This does NOT remove a Dialog entry you wrote, or a file you added, on someone else's Request — those stay as part of their own record, just no longer attributed to your name. This cannot be undone.`}
+              </div>
+
+              {deleteError && (
+                <p className="ferror" role="alert">
+                  {deleteError}
+                </p>
+              )}
+
+              <div className="modalacts" style={{ marginTop: 12 }}>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button className="btn-danger" type="button" onClick={handleDeleteAccountConfirmed} disabled={deleting}>
+                  {deleting ? 'Deleting…' : 'Delete My Account'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

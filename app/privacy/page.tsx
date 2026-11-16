@@ -69,6 +69,13 @@ import './privacy.css'
 // treating this as a substitute for professional legal review, especially
 // if WYP's user base later includes residents of jurisdictions with their
 // own specific disclosure requirements (e.g. GDPR, CCPA).
+//
+// Account deletion (2026-11-16) — the Data retention and Your choices
+// sections now describe the real in-app Delete My Account control
+// (AccountForm.tsx, app/api/account/delete/route.ts) rather than
+// "contact us," which was the only path before this. Built to satisfy
+// Apple App Store Review Guideline 5.1.1(v) ahead of TestFlight External
+// Testing, not driven by this policy page itself.
 
 // Copyright-line year (2026-09-02, owner request) — computed live in
 // America/Los_Angeles rather than hardcoded, so the footer's "© YYYY"
@@ -195,7 +202,8 @@ export default function PrivacyPolicyPage() {
           is designed around a shorter retention period for free accounts as this feature is
           completed; until then, free and paid accounts are retained on the same basis. You can
           delete individual Contacts, Requests, ToDos, and Attachments yourself at any time within
-          the app, and you can request deletion of your entire account by contacting us (below).
+          the app, and you can delete your entire account yourself from within the app (Account
+          Options &rarr; Delete My Account) &mdash; you do not need to contact us to do this.
         </p>
 
         <h2>Security</h2>
@@ -227,9 +235,10 @@ export default function PrivacyPolicyPage() {
         <h2>Your choices</h2>
         <p>
           You can review, edit, or delete your Contacts, Requests, ToDos, Dialog entries, and
-          Attachments at any time from within the app. To request a copy of your data, ask us to
-          delete your account, or ask us to remove a Contact&rsquo;s information you no longer
-          have a use for, email us at the address below.
+          Attachments at any time from within the app, and you can delete your entire account
+          yourself from within the app (Account Options &rarr; Delete My Account). To request a
+          copy of your data, or ask us to remove a Contact&rsquo;s information you no longer have
+          a use for, email us at the address below.
         </p>
 
         <h2>Changes to this policy</h2>

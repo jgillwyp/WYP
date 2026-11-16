@@ -9243,3 +9243,78 @@ link is built only after the stack is proven on Add Contact.
   lowered (`globals.css`) so a short Android viewport has more room before
   it has to scroll at all. `npx tsc --noEmit`/`npm run lint` both clean. No
   mockup update — none of this feature's own history has one either.
+- **Delete My Account — real in-app account deletion, new
+  (2026-11-16, no migration).** Jim: "it seems the app is ready for an
+  Apple External Tester TestFlight evaluation, any concerns?" — flagged two
+  real gaps; Jim asked for this one built now. Apple App Store Review
+  Guideline 5.1.1(v) requires any app that lets a person create an account
+  to also let them initiate deleting it from inside the app — `/privacy`
+  previously only offered "contact us" for that, which doesn't satisfy it.
+  New `app/api/account/delete/route.ts` (forwarded-JWT to verify identity,
+  service_role for the parts that need it — same narrow, already-
+  established exception this app's history already carves out for
+  Attachments/cron/Stripe routes) does, in order: (1) cancels any real
+  Stripe subscription immediately (`prorate: false`, the exact sequence
+  `testing-downgrade/route.ts` already established 2026-11-05/12) — unlike
+  that route, a genuine cancellation failure here **blocks** the whole
+  deletion (502), since a deleted account has no screen left to ever
+  cancel a zombie subscription from; pending-invoice-item/payment-method
+  cleanup stay best-effort, same as that route; (2) removes the real
+  Storage objects for every file Attachment on a Request/ToDo the caller
+  owns (service_role, same bucket/column names `delete-cascade/route.ts`
+  already uses) — the DB rows cascade away for free in step 4, but
+  `storage.objects` lives outside the FK graph entirely, so skipping this
+  would leave real files behind forever; deliberately scoped to the
+  caller's own Requests/ToDos only, not a file they merely uploaded onto
+  someone else's Request (`uploaded_by`/`author_user_id` are both
+  `on delete set null`, never cascade — that attachment or Dialog comment
+  stays as part of the OTHER owner's own record, just no longer attributed
+  by name, the same way deleting your own account has always left your
+  Dialog comments on someone else's thread alone); (3) logs one best-effort
+  `events` row (`subject_type: 'profile'`, `action: 'deleted'`) before the
+  row `actor_user` points at is gone; (4) `supabase.auth.admin.
+  deleteUser(userId)` — confirmed by reading every `create table` across
+  `docs/Week1` through `Week7+` SQL history before writing this route, not
+  assumed, that `profiles`/`contacts`/`requests`/`categories` all cascade
+  from `auth.users(id) on delete cascade`, and `dialog`/`attachments`/
+  `request_links`/`reminder_minutes_before_queue` all cascade a second
+  time from `requests` itself — nothing in that graph is `on delete
+  restrict` against a row this touches, so the admin call can't fail on an
+  unexpected FK violation. `events`/`ad_events`/`stripe_billing_audit` all
+  keep their own rows with just the user reference nulled, unchanged — an
+  account's audit trail was never meant to vanish with the account itself.
+  `beta_allowlist`/`tier_toggle_allowlist`/`pending_tester_setup`/
+  `app_settings` are email-keyed, not a FK to `auth.users`, and are
+  deliberately left alone — harmless if the same email ever signs up
+  again. New "Delete My Account" control in `AccountForm.tsx`'s Account
+  Options screen — always visible, no Show/Hide chip (unlike the four
+  collapsible sections above it, this is one serious control, not a group
+  of settings to tuck away), reusing `.actsummary`/`.btn-danger` verbatim
+  from Contact Detail's own 2026-09-01 Delete Contact (the closest
+  existing precedent for a serious, irreversible, user-initiated delete) —
+  same Cancel/Confirm modal shape, with a plain-language recap of exactly
+  what's removed and what isn't. On success, signs out locally
+  (`supabase.auth.signOut()`) and redirects to `/login`, same destination
+  Log Out already uses. `/privacy`'s Data retention and Your choices
+  sections updated to describe this real control instead of "contact us."
+  `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this control
+  has none.
+- **Apple reviewer sign-in — answered, nothing built (2026-11-16).** Jim
+  asked whether a special token-based sign-in could stand in for a real
+  email for Apple's TestFlight reviewer. Recommended against building a
+  bypass — this app's whole Auth posture (CLAUDE.md's own Auth section:
+  "There are no passwords anywhere in this product") is built around the
+  idea that the only way in is a real emailed link/code; a standing,
+  permanently-known bypass credential sitting in production is exactly
+  the kind of secret that eventually leaks and gets abused, for a problem
+  that doesn't need one. The standard, zero-code answer: create a
+  dedicated mailbox (same Hostinger setup already used for
+  `notifications@wouldyouplease.com`, e.g. `appreview@wouldyouplease.com`),
+  add that email via Admin &rarr; Add Private Tester (migration 091) so
+  it clears the signup gate, then in App Store Connect's own "App Review
+  Information" (Sign-In Required = Yes) give Apple that email plus the
+  webmail URL/credentials for that one mailbox and a short note explaining
+  the passwordless flow (enter the email on `/login`, open the mailbox,
+  use either the link or the numeric sign-in code). Nothing in this
+  codebase needed to change for this — it's App Store Connect metadata
+  plus one Admin &rarr; Add Private Tester call, not a build task.
