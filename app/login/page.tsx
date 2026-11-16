@@ -154,6 +154,29 @@ function LoginScreen() {
   // which was always the fallback this button only ever supplemented.
   const emailRef = useRef<HTMLInputElement>(null)
 
+  // Private Testing trial close date (2026-11-16, migration 098) — owner:
+  // "can we let them know the free-tester closing date as they are
+  // signing up?" CreateFreeAccountForm.tsx already shows this once an
+  // account exists; this shows it BEFORE that, on the one screen a
+  // prospective signer-upper actually sees first. get_trial_close_date()
+  // is anon-callable (harmless public info), so this works even for a
+  // visitor who hasn't typed an email yet. Scoped to isSignupIntent (the
+  // "Start Free Account"/"Sign In for Free Account" entry points) rather
+  // than every visit to this screen — a returning user signing back in
+  // doesn't need trial copy aimed at a brand-new signup. null (no close
+  // date scheduled yet) deliberately shows nothing extra here — that's
+  // the open-ended case, with no specific date to promise.
+  const [trialCloseDate, setTrialCloseDate] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    supabase.rpc('get_trial_close_date').then(({ data }) => {
+      if (active) setTrialCloseDate((data as string | null) ?? null)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   // Someone already signed in has no business on this screen.
   useEffect(() => {
     let active = true
@@ -339,6 +362,12 @@ function LoginScreen() {
             {gated ? 'Private Testing' : isSignupIntent ? 'Sign In for Free Account' : 'Sign In'}
           </span>
         </div>
+
+        {!gated && isSignupIntent && trialCloseDate && (
+          <div className="noticeband">
+            {`Note: New accounts get full, free Subscriber access through ${trialCloseDate} as part of Would You Please's Private Testing. After that date, normal Free and Subscriber plans apply.`}
+          </div>
+        )}
 
         {gated ? (
           <div className="scroll">

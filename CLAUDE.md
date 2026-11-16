@@ -9431,3 +9431,17 @@ link is built only after the stack is proven on Add Contact.
   exact statement. `npx tsc --noEmit`/`npm run lint` both clean across
   the whole batch. No mockup — this feature family has none beyond Jim's
   own chat messages.
+- **`/login` itself now shows the trial close date too, before an account
+  even exists (2026-11-16, same day).** Jim: "What about sign-ups after
+  the 30-day notice, can we let them know the free-tester closing date
+  as they are signing up?" `CreateFreeAccountForm.tsx`'s own notice
+  (above) only ever shows AFTER the account's already been created; this
+  adds the same information to the one screen a prospective signer-upper
+  sees first. `app/login/page.tsx` now fetches `get_trial_close_date()`
+  on mount (anon-callable, works before any email is even typed) and
+  shows a `.noticeband` with the real date, scoped to `isSignupIntent`
+  (the "Start Free Account"/"Sign In for Free Account" entry points,
+  `?intent=signup`) so a returning user just signing back in doesn't see
+  trial copy aimed at a brand-new signup. Shows nothing when no close
+  date is scheduled yet — the open-ended case has no specific date to
+  promise. `npx tsc --noEmit`/`npm run lint` both clean.
