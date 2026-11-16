@@ -1741,11 +1741,24 @@ body {
    own updated comment for Status's radios becoming chips. The plain
    Search text field also picked up the same .opt Row-Tint-while-empty
    treatment Category/Contact Name already had (MainScreen.tsx only, no
-   new CSS needed — .opt already exists). */
+   new CSS needed — .opt already exists).
+
+   2026-11-16 follow-up — owner: Windows/iPhone show the whole dialog, but
+   Android needs to scroll. No reliable CSS way to target Android alone, so
+   instead trimmed real vertical cost everywhere (helps every platform,
+   hurts none) plus gave the dialog more room to grow into: dropped the
+   redundant "Status" label above the already-self-explanatory status
+   chips (MainScreen.tsx), shortened the Any/All caption ("...of the
+   values below" -> "...values below"), and renamed "Date Type" -> "Date"
+   (both section labels already read inline with their own checkboxes, so
+   shorter text there also leaves more width for the checkboxes not to
+   wrap). max-height raised 80vh -> 92vh and top lowered (24px/+16px safe-
+   area -> 10px/+6px) so a short Android viewport has more room before it
+   has to scroll at all. */
 .advsearch-modal {
-  max-height: 80vh;
+  max-height: 92vh;
   overflow-y: auto;
-  top: max(24px, calc(env(safe-area-inset-top, 0px) + 16px));
+  top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
   transform: translateX(-50%);
 }
 

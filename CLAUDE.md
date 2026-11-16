@@ -9230,3 +9230,16 @@ link is built only after the stack is proven on Add Contact.
   "Ad Activity," right after "Sum and Averages." `npx tsc --noEmit`/`npm
   run lint` both clean. No mockup — this feature family has none beyond
   the other Admin reports' own live screens as the reference.
+- **Advanced Search Filters dialog trimmed for Android, no logic change
+  (2026-11-16).** Jim, from a real Android screenshot: Windows and iPhone
+  show the whole dialog, but Android has to be vertically scrolled. No
+  reliable CSS way to single out Android, so this trims real vertical cost
+  everywhere instead (harmless on the platforms that already fit) and
+  gives the dialog more room to grow into: dropped the redundant "Status"
+  label above the already-self-explanatory status chips, shortened the
+  Any/All caption ("Match Any of the values below" -> "Match Any values
+  below"), and renamed "Date Type" -> "Date" (`MainScreen.tsx`). `.advsearch-
+  modal`'s own `max-height` raised 80vh -> 92vh and its `top` anchor
+  lowered (`globals.css`) so a short Android viewport has more room before
+  it has to scroll at all. `npx tsc --noEmit`/`npm run lint` both clean. No
+  mockup update — none of this feature's own history has one either.

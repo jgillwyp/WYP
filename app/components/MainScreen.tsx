@@ -3695,7 +3695,6 @@ export default function MainScreen() {
             </p>
 
             <div className="fgroup stopgroup advstatus-inline">
-              <span className="advrow-label">Status</span>
               <div className="chips" style={{ marginTop: 0 }} role="radiogroup" aria-label="Advanced search status">
                 {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
                   <button
@@ -3729,7 +3728,7 @@ export default function MainScreen() {
                 </button>
               </div>
               <span className="advmatchnote">
-                Match {advDraft.matchMode === 'any' ? 'Any' : 'All'} of the values below
+                Match {advDraft.matchMode === 'any' ? 'Any' : 'All'} values below
               </span>
             </div>
 
@@ -3811,7 +3810,7 @@ export default function MainScreen() {
 
             <div className="fgroup stopgroup advdate-group">
               <div className="advlabelrow">
-                <span className="advrow-label">Date Type</span>
+                <span className="advrow-label">Date</span>
                 <div className="advcheckrow">
                   <label className="advcheck">
                     <input
