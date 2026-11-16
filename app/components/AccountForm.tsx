@@ -1566,7 +1566,7 @@ export default function AccountForm() {
             aria-label="Delete My Account"
             style={{ margin: '10px var(--pad) 0' }}
           >
-            <span className="actsummary-label">Account</span>
+            <span className="actsummary-label">Account Removal</span>
             <button className="btn-danger" type="button" onClick={() => setDeleteOpen(true)}>
               Delete My Account
             </button>

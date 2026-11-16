@@ -9480,3 +9480,9 @@ link is built only after the stack is proven on Add Contact.
   comment gives the one-line cleanup SQL for the handful of accounts
   (most likely just Jim's own test signup) that already picked up the
   migration-098 grant before this reversal ran.
+- **Delete My Account's own heading relabeled "Account Removal"
+  (2026-11-16), no migration.** Jim: "I have added a word to the account
+  deletion - from 'Account' to 'Account Removal'." The `.actsummary-label`
+  above the Delete My Account button (`AccountForm.tsx`, built 2026-11-16)
+  read plain "Account" — changed to "Account Removal" to read as a section
+  label for the control beneath it rather than a vague, unscoped word.
