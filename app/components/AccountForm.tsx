@@ -323,12 +323,6 @@ export default function AccountForm() {
   // "use the test-only card to enable this" dialog instead.
   const [hasRealSubscription, setHasRealSubscription] = useState(false)
 
-  // Private Testing free trial (2026-11-16, migration 098) — see
-  // SubscriberStatus's own comment (SubscriptionPanels.tsx) for the full
-  // reasoning. onTrial comes from this account's own profiles row;
-  // trialCloseDate is a separate, account-independent RPC read.
-  const [onTrial, setOnTrial] = useState(false)
-  const [trialCloseDate, setTrialCloseDate] = useState<string | null>(null)
   // Locked down, migration 035 — the whole Subscriber Options section is
   // hidden unless this is true, rather than shown and failing on click.
   // Defaults false so there is no flash of the section before
@@ -475,7 +469,7 @@ export default function AccountForm() {
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select(
-          'request_category_enabled, todo_category_enabled, request_time_enabled, request_repeat_enabled, todo_repeat_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end, stripe_subscription_id, trial_subscriber_granted_at'
+          'request_category_enabled, todo_category_enabled, request_time_enabled, request_repeat_enabled, todo_repeat_enabled, todo_dates_enabled, todo_time_enabled, todo_reminders_enabled, reminder_digest_enabled, notify_owner_on_done, request_reminders_enabled, always_show_send_reminder, offer_receipt_confirmation, request_reminder_default_day_before, request_reminder_default_day_of, request_reminder_default_day_after, todo_reminder_default_day_before, todo_reminder_default_day_of, todo_reminder_default_day_after, request_reminder_default_minutes_before_enabled, request_reminder_default_minutes_before_value, todo_reminder_default_minutes_before_enabled, todo_reminder_default_minutes_before_value, tier, subscription_renewal_date, subscription_storage_gb, storage_limit_override_bytes, stripe_cancel_at_period_end, stripe_subscription_id'
         )
         .eq('id', userData.user.id)
         .single()
@@ -516,7 +510,6 @@ export default function AccountForm() {
       setStorageGb(data?.subscription_storage_gb ?? 5)
       setCancelAtPeriodEnd(data?.stripe_cancel_at_period_end ?? false)
       setHasRealSubscription(data?.stripe_subscription_id != null)
-      setOnTrial(!!data?.trial_subscriber_granted_at)
       const overrideBytes = data?.storage_limit_override_bytes ?? null
       setStorageOverrideBytes(overrideBytes)
       setStorageOverrideInput(
@@ -535,9 +528,6 @@ export default function AccountForm() {
       // (2026-11-06), not just the $19-vs-$39 1st-year price.
       const { data: tester } = await supabase.rpc('is_beta_tester')
       if (!cancelled) setIsTester(tester === true)
-
-      const { data: closeDate } = await supabase.rpc('get_trial_close_date')
-      if (!cancelled) setTrialCloseDate((closeDate as string | null) ?? null)
 
       setLoading(false)
     }
@@ -1541,8 +1531,6 @@ export default function AccountForm() {
                   onSaveStorageOverride={handleSaveStorageOverride}
                   onClearStorageOverride={handleClearStorageOverride}
                   returnPath="/account"
-                  onTrial={onTrial}
-                  trialCloseDate={trialCloseDate}
                 />
               </div>
             )}

@@ -2077,3 +2077,64 @@ $$;
 --   -- that Account Status's Free pitch (with a real Sign Up button) is
 --   -- what that account actually sees.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 100 (2026-11-16) -- decommissions migration 098's Private
+-- Testing free-trial scaffolding outright. DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Migration 099's own header comment left everything migration 098 built
+-- in place as dormant (app_settings_date, get_trial_close_date(),
+-- schedule_trial_close(), admin_get_trial_subscriber_count(), the Admin >
+-- Private Testing Close screen, the /login + Create Free Account notices,
+-- cron Phase G's revert sweep), "flagged for Jim to decide whether to
+-- actually remove it later, once it's clear the trial idea is really
+-- shelved for good." Jim, re-closing the signup gate the same day
+-- (app_settings.signup_gate_enabled back to true -- every sign-up now
+-- goes through Admin > Add Private Tester again): "I don't see us going
+-- back to prior login / free account methods - yes, clean up old
+-- code/notes." Taken as exactly that confirmation.
+--
+-- Every app-code piece this migration's own SQL objects backed is already
+-- removed in this same batch: AdminTrialCloseForm.tsx, app/admin/trial-
+-- close/page.tsx, and app/api/admin/schedule-trial-close/route.ts are
+-- deleted outright; cron/tick/route.ts's Phase G, the onTrial/
+-- trialCloseDate props and branches in SubscriptionPanels.tsx/
+-- AccountForm.tsx/SubscriptionForm.tsx/CreateFreeAccountForm.tsx, the
+-- buildTrialClosingNotice* email templates, the /login banner, and the
+-- Admin Housekeeping row are all gone. This migration removes the one
+-- remaining layer -- the database objects nothing in the app calls into
+-- anymore.
+--
+-- One-time cleanup first, defensive: migration 099's own suggested manual
+-- fix (reverting any account that picked up the 098 auto-grant before 099
+-- ran, most likely just a test signup of Jim's own) may never have been
+-- run by hand -- the existing cron Phase G would only ever have caught it
+-- if a close date had actually been scheduled, which Jim never did. Run
+-- it here, once, before the column that explains that state disappears,
+-- so no account is left stuck at tier = 'subscriber' with nothing on
+-- record saying why.
+-- ============================================================================
+
+update public.profiles set tier = 'free'
+where trial_subscriber_granted_at is not null
+  and tier = 'subscriber'
+  and stripe_subscription_id is null;
+
+drop function if exists public.schedule_trial_close(date);
+drop function if exists public.get_trial_close_date();
+drop function if exists public.admin_get_trial_subscriber_count();
+drop table if exists public.app_settings_date;
+
+alter table public.profiles
+  drop column if exists trial_subscriber_granted_at;
+
+-- Verify after running:
+--   select to_regprocedure('public.schedule_trial_close(date)');
+--     -- should be null
+--   select to_regclass('public.app_settings_date');
+--     -- should be null
+--   select column_name from information_schema.columns
+--     where table_schema = 'public' and table_name = 'profiles'
+--       and column_name = 'trial_subscriber_granted_at';
+--     -- should return zero rows
+-- ============================================================================

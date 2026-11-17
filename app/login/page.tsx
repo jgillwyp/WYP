@@ -155,19 +155,6 @@ function LoginScreen() {
   // which was always the fallback this button only ever supplemented.
   const emailRef = useRef<HTMLInputElement>(null)
 
-  // A trial-close notice banner used to live here (2026-11-16, migration
-  // 098) — removed 2026-11-16, same day, once migration 099 reverted the
-  // auto-subscriber-grant at signup. It unconditionally promised "New
-  // accounts get full, free Subscriber access" to every new signup, which
-  // stopped being true the moment that grant was reverted: handle_new_user
-  // no longer sets anything special for a new account regardless of
-  // whether a close date happens to be scheduled, so the banner's own
-  // condition (trialCloseDate truthy) could no longer correspond to real
-  // behavior. CreateFreeAccountForm.tsx's own equivalent notice is
-  // unaffected — it checks the real trial_subscriber_granted_at column
-  // on an account that already exists, so it correctly stays silent now
-  // rather than needing a matching removal.
-
   // Someone already signed in has no business on this screen.
   useEffect(() => {
     let active = true

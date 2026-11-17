@@ -3267,22 +3267,6 @@ export default function MainScreen() {
                       <span className="hknote"> — impressions and clicks on the sample ad, by period</span>
                     </span>
                   </div>
-                  {/* Private Testing Close (2026-11-16, migration 098) —
-                      schedule (or cancel) the free trial's end date, with the
-                      committed 30-day email notice to everyone currently on
-                      it. See AdminTrialCloseForm.tsx's own header comment. */}
-                  <div
-                    className="hkrow"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => router.push('/admin/trial-close')}
-                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/trial-close') }}
-                  >
-                    <span className="hktext">
-                      <span className="hktitle">Private Testing Close</span>
-                      <span className="hknote"> — schedule the free trial&rsquo;s end date (30-day notice)</span>
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
