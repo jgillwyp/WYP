@@ -5125,6 +5125,15 @@ body {
   white-space: nowrap;
 }
 
+/* Plain-weight companion to .actsummary-label — a full explanatory
+   sentence rather than a short bold label, so the consequence is visible
+   next to the button itself (2026-11-17, Account Removal's own row). */
+.actsummary-note {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
 /* Destructive action — one visual step below .btn-secondary's own outline
    treatment, in --alert-red rather than --brand-blue. No prior "delete a
    whole record" control existed anywhere in the app before this (only

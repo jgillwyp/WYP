@@ -1559,17 +1559,32 @@ export default function AccountForm() {
               visible, no Show/Hide chip — unlike the four collapsible
               sections above, this is a single serious control, not a group
               of settings to tuck away. Reuses .actsummary/.btn-danger
-              verbatim from Contact Detail's own Delete Contact. */}
+              verbatim from Contact Detail's own Delete Contact.
+
+              Separation widened and the bare "Account Removal" label
+              swapped for a plain explanatory sentence, 2026-11-17 —
+              owner-reported: sitting right under Account Status's own
+              Hide button with only 10px between them, in the identical
+              Strip-blue row shape the three Show/Hide sections above it
+              already use, it read as a fourth item in that same list
+              rather than a separate, dangerous control. A wider gap (28px,
+              roughly triple the 10px the sections above it use between
+              each other) now sets it apart on sight, and the sentence
+              states the consequence next to the button itself instead of
+              a label that doesn't. The confirmation modal below is
+              unchanged, per the owner's own instruction. */}
           <div
             className="actsummary"
             role="group"
             aria-label="Delete My Account"
-            style={{ margin: '10px var(--pad) 0' }}
+            style={{ margin: '28px var(--pad) 0' }}
           >
-            <span className="actsummary-label">Account Removal</span>
             <button className="btn-danger" type="button" onClick={() => setDeleteOpen(true)}>
               Delete My Account
             </button>
+            <span className="actsummary-note">
+              This will permanently remove your profile, data, and history and cannot be undone.
+            </span>
           </div>
         </div>
         <AppFooter tier={tier} subscriptionDisabled={subscriberOpen} />
