@@ -100,6 +100,17 @@ export default function CreateFreeAccountForm() {
   const [timeZoneInvalid, setTimeZoneInvalid] = useState(false)
   const [timeZoneBrowsing, setTimeZoneBrowsing] = useState(false)
 
+  // Private Testing free trial notice (2026-11-16, migration 098) — shown
+  // only when handle_new_user() actually granted this brand-new account
+  // the trial (trial_subscriber_granted_at set) — never for an account
+  // that signed up after the trial closed, or one Jim added manually via
+  // Admin > Add Private Tester (which never sets this column at all, see
+  // that migration's own header comment). trialCloseDate is fetched
+  // separately (get_trial_close_date(), anon+authenticated-readable) so
+  // the wording stays accurate if Jim reschedules it later.
+  const [onTrial, setOnTrial] = useState(false)
+  const [trialCloseDate, setTrialCloseDate] = useState<string | null>(null)
+
   // Load the session email (for the read-only metarow) and any already-set
   // profile fields — a person can land back here again if an earlier Save
   // attempt errored partway, so this isn't purely a blank-slate screen.
@@ -111,12 +122,18 @@ export default function CreateFreeAccountForm() {
       if (cancelled || !userData.user) return
       setEmail(userData.user.email ?? '')
 
-      const { data } = await supabase
-        .from('profiles')
-        .select('first_name, last_name, display_name, phone, time_zone')
-        .eq('id', userData.user.id)
-        .single()
+      const [{ data }, { data: closeDate }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('first_name, last_name, display_name, phone, time_zone, trial_subscriber_granted_at')
+          .eq('id', userData.user.id)
+          .single(),
+        supabase.rpc('get_trial_close_date'),
+      ])
       if (cancelled) return
+
+      setOnTrial(!!data?.trial_subscriber_granted_at)
+      setTrialCloseDate((closeDate as string | null) ?? null)
 
       const zone = (data?.time_zone as string | null) || detectBrowserTimeZone()
       setForm({
@@ -247,6 +264,14 @@ export default function CreateFreeAccountForm() {
             </button>
           </span>
         </div>
+
+        {onTrial && (
+          <div className="noticeband">
+            {trialCloseDate
+              ? `Note: You're joining during Private Testing — full, free access to every Subscriber feature through ${trialCloseDate}. After that date, normal Free and Subscriber plans apply.`
+              : `Note: You're joining during Private Testing — full, free access to every Subscriber feature for now. We'll email you at least 30 days before that changes.`}
+          </div>
+        )}
 
         <div className="scroll">
           <form
