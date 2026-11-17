@@ -267,6 +267,7 @@ export function AccountStatusSection({
           onRenewed={onRenewed}
           onCanceled={onCanceled}
           onUpgraded={onUpgraded}
+          onTierToggle={onTierToggle}
           onTrial={onTrial}
           trialCloseDate={trialCloseDate}
         />
@@ -680,6 +681,70 @@ function CancelRenewalLink({
               </button>
               <button className="btn" type="button" onClick={handleConfirm}>
                 Cancel Subscription
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+// A private tester who self-toggled "Subscribed?" has no real Stripe
+// subscription to act on, so they never see the real Sign Up flow —
+// SubscriberStatus (this screen) hides it the same way it would for a real
+// subscriber, by design ("what you see is a normal Free/Subscriber page").
+// Jim: "allow 'temporarily subscribed' users to test Stripe... show a
+// Dialog... that they must be a Free Account user to test the fake credit
+// card payment for a subscription (and to click... 'Switch to Free
+// Account and return')." Reuses the exact same onTierToggle callback the
+// toggle button above already calls — flipping tier back to 'free' makes
+// AccountStatusSection re-render this screen as FreeStatus in place (its
+// real Sign Up button lives there), so "and return" needs no navigation
+// at all, just the dialog closing and the parent's own state update.
+// Scoped to canToggleTier && !hasRealSubscription (storageDisabledReason's
+// own 'tester' condition) — a real subscriber has nothing to switch away
+// from, and a Private Testing trial grant (onTrial) has no toggle to flip.
+function TestStripeSignupLink({ onTierToggle }: { onTierToggle?: (next: boolean) => void | Promise<void> }) {
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function handleSwitchAndReturn() {
+    setBusy(true)
+    await onTierToggle?.(false)
+    setBusy(false)
+    setShowConfirm(false)
+  }
+
+  return (
+    <>
+      <p className="promo-p" style={{ margin: '8px 0 0' }}>
+        Want to test a real Stripe sign-up with the 4242&hellip; test card?{' '}
+        <button type="button" className="linkbtn" onClick={() => setShowConfirm(true)}>
+          Switch to Free Account first
+        </button>
+        .
+      </p>
+      {showConfirm && (
+        <>
+          <div className="scrim" onClick={() => setShowConfirm(false)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="test-signup-title">
+            <div className="modalhead">
+              <p className="modal-title" id="test-signup-title">
+                Test a Stripe Sign-Up
+              </p>
+            </div>
+            <p className="subnote">
+              You must be a Free Account user to test the fake credit card payment for a
+              subscription. Switching to Free Account here does not touch any real Stripe
+              subscription — you can switch back to Subscriber status anytime.
+            </p>
+            <div className="modalacts" style={{ marginTop: 12 }}>
+              <button className="btn-secondary" type="button" onClick={() => setShowConfirm(false)} disabled={busy}>
+                Cancel
+              </button>
+              <button className="btn" type="button" onClick={handleSwitchAndReturn} disabled={busy}>
+                {busy ? 'Switching…' : 'Switch to Free Account and return'}
               </button>
             </div>
           </div>
@@ -1403,7 +1468,7 @@ function AttachmentStoragePanel({
             <p className="subnote">
               {disabledReason === 'monthly'
                 ? 'Modify Capacity is only available for annual subscriptions. If you choose to "Upgrade to 1st year discount" with the button below, this feature will be available.'
-                : 'Modify Capacity is only available when the test-only credit card is used to subscribe. You can uncheck the "Subscribed?" check box above and then use the normal "Sign up" for a monthly or annual subscription to use this feature.'}
+                : 'Modify Capacity is only available when the test-only credit card is used to subscribe. You can use the "Switch back to Free Account status" button above and then use the normal "Sign up" for a monthly or annual subscription to use this feature.'}
             </p>
             <div className="modalacts" style={{ marginTop: 12 }}>
               <button className="btn" type="button" onClick={() => setShowDisabledInfo(false)}>
@@ -1483,8 +1548,8 @@ function PrivateTesterBox({
     // globals.css's own comment at .testernote.
     <div className="testernote" style={{ marginBottom: 14 }}>
       <p className="checktext" style={{ margin: 0 }}>
-        As a Private Tester, what you see below is a normal Free/Subscriber page based on how
-        you may have checked or unchecked the &ldquo;Subscribed?&rdquo; check box below and how
+        As a Private Tester, what you see below is a normal Free/Subscriber page based on
+        whether you&rsquo;ve used the toggle button below to switch to Subscriber status and how
         you may have &ldquo;paid for&rdquo; subscriptions or storage with a test-only credit
         card.
       </p>
@@ -1613,6 +1678,7 @@ function SubscriberStatus({
   onRenewed,
   onCanceled,
   onUpgraded,
+  onTierToggle,
   onTrial = false,
   trialCloseDate = null,
 }: {
@@ -1630,6 +1696,11 @@ function SubscriberStatus({
   // (no webhook wait) and hands it back, so the parent's own renewalDate
   // state stays correct without a full reload.
   onUpgraded?: (renewalDate: string | null) => void
+  // Threaded through for TestStripeSignupLink below (2026-11-16) — the
+  // same callback PrivateTesterBox's own toggle button already calls;
+  // flipping tier back to 'free' here makes AccountStatusSection
+  // re-render this screen as FreeStatus in place, no navigation needed.
+  onTierToggle?: (next: boolean) => void | Promise<void>
   // Private Testing free trial (2026-11-16, migration 098) —
   // profiles.trial_subscriber_granted_at set at signup; always implies
   // !hasRealSubscription (the trial never touches Stripe). Replaces the
@@ -1745,6 +1816,8 @@ function SubscriberStatus({
           />
         )}
       </div>
+
+      {storageDisabledReason === 'tester' && <TestStripeSignupLink onTierToggle={onTierToggle} />}
     </div>
   )
 }
