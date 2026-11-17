@@ -9594,3 +9594,32 @@ link is built only after the stack is proven on Add Contact.
   reference, **deliberately not applied**: `docs/
   WYP_Trial_Period_Decommission_Plan.md`. Revisit it only once the trial
   mechanism itself (not just open signup) is genuinely done being used.
+- **Open signup settled as the standing policy — supersedes this same
+  day's earlier "all sign-ups should run through Admin → Add Private
+  Tester" instruction (2026-11-17), no code change.** Scoping an Apple
+  TestFlight submission surfaced a real, structural conflict: Apple's
+  review process has no live back-and-forth with Jim, so a reviewer can
+  only ever use whatever sign-in instructions are typed into App Store
+  Connect ahead of time, cold — there is no way to add their own real
+  email to `beta_allowlist` on the fly once review starts. With the
+  signup gate re-closed (same day's earlier entry), the only way to let
+  a reviewer sign in with their own email is either a pre-provisioned
+  shared-mailbox account (the original "awkward webmail" problem this
+  whole open-signup idea was built to avoid, 2026-11-16) or reopening
+  the gate for the review window and closing it again afterward. Jim's
+  own call once that tradeoff was laid out: "I want option 2 to be the
+  way private testers participate... Worst case, we get a lot more
+  testers than expected (which is not really a problem - it is an
+  opportunity)." So open signup (`app_settings.signup_gate_enabled =
+  false`) is now the permanent, standing state, not a one-time Apple-
+  review accommodation — run directly against the database, no app code
+  touched. The two allowlists this doesn't change: `tier_toggle_allowlist`
+  (the "Subscribed? (testing only)" toggle, test-card hint, Test Storage
+  Cap) and `beta_allowlist`'s own $19-vs-$39 tester price are both
+  independent of the signup gate and still require Admin → Add Private
+  Tester — a self-service signup lands as an ordinary Free account and
+  only gets those extras if explicitly added. This is a genuine reversal
+  of the morning's own re-closure, not a misunderstanding on Jim's part —
+  recorded here so the two same-day, opposite-direction entries both
+  stand as a record of how the decision actually evolved, per this file's
+  own convention of never rewriting a past entry.
