@@ -9502,3 +9502,95 @@ link is built only after the stack is proven on Add Contact.
   checknote text under the control itself, so it's stated once, not twice.
   `npx tsc --noEmit`/`npm run lint` both clean. No mockup file — Jim's own
   pasted screenshot is the only reference.
+- **Document-level scrollbar jitter fixed; sign-in code's `otp_expired`
+  message reworded; Getting Started wording (2026-11-16, commit
+  `eb63636`).** Owner-reported: navigating to the new ad landing page and
+  back caused the whole centered `.frame-none` card to visibly shift left
+  as a window-edge vertical scrollbar appeared, on a screen (Create
+  Request) with nowhere near enough content to need one. Root cause:
+  `html, body` had no `overflow` rule at all, so a hairline mismatch
+  between `100vh`/`100dvh` and the real viewport was enough to make the
+  whole document technically scrollable. Every screen already has its own
+  internal `.scroll` region sized to the fixed-height shell (confirmed via
+  this file's own 2026-08-13 history — `window.scrollY` was never read by
+  any screen's own scroll-position logic), so the document itself was
+  never meant to scroll at all — fixed with `html, body { overflow:
+  hidden; }` in `app/globals.css`, with a matching `@media print`
+  override (`height: auto; overflow: visible;`) so a printed report can
+  still run past one screen's height. Separately, `app/login/page.tsx`'s
+  sign-in-code failure message still explained a "clicked the link in
+  that email" scenario that stopped being possible once the sign-in email
+  went code-only (2026-11-03, no link at all) — reworded to a short "That
+  code is no longer valid." with a new inline "Send a fresh code" button
+  (`codeExpired` state) right under the error, and the dead code now
+  clears automatically on that failure or a successful resend, instead of
+  inviting a retry of the same failure. `GettingStartedHelp.tsx`'s lead
+  paragraph corrected to say Requests can be sent **or received**, not
+  only sent.
+- **`.testertoggle` button overflow on narrow Android fixed (2026-11-16,
+  commit `82d8017`).** Owner-reported: the "Temporarily switch to
+  Subscriber status"/"Switch back to Free Account status" button (built
+  earlier the same day) only showed its left portion on a narrow Android
+  screen, while the explanatory paragraph above it wrapped fine. Root
+  cause: `.btn`'s own base `white-space: nowrap` sized the button to its
+  full text width regardless of the container; the overflowing right
+  portion was clipped by `.scroll`'s own `overflow-x: hidden`. Fixed by
+  making `.testertoggle .btn` full-width and wrap-capable
+  (`display: block; width: 100%; white-space: normal;`).
+- **Stale trial-access banner on `/login` dropped; private testers can now
+  reach a real Stripe sign-up without losing their "temporarily
+  subscribed" toggle state (2026-11-16, commit `70673f2`).** The
+  pre-signup banner on `/login` ("New accounts get full, free Subscriber
+  access through `<date>`...") had been unconditionally wrong since
+  migration 099 reverted the auto-subscriber-grant at signup — removed,
+  along with its now-unused `get_trial_close_date()` fetch; Create Free
+  Account's own equivalent notice is unaffected, since it checks the real
+  `trial_subscriber_granted_at` column and already correctly stays silent.
+  Separately: a private tester who flips "Subscribed? (testing only)" on
+  had no way to reach the real Stripe sign-up flow at all —
+  `SubscriberStatus` hides it the same way it would for a real subscriber,
+  by design ("what you see is a normal Free/Subscriber page"). New
+  `TestStripeSignupLink` (`SubscriptionPanels.tsx`), shown only when
+  `canToggleTier && !hasRealSubscription` (the same condition
+  `storageDisabledReason === 'tester'` already uses): a quiet line + a
+  `.scrim`/`.modal` dialog whose confirm button, "Switch to Free Account
+  and return," flips `tier` back to Free via the same `onTierToggle`
+  callback the toggle button already uses — `AccountStatusSection`
+  re-renders the screen as `FreeStatus` in place, no navigation needed.
+  Also fixed two stale "uncheck the 'Subscribed?' check box" references
+  left over from the checkbox-to-button change earlier the same day.
+- **Signup gate re-closed; the open-signup/auto-trial experiment's
+  scaffolding deliberately kept, not removed (2026-11-16).** Jim: "during
+  the Private Tester period, all sign-ups should run through Admin → Add
+  Private Tester" — run directly against the live database (`update
+  app_settings set value = true where key = 'signup_gate_enabled';`, no
+  code change, no redeploy; this is the same toggle migration 015/098's
+  own "Managing this day to day" comment has always documented). Every
+  sign-up now has to go through Admin → Add Private Tester again, same as
+  before migration 098 ever opened signup.
+  **A real miscommunication followed, caught and corrected the same
+  day**: asked to "restate the user sign-up steps/options," Jim then said
+  "I don't see us going back to prior login / free account methods - yes,
+  clean up old code/notes" — read (wrongly) as "the whole Private Testing
+  free-trial mechanism is abandoned, not just open signup," and acted on
+  by deleting the Admin → Private Testing Close screen, cron `tick/
+  route.ts`'s Phase G revert sweep, the trial email templates, every
+  `onTrial`/`trialCloseDate` prop across `SubscriptionPanels.tsx`/
+  `AccountForm.tsx`/`SubscriptionForm.tsx`/`CreateFreeAccountForm.tsx`,
+  and drafting migration 100 to drop the backing schema (commit
+  `0bed91c`, migration 100 never run). Jim corrected this directly:
+  "where we were in functionality prior to these last edits was where we
+  wanted to be — a trial period method for all users — and that the
+  'cleanup' was for unused code/notes... you seem to have made more
+  changes than that." The actual intent was only ever the signup-gate
+  re-closure — the trial-grant mechanism itself was never meant to be
+  abandoned. **Reverted in full the same day** (`git revert 0bed91c` →
+  commit `9e2453c`; nothing in the database was ever touched, since
+  migration 100 was only drafted, never run) — confirmed `npx tsc
+  --noEmit`/`npm run lint` clean both before and after. Jim: "maybe you
+  can 'store' the work. after the trial period it will be needed" — the
+  exact cleanup (both the app-code diff, pointed at by commit `0bed91c`,
+  and the migration 100 SQL) is now written up as a standalone, runnable
+  reference, **deliberately not applied**: `docs/
+  WYP_Trial_Period_Decommission_Plan.md`. Revisit it only once the trial
+  mechanism itself (not just open signup) is genuinely done being used.
