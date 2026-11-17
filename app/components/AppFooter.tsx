@@ -64,16 +64,24 @@ export default function AppFooter({
   // against a second call from React re-running this effect (e.g. Strict
   // Mode's dev-only double-invoke) without actually unmounting first; the
   // RPC call itself is fire-and-forget — a failed/slow log must never
-  // affect what's on screen.
+  // affect what's on screen, but a failure is now at least visible in the
+  // console (2026-11-17, owner-reported: real impressions/clicks as a
+  // Free user, zero rows in Admin > Ad Activity — this call had no error
+  // handling at all before, so a failure here would have been completely
+  // silent, with nothing to confirm or rule it out).
   const loggedImpressionRef = useRef(false)
   useEffect(() => {
     if (tier !== 'free' || loggedImpressionRef.current) return
     loggedImpressionRef.current = true
-    supabase.rpc('log_ad_event', { p_kind: 'impression' })
+    supabase.rpc('log_ad_event', { p_kind: 'impression' }).then(({ error }) => {
+      if (error) console.error('log_ad_event(impression) failed:', error)
+    })
   }, [tier])
 
   function handleAdClick() {
-    supabase.rpc('log_ad_event', { p_kind: 'click' })
+    supabase.rpc('log_ad_event', { p_kind: 'click' }).then(({ error }) => {
+      if (error) console.error('log_ad_event(click) failed:', error)
+    })
   }
 
   return (
