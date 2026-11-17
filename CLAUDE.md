@@ -9624,7 +9624,7 @@ link is built only after the stack is proven on Add Contact.
   stand as a record of how the decision actually evolved, per this file's
   own convention of never rewriting a past entry.
 - **Every self-service sign-up is now a full Private Tester automatically
-  — migration 100, DRAFTED, NOT YET CONFIRMED RUN (2026-11-17), same-day
+  — migration 100, confirmed run by Jim, 2026-11-17, same-day
   follow-up to the entry above.** Jim, clarifying further: "I do not want
   to do anything to tweak access manually for private testers - anyone
   who signs up for a Free Account during the Private Testing Period is a

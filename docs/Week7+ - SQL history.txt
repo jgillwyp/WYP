@@ -2081,7 +2081,8 @@ $$;
 -- ============================================================================
 -- Migration 100 (2026-11-17) -- every self-service sign-up is automatically
 -- a full Private Tester for the duration of the Private Testing period.
--- DRAFTED, NOT YET CONFIRMED RUN.
+-- CONFIRMED RUN by Jim, 2026-11-17 (the handle_new_user() trigger change
+-- and both backfill inserts all three).
 --
 -- Same-day sequence: the morning's "all sign-ups go through Admin > Add
 -- Private Tester" (re-closing the gate) was itself walked back once
