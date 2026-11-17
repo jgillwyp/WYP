@@ -111,21 +111,22 @@ function LoginScreen() {
   const [error, setError] = useState<string | null>(null)
   const [cooldown, setCooldown] = useState(0)
 
-  // 6-digit code fallback (2026-09-29, owner-reported — a private tester's
-  // iPhone home-screen icon: Supabase's own sign-in email always includes a
-  // 6-digit code alongside the link (Authentication -> Email Templates ->
-  // Magic Link, {{ .Token }} — a Supabase dashboard setting, confirm it's
-  // actually in the template being sent, not something this codebase
-  // controls). A tapped link on iOS opens in whatever the device's default
-  // browser is, never back inside an already-open home-screen icon — a
-  // documented WebKit/iOS limitation (a home-screen web app has its own
-  // isolated storage, separate from any full browser app), not something
-  // fixable from here. Typing the code instead never leaves the icon's own
-  // window, so the session it establishes lands in that same window's own
-  // storage — the one thing a tapped link structurally cannot do on iOS.
+  // 6-digit code fallback, originally 2026-09-29 — see the "code-only,
+  // every context" comment just below for how this became the only path
+  // (not a fallback alongside a link anymore).
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
+  // True only when the most recent verify failure was Supabase's
+  // 'otp_expired' — see handleVerifyCode below. Drives the inline "send a
+  // fresh code" affordance right under the error (2026-11-16, owner-
+  // reported: a real customer isn't going to read a paragraph explaining
+  // why a code died, they just want the next working code — "potential
+  // customers don't care about explanations"). The most likely real cause
+  // once the email is code-only (no link anymore, see below): a second
+  // code was requested — a resend, or a second tab/device — after the
+  // first was already sent, which silently invalidates the first.
+  const [codeExpired, setCodeExpired] = useState(false)
 
   // Sign-in is code-only, every context, every platform (2026-11-03, owner
   // request). This page used to auto-detect whether the emailed magic link
@@ -293,7 +294,15 @@ function LoginScreen() {
 
   async function handleResend() {
     if (cooldown > 0 || loading) return
-    await sendLink(email.trim())
+    const ok = await sendLink(email.trim())
+    // A successful resend immediately invalidates whatever code was sent
+    // before it — clear the dead code/error so the field is ready for the
+    // fresh one rather than inviting a second, identical failure.
+    if (ok) {
+      setCode('')
+      setVerifyError(null)
+      setCodeExpired(false)
+    }
   }
 
   // verifyOtp with type: 'email' is the correct pairing for a code
@@ -313,6 +322,7 @@ function LoginScreen() {
     }
     setVerifying(true)
     setVerifyError(null)
+    setCodeExpired(false)
 
     const { error: verifyErr } = await supabase.auth.verifyOtp({
       email: email.trim(),
@@ -323,20 +333,21 @@ function LoginScreen() {
     setVerifying(false)
 
     if (verifyErr) {
-      // 2026-10-17 (tester-reported) — Supabase's own 'otp_expired' code
-      // covers two different real causes it can't itself tell apart: the
-      // code genuinely timed out, or it was already consumed by the *same*
-      // email's magic link being clicked elsewhere first (both the link and
-      // this code redeem one shared one-time challenge — using either one
-      // invalidates the other). The bare "Token has expired or is invalid"
-      // message left a tester who'd tried the link first, then came back
-      // and typed the code, with no idea why it failed. Name both real
-      // causes rather than overclaiming which one happened.
-      setVerifyError(
-        verifyErr.code === 'otp_expired'
-          ? 'This code is no longer valid. If you also clicked the link in that email, using either one uses up both — please request a new code or link below.'
-          : verifyErr.message
-      )
+      // Originally worded (2026-10-17) around the email also containing a
+      // clickable link — that link was removed outright 2026-11-03, so
+      // "if you also clicked the link in that email" has been stale/wrong
+      // ever since. Reworded 2026-11-16 (owner-reported): short, no
+      // mechanism explanation, and the dead code is cleared so the field
+      // is ready for a fresh one rather than inviting a retry of the same
+      // failure — the inline "send a fresh code" button right below (see
+      // codeExpired) is the actual next step, not a paragraph.
+      if (verifyErr.code === 'otp_expired') {
+        setVerifyError('That code is no longer valid.')
+        setCodeExpired(true)
+        setCode('')
+      } else {
+        setVerifyError(verifyErr.message)
+      }
       return
     }
 
@@ -530,6 +541,7 @@ function LoginScreen() {
                     onChange={(e) => {
                       setCode(e.target.value.replace(/\D/g, '').slice(0, 10))
                       if (verifyError) setVerifyError(null)
+                      if (codeExpired) setCodeExpired(false)
                     }}
                   />
                   <label className="flabel" htmlFor="otp">
@@ -539,6 +551,17 @@ function LoginScreen() {
                 {verifyError && (
                   <p className="ferror" role="alert">
                     {verifyError}
+                  </p>
+                )}
+                {codeExpired && (
+                  <p className="sent-meta" style={{ marginTop: 4 }}>
+                    {cooldown > 0 ? (
+                      <>You can request a fresh one in {cooldown}s.</>
+                    ) : (
+                      <button className="linkbtn" type="button" onClick={handleResend} disabled={loading}>
+                        Send a fresh code
+                      </button>
+                    )}
                   </p>
                 )}
                 <button

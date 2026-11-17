@@ -42,6 +42,28 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* The document itself never scrolls, on any screen — every page is its
+     own 100vh/100dvh flex column (.frame-none/.app) with exactly one
+     internal scrolling region (.scroll, or /privacy's own equivalent),
+     sized to fit inside that fixed height. Owner-reported 2026-11-16: a
+     visible window-level vertical scrollbar on Create Request (content
+     well short of the viewport) that appeared only after navigating to
+     the ad landing page and back, with the whole centered .frame-none
+     card visibly shifting left as the scrollbar was inserted — the
+     classic scrollbar-reflow artifact, caused by a sub-pixel mismatch
+     between 100vh/100dvh and the real viewport height giving the
+     document a hair of overflow it was never meant to have. Rather than
+     just reserving the scrollbar's width (scrollbar-gutter: stable) to
+     mask the symptom, this removes the possibility outright: the
+     document can't become scrollable at all, so there's nothing left to
+     insert or shift around. Overridden back to overflow:visible/
+     height:auto under @media print below — a printed report is allowed,
+     and sometimes needs, to extend past one screen's height.
+     See also the 2026-08-13 history note that .scroll was already the
+     only region any screen's own scroll-position logic ever reads from —
+     this makes that existing assumption explicit and enforced, not a
+     new behavior. */
+  overflow: hidden;
   background: #fff;
 }
 
@@ -4539,6 +4561,13 @@ body {
   html,
   body {
     background: #fff !important;
+    /* The screen-only overflow:hidden/height:100% above would clip a
+       printed report taller than one screen's worth of content — printed
+       output is allowed to run longer than the live app's own fixed-
+       height shell, same as .frame-none's own height:auto override just
+       above. */
+    height: auto;
+    overflow: visible;
   }
   .no-print {
     display: none !important;

@@ -18,9 +18,9 @@ export default function GettingStartedHelp() {
   return (
     <HelpTopicShell title="Getting Started">
       <p className="help-lead">
-        Would You Please tracks two kinds of things: Requests you send to someone else, and
-        ToDos you keep for yourself. Everything lives on one Main Screen, in three sections —
-        Sent, Received, and ToDos — so there&rsquo;s nowhere else to check.
+        Would You Please tracks two kinds of things: Requests you send to someone else or
+        receive, and ToDos you keep for yourself. Everything lives on one Main Screen, in three
+        sections — Sent, Received, and ToDos — so there&rsquo;s nowhere else to check.
       </p>
 
       <div className="panel help-shot">
