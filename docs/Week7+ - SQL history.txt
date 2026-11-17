@@ -2077,3 +2077,91 @@ $$;
 --   -- that Account Status's Free pitch (with a real Sign Up button) is
 --   -- what that account actually sees.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 100 (2026-11-17) -- every self-service sign-up is automatically
+-- a full Private Tester for the duration of the Private Testing period.
+-- DRAFTED, NOT YET CONFIRMED RUN.
+--
+-- Same-day sequence: the morning's "all sign-ups go through Admin > Add
+-- Private Tester" (re-closing the gate) was itself walked back once
+-- scoping the Apple TestFlight submission showed there's no live channel
+-- to add a reviewer's own email on the fly -- settled on reopening signup
+-- permanently (app_settings.signup_gate_enabled = false, no code/
+-- migration involved in that part). Jim's own further clarification,
+-- this entry: "I do not want to do anything to tweak access manually for
+-- private testers - anyone who signs up for a Free Account during the
+-- Private Testing Period is a full private tester. If they toggle to
+-- Subscriber, they will know it is a temporary setting. We are not
+-- actively promoting the app... will only do promotion after the private
+-- testing period."
+--
+-- handle_new_user() (last touched by migration 099, reverted to the plain
+-- insert) now also grants BOTH allowlists on every brand-new signup:
+-- tier_toggle_allowlist (the dashed-yellow "Subscribed? (testing only)"
+-- self-toggle, test-card hint, Test Storage Cap) and beta_allowlist (the
+-- discounted tester Stripe price, and the is_beta_tester() signal Admin
+-- reporting already reads) -- "full private tester" read as both, since
+-- those are the two things that vocabulary already means elsewhere in
+-- this app. Deliberately does NOT set tier = 'subscriber' directly --
+-- that's the migration-098 mistake this same file already walked back
+-- once (a brand-new account landing as "Subscriber" outright can never
+-- see the real Free Sign Up pitch well enough to test it). The new
+-- account still lands on tier = 'free' (column default, migration 089)
+-- and has to actively use the toggle to become "temporarily Subscriber"
+-- -- exactly the distinction Jim's own wording draws ("they will know it
+-- is a temporary setting").
+--
+-- Also backfills both allowlists for every account that already exists,
+-- so this applies retroactively to everyone currently using the app, not
+-- only future sign-ups. Admin > Add Private Tester itself is untouched
+-- and still useful on its own -- pre-provisioning a known person (a
+-- name, a time zone) before they ever sign in -- this migration just
+-- adds a second, automatic path onto the same two tables.
+-- ============================================================================
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id) values (new.id)
+  on conflict (id) do nothing;
+
+  insert into public.tier_toggle_allowlist (email, note)
+  values (lower(new.email), 'Private Testing -- auto-granted at signup')
+  on conflict (email) do nothing;
+
+  insert into public.beta_allowlist (email, note)
+  values (lower(new.email), 'Private Testing -- auto-granted at signup')
+  on conflict (email) do nothing;
+
+  return new;
+end;
+$$;
+
+-- Backfill: every account that already exists also becomes a full
+-- Private Tester, retroactively -- idempotent, safe to re-run.
+insert into public.tier_toggle_allowlist (email, note)
+select lower(email), 'Private Testing -- backfilled, migration 100'
+from auth.users
+on conflict (email) do nothing;
+
+insert into public.beta_allowlist (email, note)
+select lower(email), 'Private Testing -- backfilled, migration 100'
+from auth.users
+on conflict (email) do nothing;
+
+-- Verify after running:
+--   select count(*) from auth.users;
+--   select count(*) from public.tier_toggle_allowlist;
+--   select count(*) from public.beta_allowlist;
+--     -- the latter two should now be >= the first (every existing
+--     -- account backfilled; new accounts add to both automatically).
+--   -- Sign up with a brand-new email -- confirm it lands on tier =
+--   -- 'free' AND that Account Status shows the dashed-yellow Private
+--   -- Tester box (the "Subscribed? (testing only)" toggle) immediately,
+--   -- with no Admin step.
+-- ============================================================================

@@ -9623,3 +9623,32 @@ link is built only after the stack is proven on Add Contact.
   recorded here so the two same-day, opposite-direction entries both
   stand as a record of how the decision actually evolved, per this file's
   own convention of never rewriting a past entry.
+- **Every self-service sign-up is now a full Private Tester automatically
+  — migration 100, DRAFTED, NOT YET CONFIRMED RUN (2026-11-17), same-day
+  follow-up to the entry above.** Jim, clarifying further: "I do not want
+  to do anything to tweak access manually for private testers - anyone
+  who signs up for a Free Account during the Private Testing Period is a
+  full private tester. If they toggle to Subscriber, they will know it is
+  a temporary setting. We are not actively promoting the app... so I am
+  not worried about having to accommodate a LOT of users at this stage -
+  and will only do promotion after the private testing period." The
+  previous entry's "open signup, but Private Tester extras are still
+  curated manually via Admin > Add Private Tester" reading was itself
+  superseded within the same conversation — those two allowlists
+  (`tier_toggle_allowlist`, the self-toggle/test-card hint/Test Storage
+  Cap; `beta_allowlist`, the discounted tester price and
+  `is_beta_tester()` signal) are now granted automatically by
+  `handle_new_user()` on every brand-new signup, not just unlocked by a
+  separate admin step. Deliberately still does **not** set `tier =
+  'subscriber'` directly — a brand-new account still lands on the real
+  `'free'` default and has to actively flip the toggle, which is exactly
+  Jim's own "they will know it is a temporary setting" distinction;
+  re-granting that automatically is the migration-098 mistake this file's
+  history already walked back once, not something to repeat. Migration
+  100 also backfills both allowlists for every account that already
+  exists, so this applies retroactively, not only to future signups.
+  Admin → Add Private Tester itself is unchanged and still useful for
+  pre-provisioning a known person before they ever sign in — this is a
+  second, automatic path onto the same two tables, not a replacement.
+  No app code touched — purely a `handle_new_user()` trigger change plus
+  a one-time backfill, both in `docs/Week7+ - SQL history.txt`.
