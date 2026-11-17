@@ -3990,6 +3990,18 @@ body {
 }
 
 .testertoggle .btn {
+  display: block;
+  width: 100%;
+  /* .btn's own base white-space:nowrap sized this button to its full text
+     width regardless of the container — on a narrow Android screen that
+     width exceeded the viewport, and with no wrap to fall back on, the
+     overflowing right portion was simply clipped by .scroll's own
+     overflow-x:hidden (2026-11-16, owner-reported: "only the left part of
+     it shows"). The explanatory paragraph just above wraps fine since
+     it's a plain <p> with no nowrap — this button's two possible labels
+     ("Temporarily switch to Subscriber status" / "Switch back to Free
+     Account status") are both long enough to need the same treatment. */
+  white-space: normal;
   margin-top: 8px;
 }
 
