@@ -57,3 +57,25 @@ export function scrollLookupFieldToTop(field: HTMLElement | null): void {
     target.scrollIntoView({ block: 'start', behavior: 'auto' })
   }, 300)
 }
+
+// Owner-reported 2026-11-17 follow-up: typing the first character into a
+// Category field that had no dropdown open yet (nothing browsable) made the
+// field visibly jump *down* the screen the instant the dropdown appeared.
+// Root cause: AppFooter unmounting at that same moment grows `.scroll`'s own
+// clientHeight; if the document was already scrolled near its end, browsers
+// clamp scrollTop back down so there's nothing to scroll past, which reads
+// on screen as everything shifting toward the bottom of the document — i.e.
+// down. Call this from a `useEffect` keyed on the same "is AppFooter hidden
+// right now" boolean passed to AppFooter's own `hidden` prop, so the
+// correction reapplies the instant that clamp could happen, undoing it in
+// the same frame rather than leaving the field to visibly settle somewhere
+// lower than where focus first put it. Reads the field from
+// `document.activeElement` rather than needing a ref threaded in, since the
+// dropdown can only be open while its own field still has focus.
+export function scrollActiveLookupFieldToTop(): void {
+  if (typeof document === 'undefined') return
+  const active = document.activeElement
+  if (active instanceof HTMLElement) {
+    scrollLookupFieldToTop(active)
+  }
+}

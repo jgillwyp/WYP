@@ -8,7 +8,7 @@ import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { printWithExpandedWindow } from '@/lib/platform'
-import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
+import { isKeyboardDevice, scrollLookupFieldToTop, scrollActiveLookupFieldToTop } from '@/lib/lookupField'
 
 /**
  * Archive (2026-08-14) — live conversion of
@@ -1168,6 +1168,16 @@ export default function ArchiveForm() {
     ? nameOptions
     : nameOptions.filter((n) => n.toLowerCase().includes(query.toLowerCase()))
 
+  // See CreateRequestForm.tsx's identical footerHidden/effect pair for the
+  // full write-up (2026-11-17, owner-reported scroll-position clamp).
+  const footerHidden = Boolean(
+    isKeyboardDevice() && noun && showRecipientResults && (query !== '' || recipientBrowsing)
+  )
+
+  useEffect(() => {
+    if (footerHidden) scrollActiveLookupFieldToTop()
+  }, [footerHidden])
+
   // Recipient/Requestor query and Before Done Date deliberately do NOT reset
   // here (2026-08-14, owner: "it would be useful to make entries for
   // contact name (Recipient or Requestor) and the Before Done Date remain
@@ -1956,12 +1966,7 @@ export default function ArchiveForm() {
           {confirmMessage && <div className="archconfirm">{confirmMessage}</div>}
         </div>
 
-        <AppFooter
-          subscriptionDisabled={false}
-          hidden={Boolean(
-            isKeyboardDevice() && noun && showRecipientResults && (query !== '' || recipientBrowsing)
-          )}
-        />
+        <AppFooter subscriptionDisabled={false} hidden={footerHidden} />
 
         {deleteConfirmOpen && (
           <>

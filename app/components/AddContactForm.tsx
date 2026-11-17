@@ -7,7 +7,7 @@ import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
-import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
+import { isKeyboardDevice, scrollLookupFieldToTop, scrollActiveLookupFieldToTop } from '@/lib/lookupField'
 
 /**
  * Add Contact (§9.x) — converted by hand from
@@ -171,6 +171,14 @@ export default function AddContactForm() {
   const filteredTimeZones = timeZoneBrowsing || timeZoneQueryEmpty
     ? timeZones
     : timeZones.filter((z) => z.toLowerCase().includes(form.timeZone.trim().toLowerCase()))
+
+  // See CreateRequestForm.tsx's identical footerHidden/effect pair for the
+  // full write-up (2026-11-17, owner-reported scroll-position clamp).
+  const footerHidden = isKeyboardDevice() && showTimeZoneResults
+
+  useEffect(() => {
+    if (footerHidden) scrollActiveLookupFieldToTop()
+  }, [footerHidden])
 
   function selectTimeZone(z: string) {
     setSelectedTimeZone(z)
@@ -689,7 +697,7 @@ export default function AddContactForm() {
           </div>
         </div>
 
-        <AppFooter tier={tier} hidden={isKeyboardDevice() && showTimeZoneResults} />
+        <AppFooter tier={tier} hidden={footerHidden} />
       </div>
     </div>
   )

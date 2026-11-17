@@ -15,7 +15,7 @@ import { isReminderEligible } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
-import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
+import { isKeyboardDevice, scrollLookupFieldToTop, scrollActiveLookupFieldToTop } from '@/lib/lookupField'
 
 /**
  * Request Detail (§9.3) — converted from
@@ -110,7 +110,9 @@ type RequestFormState = {
 const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
 
 const CATEGORY_CAP = 20
-const LOOKUP_BROWSE_THRESHOLD = 12
+// Raised from 12 to 18 — see CreateRequestForm.tsx's own identical constant
+// for the full write-up (2026-11-17, owner-reported).
+const LOOKUP_BROWSE_THRESHOLD = 18
 
 // See CreateRequestForm.tsx's identical constants for the full reasoning
 // (globals.css's ftextarea-plain/.charcount comment; owner request
@@ -791,6 +793,14 @@ export default function RequestDetailForm() {
       ? (categoriesBrowsable ? categories : [])
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
   const showCategoryDropdown = !categoryQueryEmpty || categoriesBrowsable
+
+  // See CreateRequestForm.tsx's identical footerHidden/effect pair for the
+  // full write-up (2026-11-17, owner-reported scroll-position clamp).
+  const footerHidden = isKeyboardDevice() && showCategoryResults && showCategoryDropdown
+
+  useEffect(() => {
+    if (footerHidden) scrollActiveLookupFieldToTop()
+  }, [footerHidden])
 
   function selectCategory(c: Category) {
     setSelectedCategory(c)
@@ -1653,10 +1663,7 @@ export default function RequestDetailForm() {
           </form>
         </div>
 
-        <AppFooter
-          tier={tier}
-          hidden={isKeyboardDevice() && showCategoryResults && showCategoryDropdown}
-        />
+        <AppFooter tier={tier} hidden={footerHidden} />
 
         {addCategoryOpen && (
           <>

@@ -9728,3 +9728,46 @@ link is built only after the stack is proven on Add Contact.
   lookup-dropdown JS to update. **Not yet confirmed on a real phone** —
   awaiting Jim's own retest, including the 14-category case the original
   report was about.
+- **Two same-day follow-ups to the batch above, from Jim's own first retest
+  on a real iPhone (2026-11-17), no migration.** (1) **Browse-on-focus
+  threshold raised 12 → 18.** With 14 Private Categories, focusing the
+  field still showed nothing until a key was pressed — the pre-existing
+  §6.24 "show the whole list on focus if it's short enough" rule
+  (2026-08-07) had always gated on a flat `LOOKUP_BROWSE_THRESHOLD = 12`,
+  independent of this batch's own fix. Jim's own proposed rule: "if the
+  list length is not more than 3 times the length of the allotted
+  scrollable list... the user may prefer to just scroll." `.lookup-results`'
+  own `max-height: 220px` fits ~6 `.lookup-item` rows at a time (its own
+  `9px 12px` padding + 13.5px font), so 3x that is 18 — raised every
+  `LOOKUP_BROWSE_THRESHOLD`/`ADV_LOOKUP_BROWSE_THRESHOLD` duplicate
+  (`CreateRequestForm.tsx`, `CreateTodoForm.tsx`, `RequestDetailForm.tsx`,
+  `TodoDetailForm.tsx`, `MainScreen.tsx`'s Advanced Search modal) from 12
+  to 18 — comfortably covers the 14-category case and nearly the entire
+  range up to the existing 20-category hard cap (`CATEGORY_CAP`). Contact/
+  Time Zone/Recipient-filter lookups were never threshold-gated at all
+  (always browsable on focus regardless of count), so unaffected — this
+  was specifically a Category-list gap. (2) **Real regression in the
+  2026-11-17 batch above, found on the same retest**: "as soon as I typed
+  the first letter of the Category, the Private Category field shifted
+  down on the screen." Root cause: with 14 categories now needing a
+  keystroke to become browsable (before fix #1 above), AppFooter's own
+  `hidden` prop flips true at that exact keystroke (dropdown just
+  appeared) — AppFooter unmounting grows `.scroll`'s own clientHeight,
+  which, if the document was already scrolled near its end, makes the
+  browser clamp `scrollTop` back down so there's nothing left to scroll
+  past; visually that reads as everything shifting toward the bottom of
+  the document, i.e. the just-focused field appearing to drop down the
+  screen at the exact moment the footer disappeared. Fixed with a new
+  `scrollActiveLookupFieldToTop()` (`app/src/lib/lookupField.ts`) — reads
+  `document.activeElement` (reliable here, since a dropdown can only be
+  open while its own field still has focus) and reuses the same
+  `scrollLookupFieldToTop` correction. Each of the 7 files with
+  footer-hiding logic (the four Category screens above, plus
+  `AddContactForm.tsx`/`ContactDetailForm.tsx`'s Time Zone field and
+  `ArchiveForm.tsx`'s Recipient/Requestor filter) now lifts its own
+  `hidden={...}` expression into a named `footerHidden` const and pairs it
+  with `useEffect(() => { if (footerHidden) scrollActiveLookupFieldToTop()
+  }, [footerHidden])`, re-asserting the field's top position the instant
+  the footer actually hides rather than only once, on focus. `npx tsc
+  --noEmit`/`npm run lint` both clean across all 9 touched files. **Not
+  yet confirmed on a real phone** — awaiting Jim's next retest.

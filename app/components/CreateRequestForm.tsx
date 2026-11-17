@@ -14,7 +14,7 @@ import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
-import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
+import { isKeyboardDevice, scrollLookupFieldToTop, scrollActiveLookupFieldToTop } from '@/lib/lookupField'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
@@ -219,8 +219,13 @@ const DIALOG_MAX = 500
 // focus instead, and only fall back to type-to-search once there are enough
 // options that showing all of them stops being useful. Owner's rule, meant
 // to apply to every §6.24 lookup in the app, not just these two — see
-// design/README.md's proposed-components table.
-const LOOKUP_BROWSE_THRESHOLD = 12
+// design/README.md's proposed-components table. Raised from 12 to 18
+// (2026-11-17, owner-reported, a 14-Private-Category account hit the old
+// threshold): "if the list length is not more than 3 times the length of
+// the allotted scrollable list, after focus... the user may prefer to just
+// scroll." .lookup-results's own 220px max-height fits ~6 rows at a time
+// (globals.css's .lookup-item padding/font-size), so 3x that is 18.
+const LOOKUP_BROWSE_THRESHOLD = 18
 
 // Desktop browsers only open a date/time input's native picker when the
 // calendar/clock icon itself is clicked — unlike mobile, where tapping
@@ -1049,6 +1054,24 @@ export default function CreateRequestForm() {
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
 
   const showCategoryDropdown = !categoryQueryEmpty || categoriesBrowsable
+
+  // Whether AppFooter should currently unmount itself to free room for a
+  // dropdown (2026-11-17) — lifted to a variable, not computed inline at
+  // the <AppFooter> call site, so the effect right below can also depend
+  // on it: AppFooter unmounting grows `.scroll`'s own clientHeight, which
+  // can clamp scrollTop back down if the document was already scrolled
+  // near its end — visually shifting the just-focused field *down* the
+  // screen the instant a dropdown first appears (owner-reported, typing
+  // the first character of a Category). Re-running the same scroll
+  // correction right as this flips true undoes that clamp in the same
+  // frame instead of leaving the field to visibly settle somewhere lower.
+  const footerHidden =
+    isKeyboardDevice() &&
+    ((showContactResults && showContactDropdown) || (showCategoryResults && showCategoryDropdown))
+
+  useEffect(() => {
+    if (footerHidden) scrollActiveLookupFieldToTop()
+  }, [footerHidden])
 
   function selectContact(c: Contact) {
     setSelectedContact(c)
@@ -2080,14 +2103,7 @@ export default function CreateRequestForm() {
           </div>
         </div>
 
-        <AppFooter
-          tier={tier}
-          hidden={
-            isKeyboardDevice() &&
-            ((showContactResults && showContactDropdown) ||
-              (showCategoryResults && showCategoryDropdown))
-          }
-        />
+        <AppFooter tier={tier} hidden={footerHidden} />
 
         {addCategoryOpen && (
           <>

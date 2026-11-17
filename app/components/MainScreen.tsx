@@ -519,8 +519,9 @@ type AdvLookupCategory = { id: string; name: string }
 // Same browse-on-focus-when-short threshold as CreateRequestForm.tsx's own
 // LOOKUP_BROWSE_THRESHOLD (2026-08-09/08-10) — duplicated here rather than
 // imported, matching this codebase's established per-file convention for
-// small shared constants.
-const ADV_LOOKUP_BROWSE_THRESHOLD = 12
+// small shared constants. Raised from 12 to 18, see that file's own comment
+// for the full write-up (2026-11-17, owner-reported).
+const ADV_LOOKUP_BROWSE_THRESHOLD = 18
 
 function inDateRange(dateStr: string, from: string, to: string): boolean {
   if (from && dateStr < from) return false
