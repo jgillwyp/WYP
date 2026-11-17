@@ -9652,3 +9652,33 @@ link is built only after the stack is proven on Add Contact.
   second, automatic path onto the same two tables, not a replacement.
   No app code touched — purely a `handle_new_user()` trigger change plus
   a one-time backfill, both in `docs/Week7+ - SQL history.txt`.
+- **Admin "Ad Activity" report showed zero rows despite genuine
+  impressions/clicks as a Free user — root cause unconfirmed, but
+  `log_ad_event()` calls now surface any future failure instead of
+  swallowing it silently (2026-11-17, no migration).** Jim: real
+  impressions/clicks happened while he was signed in as a Free account,
+  yet Admin &rarr; Ad Activity (migration 097) showed none. Reviewed
+  `admin_get_ad_activity()`'s own SQL directly — no bug found there; the
+  report reads exactly what's in `ad_events`. The real gap was upstream:
+  both `log_ad_event()` calls in `AppFooter.tsx` (the impression-tracking
+  effect and `handleAdClick()`) were fire-and-forget with no `.catch()`/
+  error check at all — a Supabase RPC call resolves `{data, error}` rather
+  than rejecting on failure, so a failing call was completely invisible,
+  with nothing in the console to confirm or rule it out. Added
+  `.then(({ error }) => { if (error) console.error(...) })` to both calls.
+  Jim then ran `select * from ad_events order by at desc limit 20;`
+  directly via the SQL editor (bypassing RLS/app-layer ambiguity
+  entirely) and got "Success. No rows returned" — confirming the calls
+  really were never reaching the table, not a report-query problem.
+  **Resolution, not fully root-caused**: after that direct SQL check (and
+  possibly a retry with the new logging in place), Jim confirmed "The ad
+  is creating counts as expected now." Most likely explanation, not
+  independently confirmed: a stale PostgREST schema cache — `log_ad_event()`
+  was created directly via the SQL editor on 2026-11-15, and PostgREST
+  doesn't always pick up a brand-new function immediately unless something
+  triggers a schema reload, which one of Jim's own diagnostic SQL calls
+  may have done as a side effect. The error-logging fix stays in
+  regardless — if this (or a similar silent-RPC-failure class of bug)
+  recurs on any other fire-and-forget `supabase.rpc()` call elsewhere in
+  the app, it's worth applying the same pattern there too. `npx tsc
+  --noEmit`/`npm run lint` both clean.
