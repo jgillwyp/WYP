@@ -8,6 +8,7 @@ import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { printWithExpandedWindow } from '@/lib/platform'
+import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
 
 /**
  * Archive (2026-08-14) — live conversion of
@@ -1564,6 +1565,7 @@ export default function ArchiveForm() {
                         e.target.select()
                         setRecipientBrowsing(true)
                         setShowRecipientResults(true)
+                        scrollLookupFieldToTop(e.currentTarget)
                       }}
                       onBlur={() => setTimeout(() => setShowRecipientResults(false), 120)}
                     />
@@ -1954,7 +1956,12 @@ export default function ArchiveForm() {
           {confirmMessage && <div className="archconfirm">{confirmMessage}</div>}
         </div>
 
-        <AppFooter subscriptionDisabled={false} />
+        <AppFooter
+          subscriptionDisabled={false}
+          hidden={Boolean(
+            isKeyboardDevice() && noun && showRecipientResults && (query !== '' || recipientBrowsing)
+          )}
+        />
 
         {deleteConfirmOpen && (
           <>

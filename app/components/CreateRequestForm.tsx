@@ -14,6 +14,7 @@ import { isReminderEligible, hasAmpleReminderLeadTime } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
+import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
 import {
   takeConversionCarry,
   applyConversionSideEffect,
@@ -1668,6 +1669,7 @@ export default function CreateRequestForm() {
                       e.target.select()
                       setContactBrowsing(true)
                       setShowContactResults(true)
+                      scrollLookupFieldToTop(e.currentTarget)
                     }}
                     onBlur={() => setTimeout(() => setShowContactResults(false), 120)}
                   />
@@ -1835,6 +1837,7 @@ export default function CreateRequestForm() {
                         e.target.select()
                         setCategoryBrowsing(true)
                         setShowCategoryResults(true)
+                        scrollLookupFieldToTop(e.currentTarget)
                       }}
                       onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
                     />
@@ -2077,7 +2080,14 @@ export default function CreateRequestForm() {
           </div>
         </div>
 
-        <AppFooter tier={tier} />
+        <AppFooter
+          tier={tier}
+          hidden={
+            isKeyboardDevice() &&
+            ((showContactResults && showContactDropdown) ||
+              (showCategoryResults && showCategoryDropdown))
+          }
+        />
 
         {addCategoryOpen && (
           <>

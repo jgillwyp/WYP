@@ -7,6 +7,7 @@ import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
+import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
 
 /**
  * Contact Detail (2026-08-09) — converted from
@@ -706,6 +707,7 @@ export default function ContactDetailForm() {
                       e.target.select()
                       setTimeZoneBrowsing(true)
                       setShowTimeZoneResults(true)
+                      scrollLookupFieldToTop(e.currentTarget)
                     }}
                     onBlur={() => setTimeout(() => setShowTimeZoneResults(false), 120)}
                   />
@@ -1020,7 +1022,7 @@ export default function ContactDetailForm() {
           </>
         )}
 
-        <AppFooter tier={tier} />
+        <AppFooter tier={tier} hidden={isKeyboardDevice() && showTimeZoneResults} />
       </div>
     </div>
   )

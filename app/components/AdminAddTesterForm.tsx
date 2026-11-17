@@ -39,6 +39,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { getAllTimeZones } from '@/lib/timeZones'
+import { scrollLookupFieldToTop } from '@/lib/lookupField'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -213,9 +214,10 @@ export default function AdminAddTesterForm() {
                       setTimeZoneBrowsing(false)
                       setShowTimeZoneResults(true)
                     }}
-                    onFocus={() => {
+                    onFocus={(e) => {
                       setTimeZoneBrowsing(true)
                       setShowTimeZoneResults(true)
+                      scrollLookupFieldToTop(e.currentTarget)
                     }}
                     onBlur={() => setTimeout(() => setShowTimeZoneResults(false), 120)}
                   />

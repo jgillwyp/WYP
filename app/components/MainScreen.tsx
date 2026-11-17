@@ -9,6 +9,7 @@ import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
 import { printWithExpandedWindow } from '@/lib/platform'
+import { scrollLookupFieldToTop } from '@/lib/lookupField'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import {
   isIOSDevice,
@@ -3788,6 +3789,7 @@ export default function MainScreen() {
                         e.target.select()
                         setAdvCategoryBrowsing(true)
                         setAdvCategoryResultsOpen(true)
+                        scrollLookupFieldToTop(e.currentTarget)
                       }}
                       onBlur={() => setTimeout(() => setAdvCategoryResultsOpen(false), 120)}
                       aria-label="Advanced search category"
@@ -3956,6 +3958,7 @@ export default function MainScreen() {
                       e.target.select()
                       setAdvContactBrowsing(true)
                       setAdvContactResultsOpen(true)
+                      scrollLookupFieldToTop(e.currentTarget)
                     }}
                     onBlur={() => setTimeout(() => setAdvContactResultsOpen(false), 120)}
                     aria-label="Advanced search contact name"

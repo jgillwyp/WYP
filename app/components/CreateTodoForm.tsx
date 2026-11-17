@@ -25,6 +25,7 @@ import { buildCalendarEventFields, buildIcsContent, type IcsAlarmOffset } from '
 import { type RepeatRule } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { printWithExpandedWindow } from '@/lib/platform'
+import { isKeyboardDevice, scrollLookupFieldToTop } from '@/lib/lookupField'
 import NativeCalendar from '@/lib/nativeCalendar'
 import {
   takeConversionCarry,
@@ -1673,6 +1674,7 @@ export default function CreateTodoForm() {
                         e.target.select()
                         setCategoryBrowsing(true)
                         setShowCategoryResults(true)
+                        scrollLookupFieldToTop(e.currentTarget)
                       }}
                       onBlur={() => setTimeout(() => setShowCategoryResults(false), 120)}
                     />
@@ -1868,7 +1870,10 @@ export default function CreateTodoForm() {
           </form>
         </div>
 
-        <AppFooter tier={tier} />
+        <AppFooter
+          tier={tier}
+          hidden={isKeyboardDevice() && showCategoryResults && showCategoryDropdown}
+        />
 
         {addCategoryOpen && (
           <>

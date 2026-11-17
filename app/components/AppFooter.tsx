@@ -12,6 +12,7 @@ type Tier = 'free' | 'subscriber'
 export default function AppFooter({
   tier: providedTier,
   subscriptionDisabled = false,
+  hidden = false,
 }: {
   // `null` (2026-11-10) is distinct from omitting the prop entirely: it
   // means "a caller that fetches its own tier, but hasn't resolved it yet"
@@ -27,6 +28,14 @@ export default function AppFooter({
   // null while its own fetch is still in flight.
   tier?: Tier | null
   subscriptionDisabled?: boolean
+  // 2026-11-17, owner-reported — a lookup/type-ahead dropdown (Contact,
+  // Category, Time Zone) left almost no room to show its own results once
+  // a phone's on-screen keyboard appeared, since this footer (ad/buttons/
+  // copyright) kept its own space in the flex column regardless. A caller
+  // sets this true while its own dropdown is actually open, unmounting the
+  // footer entirely (not just visually hiding it) so `.scroll` gets that
+  // space back; false restores it once the dropdown closes.
+  hidden?: boolean
 }) {
   const router = useRouter()
   const [loadedTier, setLoadedTier] = useState<Tier | null>(providedTier ?? null)
@@ -69,14 +78,21 @@ export default function AppFooter({
   // Free user, zero rows in Admin > Ad Activity — this call had no error
   // handling at all before, so a failure here would have been completely
   // silent, with nothing to confirm or rule it out).
+  // `hidden` gates this too (2026-11-17) — a caller can set it true before
+  // the ad has ever actually been on screen (e.g. a dropdown already open
+  // at mount), and this must count an impression only once it's genuinely
+  // visible, not the instant `tier` resolves to 'free' regardless of
+  // whether anything rendered.
   const loggedImpressionRef = useRef(false)
   useEffect(() => {
-    if (tier !== 'free' || loggedImpressionRef.current) return
+    if (tier !== 'free' || hidden || loggedImpressionRef.current) return
     loggedImpressionRef.current = true
     supabase.rpc('log_ad_event', { p_kind: 'impression' }).then(({ error }) => {
       if (error) console.error('log_ad_event(impression) failed:', error)
     })
-  }, [tier])
+  }, [tier, hidden])
+
+  if (hidden) return null
 
   function handleAdClick() {
     supabase.rpc('log_ad_event', { p_kind: 'click' }).then(({ error }) => {

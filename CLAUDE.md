@@ -9682,3 +9682,49 @@ link is built only after the stack is proven on Add Contact.
   recurs on any other fire-and-forget `supabase.rpc()` call elsewhere in
   the app, it's worth applying the same pattern there too. `npx tsc
   --noEmit`/`npm run lint` both clean.
+- **Lookup/type-ahead dropdowns (Contact, Private Category, Time Zone) left
+  almost no room on a phone once the keyboard was up — fixed app-wide,
+  everywhere a dropdown appears (2026-11-17, new `app/src/lib/
+  lookupField.ts`, no migration).** Jim, on Create Request/Create ToDo: the
+  keyboard plus AppFooter (ad/buttons/copyright) still occupying its own
+  space meant only a couple of lines were left to show the dropdown below
+  whichever field happened to be focused — worse if a data row was already
+  visible above the field too. A tester with 14 Private Categories reported
+  being unable to reach the end of that list at all except by carefully
+  scrolling the whole page by hand while the keyboard was up. Confirmed via
+  `AskUserQuestion` this applies everywhere a lookup field exists, not just
+  the two screens tested — approved fixing it app-wide in one pass. Two
+  pieces, both gated on a new `isKeyboardDevice()` (touch/mobile UA check,
+  same "never a security decision, worst case shows the wrong behavior"
+  posture as `platform.ts`'s own detectors — deliberately a self-contained
+  copy here rather than importing `platform.ts`, to avoid pulling its
+  Capacitor/NativePrint import chain into every file that has a lookup
+  field): (1) `scrollLookupFieldToTop()` — on focus, scrolls the whole
+  labeled field (its `.fgroup` wrapper, not just the bare `<input>`) to the
+  top of its nearest scrollable ancestor via the browser's own
+  `scrollIntoView({ block: 'start' })`, so whatever's below it (the
+  dropdown) gets the most room the remaining visible area can offer —
+  delayed 300ms, same reasoning as the existing Description-field
+  `handleFieldFocusScroll` precedent (2026-09-16), so it corrects after the
+  native keyboard-open auto-scroll settles rather than racing it. (2) a new
+  `hidden` prop on `AppFooter.tsx` — when true, the footer unmounts
+  entirely (not just visually hides), freeing its own space back to
+  `.scroll`'s flex-basis; each caller passes `isKeyboardDevice() &&
+  <its own dropdown-is-open boolean>`. The impression-tracking effect
+  (2026-11-15/17) now also gates on `hidden`, so an ad that's hidden the
+  instant it would have mounted is never counted as a false impression.
+  Wired into both parts of the behavior on every lookup field in the app:
+  Contact + Private Category on Create Request; Private Category on Create
+  ToDo, Request Detail, ToDo Detail; Time Zone on Add Contact, Contact
+  Detail, Create Free Account (no `AppFooter` on this screen, so
+  scroll-to-top only), Admin → Add Private Tester (same, no footer); the
+  Recipient/Requestor filter on Archive; and Contact Name/Category inside
+  Main Screen's own Advanced Search Filters modal (scroll-to-top only —
+  that dropdown already scrolls within the modal's own `overflow-y: auto`,
+  and the modal already sits above `AppFooter` in the stacking order, so
+  hiding the footer underneath it would have had no visible effect either
+  way). `npx tsc --noEmit`/`npm run lint` both clean across all 10 touched
+  files. No mockup — none of this app's static-HTML mockups has interactive
+  lookup-dropdown JS to update. **Not yet confirmed on a real phone** —
+  awaiting Jim's own retest, including the 14-category case the original
+  report was about.

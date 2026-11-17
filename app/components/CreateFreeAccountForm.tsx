@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
+import { scrollLookupFieldToTop } from '@/lib/lookupField'
 
 /**
  * Create Free Account (first run) — converted by hand from
@@ -369,6 +370,7 @@ export default function CreateFreeAccountForm() {
                   e.target.select()
                   setTimeZoneBrowsing(true)
                   setShowTimeZoneResults(true)
+                  scrollLookupFieldToTop(e.currentTarget)
                 }}
                 onBlur={() => setTimeout(() => setShowTimeZoneResults(false), 120)}
               />
