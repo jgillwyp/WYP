@@ -3930,6 +3930,27 @@ body {
   letter-spacing: .02em;
 }
 
+/* Private Categories' own "Inactive" row tag (2026-11-18, categories.
+   is_active, migration 101) — same small-badge shape as .archtag/.opentag
+   above, own class since this means something different again (a Category
+   retired from the Create/Detail screens' own pulldown, not an archived
+   item or an in-progress upload). Sits before the Category's own name on
+   its one .hktext line. */
+.cattag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--strip);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+
 /* ============================================================================
    DETAIL SCREENS (§6.28/§6.27 variants) — ported from
    design/screens/WYP_request_detail_palette1.html for RequestDetailForm.tsx
@@ -5023,10 +5044,15 @@ body {
 
 /* Private Categories print report (2026-09-28) — same .pcon- namespacing
    convention as Contacts' own print report just above, one column set
-   simpler (no email/phone/time zone, just name + the two usage counts). */
+   simpler (no email/phone/time zone, just name + the two usage counts).
+   Gained a Status column (2026-11-18, categories.is_active, migration
+   101) — blank for an ordinary active Category, "Inactive" otherwise,
+   same blank-when-not-applicable convention this app already uses for a
+   zero/empty value elsewhere rather than spelling out "Active" on every
+   row. */
 .pcat-colbar {
   display: grid;
-  grid-template-columns: 1fr 90px 90px;
+  grid-template-columns: 1fr 70px 90px 90px;
   column-gap: 10px;
   background: var(--strip);
   border: 1px solid var(--rule);
@@ -5037,6 +5063,7 @@ body {
   color: var(--ink);
 }
 
+.pcat-colbar .pcat-c-status,
 .pcat-colbar .pcat-c-count {
   text-align: center;
 }
@@ -5047,7 +5074,7 @@ body {
 
 .pcat-row {
   display: grid;
-  grid-template-columns: 1fr 90px 90px;
+  grid-template-columns: 1fr 70px 90px 90px;
   column-gap: 10px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--rule);
@@ -5065,6 +5092,13 @@ body {
   font-size: 10pt;
   font-weight: 700;
   color: var(--ink);
+}
+
+.pcat-status {
+  font-size: 10pt;
+  font-style: italic;
+  color: var(--ink);
+  text-align: center;
 }
 
 .pcat-count {

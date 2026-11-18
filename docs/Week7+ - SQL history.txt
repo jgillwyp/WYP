@@ -2166,3 +2166,42 @@ on conflict (email) do nothing;
 --   -- Tester box (the "Subscribed? (testing only)" toggle) immediately,
 --   -- with no Admin step.
 -- ============================================================================
+
+
+-- ============================================================================
+-- WYP migration 101 -- categories.is_active (Inactive categories), drops the
+-- app-layer 20-category cap
+-- Run 2026-11-18 in the Supabase SQL editor.
+--
+-- Jim's own design, with a pasted Edit Category dialog mockup, after
+-- re-hitting the lookup-field keystroke-before-list-shows wall at the
+-- 20-category cap the same day it was raised to 18 (CLAUDE.md's own
+-- 2026-11-17/11-18 entries): rather than raise the cap again, a per-
+-- Category "Inactive" checkbox lets an account holder retire a Category
+-- from the Create/Detail screens' own browse-on-focus pulldown without
+-- deleting it, or anything it's already assigned to. His own stated use
+-- case: a small construction business using street addresses as
+-- Categories, where finished/inactive projects would otherwise make the
+-- pulldown grow unbounded over time. His own dialog text, used verbatim
+-- in the app: "If Inactive is checked, this Category will not display for
+-- selection in a Request or a ToDo pull-down list of Categories - unless
+-- it matches what is typed for a search." CATEGORY_CAP (app-layer only,
+-- never a DB constraint) is removed from every screen that had one in the
+-- same batch -- Inactive is the real fix for unbounded growth now; a
+-- fixed ceiling on top of it has nothing left to protect against.
+--
+-- `categories` already carries full owner-scoped RLS (select/insert/
+-- update/delete, migration 003) and predates the 2026-10-30 Data-API
+-- auto-grant cutoff (grandfathered -- see CLAUDE.md's Database section),
+-- so a plain ALTER TABLE ADD COLUMN needs no new grant -- the existing
+-- table-level grants already cover the new column.
+-- ============================================================================
+
+alter table public.categories
+  add column if not exists is_active boolean not null default true;
+
+-- Verify after running:
+--   select is_active, count(*) from public.categories group by is_active;
+--     -- every existing row should read is_active = true (the default) --
+--     -- nothing was already marked Inactive before this column existed.
+-- ============================================================================

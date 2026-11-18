@@ -88,6 +88,7 @@ import {
 type Category = {
   id: string
   name: string
+  is_active: boolean
 }
 
 type TodoFormState = {
@@ -140,7 +141,6 @@ const initialState: TodoFormState = {
   reminderMinutesBeforeValue: MINUTES_BEFORE_DEFAULT,
 }
 
-const CATEGORY_CAP = 20
 // The lookup-field browse-on-focus length gate was removed entirely
 // 2026-11-18 — see CreateRequestForm.tsx's own identical comment for the
 // full write-up. A focused Category field with an empty query now always
@@ -372,7 +372,7 @@ export default function CreateTodoForm() {
   useEffect(() => {
     supabase
       .from('categories')
-      .select('id, name')
+      .select('id, name, is_active')
       .order('name')
       .then(({ data }) => {
         const list = data ?? []
@@ -728,12 +728,14 @@ export default function CreateTodoForm() {
   // ported here: clicking a field with an exact match re-filtered to that
   // one match instead of showing the whole list. categoryBrowsing (same
   // pattern as Time Zone's browse-on-focus fix) shows the full list from
-  // focus until the first keystroke. An empty query always shows the full
-  // list too now (2026-11-18, no length gate — see the constant comment
-  // above).
+  // focus until the first keystroke. An empty query also shows the full
+  // list now (2026-11-18, no length gate), but only its active entries
+  // (categories.is_active, migration 101) — an Inactive category only
+  // surfaces through a typed search, matching the Edit Category dialog's
+  // own wording.
   const filteredCategories =
     categoryBrowsing || categoryQueryEmpty
-      ? categories
+      ? categories.filter((c) => c.is_active)
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
 
   // See CreateRequestForm.tsx's identical footerHidden/effect pair for the
@@ -762,10 +764,6 @@ export default function CreateTodoForm() {
       setCategoryError('Enter a category name.')
       return
     }
-    if (categories.length >= CATEGORY_CAP) {
-      setCategoryError(`You've reached the ${CATEGORY_CAP}-category limit.`)
-      return
-    }
 
     setCategorySaving(true)
     const { data: userData, error: userError } = await getCurrentUser()
@@ -778,7 +776,7 @@ export default function CreateTodoForm() {
     const { data, error: insertError } = await supabase
       .from('categories')
       .insert({ owner_id: userData.user.id, name })
-      .select('id, name')
+      .select('id, name, is_active')
       .single()
 
     setCategorySaving(false)

@@ -70,6 +70,7 @@ type Kind = 'question' | 'answer' | 'comment'
 type Category = {
   id: string
   name: string
+  is_active: boolean
 }
 
 type DialogEntry = {
@@ -109,7 +110,6 @@ type RequestFormState = {
 // See CreateRequestForm.tsx's identical constant/comment.
 const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
 
-const CATEGORY_CAP = 20
 // The lookup-field browse-on-focus length gate was removed entirely
 // 2026-11-18 — see CreateRequestForm.tsx's own identical comment for the
 // full write-up. A focused Category field with an empty query now always
@@ -557,10 +557,10 @@ export default function RequestDetailForm() {
       const [reqRes, catRes, ownerRes, attRes] = await Promise.all([
         supabase
           .from('requests')
-          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, reminder_minutes_before_enabled, reminder_minutes_before_value, reminder_minutes_before_sent_at, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, receipt_confirmation_requested, receipt_confirmed_at, contacts(display_name), categories(name)')
+          .select('id, description, created_at, due_date, due_time, done_date, done_time, category_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, reminder_minutes_before_enabled, reminder_minutes_before_value, reminder_minutes_before_sent_at, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, receipt_confirmation_requested, receipt_confirmed_at, contacts(display_name), categories(name, is_active)')
           .eq('id', requestId)
           .single(),
-        supabase.from('categories').select('id, name').order('name'),
+        supabase.from('categories').select('id, name, is_active').order('name'),
         supabase
           .from('profiles')
           .select(
@@ -622,7 +622,7 @@ export default function RequestDetailForm() {
         receipt_confirmation_requested: boolean
         receipt_confirmed_at: string | null
         contacts: { display_name: string } | null
-        categories: { name: string } | null
+        categories: { name: string; is_active: boolean } | null
       }
       const row = reqRes.data as unknown as Row
 
@@ -665,7 +665,11 @@ export default function RequestDetailForm() {
         repeatRule: row.repeat_rule,
       }
       if (row.category_id && row.categories) {
-        setSelectedCategory({ id: row.category_id, name: row.categories.name })
+        setSelectedCategory({
+          id: row.category_id,
+          name: row.categories.name,
+          is_active: row.categories.is_active,
+        })
       }
       setCategories(catRes.data ?? [])
       setOwnerName(ownerRes.data?.display_name ?? null)
@@ -786,12 +790,14 @@ export default function RequestDetailForm() {
   // ported here: clicking a field with an exact match re-filtered to that
   // one match instead of showing the whole list. categoryBrowsing (same
   // pattern as Time Zone's browse-on-focus fix) shows the full list from
-  // focus until the first keystroke. An empty query always shows the full
-  // list too now (2026-11-18, no length gate — see the constant comment
-  // above).
+  // focus until the first keystroke. An empty query also shows the full
+  // list now (2026-11-18, no length gate), but only its active entries
+  // (categories.is_active, migration 101) — an Inactive category only
+  // surfaces through a typed search, matching the Edit Category dialog's
+  // own wording.
   const filteredCategories =
     categoryBrowsing || categoryQueryEmpty
-      ? categories
+      ? categories.filter((c) => c.is_active)
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
 
   // See CreateRequestForm.tsx's identical footerHidden/effect pair for the
@@ -820,10 +826,6 @@ export default function RequestDetailForm() {
       setCategoryError('Enter a category name.')
       return
     }
-    if (categories.length >= CATEGORY_CAP) {
-      setCategoryError(`You've reached the ${CATEGORY_CAP}-category limit.`)
-      return
-    }
 
     setCategorySaving(true)
     const { data: userData, error: userError } = await getCurrentUser()
@@ -836,7 +838,7 @@ export default function RequestDetailForm() {
     const { data, error: insertError } = await supabase
       .from('categories')
       .insert({ owner_id: userData.user.id, name })
-      .select('id, name')
+      .select('id, name, is_active')
       .single()
 
     setCategorySaving(false)

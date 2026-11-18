@@ -55,6 +55,7 @@ type Kind = 'question' | 'answer' | 'comment'
 type Category = {
   id: string
   name: string
+  is_active: boolean
 }
 
 type DialogEntry = {
@@ -86,7 +87,6 @@ type TodoFormState = {
 // See CreateRequestForm.tsx's identical constant/comment.
 const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
 
-const CATEGORY_CAP = 20
 // The lookup-field browse-on-focus length gate was removed entirely
 // 2026-11-18 — see CreateRequestForm.tsx's own identical comment for the
 // full write-up. A focused Category field with an empty query now always
@@ -708,11 +708,11 @@ export default function TodoDetailForm() {
         supabase
           .from('requests')
           .select(
-            'id, description, priority, due_date, due_time, done_date, done_time, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, reminder_minutes_before_enabled, reminder_minutes_before_value, reminder_minutes_before_sent_at, categories(name)'
+            'id, description, priority, due_date, due_time, done_date, done_time, created_at, category_id, archived_at, repeat_rule, repeat_occurrence_index, repeat_series_id, reminder_enabled, overdue_reminder_enabled, reminder_sent_at, reminder_day_of_enabled, reminder_day_of_sent_at, reminder_minutes_before_enabled, reminder_minutes_before_value, reminder_minutes_before_sent_at, categories(name, is_active)'
           )
           .eq('id', todoId)
           .single(),
-        supabase.from('categories').select('id, name').order('name'),
+        supabase.from('categories').select('id, name, is_active').order('name'),
         supabase
           .from('profiles')
           .select('display_name, todo_category_enabled, todo_dates_enabled, todo_time_enabled, todo_repeat_enabled, todo_reminders_enabled, tier')
@@ -767,7 +767,7 @@ export default function TodoDetailForm() {
         reminder_minutes_before_enabled: boolean
         reminder_minutes_before_value: number | null
         reminder_minutes_before_sent_at: string | null
-        categories: { name: string } | null
+        categories: { name: string; is_active: boolean } | null
       }
       const row = todoRes.data as unknown as Row
 
@@ -787,7 +787,11 @@ export default function TodoDetailForm() {
       })
       setCreatedAt(row.created_at)
       if (row.category_id && row.categories) {
-        setSelectedCategory({ id: row.category_id, name: row.categories.name })
+        setSelectedCategory({
+          id: row.category_id,
+          name: row.categories.name,
+          is_active: row.categories.is_active,
+        })
       }
       setCategories(catRes.data ?? [])
       setOwnerName(ownerRes.data?.display_name ?? null)
@@ -932,12 +936,14 @@ export default function TodoDetailForm() {
   // ported here: clicking a field with an exact match re-filtered to that
   // one match instead of showing the whole list. categoryBrowsing (same
   // pattern as Time Zone's browse-on-focus fix) shows the full list from
-  // focus until the first keystroke. An empty query always shows the full
-  // list too now (2026-11-18, no length gate — see the constant comment
-  // above).
+  // focus until the first keystroke. An empty query also shows the full
+  // list now (2026-11-18, no length gate), but only its active entries
+  // (categories.is_active, migration 101) — an Inactive category only
+  // surfaces through a typed search, matching the Edit Category dialog's
+  // own wording.
   const filteredCategories =
     categoryBrowsing || categoryQueryEmpty
-      ? categories
+      ? categories.filter((c) => c.is_active)
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
 
   // See CreateRequestForm.tsx's identical footerHidden/effect pair for the
@@ -966,10 +972,6 @@ export default function TodoDetailForm() {
       setCategoryError('Enter a category name.')
       return
     }
-    if (categories.length >= CATEGORY_CAP) {
-      setCategoryError(`You've reached the ${CATEGORY_CAP}-category limit.`)
-      return
-    }
 
     setCategorySaving(true)
     const { data: userData, error: userError } = await getCurrentUser()
@@ -982,7 +984,7 @@ export default function TodoDetailForm() {
     const { data, error: insertError } = await supabase
       .from('categories')
       .insert({ owner_id: userData.user.id, name })
-      .select('id, name')
+      .select('id, name, is_active')
       .single()
 
     setCategorySaving(false)

@@ -36,12 +36,21 @@ import { printWithExpandedWindow } from '@/lib/platform'
  * (select/insert/update/delete, migration 003), so rename and delete are
  * both plain client calls, same posture as Create Request's own existing
  * Add Category insert.
+ *
+ * Inactive status + 20-category cap removed (2026-11-18, migration 101,
+ * categories.is_active) — owner, after re-hitting the lookup-field
+ * keystroke-before-list-shows wall at the cap, with his own mockup of this
+ * Edit Category dialog: a real construction-business use case (street
+ * addresses as Categories) needs retiring a finished Category from the
+ * Create/Detail screens' own pulldown without deleting it or anything
+ * already assigned to it. The 20-category cap (app-layer only) is removed
+ * entirely across every Add Category modal in the app — Inactive is the
+ * real fix for unbounded growth now, so the fixed ceiling has nothing left
+ * to protect against.
  */
 
-type Category = { id: string; name: string }
+type Category = { id: string; name: string; is_active: boolean }
 type CategoryCounts = { todos: number; requests: number }
-
-const CATEGORY_CAP = 20
 
 export default function PrivateCategoriesList() {
   const router = useRouter()
@@ -59,6 +68,7 @@ export default function PrivateCategoriesList() {
 
   const [editing, setEditing] = useState<Category | null>(null)
   const [editName, setEditName] = useState('')
+  const [editInactive, setEditInactive] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -83,7 +93,10 @@ export default function PrivateCategoriesList() {
         if (delaysMs[i] > 0) await new Promise((r) => setTimeout(r, delaysMs[i]))
         if (cancelled) return
 
-        const { data, error } = await supabase.from('categories').select('id, name').order('name')
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, name, is_active')
+          .order('name')
         if (cancelled) return
 
         if (!error) {
@@ -140,10 +153,6 @@ export default function PrivateCategoriesList() {
       setAddError('Enter a category name.')
       return
     }
-    if (categories.length >= CATEGORY_CAP) {
-      setAddError(`You've reached the ${CATEGORY_CAP}-category limit.`)
-      return
-    }
 
     setAddSaving(true)
     const { data: userData, error: userError } = await getCurrentUser()
@@ -156,7 +165,7 @@ export default function PrivateCategoriesList() {
     const { data, error: insertError } = await supabase
       .from('categories')
       .insert({ owner_id: userData.user.id, name })
-      .select('id, name')
+      .select('id, name, is_active')
       .single()
 
     setAddSaving(false)
@@ -173,6 +182,7 @@ export default function PrivateCategoriesList() {
   function openEdit(category: Category) {
     setEditing(category)
     setEditName(category.name)
+    setEditInactive(!category.is_active)
     setEditError(null)
   }
 
@@ -188,13 +198,17 @@ export default function PrivateCategoriesList() {
       setEditError('Enter a category name.')
       return
     }
-    if (name === editing.name) {
+    const nextIsActive = !editInactive
+    if (name === editing.name && nextIsActive === editing.is_active) {
       setEditing(null)
       return
     }
 
     setEditSaving(true)
-    const { error: updateError } = await supabase.from('categories').update({ name }).eq('id', editing.id)
+    const { error: updateError } = await supabase
+      .from('categories')
+      .update({ name, is_active: nextIsActive })
+      .eq('id', editing.id)
     setEditSaving(false)
 
     if (updateError) {
@@ -203,7 +217,9 @@ export default function PrivateCategoriesList() {
     }
 
     setCategories((list) =>
-      list.map((c) => (c.id === editing.id ? { ...c, name } : c)).sort((a, b) => a.name.localeCompare(b.name))
+      list
+        .map((c) => (c.id === editing.id ? { ...c, name, is_active: nextIsActive } : c))
+        .sort((a, b) => a.name.localeCompare(b.name))
     )
     setEditing(null)
   }
@@ -299,6 +315,7 @@ export default function PrivateCategoriesList() {
                   onKeyDown={(e) => { if (e.key === 'Enter') openEdit(c) }}
                 >
                   <span className="hktext">
+                    {!c.is_active && <span className="cattag">Inactive</span>}
                     <span className="hktitle">{c.name}</span>
                   </span>
                 </div>
@@ -372,6 +389,23 @@ export default function PrivateCategoriesList() {
                 </label>
               </div>
 
+              <label className="checkrow" style={{ marginTop: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={editInactive}
+                  disabled={editSaving || deleting}
+                  onChange={(e) => setEditInactive(e.target.checked)}
+                />
+                <span className="checktext">
+                  Inactive
+                  <span className="checknote">
+                    If Inactive is checked, this Category will not display for selection in a
+                    Request or a ToDo pull-down list of Categories — unless it matches what is
+                    typed for a search.
+                  </span>
+                </span>
+              </label>
+
               <div className="actsummary" role="group" aria-label="Category usage">
                 <span className="actsummary-label">In use:</span>
                 <span className="actsummary-stats">
@@ -402,6 +436,7 @@ export default function PrivateCategoriesList() {
           <div className="ptitle">Private Categories</div>
           <div className="pcat-colbar">
             <span>Category Name</span>
+            <span className="pcat-c-status">Status</span>
             <span className="pcat-c-count">ToDos</span>
             <span className="pcat-c-count">Requests</span>
           </div>
@@ -412,6 +447,7 @@ export default function PrivateCategoriesList() {
               return (
                 <div key={c.id} className="pcat-row">
                   <span className="pcat-name">{c.name}</span>
+                  <span className="pcat-status">{c.is_active ? '' : 'Inactive'}</span>
                   <span className="pcat-count">{cnt.todos}</span>
                   <span className="pcat-count">{cnt.requests}</span>
                 </div>

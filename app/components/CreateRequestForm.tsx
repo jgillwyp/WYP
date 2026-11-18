@@ -125,6 +125,7 @@ type Contact = {
 type Category = {
   id: string
   name: string
+  is_active: boolean
 }
 
 // Add Contact round trip (2026-10-20, owner-reported data loss) — restores
@@ -202,7 +203,6 @@ const initialState: RequestFormState = {
   reminderMinutesBeforeValue: MINUTES_BEFORE_DEFAULT,
 }
 
-const CATEGORY_CAP = 20
 
 // Character caps for the two free-text boxes on this screen — kept as named
 // constants (2026-08-16) so the maxLength attribute and the .charcount
@@ -640,7 +640,7 @@ export default function CreateRequestForm() {
 
     supabase
       .from('categories')
-      .select('id, name')
+      .select('id, name, is_active')
       .order('name')
       .then(({ data }) => {
         const list = data ?? []
@@ -1037,10 +1037,15 @@ export default function CreateRequestForm() {
 
   const categoryQueryEmpty = form.categoryName.trim() === ''
 
-  // Same fix as Recipient above.
+  // Same fix as Recipient above, plus Inactive filtering (categories.
+  // is_active, migration 101, 2026-11-18): browsing the empty-query list
+  // only ever shows active categories, matching the Edit Category dialog's
+  // own wording ("will not display for selection... unless it matches
+  // what is typed for a search") — a typed query still searches every
+  // category, active or not.
   const filteredCategories =
     categoryBrowsing || categoryQueryEmpty
-      ? categories
+      ? categories.filter((c) => c.is_active)
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
 
   // Whether AppFooter should currently unmount itself to free room for a
@@ -1084,10 +1089,6 @@ export default function CreateRequestForm() {
       setCategoryError('Enter a category name.')
       return
     }
-    if (categories.length >= CATEGORY_CAP) {
-      setCategoryError(`You've reached the ${CATEGORY_CAP}-category limit.`)
-      return
-    }
 
     setCategorySaving(true)
     const { data: userData, error: userError } = await getCurrentUser()
@@ -1100,7 +1101,7 @@ export default function CreateRequestForm() {
     const { data, error: insertError } = await supabase
       .from('categories')
       .insert({ owner_id: userData.user.id, name })
-      .select('id, name')
+      .select('id, name, is_active')
       .single()
 
     setCategorySaving(false)

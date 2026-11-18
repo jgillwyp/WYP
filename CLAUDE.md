@@ -9804,3 +9804,66 @@ link is built only after the stack is proven on Add Contact.
   lint` both clean across all 5 touched files. **Not yet confirmed on a
   real phone** — awaiting Jim's next retest, including the 20-category
   case this message was about.
+- **Private Categories gain an Inactive status; the 20-category cap
+  removed entirely — migration 101, DRAFTED, NOT YET CONFIRMED RUN
+  (2026-11-18).** Same conversation as the threshold-removal entry just
+  above: Jim added the maximum 20 categories to test the new unlimited
+  browse behavior and, with his own pasted Edit Category mockup, flagged
+  a real downstream problem — a construction-business use case where
+  active projects are named by street address, which would otherwise make
+  the Category pulldown grow unbounded over time unless finished ones can
+  be retired from it. Agreed this is a better fix than any cap (asked for
+  a recommendation first, per this app's own exploratory-question
+  convention, then built it once he said "Yes"). **Migration 101** adds
+  `categories.is_active boolean not null default true` — `categories`
+  already carries full owner-scoped RLS (migration 003) and predates the
+  2026-10-30 Data-API auto-grant cutoff (grandfathered), so the plain
+  `alter table add column` needed no new grant. `CATEGORY_CAP` (always
+  app-layer only, never a DB constraint) is removed outright from every
+  Add Category modal that had one — `CreateRequestForm.tsx`,
+  `CreateTodoForm.tsx`, `RequestDetailForm.tsx`, `TodoDetailForm.tsx`,
+  `PrivateCategoriesList.tsx` — Inactive is the real fix for unbounded
+  growth now, so a fixed ceiling on top of it has nothing left to
+  protect against.
+  **Browse-list filtering**: in all four Create/Detail screens' own
+  Category lookup, the empty-query/browse-on-focus list (already changed
+  to show-everything-unconditionally earlier the same day) now filters to
+  `is_active` only; a typed query still searches every category, active
+  or not — matching Jim's own dialog text verbatim: "If Inactive is
+  checked, this Category will not display for selection in a Request or a
+  ToDo pull-down list of Categories — unless it matches what is typed for
+  a search." **Deliberately not applied to Main Screen's Advanced Search**
+  modal's own Category picker — flagged as a considered, not
+  uncontroversial, call: that field is a search criterion, not something
+  being newly assigned, and an Inactive category is exactly the kind of
+  thing someone is most likely searching to find again, so hiding it from
+  browse there would work against the feature's own purpose.
+  **`PrivateCategoriesList.tsx`** (the management screen) gained the real
+  Edit Category UI from Jim's own mockup: a `.checkrow` "Inactive"
+  checkbox with his exact explanatory `.checknote` text, placed between
+  Category Name and the existing "In use: N ToDos N Requests"/Delete
+  Category block — `handleEditSave`'s own no-op short-circuit (previously
+  "name unchanged, nothing to do") now also checks whether the Inactive
+  state changed, and saves `{ name, is_active }` together in one update
+  when either did. Each row in the on-screen list now shows a small
+  "INACTIVE" badge (new `.cattag` class, same shape as the existing
+  `.archtag`/`.opentag` badges, own class since this means something
+  different again) before an inactive category's name; the print report
+  gained a matching Status column (blank for active, "Inactive"
+  otherwise — new `.pcat-status`/`.pcat-c-status` CSS, `.pcat-colbar`/
+  `.pcat-row`'s grid widened from 3 to 4 columns). The Add Category modal
+  (in every file that has one) is unchanged — a brand-new category is
+  always created active, matching Jim's own mockup, which only draws the
+  checkbox on Edit.
+  **A real type gap found and fixed along the way**: `RequestDetailForm.tsx`'s
+  and `TodoDetailForm.tsx`'s own existing-item load effects construct
+  `selectedCategory` from an embedded `categories(name)` join on the
+  `requests`/`id` select, not from the separately-fetched `categories`
+  list — both joins widened to `categories(name, is_active)` (and their
+  local `Row` type's `categories` field to match) so a Request/ToDo
+  already assigned an Inactive category reads that correctly rather than
+  defaulting the value. No mockup updated beyond Jim's own pasted Edit
+  Category image. `npx tsc --noEmit`/`npm run lint` both clean across all
+  7 touched files (5 `.tsx`, `globals.css`, the SQL history file). **Not
+  yet confirmed on a real device** — awaiting Jim's own retest, and
+  awaiting migration 101 being run.

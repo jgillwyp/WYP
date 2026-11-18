@@ -514,7 +514,7 @@ const ADVANCED_SEARCH_DEFAULT: AdvancedSearchFilter = {
 // first dialog open (see openAdvancedSearch below) rather than on every
 // Main Screen mount, since most visits never open this dialog at all.
 type AdvLookupContact = { id: string; display_name: string }
-type AdvLookupCategory = { id: string; name: string }
+type AdvLookupCategory = { id: string; name: string; is_active: boolean }
 
 // The lookup-field browse-on-focus length gate (previously
 // ADV_LOOKUP_BROWSE_THRESHOLD, mirroring CreateRequestForm.tsx's own) was
@@ -1503,7 +1503,7 @@ export default function MainScreen() {
     if (advCategories === null) {
       supabase
         .from('categories')
-        .select('id, name')
+        .select('id, name, is_active')
         .order('name')
         .then(({ data }) => setAdvCategories(data ?? []))
     }
@@ -2356,7 +2356,12 @@ export default function MainScreen() {
   // narrows by substring. The *committed* match (matchesAdvancedText's
   // callers) stays a plain substring against advDraft.contactName/category
   // either way — picking a row here is a UI convenience, not a switch to
-  // exact-id matching.
+  // exact-id matching. Deliberately NOT filtered by categories.is_active
+  // (migration 101, 2026-11-18) the way the Create/Detail screens' own
+  // Category picker is — this field is a search criterion, not something
+  // being newly assigned, and an Inactive category (the exact thing
+  // someone's most likely searching to find again) would otherwise be
+  // hidden from browse here too.
   const advContactQueryEmpty = advDraft.contactName.trim() === ''
   const filteredAdvContacts =
     advContactBrowsing || advContactQueryEmpty
