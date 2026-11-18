@@ -9771,3 +9771,36 @@ link is built only after the stack is proven on Add Contact.
   the footer actually hides rather than only once, on focus. `npx tsc
   --noEmit`/`npm run lint` both clean across all 9 touched files. **Not
   yet confirmed on a real phone** — awaiting Jim's next retest.
+- **Browse-on-focus length gate removed entirely for Category/Contact
+  lookups — superseded the 2026-11-17 threshold raise outright, same day
+  (2026-11-18), no migration.** Jim added the maximum 20 Private
+  Categories and still hit the keystroke-before-list-shows wall, even at
+  the raised threshold of 18: "Maybe the simpler solution is to always
+  show the first x entries of the pulldown list (whatever the pulldown
+  displays). We are only dealing with categories and contacts. Even for
+  contacts, if someone were to have 100+ (which is unlikely), they could
+  scroll it if desired - without needing to enter a keystroke." Dropped
+  the whole `LOOKUP_BROWSE_THRESHOLD`/`ADV_LOOKUP_BROWSE_THRESHOLD`
+  length-gating mechanism (and the `*Browsable`/`show*Dropdown` variables
+  built around it) rather than raising the number again — an empty-query
+  focused Contact/Category field now always shows the full list
+  unconditionally, relying entirely on `.lookup-results`'s own existing
+  `max-height: 220px`/`overflow-y: auto` to show the first ~6 rows and let
+  the rest be scrolled to, exactly as Jim described. Applied to every
+  lookup field this threshold ever gated: `CreateRequestForm.tsx`
+  (Contact + Category), `CreateTodoForm.tsx`/`RequestDetailForm.tsx`/
+  `TodoDetailForm.tsx` (Category), and `MainScreen.tsx`'s Advanced Search
+  modal (Contact Name + Category). Each file's own `footerHidden`
+  computation (2026-11-17, unmounts `AppFooter` while a dropdown is open)
+  simplified in step — it no longer needs to also check the now-deleted
+  dropdown-visibility flag, just whether the field has focus at all
+  (`showContactResults`/`showCategoryResults`). Time Zone (Add Contact,
+  Contact Detail, Create Free Account, Admin → Add Private Tester) and
+  Archive's Recipient/Requestor filter were out of scope for this message
+  — Jim's own "we are only dealing with categories and contacts" — and are
+  untouched; neither had ever had its own threshold gate in the first
+  place (Time Zone's own browse-on-focus rule, §6.16, predates and is
+  independent of `LOOKUP_BROWSE_THRESHOLD`). `npx tsc --noEmit`/`npm run
+  lint` both clean across all 5 touched files. **Not yet confirmed on a
+  real phone** — awaiting Jim's next retest, including the 20-category
+  case this message was about.

@@ -516,12 +516,12 @@ const ADVANCED_SEARCH_DEFAULT: AdvancedSearchFilter = {
 type AdvLookupContact = { id: string; display_name: string }
 type AdvLookupCategory = { id: string; name: string }
 
-// Same browse-on-focus-when-short threshold as CreateRequestForm.tsx's own
-// LOOKUP_BROWSE_THRESHOLD (2026-08-09/08-10) — duplicated here rather than
-// imported, matching this codebase's established per-file convention for
-// small shared constants. Raised from 12 to 18, see that file's own comment
-// for the full write-up (2026-11-17, owner-reported).
-const ADV_LOOKUP_BROWSE_THRESHOLD = 18
+// The lookup-field browse-on-focus length gate (previously
+// ADV_LOOKUP_BROWSE_THRESHOLD, mirroring CreateRequestForm.tsx's own) was
+// removed entirely 2026-11-18 — see that file's own comment for the full
+// write-up. A focused Contact Name/Category field with an empty query now
+// always shows the full list, scrollable via `.lookup-results`'s own
+// overflow.
 
 function inDateRange(dateStr: string, from: string, to: string): boolean {
   if (from && dateStr < from) return false
@@ -2351,36 +2351,27 @@ export default function MainScreen() {
   // (2026-11-14) — same filtering shape as CreateRequestForm.tsx's own
   // filteredContacts/filteredCategories: focus (advContactBrowsing/
   // advCategoryBrowsing) shows the whole list regardless of what's typed;
-  // otherwise an empty field shows the whole list only if it's short
-  // enough to browse, and a non-empty field narrows by substring. The
-  // *committed* match (matchesAdvancedText's callers) stays a plain
-  // substring against advDraft.contactName/category either way — picking a
-  // row here is a UI convenience, not a switch to exact-id matching.
+  // an empty field always shows the whole list too (no length gate, see
+  // the ADV_LOOKUP_BROWSE_THRESHOLD comment above), and a non-empty field
+  // narrows by substring. The *committed* match (matchesAdvancedText's
+  // callers) stays a plain substring against advDraft.contactName/category
+  // either way — picking a row here is a UI convenience, not a switch to
+  // exact-id matching.
   const advContactQueryEmpty = advDraft.contactName.trim() === ''
-  const advContactsBrowsable = (advContacts?.length ?? 0) < ADV_LOOKUP_BROWSE_THRESHOLD
-  const filteredAdvContacts = advContactBrowsing
-    ? advContacts ?? []
-    : advContactQueryEmpty
-      ? advContactsBrowsable
-        ? advContacts ?? []
-        : []
+  const filteredAdvContacts =
+    advContactBrowsing || advContactQueryEmpty
+      ? advContacts ?? []
       : (advContacts ?? []).filter((c) =>
           c.display_name.toLowerCase().includes(advDraft.contactName.trim().toLowerCase())
         )
-  const showAdvContactDropdown = !advContactQueryEmpty || advContactsBrowsable
 
   const advCategoryQueryEmpty = advDraft.category.trim() === ''
-  const advCategoriesBrowsable = (advCategories?.length ?? 0) < ADV_LOOKUP_BROWSE_THRESHOLD
-  const filteredAdvCategories = advCategoryBrowsing
-    ? advCategories ?? []
-    : advCategoryQueryEmpty
-      ? advCategoriesBrowsable
-        ? advCategories ?? []
-        : []
+  const filteredAdvCategories =
+    advCategoryBrowsing || advCategoryQueryEmpty
+      ? advCategories ?? []
       : (advCategories ?? []).filter((c) =>
           c.name.toLowerCase().includes(advDraft.category.trim().toLowerCase())
         )
-  const showAdvCategoryDropdown = !advCategoryQueryEmpty || advCategoriesBrowsable
 
   function selectAdvContact(name: string) {
     setAdvDraft((d) => ({ ...d, contactName: name }))
@@ -3801,7 +3792,7 @@ export default function MainScreen() {
                     </label>
                   </span>
 
-                  {advCategoryResultsOpen && showAdvCategoryDropdown && (
+                  {advCategoryResultsOpen && (
                     <div className="lookup-results" role="listbox">
                       {advCategories === null ? (
                         <div className="lookup-empty">Loading…</div>
@@ -3970,7 +3961,7 @@ export default function MainScreen() {
                   </label>
                 </span>
 
-                {advDraft.requests && advContactResultsOpen && showAdvContactDropdown && (
+                {advDraft.requests && advContactResultsOpen && (
                   <div className="lookup-results" role="listbox">
                     {advContacts === null ? (
                       <div className="lookup-empty">Loading…</div>

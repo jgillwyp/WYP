@@ -110,9 +110,10 @@ type RequestFormState = {
 const MINUTES_BEFORE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5)
 
 const CATEGORY_CAP = 20
-// Raised from 12 to 18 — see CreateRequestForm.tsx's own identical constant
-// for the full write-up (2026-11-17, owner-reported).
-const LOOKUP_BROWSE_THRESHOLD = 18
+// The lookup-field browse-on-focus length gate was removed entirely
+// 2026-11-18 — see CreateRequestForm.tsx's own identical comment for the
+// full write-up. A focused Category field with an empty query now always
+// shows the full list, scrollable via `.lookup-results`'s own overflow.
 
 // See CreateRequestForm.tsx's identical constants for the full reasoning
 // (globals.css's ftextarea-plain/.charcount comment; owner request
@@ -781,22 +782,21 @@ export default function RequestDetailForm() {
   }
 
   const categoryQueryEmpty = form.categoryName.trim() === ''
-  const categoriesBrowsable = categories.length < LOOKUP_BROWSE_THRESHOLD
   // Owner-reported, 2026-08-10, on Create Request's identical lookup —
   // ported here: clicking a field with an exact match re-filtered to that
   // one match instead of showing the whole list. categoryBrowsing (same
   // pattern as Time Zone's browse-on-focus fix) shows the full list from
-  // focus until the first keystroke.
-  const filteredCategories = categoryBrowsing
-    ? categories
-    : categoryQueryEmpty
-      ? (categoriesBrowsable ? categories : [])
+  // focus until the first keystroke. An empty query always shows the full
+  // list too now (2026-11-18, no length gate — see the constant comment
+  // above).
+  const filteredCategories =
+    categoryBrowsing || categoryQueryEmpty
+      ? categories
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
-  const showCategoryDropdown = !categoryQueryEmpty || categoriesBrowsable
 
   // See CreateRequestForm.tsx's identical footerHidden/effect pair for the
   // full write-up (2026-11-17, owner-reported scroll-position clamp).
-  const footerHidden = isKeyboardDevice() && showCategoryResults && showCategoryDropdown
+  const footerHidden = isKeyboardDevice() && showCategoryResults
 
   useEffect(() => {
     if (footerHidden) scrollActiveLookupFieldToTop()
@@ -1489,7 +1489,7 @@ export default function RequestDetailForm() {
                     Add Category
                   </button>
 
-                  {showCategoryResults && showCategoryDropdown && (
+                  {showCategoryResults && (
                     <div className="lookup-results" role="listbox">
                       {filteredCategories.length === 0 ? (
                         <div className="lookup-empty">

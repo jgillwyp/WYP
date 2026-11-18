@@ -216,16 +216,16 @@ const DIALOG_MAX = 500
 
 // §6.24 lookup fields (2026-08-07): with a short list, making the user type
 // before seeing anything is friction for no reason — show the whole list on
-// focus instead, and only fall back to type-to-search once there are enough
-// options that showing all of them stops being useful. Owner's rule, meant
-// to apply to every §6.24 lookup in the app, not just these two — see
-// design/README.md's proposed-components table. Raised from 12 to 18
-// (2026-11-17, owner-reported, a 14-Private-Category account hit the old
-// threshold): "if the list length is not more than 3 times the length of
-// the allotted scrollable list, after focus... the user may prefer to just
-// scroll." .lookup-results's own 220px max-height fits ~6 rows at a time
-// (globals.css's .lookup-item padding/font-size), so 3x that is 18.
-const LOOKUP_BROWSE_THRESHOLD = 18
+// focus instead. Was gated on a length threshold (raised 12→18 on
+// 2026-11-17 for a 14-Private-Category account), dropped entirely
+// 2026-11-18 — owner, after hitting the 20-category cap and still needing a
+// keystroke: "the simpler solution is to always show the first x entries of
+// the pulldown list (whatever the pulldown displays)... Even for contacts,
+// if someone were to have 100+ ... they could scroll it if desired -
+// without needing to enter a keystroke." `.lookup-results`'s own
+// `max-height`/`overflow-y:auto` already does the showing-the-first-part-
+// and-letting-them-scroll job on its own, so there's no list length this
+// app needs to reason about anymore.
 
 // Desktop browsers only open a date/time input's native picker when the
 // calendar/clock icon itself is clicked — unlike mobile, where tapping
@@ -1017,7 +1017,6 @@ export default function CreateRequestForm() {
   }
 
   const contactQueryEmpty = form.recipientName.trim() === ''
-  const contactsBrowsable = contacts.length < LOOKUP_BROWSE_THRESHOLD
 
   // Owner-reported, 2026-08-10: clicking a field that already holds an exact
   // match (e.g. after selecting a Recipient) re-filtered the dropdown down
@@ -1025,35 +1024,24 @@ export default function CreateRequestForm() {
   // or choose something else — "technically correct... but if they're
   // clicking on the value, they want to be able to select a different
   // value." `contactBrowsing` (same pattern as Time Zone's own
-  // browse-on-focus fix, 2026-08-09) shows the full list, unfiltered and
-  // regardless of size, from focus until the first keystroke — at which
-  // point normal substring filtering (and, for a large list, the
-  // empty-query size gate) takes back over.
-  const filteredContacts = contactBrowsing
-    ? contacts
-    : contactQueryEmpty
-      ? (contactsBrowsable ? contacts : [])
+  // browse-on-focus fix, 2026-08-09) shows the full list, unfiltered, from
+  // focus until the first keystroke — at which point normal substring
+  // filtering takes back over. An empty query always shows the full list
+  // too now (2026-11-18, no length gate — see the constant comment above).
+  const filteredContacts =
+    contactBrowsing || contactQueryEmpty
+      ? contacts
       : contacts.filter((c) =>
           c.display_name.toLowerCase().includes(form.recipientName.trim().toLowerCase())
         )
 
-  // Show the dropdown on focus when there's something to browse (query empty
-  // but the list is short enough to just list) or once the user has typed
-  // something to search for — not when the query is empty and the list is
-  // too long to browse, since there'd be nothing useful to show yet.
-  const showContactDropdown = !contactQueryEmpty || contactsBrowsable
-
   const categoryQueryEmpty = form.categoryName.trim() === ''
-  const categoriesBrowsable = categories.length < LOOKUP_BROWSE_THRESHOLD
 
   // Same fix as Recipient above.
-  const filteredCategories = categoryBrowsing
-    ? categories
-    : categoryQueryEmpty
-      ? (categoriesBrowsable ? categories : [])
+  const filteredCategories =
+    categoryBrowsing || categoryQueryEmpty
+      ? categories
       : categories.filter((c) => c.name.toLowerCase().includes(form.categoryName.trim().toLowerCase()))
-
-  const showCategoryDropdown = !categoryQueryEmpty || categoriesBrowsable
 
   // Whether AppFooter should currently unmount itself to free room for a
   // dropdown (2026-11-17) — lifted to a variable, not computed inline at
@@ -1065,9 +1053,7 @@ export default function CreateRequestForm() {
   // the first character of a Category). Re-running the same scroll
   // correction right as this flips true undoes that clamp in the same
   // frame instead of leaving the field to visibly settle somewhere lower.
-  const footerHidden =
-    isKeyboardDevice() &&
-    ((showContactResults && showContactDropdown) || (showCategoryResults && showCategoryDropdown))
+  const footerHidden = isKeyboardDevice() && (showContactResults || showCategoryResults)
 
   useEffect(() => {
     if (footerHidden) scrollActiveLookupFieldToTop()
@@ -1750,7 +1736,7 @@ export default function CreateRequestForm() {
                   Add Contact
                 </button>
 
-                {showContactResults && showContactDropdown && (
+                {showContactResults && (
                   <div className="lookup-results" role="listbox">
                     {filteredContacts.length === 0 ? (
                       <div className="lookup-empty">
@@ -1880,7 +1866,7 @@ export default function CreateRequestForm() {
                     Add Category
                   </button>
 
-                  {showCategoryResults && showCategoryDropdown && (
+                  {showCategoryResults && (
                     <div className="lookup-results" role="listbox">
                       {filteredCategories.length === 0 ? (
                         <div className="lookup-empty">
