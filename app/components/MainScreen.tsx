@@ -2169,8 +2169,7 @@ export default function MainScreen() {
         // "hidden field, excluded from search" rule the simple Date Range
         // scope already enforces below — but Created/Done are always shown
         // regardless of that toggle (TodoRow's own comment), so only Due is
-        // conditioned here rather than excluding the whole ToDo. No Contact
-        // Name check — a ToDo has no Contact at all.
+        // conditioned here rather than excluding the whole ToDo.
         const checks: boolean[] = []
         if (f.fromDate || f.toDate) {
           checks.push(matchesAdvancedDateRange(f, t.created_at, todoDatesEnabled ? t.due_date : null, t.done_date))
@@ -2178,6 +2177,15 @@ export default function MainScreen() {
         const cat = f.category.trim().toLowerCase()
         if (cat) checks.push(todoCategoriesEnabled && (t.categories?.name ?? '').toLowerCase().includes(cat))
         if (f.searchText.trim()) checks.push(matchesAdvancedText(f, t.description, advDialogText[t.id] ?? ''))
+        // A ToDo has no Contact at all (owner-reported, 2026-11-20): a typed
+        // Contact Name is still a real, active filter value overall — just
+        // one no ToDo can ever satisfy — so it has to push `false` here,
+        // same as Received's own Category handling above. Omitting the
+        // check entirely (as before) left `checks` empty whenever Contact
+        // Name was the only thing typed, and combineAdvancedValueChecks
+        // treats zero active checks as "nothing to narrow by," matching
+        // every ToDo instead of none.
+        if (f.contactName.trim() !== '') checks.push(false)
         return combineAdvancedValueChecks(f.matchMode, checks)
       }
       if (searchScope === 'daterange') return todoDatesEnabled && matchesDateRange(t.due_date, fromDate, toDate)

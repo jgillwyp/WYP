@@ -9973,3 +9973,30 @@ link is built only after the stack is proven on Add Contact.
   only this dialog's force-mode ones. `npx tsc --noEmit`/`npm run lint`
   both clean. **Not yet confirmed on a real device** — awaiting Jim's own
   retest on iPhone and Android.
+- **Confirmed fixed on Windows, Android, and iOS, same day** — "The
+  pulldown presentation for the Contact Name in Advanced Search is correct
+  for Windows, Android, and iOS." Closes out the dropdown-clipping fix
+  above for good.
+- **Real bug, same test: a Contact Name search matched every ToDo instead
+  of none (2026-11-20, `MainScreen.tsx`).** Jim searched Contact Name =
+  "Brett Jackson" and got the one matching Sent row correctly, but every
+  ToDo too — "I understand that 'technically ToDos do not have Contact
+  Names' and that is probably why they were included." Exactly right:
+  `filteredTodos`'s own Any/All combinator never pushed a check for
+  Contact Name at all (its own comment said so explicitly — "a ToDo has no
+  Contact at all"), so with Contact Name the only thing typed, `checks`
+  came back empty for every ToDo, and `combineAdvancedValueChecks` treats
+  zero active checks as "nothing to narrow by" (`if (checks.length === 0)
+  return true` — deliberate, for the case where no value criteria are
+  entered at all) and matched everything. The same class of bug Category
+  already hit twice before (Sent with Show Categories off, 2026-11-16;
+  Received, same day) — a real, active filter value a given row type can
+  never satisfy has to push a hard `false`, not be omitted, exactly the
+  "hidden field can never satisfy a typed value" rule Received's own
+  Category handling already established. Fixed by pushing `false` for
+  ToDos whenever Contact Name is typed, same pattern. Under Any (OR) mode
+  this correctly still lets a ToDo match via a different satisfied
+  criterion (e.g. Category); under All (AND) mode it correctly excludes
+  every ToDo once Contact Name is one of the entered criteria, since no
+  ToDo can ever satisfy it. `npx tsc --noEmit`/`npm run lint` both clean.
+  No mockup — this dialog has never had one.
