@@ -46,16 +46,32 @@ export function isKeyboardDevice(): boolean {
   )
 }
 
-export function scrollLookupFieldToTop(field: HTMLElement | null): void {
-  if (!field || !isKeyboardDevice()) return
+// `force` (2026-11-19, owner-reported — Advanced Search Filters' own
+// Contact Name field): inside .advsearch-modal, the dropdown's real cutoff
+// is the *modal's own* bounded max-height/overflow-y:auto (Main Screen's
+// tallest dialog, confirmed via a real Windows screenshot showing the
+// dropdown clipped at the dialog's own edge with its scrollbar sitting
+// right there, unused). That's a different problem from the mobile-
+// keyboard one this function was built for — a mouse/desktop user hits it
+// exactly as much as a phone does, so the isKeyboardDevice() gate below is
+// wrong for this one caller. `force: true` skips that gate (and the
+// 300ms-for-the-keyboard-animation delay, since there's no keyboard
+// animation to wait out here) while leaving every other call site's
+// existing mobile-only behavior unchanged.
+export function scrollLookupFieldToTop(field: HTMLElement | null, opts?: { force?: boolean }): void {
+  if (!field) return
+  if (!opts?.force && !isKeyboardDevice()) return
 
   // Scroll the whole labeled field (its wrapper, not just the bare <input>)
   // into view, so the label/button beside it comes along rather than being
-  // left peeking above the scrolled-to input.
+  // left peeking above the scrolled-to input. scrollIntoView itself finds
+  // and scrolls whichever ancestor is actually scrollable — the page's own
+  // `.scroll` region for every mobile caller, or a bounded `.modal` (like
+  // .advsearch-modal) for a `force` caller — no special-casing needed here.
   const target = (field.closest('.fgroup') as HTMLElement | null) ?? field
   setTimeout(() => {
     target.scrollIntoView({ block: 'start', behavior: 'auto' })
-  }, 300)
+  }, opts?.force ? 0 : 300)
 }
 
 // Owner-reported 2026-11-17 follow-up: typing the first character into a

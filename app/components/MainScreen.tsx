@@ -3833,7 +3833,7 @@ export default function MainScreen() {
                         e.target.select()
                         setAdvCategoryBrowsing(true)
                         setAdvCategoryResultsOpen(true)
-                        scrollLookupFieldToTop(e.currentTarget)
+                        scrollLookupFieldToTop(e.currentTarget, { force: true })
                       }}
                       onBlur={() => setTimeout(() => setAdvCategoryResultsOpen(false), 120)}
                       aria-label="Advanced search category"
@@ -3996,7 +3996,7 @@ export default function MainScreen() {
                         e.target.select()
                         setAdvContactBrowsing(true)
                         setAdvContactResultsOpen(true)
-                        scrollLookupFieldToTop(e.currentTarget)
+                        scrollLookupFieldToTop(e.currentTarget, { force: true })
                       }}
                       onBlur={() => setTimeout(() => setAdvContactResultsOpen(false), 120)}
                       aria-label="Advanced search contact name"

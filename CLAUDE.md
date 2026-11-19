@@ -9914,3 +9914,30 @@ link is built only after the stack is proven on Add Contact.
   mockup, not the app's existing "Contact Type" — relabeled to match.
   `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this dialog
   has never had one.
+- **Same-day follow-up: Advanced Search Filters' Contact Name dropdown was
+  clipped by the dialog's own bounded scroll region, on desktop too, not
+  just mobile (2026-11-19, `app/src/lib/lookupField.ts`,
+  `MainScreen.tsx`).** Jim, from a real Windows screenshot: focusing
+  Contact Name showed only 2 of the matching rows, visibly cut off by the
+  bottom edge of `.advsearch-modal`, with that dialog's own scrollbar
+  sitting right there unused — "preferably, upon focus the Contact Name
+  would be scrolled up far enough to display the pulldown choices." Root
+  cause: `scrollLookupFieldToTop()` (2026-11-17) is deliberately gated on
+  `isKeyboardDevice()` — built to reclaim space from an on-screen mobile
+  keyboard, so it never runs at all on a desktop/mouse session. That's the
+  wrong gate for this dialog specifically: `.advsearch-modal`'s own
+  `max-height: 92vh; overflow-y: auto` (2026-11-15) is a bounded scroll
+  region a desktop user hits exactly as much as a phone does, independent
+  of any keyboard. New optional `{ force: true }` second argument skips
+  that gate (and the 300ms keyboard-settle delay, since there's no
+  keyboard animation to wait out inside a modal) — `scrollIntoView` itself
+  already finds and scrolls whichever ancestor is actually scrollable, so
+  no DOM math was needed, just reaching the function at all. Applied only
+  to this dialog's own Category and Contact Name focus handlers (the two
+  lookup fields with any real risk of sitting near the modal's own bottom
+  edge); every other `scrollLookupFieldToTop` call site across the app
+  (Add Contact, Contact Detail, Create Request/ToDo, Request/ToDo Detail,
+  Archive, Admin → Add Private Tester, Create Free Account) is untouched
+  and stays mobile-only, since none of those sit inside a bounded,
+  independently-scrolling `.modal`. `npx tsc --noEmit`/`npm run lint` both
+  clean. No mockup — this dialog has never had one.
