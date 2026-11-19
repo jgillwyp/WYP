@@ -1534,7 +1534,7 @@ export default function MainScreen() {
       setAdvError('Please select at least one of Created, Due, or Done to apply the date range.')
       return
     }
-    if (d.contactName.trim() !== '' && !d.contactTo && !d.contactFrom) {
+    if (d.requests && d.contactName.trim() !== '' && !d.contactTo && !d.contactFrom) {
       setAdvError('Please select To and/or From to search by Contact Name.')
       return
     }
@@ -3699,7 +3699,40 @@ export default function MainScreen() {
           below," since the values it governs now visibly follow it rather
           than sit above it. Pure reorder/wording —
           matchesAdvancedDateRange/matchesAdvancedText/
-          combineAdvancedValueChecks and every handler are untouched. */}
+          combineAdvancedValueChecks and every handler are untouched.
+
+          Reorganized again 2026-11-19, owner's own pasted mockup, after a
+          tester was confused: "He expected some data fields under the
+          'ToDos' checkbox - and thought the Requests and ToDos checkboxes
+          should be together." Requests and ToDos now sit together at the
+          very top, in the same Strip-blue panel as the Status chips
+          (previously Requests sat mid-dialog and ToDos was the very last
+          control) — owner: "I have elevated the ToDos/Requests choice to
+          the top... and have included the status chips in the same blue
+          panel at the top." Contact Type/Contact Name is now fully
+          unmounted, not just greyed (.adv-contacttype's old .is-disabled
+          state is gone), whenever Requests is unchecked — "the Request
+          Type and Contact Name on the bottom would be dropped." Every
+          section below Any/All (Category, Text Type, Contact Type) now
+          shares the same Strip-blue .stopgroup treatment Date/the new top
+          panel already had, replacing the old alternating blue/plain
+          rhythm outright — owner: "I used a blue panel for all data
+          elements and related qualifiers which is visually better than
+          the earlier alternating blue/white backgrounds." Any/All is the
+          one deliberate exception — kept its own distinct light-grey
+          background and gained a 2px solid border (var(--ink)) so it
+          still reads as its own panel next to an otherwise all-blue
+          dialog (owner: "the very light grey did not set it off as a
+          panel very well"). New shared .stopgroup.adv-panel modifier
+          (globals.css) gives every newly-blue section the same 14px
+          margin-bottom the pre-existing .advdate-group already had — one
+          class instead of a one-off per section. .advstatus-inline is now
+          unreferenced (Status no longer gets its own standalone panel)
+          but left in globals.css per this file's own "leave an
+          unreferenced class in place" precedent (e.g. .adbox-preview's
+          own history). The Any/All->Category->Date->Text Type->Contact
+          Type ordering below Requests/ToDos+Status is otherwise unchanged
+          from 2026-11-16's own reorder. */}
       {advDialogOpen && (
         <>
           <div className="scrim" onClick={closeAdvancedSearch} />
@@ -3708,7 +3741,21 @@ export default function MainScreen() {
               Advanced Search Filters
             </p>
 
-            <div className="fgroup stopgroup advstatus-inline">
+            <div className="fgroup stopgroup adv-panel">
+              <div className="advcheckrow" style={{ marginBottom: 8 }}>
+                <label className="advcheck">
+                  <input type="checkbox" checked={advDraft.requests} onChange={(e) => setAdvRequests(e.target.checked)} />
+                  Requests
+                </label>
+                <label className="advcheck">
+                  <input
+                    type="checkbox"
+                    checked={advDraft.todos}
+                    onChange={(e) => setAdvDraft((d) => ({ ...d, todos: e.target.checked }))}
+                  />
+                  ToDos
+                </label>
+              </div>
               <div className="chips" style={{ marginTop: 0 }} role="radiogroup" aria-label="Advanced search status">
                 {(['all', 'open', 'overdue', 'done'] as AdvancedStatusValue[]).map((s) => (
                   <button
@@ -3767,7 +3814,7 @@ export default function MainScreen() {
                 ones (Any/All's own grey band, this field, Text Type,
                 Contact Type), the owner's own stated rhythm. */}
             {(sentCategoriesEnabled || todoCategoriesEnabled) && (
-              <div className="fgroup">
+              <div className="fgroup stopgroup adv-panel">
                 <div className="frow" style={{ position: 'relative' }}>
                   <span className="ffloat">
                     <input
@@ -3875,7 +3922,7 @@ export default function MainScreen() {
               </div>
             </div>
 
-            <div className="fgroup">
+            <div className="fgroup stopgroup adv-panel">
               <div className="advlabelrow">
                 <span className="advrow-label">Text Type</span>
                 <div className="advcheckrow">
@@ -3908,97 +3955,83 @@ export default function MainScreen() {
               />
             </div>
 
-            <label className="checkrow" style={{ marginBottom: 6 }}>
-              <input type="checkbox" checked={advDraft.requests} onChange={(e) => setAdvRequests(e.target.checked)} />
-              <span className="checktext">Requests</span>
-            </label>
-            <div className={`fgroup adv-contacttype${advDraft.requests ? '' : ' is-disabled'}`}>
-              <div className="advlabelrow">
-                <span className="advrow-label">Contact Type</span>
-                <div className="advcheckrow">
-                  <label className="advcheck">
+            {advDraft.requests && (
+              <div className="fgroup stopgroup adv-panel adv-contacttype">
+                <div className="advlabelrow">
+                  <span className="advrow-label">Request Contact Type</span>
+                  <div className="advcheckrow">
+                    <label className="advcheck">
+                      <input
+                        type="checkbox"
+                        checked={advDraft.contactTo}
+                        onChange={(e) => setAdvDraft((d) => ({ ...d, contactTo: e.target.checked }))}
+                      />
+                      To
+                    </label>
+                    <label className="advcheck">
+                      <input
+                        type="checkbox"
+                        checked={advDraft.contactFrom}
+                        onChange={(e) => setAdvDraft((d) => ({ ...d, contactFrom: e.target.checked }))}
+                      />
+                      From
+                    </label>
+                  </div>
+                </div>
+                <div className="frow" style={{ position: 'relative', marginTop: 6 }}>
+                  <span className="ffloat">
                     <input
-                      type="checkbox"
-                      disabled={!advDraft.requests}
-                      checked={advDraft.contactTo}
-                      onChange={(e) => setAdvDraft((d) => ({ ...d, contactTo: e.target.checked }))}
+                      className={`finput${advDraft.contactName.trim() === '' ? ' opt' : ''}`}
+                      id="adv-contactname"
+                      type="text"
+                      autoComplete="off"
+                      placeholder=" "
+                      value={advDraft.contactName}
+                      onChange={(e) => {
+                        setAdvDraft((d) => ({ ...d, contactName: e.target.value }))
+                        setAdvContactBrowsing(false)
+                        setAdvContactResultsOpen(true)
+                      }}
+                      onFocus={(e) => {
+                        e.target.select()
+                        setAdvContactBrowsing(true)
+                        setAdvContactResultsOpen(true)
+                        scrollLookupFieldToTop(e.currentTarget)
+                      }}
+                      onBlur={() => setTimeout(() => setAdvContactResultsOpen(false), 120)}
+                      aria-label="Advanced search contact name"
                     />
-                    To
-                  </label>
-                  <label className="advcheck">
-                    <input
-                      type="checkbox"
-                      disabled={!advDraft.requests}
-                      checked={advDraft.contactFrom}
-                      onChange={(e) => setAdvDraft((d) => ({ ...d, contactFrom: e.target.checked }))}
-                    />
-                    From
-                  </label>
+                    <label className="flabel" htmlFor="adv-contactname">
+                      <LookupGlyph />
+                      Contact Name
+                    </label>
+                  </span>
+
+                  {advContactResultsOpen && (
+                    <div className="lookup-results" role="listbox">
+                      {advContacts === null ? (
+                        <div className="lookup-empty">Loading…</div>
+                      ) : filteredAdvContacts.length === 0 ? (
+                        <div className="lookup-empty">No matching contact.</div>
+                      ) : (
+                        filteredAdvContacts.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`lookup-item${c.display_name.toLowerCase() === advDraft.contactName.trim().toLowerCase() ? ' selected' : ''}`}
+                            role="option"
+                            aria-selected={c.display_name.toLowerCase() === advDraft.contactName.trim().toLowerCase()}
+                            onMouseDown={() => selectAdvContact(c.display_name)}
+                          >
+                            {c.display_name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="frow" style={{ position: 'relative', marginTop: 6 }}>
-                <span className="ffloat">
-                  <input
-                    className={`finput${advDraft.contactName.trim() === '' ? ' opt' : ''}`}
-                    id="adv-contactname"
-                    type="text"
-                    autoComplete="off"
-                    placeholder=" "
-                    disabled={!advDraft.requests}
-                    value={advDraft.contactName}
-                    onChange={(e) => {
-                      setAdvDraft((d) => ({ ...d, contactName: e.target.value }))
-                      setAdvContactBrowsing(false)
-                      setAdvContactResultsOpen(true)
-                    }}
-                    onFocus={(e) => {
-                      e.target.select()
-                      setAdvContactBrowsing(true)
-                      setAdvContactResultsOpen(true)
-                      scrollLookupFieldToTop(e.currentTarget)
-                    }}
-                    onBlur={() => setTimeout(() => setAdvContactResultsOpen(false), 120)}
-                    aria-label="Advanced search contact name"
-                  />
-                  <label className="flabel" htmlFor="adv-contactname">
-                    <LookupGlyph />
-                    Contact Name
-                  </label>
-                </span>
-
-                {advDraft.requests && advContactResultsOpen && (
-                  <div className="lookup-results" role="listbox">
-                    {advContacts === null ? (
-                      <div className="lookup-empty">Loading…</div>
-                    ) : filteredAdvContacts.length === 0 ? (
-                      <div className="lookup-empty">No matching contact.</div>
-                    ) : (
-                      filteredAdvContacts.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className={`lookup-item${c.display_name.toLowerCase() === advDraft.contactName.trim().toLowerCase() ? ' selected' : ''}`}
-                          role="option"
-                          aria-selected={c.display_name.toLowerCase() === advDraft.contactName.trim().toLowerCase()}
-                          onMouseDown={() => selectAdvContact(c.display_name)}
-                        >
-                          {c.display_name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <label className="checkrow" style={{ marginBottom: 6 }}>
-              <input
-                type="checkbox"
-                checked={advDraft.todos}
-                onChange={(e) => setAdvDraft((d) => ({ ...d, todos: e.target.checked }))}
-              />
-              <span className="checktext">ToDos</span>
-            </label>
+            )}
 
             {advError && <p className="ferror">{advError}</p>}
 

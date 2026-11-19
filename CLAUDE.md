@@ -9867,3 +9867,50 @@ link is built only after the stack is proven on Add Contact.
   7 touched files (5 `.tsx`, `globals.css`, the SQL history file). **Not
   yet confirmed on a real device** — awaiting Jim's own retest, and
   awaiting migration 101 being run.
+- **Migration 101 confirmed run by Jim, 2026-11-19 — Inactive Categories
+  confirmed working on a real device.** An Inactive category is findable
+  via typed search but correctly excluded from the default/browse-on-focus
+  pulldown list on Create Request/Create ToDo/Request Detail/ToDo Detail —
+  both halves of the feature behave exactly as designed; no follow-up
+  needed.
+- **Advanced Search Filters reorganized a third time — Requests/ToDos
+  moved to the top, status chips joined them, every section besides
+  Any/All went Strip-blue (2026-11-19, `MainScreen.tsx`, `app/globals.css`).**
+  A private tester, testing the 2026-11-16 layout, was confused: he
+  expected data fields under the ToDos checkbox, and expected
+  Requests/ToDos to sit together — instead Requests sat mid-dialog and
+  ToDos was the very last control, with the tester's own two checkboxes
+  split apart by every data section in between. Jim, with his own pasted
+  mockup, agreed and redesigned it himself: "I have elevated the
+  ToDos/Requests choice to the top (if Requests is unchecked, the Request
+  Type and Contact Name on the bottom would be dropped) and have included
+  the status chips in the same blue panel at the top. I also used a blue
+  panel for all data elements and related qualifiers which is visually
+  better than the earlier alternating blue/white backgrounds (with the
+  exception if the All/Any choice panel - and for that one added a black
+  border...)." Requests and ToDos checkboxes now sit together in one new
+  top `.stopgroup.adv-panel`, alongside the Status chips (previously their
+  own standalone panel) — `.advstatus-inline`'s own CSS rule is now
+  unreferenced, left in place per this file's own "leave an unreferenced
+  class" precedent rather than deleted. **Real behavior change, not just
+  layout**: Contact Type/Contact Name now fully unmounts when Requests is
+  unchecked, replacing the old greyed `.is-disabled` state — "dropped,"
+  per Jim's own wording — so `.adv-contacttype.is-disabled`'s CSS is also
+  now unreferenced, same treatment. The Contact-Name validation check
+  (`Please select To and/or From...`) is now gated on `d.requests` too, so
+  a stale, hidden Contact Name value can't block a ToDos-only search once
+  Requests is unchecked — a real, if minor, bug the unmount-instead-of-grey
+  change would otherwise have introduced. Category, Date, Text Type, and
+  Contact Type all share a new `.stopgroup.adv-panel` CSS modifier (14px
+  margin-bottom, the same every section already had piecemeal). Any/All
+  keeps its distinct light-grey (`--row-tint`) fill but gains a `2px solid
+  var(--ink)` border, since the grey alone stopped reading as its own
+  panel once every section around it also went Strip-blue — Jim's own
+  explicit reasoning ("the very light grey did not set it off as a panel
+  very well"), choosing the border over his own floated alternative (a
+  darker grey fill) to keep the explanatory caption text just as readable.
+  **Same-day follow-up, from Jim's own screenshot of the live result**:
+  the Contact Type section's label read "Request Contact Type" in his
+  mockup, not the app's existing "Contact Type" — relabeled to match.
+  `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this dialog
+  has never had one.

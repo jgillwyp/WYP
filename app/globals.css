@@ -1835,7 +1835,13 @@ body {
    instead of radio buttons for app consistency") — reuses the exact same
    component Main Screen's own Sent/Received/ToDos filter rows already use
    (.chips/.chip/.chip.sel/.chip.over/.chip.done), so .stoprow no longer
-   appears inside this box at all. */
+   appears inside this box at all.
+
+   Unreferenced as of 2026-11-19 — Status moved into the same combined
+   top panel as Requests/ToDos (.stopgroup.adv-panel, below), so it no
+   longer gets a standalone box of its own. Left here unreferenced rather
+   than deleted, same precedent as .adbox-preview's own history in this
+   file. */
 .stopgroup.advstatus-inline {
   display: flex;
   align-items: center;
@@ -1859,15 +1865,38 @@ body {
    "value" section's own Strip-blue box (.stopgroup/.checkrow) below it, so
    it reads as governing them rather than being one of them. Holds the
    Any/All .chips pair plus an adjoining caption that names whichever is
-   currently selected. */
+   currently selected.
+
+   2026-11-19 — once every other section in this dialog also went
+   Strip-blue (.stopgroup.adv-panel, below), the light grey alone stopped
+   reading as its own panel next to them (owner: "the very light grey did
+   not set it off as a panel very well"). Added a 2px solid border in
+   var(--ink) rather than darkening the fill — keeps the explanatory
+   caption text exactly as readable as before, the alternative the owner
+   himself floated ("a darker grey background might work if the
+   explanatory text was easily readable") but didn't need, since the
+   border alone already sets it apart. */
 .advmatchmode {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 10px;
   background: var(--row-tint);
+  border: 2px solid var(--ink);
   border-radius: 9px;
   padding: 10px;
+  margin-bottom: 14px;
+}
+
+/* Shared Strip-blue-panel modifier (2026-11-19) — every section in this
+   dialog besides Any/All is now Strip-blue (.stopgroup already supplies
+   the background/padding; this just adds the same 14px margin-bottom
+   .advstatus-inline/.advdate-group each carried on their own before this
+   batch), applied to the new combined Requests/ToDos+Status panel at the
+   top, Category, Text Type, and Contact Type. Owner: "I also used a blue
+   panel for all data elements and related qualifiers which is visually
+   better than the earlier alternating blue/white backgrounds." */
+.stopgroup.adv-panel {
   margin-bottom: 14px;
 }
 
@@ -1898,7 +1927,14 @@ body {
    elsewhere, just scoped to this one nested block rather than a whole row.
    .flabel covers both the "Contact Type" section label pre-2026-11-14 and,
    now, Contact Name's own floating field label (LookupGlyph + text) — both
-   still need to dim. */
+   still need to dim.
+
+   Unreferenced as of 2026-11-19 — MainScreen.tsx now unmounts this whole
+   block outright when Requests is unchecked ("the Request Type and
+   Contact Name on the bottom would be dropped," owner) rather than
+   rendering it greyed, so .is-disabled is never applied anymore. Left
+   here unreferenced rather than deleted, same precedent as
+   .advstatus-inline's own note above. */
 .adv-contacttype.is-disabled .advrow-label,
 .adv-contacttype.is-disabled .advcheck,
 .adv-contacttype.is-disabled .flabel,
