@@ -54,13 +54,36 @@ export function isKeyboardDevice(): boolean {
 // right there, unused). That's a different problem from the mobile-
 // keyboard one this function was built for — a mouse/desktop user hits it
 // exactly as much as a phone does, so the isKeyboardDevice() gate below is
-// wrong for this one caller. `force: true` skips that gate (and the
-// 300ms-for-the-keyboard-animation delay, since there's no keyboard
-// animation to wait out here) while leaving every other call site's
-// existing mobile-only behavior unchanged.
+// wrong for this one caller. `force: true` skips that gate while leaving
+// every other call site's existing mobile-only behavior unchanged.
+//
+// Same-day fix, two real phones: the first version of `force` also skipped
+// the keyboard-settle delay outright (0ms, unconditionally) — wrong on a
+// phone, where this dialog is *also* a keyboard device: the forced scroll
+// then raced the real keyboard-open animation exactly the way the comment
+// above already warns against, and lost — confirmed via a real iPhone
+// screenshot showing the field scrolled to roughly where it would land
+// *before* the keyboard's final height was accounted for, leaving the
+// dropdown hidden behind the keyboard rather than above it. The delay is
+// now keyed on isKeyboardDevice() itself, not on `force` — a forced scroll
+// on a real keyboard device still waits out the keyboard animation first,
+// same as every non-forced mobile caller; only a forced scroll on a
+// non-keyboard device (desktop/mouse, the original Windows case) skips the
+// wait, since there's no animation there to race. Also narrowed the scroll
+// target to `.frow` (falling back to `.fgroup`) — in this one dialog,
+// Contact Name's `.fgroup` is the whole "Request Contact Type" panel
+// (label row + To/From checkboxes + the field), not just the field's own
+// wrapper the way `.fgroup` is everywhere else in the app; scrolling that
+// whole panel to the top wasted room on the header row above the field,
+// leaving less of the dialog's own limited height for the dropdown below
+// it (the real cause of the owner's separate Android report, "could be
+// scrolled up more to show all of the pulldown choices"). `.frow` wraps
+// just the labeled field itself everywhere it's used, so this is a
+// strictly tighter, equally-safe target for every existing caller too.
 export function scrollLookupFieldToTop(field: HTMLElement | null, opts?: { force?: boolean }): void {
   if (!field) return
-  if (!opts?.force && !isKeyboardDevice()) return
+  const keyboardDevice = isKeyboardDevice()
+  if (!opts?.force && !keyboardDevice) return
 
   // Scroll the whole labeled field (its wrapper, not just the bare <input>)
   // into view, so the label/button beside it comes along rather than being
@@ -68,10 +91,13 @@ export function scrollLookupFieldToTop(field: HTMLElement | null, opts?: { force
   // and scrolls whichever ancestor is actually scrollable — the page's own
   // `.scroll` region for every mobile caller, or a bounded `.modal` (like
   // .advsearch-modal) for a `force` caller — no special-casing needed here.
-  const target = (field.closest('.fgroup') as HTMLElement | null) ?? field
+  const target =
+    (field.closest('.frow') as HTMLElement | null) ??
+    (field.closest('.fgroup') as HTMLElement | null) ??
+    field
   setTimeout(() => {
     target.scrollIntoView({ block: 'start', behavior: 'auto' })
-  }, opts?.force ? 0 : 300)
+  }, keyboardDevice ? 300 : 0)
 }
 
 // Owner-reported 2026-11-17 follow-up: typing the first character into a

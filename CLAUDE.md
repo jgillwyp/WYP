@@ -9941,3 +9941,35 @@ link is built only after the stack is proven on Add Contact.
   and stays mobile-only, since none of those sit inside a bounded,
   independently-scrolling `.modal`. `npx tsc --noEmit`/`npm run lint` both
   clean. No mockup — this dialog has never had one.
+- **Same-day second fix: the `force` fix above was itself wrong on a real
+  phone — two real root causes, both fixed (2026-11-19,
+  `app/src/lib/lookupField.ts`).** Jim: "I was too quick to say it worked.
+  I had retested on Windows. I just tested on the iPhone and see the
+  pasted-in layout when I focus on the Contact Name field - it only shows
+  the Contact Type. The Android is better, but could be scrolled up more
+  to show all of the pulldown choices." Two distinct bugs in the first
+  fix: (1) `force: true` skipped the keyboard-settle delay outright (0ms,
+  unconditionally) — correct for the desktop/Windows case this fix was
+  built for, wrong on a phone, where the dialog is *also* a keyboard
+  device: the forced scroll raced the real iOS/Android keyboard-open
+  animation, exactly the race this function's own original comment
+  already warns against, and lost — the iPhone screenshot showed the
+  field scrolled to where it would land *before* the keyboard's final
+  height was known, leaving the dropdown hidden behind the keyboard
+  rather than above it. Fixed by keying the delay on `isKeyboardDevice()`
+  itself rather than on `force` — a forced scroll on a real keyboard
+  device now waits the same 300ms every non-forced mobile caller already
+  does; only a forced scroll on a non-keyboard device skips the wait.
+  (2) The scroll target, `field.closest('.fgroup')`, is the *whole*
+  "Request Contact Type" panel in this one dialog (label row + To/From
+  checkboxes + the field) — not just the field's own wrapper, the way
+  `.fgroup` is everywhere else in the app — so scrolling it to the top
+  wasted room on that header row, leaving less of the dialog's own
+  bounded height for the dropdown below. This is what the Android report
+  was actually describing. Narrowed to prefer `.closest('.frow')` first
+  (falling back to `.fgroup`, then the field itself) — `.frow` wraps just
+  the labeled field everywhere it's used app-wide, so this is a strictly
+  tighter, equally-safe target for every existing mobile caller too, not
+  only this dialog's force-mode ones. `npx tsc --noEmit`/`npm run lint`
+  both clean. **Not yet confirmed on a real device** — awaiting Jim's own
+  retest on iPhone and Android.
