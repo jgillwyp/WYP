@@ -10000,3 +10000,19 @@ link is built only after the stack is proven on Add Contact.
   every ToDo once Contact Name is one of the entered criteria, since no
   ToDo can ever satisfy it. `npx tsc --noEmit`/`npm run lint` both clean.
   No mockup — this dialog has never had one.
+- **`ITSAppUsesNonExemptEncryption` added to the iOS Info.plist, ahead of
+  the first TestFlight External Testing submission (2026-11-20,
+  `ios/App/App/Info.plist`).** Jim, prepping to submit: confirmed this key
+  was missing entirely — without it, App Store Connect/Transporter prompts
+  the Export Compliance question interactively on every single upload,
+  rather than it being answered once. Checked the native iOS project for
+  any custom cryptography first (`grep` across `ios/` for `CryptoKit`/
+  `CommonCrypto`/`AES`/`RSA`/`SecKey`/`encrypt` — none found) — WYP only
+  ever talks HTTPS to Supabase/Stripe/its own Vercel API routes, no
+  app-level encryption of its own, so `false` (exempt — standard/OS-
+  provided encryption only) is the correct value, not a guess. Same
+  posture this file's own history already takes on everything
+  iOS-build-related: written here, needs Jim's own next `npx cap sync
+  ios`/Xcode rebuild to actually apply — not verifiable from this
+  sandbox (no Xcode/macOS access). Confirmed well-formed XML via a direct
+  parse before committing.
