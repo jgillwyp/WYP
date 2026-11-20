@@ -10016,3 +10016,27 @@ link is built only after the stack is proven on Add Contact.
   ios`/Xcode rebuild to actually apply — not verifiable from this
   sandbox (no Xcode/macOS access). Confirmed well-formed XML via a direct
   parse before committing.
+- **iOS build number (`CURRENT_PROJECT_VERSION`) was hardcoded to `1`,
+  never bumped between archives — found and fixed, same day
+  (2026-11-20, `ios/App/App.xcodeproj/project.pbxproj`).** Jim archived a
+  second build in Xcode Organizer and it still showed `1.0 (1)` —
+  identical version+build to the first (Oct 31) archive. Confirmed via
+  grep: `CURRENT_PROJECT_VERSION = 1` was hardcoded in both the Debug and
+  Release `XCBuildConfiguration` blocks, with nothing anywhere bumping it
+  — unlike the web app's own `app/src/version.ts` (stamped automatically
+  by `npm run build`'s `prebuild` hook), this native project has no
+  equivalent auto-increment mechanism, so it's been stuck at `1` since the
+  project was scaffolded. App Store Connect requires a unique build number
+  per app version, so a second upload at `1.0 (1)` would very likely be
+  rejected as a duplicate. Bumped both configs to `CURRENT_PROJECT_VERSION
+  = 2`, matching the archive Jim had just made (his most recent local
+  build is now the one that will actually upload cleanly). **No
+  auto-increment was built** — this is a manual bump, same as `MARKETING_VERSION`
+  itself (still `1.0` in both configs, untouched); flagged for Jim that
+  every future archive meant to go to TestFlight/App Store needs this
+  number bumped by hand first (Xcode → App target → Build Settings →
+  search "Current Project Version," or edit `project.pbxproj` directly,
+  same two lines), or it'll collide with whatever was uploaded last. Not
+  verifiable from this sandbox beyond the raw text edit — needs Jim's own
+  next Archive/Distribute cycle to confirm Xcode picks it up correctly
+  (`1.0 (2)`) and that App Store Connect accepts the upload.
