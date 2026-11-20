@@ -38,6 +38,20 @@ import type { IcsAlarmOffset } from '@/lib/ics'
  * the day itself), just labeled for what that actually means without a
  * time component. Required, not optional, so every caller has to supply
  * the real answer rather than silently defaulting to the time-bearing set.
+ *
+ * `reminderSummary` (2026-11-20, owner-reported) — WYP's own "Reminders
+ * until Done" emails/texts (reminder_enabled/day_of/day_after/minutes_
+ * before) are completely independent of the calendar-app alarms this
+ * dialog adds, and can keep firing on their own schedule regardless of
+ * what's picked here — owner: "if the requestor had already set reminder
+ * options, the calendar reminder dialog should show that, otherwise the
+ * user may be surprised or unhappy about what subsequently occurs." Only
+ * `RequestResponseForm.tsx`/`ResponseDetailForm.tsx` pass one (built by
+ * each screen's own `calendarReminderSummaryText()`, already excluding
+ * anything ineligible/already-sent/Done) — on a ToDo the same person who
+ * configured its own Reminders is the one adding the calendar entry, with
+ * no separate "requestor" to be surprised by, so `CreateTodoForm.tsx`/
+ * `TodoDetailForm.tsx` don't pass this.
  */
 
 type Props = {
@@ -47,6 +61,7 @@ type Props = {
   confirmLabel?: string
   guidance?: ReactNode
   hasDueTime: boolean
+  reminderSummary?: string
 }
 
 function alarmOptionsFor(hasDueTime: boolean): { value: IcsAlarmOffset; label: string }[] {
@@ -70,6 +85,7 @@ export default function AddToCalendarAlarmsDialog({
   confirmLabel = 'Add to Calendar',
   guidance,
   hasDueTime,
+  reminderSummary,
 }: Props) {
   const [selected, setSelected] = useState<Set<IcsAlarmOffset>>(new Set())
 
@@ -111,6 +127,11 @@ export default function AddToCalendarAlarmsDialog({
         {guidance && (
           <p className="checknote" style={{ marginBottom: 10 }}>
             {guidance}
+          </p>
+        )}
+        {reminderSummary && (
+          <p className="checknote" style={{ marginBottom: 10 }}>
+            {reminderSummary}
           </p>
         )}
         <p className="checknote" style={{ marginBottom: 10 }}>

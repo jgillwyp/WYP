@@ -914,6 +914,33 @@ export default function RequestResponseForm() {
           ? 'The minutes-before Reminder has already been sent for this Request.'
           : undefined
 
+  // Owner's ask, 2026-11-20 — "if the requestor had already set reminder
+  // options, the calendar reminder dialog should show that, otherwise the
+  // user may be surprised or unhappy about what subsequently occurs."
+  // These Reminders-until-Done emails/texts are completely independent of
+  // the calendar-app alarms AddToCalendarAlarmsDialog adds, and — since
+  // migration 045 decoupled "Show Reminders" from whether sending actually
+  // happens — they can still fire even when data.owner_request_reminders_
+  // enabled is hiding reminderBanner() itself on this very screen. Reuses
+  // the same *Disabled flags the banner's own checkboxes already compute
+  // (reminderDisabled/dayOfDisabled/overdueReminderDisabled/
+  // minutesBeforeDisabled), so an ineligible, already-sent, or Done
+  // reminder is correctly left off rather than falsely promised.
+  function calendarReminderSummaryText(): string | undefined {
+    const active: string[] = []
+    if (reminderEnabled && !reminderDisabled) active.push('Day before')
+    if (reminderDayOfEnabled && !dayOfDisabled) active.push('Day of')
+    if (overdueReminderEnabled && !overdueReminderDisabled) active.push('Day after')
+    if (reminderMinutesBeforeEnabled && !minutesBeforeDisabled) {
+      active.push(`${reminderMinutesBeforeValue} minutes before`)
+    }
+    if (active.length === 0) return undefined
+    const noun = active.length === 1 ? 'reminder' : 'reminders'
+    const article = active.length === 1 ? 'a' : 'these'
+    const pronoun = active.length === 1 ? "It's" : "They're"
+    return `This Request already has ${article} ${noun} scheduled: ${active.join(', ')}. ${pronoun} separate from any calendar alarm you add below.`
+  }
+
   function reminderBanner() {
     return (
       <div className="reminderbanner">
@@ -1540,6 +1567,7 @@ export default function RequestResponseForm() {
           }}
           guidance={calendarSavingGuidance()}
           hasDueTime={!!data?.due_time}
+          reminderSummary={calendarReminderSummaryText()}
         />
       </div>
     </div>

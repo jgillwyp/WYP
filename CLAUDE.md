@@ -10109,3 +10109,39 @@ link is built only after the stack is proven on Add Contact.
   here — the fix is simply that a hidden checkbox can never be selected in
   the first place. `npx tsc --noEmit`/`npm run lint` both clean. No mockup
   — this dialog has never had one.
+- **AddToCalendarAlarmsDialog now warns when WYP's own Reminders-until-Done
+  are still going to fire, independent of whatever calendar alarm is
+  chosen — same day (2026-11-20), no migration.** Jim: "if the requestor
+  had already set reminder options, the calendar reminder dialog should
+  show that, otherwise the user may be surprised or unhappy about what
+  subsequently occurs." Real gap: the Reminders-until-Done banner
+  (`reminder_enabled`/`reminder_day_of_enabled`/`overdue_reminder_enabled`/
+  `reminder_minutes_before_enabled`) sends its own emails/texts completely
+  independent of whatever VALARM alarm this dialog's own checkboxes embed
+  in the downloaded `.ics` — and since migration 045 deliberately decoupled
+  "Show Reminders" from whether sending actually happens, those can still
+  fire even when `data.owner_request_reminders_enabled` is hiding the
+  banner itself on the very screen the recipient is looking at. New
+  optional `reminderSummary?: string` prop, rendered as another
+  `.checknote` paragraph alongside `guidance`. `RequestResponseForm.tsx`/
+  `ResponseDetailForm.tsx` are the only two callers that pass one, via a
+  new `calendarReminderSummaryText()` in each — reuses the exact same
+  `reminderDisabled`/`dayOfDisabled`/`overdueReminderDisabled`/
+  `minutesBeforeDisabled` flags `reminderBanner()`'s own checkboxes already
+  compute, so a reminder that's ineligible, already sent, or moot (Done,
+  or on `ResponseDetailForm.tsx`, Archived) is correctly left out rather
+  than falsely promised — this reports what will actually still happen,
+  not just which boxes are currently checked. Returns `undefined` (so the
+  dialog renders nothing extra) when nothing is actually still scheduled.
+  Singular/plural-aware, matching `email.ts`'s own `changedFieldsSentence()`
+  convention: "This Request already has a reminder scheduled: Day before.
+  It's separate from any calendar alarm you add below." / "...has these
+  reminders scheduled: Day before, Day of. They're separate...". Built as
+  one complete template-literal string, never JSX text interleaved with
+  `{expressions}`, per this file's own established SWC-whitespace-bug
+  mitigation (2026-09-02/09-03, reconfirmed 2026-11-07/11). **Not extended
+  to `CreateTodoForm.tsx`/`TodoDetailForm.tsx`** — on a ToDo the person
+  adding the calendar entry is the same person who set its own Reminders
+  moments earlier on the same screen, with no separate "requestor" to
+  genuinely be surprised. `npx tsc --noEmit`/`npm run lint` both clean. No
+  mockup — this dialog has never had one.

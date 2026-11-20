@@ -755,6 +755,28 @@ export default function ResponseDetailForm() {
           ? 'The minutes-before Reminder has already been sent for this Request.'
           : undefined
 
+  // Owner's ask, 2026-11-20 — see RequestResponseForm.tsx's own identical
+  // comment: "if the requestor had already set reminder options, the
+  // calendar reminder dialog should show that, otherwise the user may be
+  // surprised or unhappy about what subsequently occurs." Same reuse of
+  // the banner's own *Disabled flags (which already fold in Archive here,
+  // unlike the anonymous screen) so an ineligible/already-sent/Done/
+  // archived reminder is correctly left off.
+  function calendarReminderSummaryText(): string | undefined {
+    const active: string[] = []
+    if (reminderEnabled && !reminderDisabled) active.push('Day before')
+    if (reminderDayOfEnabled && !dayOfDisabled) active.push('Day of')
+    if (overdueReminderEnabled && !overdueReminderDisabled) active.push('Day after')
+    if (reminderMinutesBeforeEnabled && !minutesBeforeDisabled) {
+      active.push(`${reminderMinutesBeforeValue} minutes before`)
+    }
+    if (active.length === 0) return undefined
+    const noun = active.length === 1 ? 'reminder' : 'reminders'
+    const article = active.length === 1 ? 'a' : 'these'
+    const pronoun = active.length === 1 ? "It's" : "They're"
+    return `This Request already has ${article} ${noun} scheduled: ${active.join(', ')}. ${pronoun} separate from any calendar alarm you add below.`
+  }
+
   function reminderBanner() {
     return (
       <div className="reminderbanner">
@@ -1564,6 +1586,7 @@ export default function ResponseDetailForm() {
             performAddToCalendarDownload(alarms)
           }}
           hasDueTime={!!data?.due_time}
+          reminderSummary={calendarReminderSummaryText()}
         />
       </div>
 
