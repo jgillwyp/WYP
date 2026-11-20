@@ -1563,6 +1563,7 @@ export default function ResponseDetailForm() {
             setCalendarDialogOpen(false)
             performAddToCalendarDownload(alarms)
           }}
+          hasDueTime={!!data?.due_time}
         />
       </div>
 

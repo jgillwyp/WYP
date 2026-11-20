@@ -1839,6 +1839,7 @@ export default function TodoDetailForm() {
             setCalendarDialogOpen(false)
             performAddToCalendarDownload(alarms)
           }}
+          hasDueTime={todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== ''}
         />
       </div>
 

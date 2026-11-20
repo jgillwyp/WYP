@@ -2086,6 +2086,7 @@ export default function CreateTodoForm() {
             if (pendingCalendarTodoId) downloadTodoCalendarIcs(pendingCalendarTodoId, alarms)
             router.back()
           }}
+          hasDueTime={todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== ''}
         />
       </div>
     </div>

@@ -10077,3 +10077,35 @@ link is built only after the stack is proven on Add Contact.
   `open` ever flips true the component is already purely client-side.
   `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this dialog has
   never had one.
+- **AddToCalendarAlarmsDialog's "1 hour before"/"At the scheduled time"
+  checkboxes hidden for a no-Due-Time item; "Day of" shown instead — same
+  day (2026-11-20), no migration.** Jim: when a Request has no Due Time,
+  the reminder prompt should reflect that — those two options describe a
+  specific clock moment that doesn't exist once the event becomes an
+  all-day (`VALUE=DATE`) one (see `buildCalendarEventFields`'s own
+  `allDay` field, `ics.ts`) — and "there would be an option in this
+  circumstance displayed for the 'Day of' instead." New required
+  `hasDueTime: boolean` prop (deliberately required, not optional, so a
+  caller can't silently fall through to the time-bearing set by
+  forgetting to pass it) drives a new `alarmOptionsFor()` branch: with a
+  Due Time, the existing three options are unchanged; without one, "1 hour
+  before" drops out and "At the scheduled time" is relabeled "Day of" —
+  both the kept option and the renamed one still use the *same* `IcsAlarmOffset`
+  values (`'1day'`/`'attime'`) and the same zero-offset `attime` TRIGGER
+  under the hood, since firing "at DTSTART" already means "the day
+  itself" once there's no time component — only the label changes to
+  describe what that actually means. Applied to all four callers, each
+  passing its own real due-time state: `RequestResponseForm.tsx`/
+  `ResponseDetailForm.tsx` (`!!data?.due_time`),
+  `TodoDetailForm.tsx`/`CreateTodoForm.tsx`
+  (`todoDatesEnabled && todoTimeEnabled && form.dueTime.trim() !== ''`,
+  the same expression each file's own `due_time` write/native-calendar
+  path already uses). **Checked, not built**: Jim's parenthetical "even if
+  the defaults for the account included those reminders" doesn't apply to
+  anything live — this dialog has never had an account-level default for
+  its own alarm checkboxes (confirmed via the file's own 2026-09-17
+  header comment and by reading all four call sites); it has only ever
+  started every open fully unchecked, so there's no default to override
+  here — the fix is simply that a hidden checkbox can never be selected in
+  the first place. `npx tsc --noEmit`/`npm run lint` both clean. No mockup
+  — this dialog has never had one.

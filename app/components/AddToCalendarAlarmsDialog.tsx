@@ -25,6 +25,19 @@ import type { IcsAlarmOffset } from '@/lib/ics'
  * every other caller (ResponseDetailForm.tsx, CreateTodoForm.tsx,
  * TodoDetailForm.tsx — all reached only by a signed-in account holder who
  * already knows the drill) omits it, leaving this dialog unchanged there.
+ *
+ * `hasDueTime` (2026-11-20, owner-reported) — a Request/ToDo with no Due
+ * Time set becomes an RFC 5545 all-day (VALUE=DATE) event (see
+ * buildCalendarEventFields's own `allDay` field in ics.ts); "1 hour before"
+ * and "At the scheduled time" both describe a specific clock moment that
+ * simply doesn't exist on an all-day event — a calendar app can only
+ * compute them relative to DTSTART's own implied midnight, which isn't what
+ * either label promises. When false, those two are dropped and "1 day
+ * before" is joined by "Day of" instead — the same zero-offset `attime`
+ * TRIGGER as "At the scheduled time" (fires at the start of DTSTART, i.e.
+ * the day itself), just labeled for what that actually means without a
+ * time component. Required, not optional, so every caller has to supply
+ * the real answer rather than silently defaulting to the time-bearing set.
  */
 
 type Props = {
@@ -33,13 +46,22 @@ type Props = {
   onConfirm: (alarms: IcsAlarmOffset[]) => void
   confirmLabel?: string
   guidance?: ReactNode
+  hasDueTime: boolean
 }
 
-const ALARM_OPTIONS: { value: IcsAlarmOffset; label: string }[] = [
-  { value: '1day', label: '1 day before' },
-  { value: '1hour', label: '1 hour before' },
-  { value: 'attime', label: 'At the scheduled time' },
-]
+function alarmOptionsFor(hasDueTime: boolean): { value: IcsAlarmOffset; label: string }[] {
+  if (!hasDueTime) {
+    return [
+      { value: '1day', label: '1 day before' },
+      { value: 'attime', label: 'Day of' },
+    ]
+  }
+  return [
+    { value: '1day', label: '1 day before' },
+    { value: '1hour', label: '1 hour before' },
+    { value: 'attime', label: 'At the scheduled time' },
+  ]
+}
 
 export default function AddToCalendarAlarmsDialog({
   open,
@@ -47,10 +69,13 @@ export default function AddToCalendarAlarmsDialog({
   onConfirm,
   confirmLabel = 'Add to Calendar',
   guidance,
+  hasDueTime,
 }: Props) {
   const [selected, setSelected] = useState<Set<IcsAlarmOffset>>(new Set())
 
   if (!open) return null
+
+  const alarmOptions = alarmOptionsFor(hasDueTime)
 
   function toggle(value: IcsAlarmOffset) {
     setSelected((prev) => {
@@ -92,7 +117,7 @@ export default function AddToCalendarAlarmsDialog({
           Optionally add a reminder alarm inside the calendar event itself — your calendar app
           will alert you, whether or not Would You Please is open. None selected by default.
         </p>
-        {ALARM_OPTIONS.map((opt) => (
+        {alarmOptions.map((opt) => (
           <label className="checkrow" key={opt.value} style={{ marginBottom: 8 }}>
             <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} />
             <span className="checktext">{opt.label}</span>

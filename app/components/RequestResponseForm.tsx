@@ -1539,6 +1539,7 @@ export default function RequestResponseForm() {
             performAddToCalendarDownload(alarms)
           }}
           guidance={calendarSavingGuidance()}
+          hasDueTime={!!data?.due_time}
         />
       </div>
     </div>
