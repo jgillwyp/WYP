@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import type { IcsAlarmOffset } from '@/lib/ics'
 
@@ -17,6 +17,14 @@ import type { IcsAlarmOffset } from '@/lib/ics'
  * All three options start unchecked every time the dialog opens ("The
  * default would be none checked" — owner's own instruction), not
  * remembered across opens.
+ *
+ * `guidance` (2026-11-20) — optional, platform-specific text shown above the
+ * reminder-alarm note. Added for RequestResponseForm.tsx's own anonymous
+ * `/r/[token]` recipient, who has never seen this app before and has no
+ * reason to expect a browser download to produce a usable calendar event;
+ * every other caller (ResponseDetailForm.tsx, CreateTodoForm.tsx,
+ * TodoDetailForm.tsx — all reached only by a signed-in account holder who
+ * already knows the drill) omits it, leaving this dialog unchanged there.
  */
 
 type Props = {
@@ -24,6 +32,7 @@ type Props = {
   onCancel: () => void
   onConfirm: (alarms: IcsAlarmOffset[]) => void
   confirmLabel?: string
+  guidance?: ReactNode
 }
 
 const ALARM_OPTIONS: { value: IcsAlarmOffset; label: string }[] = [
@@ -37,6 +46,7 @@ export default function AddToCalendarAlarmsDialog({
   onCancel,
   onConfirm,
   confirmLabel = 'Add to Calendar',
+  guidance,
 }: Props) {
   const [selected, setSelected] = useState<Set<IcsAlarmOffset>>(new Set())
 
@@ -73,6 +83,11 @@ export default function AddToCalendarAlarmsDialog({
             <button className="btn" type="button" onClick={handleConfirm}>{confirmLabel}</button>
           </div>
         </div>
+        {guidance && (
+          <p className="checknote" style={{ marginBottom: 10 }}>
+            {guidance}
+          </p>
+        )}
         <p className="checknote" style={{ marginBottom: 10 }}>
           Optionally add a reminder alarm inside the calendar event itself — your calendar app
           will alert you, whether or not Would You Please is open. None selected by default.

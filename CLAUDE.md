@@ -10040,3 +10040,40 @@ link is built only after the stack is proven on Add Contact.
   verifiable from this sandbox beyond the raw text edit — needs Jim's own
   next Archive/Distribute cycle to confirm Xcode picks it up correctly
   (`1.0 (2)`) and that App Store Connect accepts the upload.
+- **Add to Calendar on the anonymous `/r/[token]` path now explains, per
+  platform, how to actually get the downloaded `.ics` onto a calendar —
+  new (2026-11-20), no migration.** Jim: a "WYP non-account" recipient
+  clicking Add to Calendar in a browser just gets a file download, with no
+  explanation that it needs a further step to actually land on a calendar,
+  and asked whether a platform-tailored dialog could cover that, plus
+  mention that installing the app makes it smoother. Confirmed the real
+  mechanics before building, since the original framing overstated them: a
+  Free Account used in an ordinary browser tab gets the identical `.ics`-
+  download behavior as no account at all — only the *installed native app*
+  (Android APK sideload or the iOS TestFlight build) hands the event
+  straight to the device's own Calendar app, via `handleAddToCalendar`'s
+  existing `Capacitor.isNativePlatform()` branch (2026-10-16) — so the new
+  copy says the app "connects directly" to the calendar rather than
+  promising anything "automatic."
+  `AddToCalendarAlarmsDialog.tsx` (the reminder-alarm picker that already
+  opens on every non-native "Add to Calendar" click, 2026-09-17) gained an
+  optional `guidance?: ReactNode` prop, rendered as a `.checknote`
+  paragraph above the existing reminder-alarm note — `undefined` for every
+  other caller (`ResponseDetailForm.tsx`, `CreateTodoForm.tsx`,
+  `TodoDetailForm.tsx`, all reached only by a signed-in account holder who
+  already knows the drill), so none of them changed. `RequestResponseForm.tsx`
+  (the one anonymous-recipient screen) is the only caller that passes one,
+  via new `calendarSavingGuidance()` — branches on the existing
+  `isIOSDevice()`/`isAndroidDevice()` helpers from `app/src/lib/platform.ts`
+  (iOS: check the download banner or Files app's Downloads folder, tap the
+  file; Android: tap the "Download complete" notification or the Files
+  app; desktop/anything else: open it from the Downloads folder, usually a
+  double-click), each ending with the "installing the app connects this
+  directly" line except the desktop branch, where there's no installed-app
+  path to mention. Safe to call these UA-sniffing helpers directly in
+  render rather than behind a mount effect — the dialog itself returns
+  `null` whenever `open` is false, true on both the server render and the
+  very first client render, so there's no hydration mismatch; by the time
+  `open` ever flips true the component is already purely client-side.
+  `npx tsc --noEmit`/`npm run lint` both clean. No mockup — this dialog has
+  never had one.

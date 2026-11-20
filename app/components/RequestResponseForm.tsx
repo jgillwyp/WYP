@@ -16,7 +16,7 @@ import { buildCalendarEventFields, buildIcsContent, cameFromCalendarLink, todayI
 import { isReminderEligible, type RecipientAccountStatus } from '@/lib/email'
 import { type RepeatRule, describeRepeat } from '@/lib/repeatRule'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
-import { printWithExpandedWindow } from '@/lib/platform'
+import { isAndroidDevice, isIOSDevice, printWithExpandedWindow } from '@/lib/platform'
 import NativeCalendar from '@/lib/nativeCalendar'
 
 /**
@@ -787,6 +787,53 @@ export default function RequestResponseForm() {
     setCalendarDialogOpen(true)
   }
 
+  // Owner's ask, 2026-11-20 — this screen's own visitor is a WYP
+  // "non-account" recipient: an anonymous link-click with no app context,
+  // so a browser download producing a file rather than a calendar entry is
+  // a real surprise, not an obvious next step. Shown only here (passed as
+  // AddToCalendarAlarmsDialog's own optional `guidance` prop below) — every
+  // other caller of that dialog is a signed-in account holder who already
+  // knows the drill. Tailored per-platform since "open your Downloads" means
+  // a different place on each one; falls back to the desktop wording for
+  // any UA that isn't recognized as iOS/Android. Deliberately doesn't
+  // promise the app makes this "automatic" — only the installed native app
+  // (Android APK sideload or the iOS TestFlight build) hands the event
+  // straight to the device's own Calendar app via handleAddToCalendar's own
+  // Capacitor.isNativePlatform() branch above; a Free Account used in an
+  // ordinary browser tab gets this same download either way.
+  function calendarSavingGuidance() {
+    if (isIOSDevice()) {
+      return (
+        <>
+          This saves a universal calendar file (.ics) — look for a download
+          banner, or check the Files app&rsquo;s Downloads folder, then tap
+          the file; it will offer to add the event to your Calendar app.
+          Installing the Would You Please app lets this connect directly to
+          your calendar instead.
+        </>
+      )
+    }
+    if (isAndroidDevice()) {
+      return (
+        <>
+          This saves a universal calendar file (.ics) to your Downloads
+          folder — tap the &ldquo;Download complete&rdquo; notification, or
+          open it from your Files app, and your calendar app will offer to
+          add the event. Installing the Would You Please app lets this
+          connect directly to your calendar instead.
+        </>
+      )
+    }
+    return (
+      <>
+        This saves a universal calendar file (.ics) to your Downloads
+        folder — opening it (usually a double-click) will offer to add the
+        event to whatever calendar app you have set as default (Outlook,
+        Apple Calendar, etc.).
+      </>
+    )
+  }
+
   // Owner's ask, 2026-08-10 — see buildIcsContent above for the field
   // mapping and the boilerplate-text flag. The link is just this page's own
   // URL (the /r/[token] the recipient is already looking at), so there's
@@ -1491,6 +1538,7 @@ export default function RequestResponseForm() {
             setCalendarDialogOpen(false)
             performAddToCalendarDownload(alarms)
           }}
+          guidance={calendarSavingGuidance()}
         />
       </div>
     </div>
