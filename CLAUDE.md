@@ -10292,3 +10292,46 @@ link is built only after the stack is proven on Add Contact.
   reaches out to directly is a different, legitimate use case — but that's
   a template he'd send himself, not an app feature. `npx tsc --noEmit`/
   `npm run lint` both clean. No mockup file updated.
+- **One-time Welcome dialog for a brand-new Pre-Release Tester, plus a
+  re-view link on the About screen — new shared `WelcomeDialog.tsx`
+  (2026-11-21), no migration.** Jim: "We should have a one-time Welcome
+  dialog that thanks the tester for being part of the Pre-Release Testers
+  community, encourges feedback by email (directs them to Housekeeping,
+  Pre-Release Testers, Feedback), and suggests that they create a Request
+  and send it to themselves - so they can see how the application is seen
+  by others," then, mid-build: "Maybe add a button or underlined link on
+  the About screen to 'See the Would You Please app Welcome message.'"
+  **"One-time" needed no new column or flag** — `CreateFreeAccountForm.tsx`
+  is itself already only ever reached once per account
+  (`profiles.display_name` still null, the existing `/auth/callback`
+  routing rule, see that file's own header comment), so showing the dialog
+  right after a successful Save there is already guaranteed one-time with
+  nothing new to track. Its old `router.push('/')` on save success became
+  `setWelcomeDialogOpen(true)` instead, with the dialog's own "Go to Main
+  Screen" button carrying that same navigation forward.
+  New `app/components/WelcomeDialog.tsx` (title, copy, and a "Create a
+  Request" button that routes to `/requests/new`) is shared between
+  `CreateFreeAccountForm.tsx` and `AboutForm.tsx` rather than duplicated —
+  a deliberate exception to this codebase's usual per-file-duplication
+  convention, same reasoning `AttachmentsPanel.tsx`/`RepeatControl.tsx`
+  already established: identical content reused by two genuinely different
+  screens. Only `dismissLabel`/`onDismiss` are each caller's own, since the
+  two screens want different things from dismissing it — continue on to
+  Main Screen (Create Free Account, first-run) vs. just close and stay put
+  (About, a revisit). `AboutForm.tsx` gained a new `.linkbtn` ("See the
+  Would You Please app Welcome message") under its own Pre-Release Testing
+  section, same underlined-link-button component `RepeatControl.tsx`/
+  `DateTimeField.tsx` already use, rendered as a standalone element with no
+  wrapping `<p>` (`DateTimeField.tsx`'s own "+ Add Time" link is the
+  existing precedent that this needs no extra markup). **Placement bug
+  caught and fixed before shipping**: the dialog's `<WelcomeDialog>` must
+  render inside `.app`, not after it closes — `.scrim`/`.modal` are
+  `position: absolute` and `.app` (not `.frame-none`) is this app's one
+  positioned ancestor (`globals.css`, the 2026-08-06 Add Category modal
+  comment) — a first draft placed it as a sibling after `.app` in
+  `CreateFreeAccountForm.tsx`, which would have anchored it wrong (the
+  exact class of bug `LandingPage.tsx`'s own 2026-11-10 "modal off-screen"
+  fix was about, there because that page has no `.app` ancestor at all);
+  caught by checking globals.css directly rather than assuming, moved
+  inside `.app` before shipping. `npx tsc --noEmit`/`npm run lint` both
+  clean. No mockup — neither screen's own static HTML has this.

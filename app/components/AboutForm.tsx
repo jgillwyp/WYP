@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
+import WelcomeDialog from './WelcomeDialog'
 import { APP_VERSION, BUILD_DATE } from '@/version'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
@@ -47,6 +48,14 @@ export default function AboutForm() {
   const [feedbackError, setFeedbackError] = useState<string | null>(null)
   const [feedbackSent, setFeedbackSent] = useState(false)
   const feedbackDictation = useSpeechDictation(feedbackBody, setFeedbackBody)
+
+  // Re-view the Welcome dialog (2026-11-21) — Jim: "add a button or
+  // underlined link on the About screen to 'See the Would You Please app
+  // Welcome message.'" See WelcomeDialog.tsx's own header comment for why
+  // this is a shared component rather than duplicated — this screen's own
+  // dismiss just closes the dialog and stays on About, unlike
+  // CreateFreeAccountForm.tsx's dismiss, which continues on to Main Screen.
+  const [welcomeDialogOpen, setWelcomeDialogOpen] = useState(false)
 
   async function openFeedbackDialog() {
     setFeedbackDialogOpen(true)
@@ -129,6 +138,14 @@ export default function AboutForm() {
               choose to subscribe for real later, Pre-Release Testers get a discounted
               first-year rate.
             </p>
+            <button
+              type="button"
+              className="linkbtn"
+              style={{ marginTop: 8 }}
+              onClick={() => setWelcomeDialogOpen(true)}
+            >
+              See the Would You Please app Welcome message
+            </button>
           </section>
 
           <section className="about-section">
@@ -234,6 +251,12 @@ export default function AboutForm() {
             </div>
           </>
         )}
+
+        <WelcomeDialog
+          open={welcomeDialogOpen}
+          dismissLabel="Close"
+          onDismiss={() => setWelcomeDialogOpen(false)}
+        />
       </div>
     </div>
   )

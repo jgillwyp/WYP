@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
+import WelcomeDialog from './WelcomeDialog'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { detectBrowserTimeZone, getAllTimeZones } from '@/lib/timeZones'
 import { scrollLookupFieldToTop } from '@/lib/lookupField'
@@ -111,6 +112,17 @@ export default function CreateFreeAccountForm() {
   // the wording stays accurate if Jim reschedules it later.
   const [onTrial, setOnTrial] = useState(false)
   const [trialCloseDate, setTrialCloseDate] = useState<string | null>(null)
+
+  // One-time Welcome dialog (2026-11-21) — Jim: thank a brand-new
+  // Pre-Release Tester, point them at Housekeeping > Pre-Release Tester >
+  // Feedback, and suggest creating a Request and sending it to themselves
+  // so they see both sides of the app. "One-time" needs no new column or
+  // flag of its own — this screen is already only ever reached once per
+  // account, the moment profiles.display_name is still null
+  // (app/auth/callback/page.tsx's own routing rule, see this file's header
+  // comment) — so showing it here, right after a successful Save, is
+  // already guaranteed one-time per account with no extra state to track.
+  const [welcomeDialogOpen, setWelcomeDialogOpen] = useState(false)
 
   // Load the session email (for the read-only metarow) and any already-set
   // profile fields — a person can land back here again if an earlier Save
@@ -244,7 +256,7 @@ export default function CreateFreeAccountForm() {
     }
 
     setSaving(false)
-    router.push('/')
+    setWelcomeDialogOpen(true)
   }
 
   return (
@@ -500,6 +512,12 @@ export default function CreateFreeAccountForm() {
             reset, or forget.
           </div>
         </div>
+
+        <WelcomeDialog
+          open={welcomeDialogOpen}
+          dismissLabel="Go to Main Screen"
+          onDismiss={() => router.push('/')}
+        />
       </div>
     </div>
   )
