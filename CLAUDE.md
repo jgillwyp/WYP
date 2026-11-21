@@ -10145,3 +10145,20 @@ link is built only after the stack is proven on Add Contact.
   moments earlier on the same screen, with no separate "requestor" to
   genuinely be surprised. `npx tsc --noEmit`/`npm run lint` both clean. No
   mockup — this dialog has never had one.
+- **About screen's "Send Feedback" now opens the same real Feedback dialog
+  the Private Tester chip already offers, instead of a bare `mailto:` link
+  (2026-11-20), no migration.** Jim: "The same Feedback dialog should be
+  presented in the About screen as is provided under the Private Tester
+  chip, Feedback." `AboutForm.tsx` previously only had a plain `<a
+  href="mailto:...">` — now a real button calling a new, duplicated
+  `openFeedbackDialog()`/`handleSendFeedback()` pair (same per-file
+  convention this codebase already uses for `MicIcon()` and other small
+  shared pieces, rather than extracting a shared component), sending
+  through the same `/api/feedback/send` route (forwarded-JWT, Subject
+  dropdown, Dialog-style voice dictation via `useSpeechDictation`) built
+  for MainScreen.tsx's own dialog (2026-10-21) — identical wording,
+  identical `.scrim`/`.modal` markup. The plain "or email
+  feedback@wouldyouplease.com" fallback text stays, in case a tester has
+  no session for the dialog's own forwarded-JWT send to work with. `npx
+  tsc --noEmit`/`npm run lint` both clean. No mockup — neither screen's
+  own Feedback control has ever had one.
