@@ -1,10 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 import './landing.css'
 import { SUBSCRIBER_FEATURES, FREE_TIER_ADVANCED_FEATURES, SubscriberComparisonTable } from './SubscriptionPanels'
+import { isAndroidDevice, isIOSDevice } from '@/lib/platform'
+
+// Jim's own public TestFlight link for the renamed "Pre-Release Testers"
+// External Testing group (turned on 2026-11-21) — see
+// https://appstoreconnect.apple.com, Would You Please > TestFlight >
+// Pre-Release Testers > Public Link.
+const TESTFLIGHT_PUBLIC_LINK = 'https://testflight.apple.com/join/k3pMpXd3'
 
 // Live conversion of design/marketing/WYP_landing_page.html, 2026-08-13 —
 // owner asked for this to become the actual unauthenticated `/` route
@@ -98,8 +105,45 @@ import { SUBSCRIBER_FEATURES, FREE_TIER_ADVANCED_FEATURES, SubscriberComparisonT
 // platform-appropriate link with small text fallbacks for the other two —
 // one fewer tap, and no risk of someone picking the wrong platform for
 // their own device.
+//
+// Auto-detect built the same day, Jim agreeing ("The auto-detect is a
+// better strategy"). detectedPlatform (isIOSDevice()/isAndroidDevice(),
+// microtask-deferred in a mount effect, same pattern MainScreen.tsx's own
+// installGuidance already uses) changes what Continue actually does, not
+// just its label: iOS opens TESTFLIGHT_PUBLIC_LINK directly (Jim's own
+// newly-enabled public link) rather than the web sign-up — Jim's whole
+// reason for this batch was getting more real TestFlight installs, and the
+// dialog's body text now says so plainly, including the one TestFlight
+// prerequisite worth mentioning (installing the free TestFlight app
+// itself). Android goes to /android (the existing direct-APK instructions
+// page) instead of straight to web sign-up, for the same reason. Desktop/
+// unrecognized keeps the original /login?intent=signup — there's no
+// separate native app for that case, the website (and its own PWA install
+// prompt once signed in) already is the product there.
+//
+// Jim also asked whether a *separate email* should walk Apple users through
+// the TestFlight prerequisite — deliberately not built. Apple's own public
+// join link already detects whether TestFlight is installed and walks a
+// visitor through installing it (redirects to the App Store, then back into
+// TestFlight) with no help needed from us; an email would only repeat that
+// explanation before the person has even tapped the link. The one thing
+// actually worth saying — "you'll need the free TestFlight app" — is said
+// right here, inline, at the moment it's relevant, the same place this app
+// already puts every other install explainer (see /android's own two-step
+// instructions) rather than in a separate message to go read first. An
+// email instead makes sense as a one-off recruiting tool for specific
+// people Jim reaches out to directly (not organic landing-page visitors),
+// which doesn't need app code — a template, if he wants one, not a feature.
 export default function LandingPage({ errorMessage }: { errorMessage?: string | null }) {
   const [testingDialogOpen, setTestingDialogOpen] = useState(false)
+  const [detectedPlatform, setDetectedPlatform] = useState<'ios' | 'android' | 'other'>('other')
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setDetectedPlatform(isIOSDevice() ? 'ios' : isAndroidDevice() ? 'android' : 'other')
+    })
+  }, [])
+
   return (
     <div className="wyp-landing">
       <header className="topbar">
@@ -474,10 +518,28 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="testing-dialog-title">
             <p className="modal-title" id="testing-dialog-title">Pre-Release Testing</p>
             <p className="promo-p" style={{ margin: '0 0 12px' }}>
-              Would You Please is currently in Pre-Release Testing, ahead of our full public
-              launch. Anyone can join — continue below to create your own Free Account, and
-              you&rsquo;ll automatically become a Pre-Release Tester, with the option to try
-              every Subscriber feature for free while you&rsquo;re testing.
+              {detectedPlatform === 'ios' ? (
+                <>
+                  You&rsquo;re on an iPhone or iPad — continue below to install Would You Please
+                  through Apple&rsquo;s free TestFlight beta-testing app. If you don&rsquo;t
+                  already have TestFlight, the link will prompt you to install it first; once
+                  Would You Please is installed, open it to create your Free Account and join as
+                  a Pre-Release Tester.
+                </>
+              ) : detectedPlatform === 'android' ? (
+                <>
+                  You&rsquo;re on Android — continue below for the direct install file (Would You
+                  Please isn&rsquo;t on the Google Play Store yet). Once it&rsquo;s installed,
+                  open it to create your Free Account and join as a Pre-Release Tester.
+                </>
+              ) : (
+                <>
+                  Would You Please is currently in Pre-Release Testing, ahead of our full public
+                  launch. Anyone can join — continue below to create your own Free Account, and
+                  you&rsquo;ll automatically become a Pre-Release Tester, with the option to try
+                  every Subscriber feature for free while you&rsquo;re testing.
+                </>
+              )}
             </p>
             <p className="promo-p" style={{ margin: '0 0 12px' }}>
               Already a Pre-Release Tester? <Link href="/login">Sign In</Link>
@@ -486,13 +548,25 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
               <button type="button" className="btn-secondary" onClick={() => setTestingDialogOpen(false)}>
                 Cancel
               </button>
-              <Link
-                className="btn"
-                href="/login?intent=signup"
-                onClick={() => setTestingDialogOpen(false)}
-              >
-                Continue
-              </Link>
+              {detectedPlatform === 'ios' ? (
+                <a
+                  className="btn"
+                  href={TESTFLIGHT_PUBLIC_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setTestingDialogOpen(false)}
+                >
+                  Continue
+                </a>
+              ) : (
+                <Link
+                  className="btn"
+                  href={detectedPlatform === 'android' ? '/android' : '/login?intent=signup'}
+                  onClick={() => setTestingDialogOpen(false)}
+                >
+                  Continue
+                </Link>
+              )}
             </div>
           </div>
         </>

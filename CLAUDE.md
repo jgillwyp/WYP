@@ -10261,3 +10261,34 @@ link is built only after the stack is proven on Add Contact.
   picking the wrong one for their own device. `npx tsc --noEmit`/`npm run
   lint` both clean. No mockup file updated — none of this feature's
   surfaces have one beyond Jim's own pasted screenshots.
+- **Pre-Release Testing dialog's Continue is now platform-aware, same-day
+  follow-up (2026-11-21) — auto-detect built, no separate "TestFlight
+  prerequisite" email built.** Jim confirmed the recommendation above
+  ("The auto-detect is a better strategy") and asked a follow-up: "Should
+  we send an email to Apple users which steps them through the TestFlight
+  installation prerequisite?" `LandingPage.tsx` gained `detectedPlatform`
+  (`isIOSDevice()`/`isAndroidDevice()`, `app/src/lib/platform.ts`,
+  microtask-deferred in a mount effect — same pattern `MainScreen.tsx`'s
+  own `installGuidance` already uses) and both the dialog's body text and
+  its Continue action now branch on it: **iOS** opens the real public
+  TestFlight join link (`TESTFLIGHT_PUBLIC_LINK`, a new constant —
+  `https://testflight.apple.com/join/k3pMpXd3`, the same link Jim turned
+  on this conversation) in a new tab, rather than the web sign-up — the
+  whole point of this batch was driving real TestFlight installs, not web
+  signups; **Android** goes to the existing `/android` direct-APK
+  instructions page instead; **desktop/unrecognized** keeps the original
+  `/login?intent=signup`, since there's no separate native app for that
+  case. Recommended against a dedicated prerequisite email and explained
+  why rather than building it: Apple's own public join link already
+  detects whether TestFlight is installed and walks a visitor through
+  installing it (redirect to the App Store, then back into TestFlight)
+  with zero help needed from this app; an email would only re-explain that
+  before the link is even tapped. The one sentence actually worth saying —
+  you'll need the free TestFlight app first — is said inline, in the
+  iOS branch of the dialog's own body text, at the moment it's relevant,
+  matching the precedent `/android`'s own two-step instructions already
+  set (explain the prerequisite on the page itself, not in a separate
+  message). Noted that a one-off recruiting email to specific people Jim
+  reaches out to directly is a different, legitimate use case — but that's
+  a template he'd send himself, not an app feature. `npx tsc --noEmit`/
+  `npm run lint` both clean. No mockup file updated.
