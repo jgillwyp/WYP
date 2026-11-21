@@ -2205,3 +2205,58 @@ alter table public.categories
 --     -- every existing row should read is_active = true (the default) --
 --     -- nothing was already marked Inactive before this column existed.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 102 (2026-11-22) -- profiles.welcome_dialog_shown_at. DRAFTED,
+-- NOT YET CONFIRMED RUN.
+--
+-- Backs the one-time Welcome dialog (WelcomeDialog.tsx, 2026-11-21) moving
+-- its first-shown trigger from Create Free Account to Main Screen's own
+-- first real load. Jim, testing it himself and admitting he clicked
+-- straight through without reading: "it seems more natural to add it in
+-- the app for the 1st time it is opened - since it is then part of the app
+-- instead of part of the installation. I realize that may require a
+-- migration." It does, because the reason the original placement needed no
+-- new column at all no longer holds once the trigger moves: Create Free
+-- Account is itself only ever reached once per account (its own guard is
+-- profiles.display_name still null, app/auth/callback/page.tsx's own
+-- routing rule), so showing the dialog right after its one-and-only Save
+-- was automatically one-time. Main Screen is visited forever after sign-in,
+-- so "the first time it is opened" needs its own explicit marker.
+--
+-- A nullable timestamptz, not a boolean -- same idiom every other one-time/
+-- idempotency column in this schema already uses (reminder_sent_at,
+-- trial_subscriber_granted_at, overdue_notified_at, etc.): null means "not
+-- yet," and the timestamp itself is a free audit trail of exactly when an
+-- account first saw it, which a plain boolean would throw away. MainScreen.
+-- tsx's own loadPrefs() reads it on the same round trip as main_chip_prefs/
+-- tier/etc., opens the dialog when it's null, and immediately writes the
+-- current time back (fire-and-forget, same posture ad_events' own
+-- impression logging already uses) so a person who closes the tab without
+-- ever dismissing the dialog still can't see it twice. CreateFreeAccountForm.
+-- tsx no longer touches this column or the dialog at all -- see that file's
+-- own header comment for the full before/after. The About screen's own
+-- "See the Would You Please app Welcome message" re-view link (2026-11-21)
+-- is unaffected either way -- revisiting it there never touches this column,
+-- by design, since it's meant to be read again on purpose.
+-- ============================================================================
+
+alter table public.profiles
+  add column if not exists welcome_dialog_shown_at timestamptz;
+
+grant update (welcome_dialog_shown_at) on public.profiles to authenticated;
+
+-- Verify after running:
+--   select column_name, data_type, is_nullable from information_schema.columns
+--     where table_name = 'profiles' and column_name = 'welcome_dialog_shown_at';
+--     -- timestamp with time zone, nullable
+--   select grantee, privilege_type from information_schema.column_privileges
+--     where table_name = 'profiles' and column_name = 'welcome_dialog_shown_at'
+--       and grantee = 'authenticated';
+--     -- one UPDATE row
+--   -- Then, live: reset a test account back to welcome_dialog_shown_at = null
+--   -- (or display_name = null, to go through the whole first-run flow),
+--   -- sign in, and confirm the Welcome dialog now appears on Main Screen's
+--   -- own first load rather than on Create Free Account's Save -- and that
+--   -- it does NOT appear again on a second sign-in afterward.
+-- ============================================================================

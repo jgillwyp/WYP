@@ -10394,3 +10394,46 @@ link is built only after the stack is proven on Add Contact.
   `jimgillon@hotmail.com` (already confirmed `display_name` null, no
   further SQL needed) once this deploys; should now land on Create Free
   Account and, on Save, the Welcome dialog.
+- **`app/page.tsx` routing fix confirmed live, and a diagnostic query
+  confirmed no real tester was ever actually affected (2026-11-22).** Jim
+  retested with `jimgillon@hotmail.com` and this time got the Create Free
+  Account form (not skipped) and saw the Welcome dialog on Save. A
+  follow-up query (`select ... from auth.users u join public.profiles p on
+  p.id = u.id where p.display_name is null`) across every account came
+  back with exactly one row — that same hotmail test account — confirming
+  this bug, while real, had not yet actually hit any genuine Pre-Release
+  Tester before the fix shipped.
+- **Welcome dialog's first-shown trigger moved from Create Free Account to
+  Main Screen's own first load — migration 102, DRAFTED, NOT YET CONFIRMED
+  RUN (2026-11-22).** Jim, after testing the dialog himself and admitting
+  he dismissed it with "Go to Main Screen" without reading it carefully:
+  "it seems more natural to add it in the app for the 1st time it is
+  opened - since it is then part of the app instead of part of the
+  installation. I realize that may require a migration." Right — shown as
+  the last step of Create Free Account, it read as one more step of
+  account *setup* rather than a real welcome to the app, and (by his own
+  admission) got clicked straight through. It does need a migration: Create
+  Free Account's own guaranteed-one-time property (only reached while
+  `profiles.display_name` is null) is what let the original placement skip
+  a dedicated flag entirely — that stops working once the trigger point is
+  Main Screen, which is visited forever after sign-in.
+  New `profiles.welcome_dialog_shown_at timestamptz` (nullable, no
+  default — same "null means not yet" idiom every other one-time/
+  idempotency column in this schema already uses, e.g.
+  `trial_subscriber_granted_at`/`reminder_sent_at`, rather than a plain
+  boolean that would throw away *when* it first happened). `MainScreen.tsx`'s
+  existing `loadPrefs()` effect (the same one-time round trip that already
+  reads `main_chip_prefs`/`tier`/`is_admin`/etc. on mount) now also selects
+  this column, opens the dialog when it's null, and immediately writes the
+  current timestamp back — fire-and-forget, same posture `ad_events`' own
+  impression logging already uses — so a person who closes the tab before
+  ever dismissing the dialog still can't see it twice. `CreateFreeAccountForm.tsx`
+  reverted to its original plain `router.push('/')` on Save, with the
+  `WelcomeDialog` import/state/JSX removed entirely — its own header
+  comment now points to `MainScreen.tsx` for the real mechanism.
+  `WelcomeDialog.tsx` itself needed no interface change at all — both call
+  sites (the new `MainScreen.tsx` one, dismiss label "Got it," and the
+  existing `AboutForm.tsx` re-view link, dismiss label "Close") already
+  only ever differed in `dismissLabel`/`onDismiss`, confirming the shared-
+  component design from the day before was the right call. `npx tsc
+  --noEmit`/`npm run lint` both clean. No mockup — this dialog has none.

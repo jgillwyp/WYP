@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
+import WelcomeDialog from './WelcomeDialog'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { usePWAInstall } from './PWAProvider'
 import { printWithExpandedWindow } from '@/lib/platform'
@@ -1658,6 +1659,17 @@ export default function MainScreen() {
   // its own (see docs/WYP_Admin_Statistics_Plan.md).
   const [isAdmin, setIsAdmin] = useState(false)
 
+  // One-time Welcome dialog (2026-11-22, migration 102) — see
+  // WelcomeDialog.tsx's own header comment for the full history of why this
+  // moved here from Create Free Account. profiles.welcome_dialog_shown_at
+  // is read on the same loadPrefs() round trip as main_chip_prefs/tier/etc.
+  // below; a null value means this account has never actually seen Main
+  // Screen with the dialog logic live, so it's shown once and the column is
+  // written back immediately (fire-and-forget, same pattern as ad_events'
+  // own impression logging) so it can never show twice, even if the person
+  // closes the tab before dismissing it.
+  const [welcomeDialogOpen, setWelcomeDialogOpen] = useState(false)
+
   // Private Category is now an opt-in account preference, split into
   // independent Requests(sent)/ToDos toggles (migration 073, 2026-09-30,
   // superseding the single shared private_category_enabled, migration 018)
@@ -1750,10 +1762,23 @@ export default function MainScreen() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('main_chip_prefs, request_category_enabled, todo_category_enabled, request_time_enabled, todo_dates_enabled, tier, is_admin')
+        .select(
+          'main_chip_prefs, request_category_enabled, todo_category_enabled, request_time_enabled, todo_dates_enabled, tier, is_admin, welcome_dialog_shown_at'
+        )
         .eq('id', uid)
         .single()
       if (cancelled) return
+
+      if (!data?.welcome_dialog_shown_at) {
+        setWelcomeDialogOpen(true)
+        supabase
+          .from('profiles')
+          .update({ welcome_dialog_shown_at: new Date().toISOString() })
+          .eq('id', uid)
+          .then(({ error }) => {
+            if (error) console.error('Failed to record the Welcome dialog as shown:', error.message)
+          })
+      }
 
       setSentCategoriesEnabled(data?.request_category_enabled ?? false)
       setTodoCategoriesEnabled(data?.todo_category_enabled ?? false)
@@ -4251,6 +4276,12 @@ export default function MainScreen() {
           </div>
         </>
       )}
+
+      <WelcomeDialog
+        open={welcomeDialogOpen}
+        dismissLabel="Got it"
+        onDismiss={() => setWelcomeDialogOpen(false)}
+      />
     </div>
   )
 }

@@ -53,8 +53,9 @@ export default function AboutForm() {
   // underlined link on the About screen to 'See the Would You Please app
   // Welcome message.'" See WelcomeDialog.tsx's own header comment for why
   // this is a shared component rather than duplicated — this screen's own
-  // dismiss just closes the dialog and stays on About, unlike
-  // CreateFreeAccountForm.tsx's dismiss, which continues on to Main Screen.
+  // dismiss just closes the dialog and stays on About, same as its real
+  // first-shown trigger now does on MainScreen.tsx (2026-11-22, moved there
+  // from Create Free Account — see that file's own comment).
   const [welcomeDialogOpen, setWelcomeDialogOpen] = useState(false)
 
   async function openFeedbackDialog() {

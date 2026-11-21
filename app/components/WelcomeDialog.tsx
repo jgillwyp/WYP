@@ -5,21 +5,28 @@ import { useRouter } from 'next/navigation'
 // Welcome dialog (2026-11-21) — Jim: thank a brand-new Pre-Release Tester,
 // point them at Housekeeping > Pre-Release Tester > Feedback, and suggest
 // creating a Request and sending it to themselves so they see both sides of
-// the app (the asker's view and the recipient's). First shown exactly once,
-// right after a successful Save on CreateFreeAccountForm.tsx — that screen
-// is itself only ever reached once per account (profiles.display_name still
-// null, see its own header comment), so no separate "has this account seen
-// the welcome message" flag is needed there.
+// the app (the asker's view and the recipient's).
 //
-// Jim's own same-turn follow-up: "add a button or underlined link on the
+// Jim's own same-day follow-up: "add a button or underlined link on the
 // About screen to 'See the Would You Please app Welcome message'" — a
 // tester who dismissed it quickly, or just wants to re-read it, can pull it
-// back up any time from About. That's a second, independent call site with
-// different dismiss behavior (stay on About vs. continue to Main Screen
-// after signup), which is why dismissLabel/onDismiss are the caller's own —
-// everything else (title, copy, the Create a Request action) is identical
-// and lives here once rather than duplicated, since this is reused
-// identically by two very different screens.
+// back up any time from About. That's a second, independent call site,
+// which is why dismissLabel/onDismiss are the caller's own — everything
+// else (title, copy, the Create a Request action) is identical and lives
+// here once rather than duplicated, since this is reused identically by
+// two very different screens.
+//
+// First-shown trigger moved from Create Free Account to MainScreen.tsx,
+// 2026-11-22 — Jim, after testing it himself and clicking straight through
+// without reading: "it seems more natural to add it in the app for the 1st
+// time it is opened - since it is then part of the app instead of part of
+// the installation." Shown right after Create Free Account, it read as one
+// more step of account setup rather than a real welcome to the app itself.
+// Main Screen's own first real load is now the actual one-time trigger
+// (profiles.welcome_dialog_shown_at, migration 102) — see MainScreen.tsx's
+// own loadPrefs() comment for the mechanism; this component itself didn't
+// need to change at all, since both call sites already only ever differed
+// in dismissLabel/onDismiss.
 export default function WelcomeDialog({
   open,
   dismissLabel,
