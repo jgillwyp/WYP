@@ -2207,8 +2207,8 @@ alter table public.categories
 -- ============================================================================
 
 -- ============================================================================
--- Migration 102 (2026-11-22) -- profiles.welcome_dialog_shown_at. DRAFTED,
--- NOT YET CONFIRMED RUN.
+-- Migration 102 (2026-11-22) -- profiles.welcome_dialog_shown_at.
+-- CONFIRMED RUN by Jim, 2026-11-22.
 --
 -- Backs the one-time Welcome dialog (WelcomeDialog.tsx, 2026-11-21) moving
 -- its first-shown trigger from Create Free Account to Main Screen's own

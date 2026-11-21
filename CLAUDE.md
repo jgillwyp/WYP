@@ -10404,8 +10404,8 @@ link is built only after the stack is proven on Add Contact.
   this bug, while real, had not yet actually hit any genuine Pre-Release
   Tester before the fix shipped.
 - **Welcome dialog's first-shown trigger moved from Create Free Account to
-  Main Screen's own first load — migration 102, DRAFTED, NOT YET CONFIRMED
-  RUN (2026-11-22).** Jim, after testing the dialog himself and admitting
+  Main Screen's own first load — migration 102, confirmed run by Jim,
+  2026-11-22.** Jim, after testing the dialog himself and admitting
   he dismissed it with "Go to Main Screen" without reading it carefully:
   "it seems more natural to add it in the app for the 1st time it is
   opened - since it is then part of the app instead of part of the
