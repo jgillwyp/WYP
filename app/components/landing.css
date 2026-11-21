@@ -308,6 +308,15 @@
 .wyp-landing .scrim { position: fixed; }
 .wyp-landing .modal { position: fixed; }
 
+/* Continue button text color, 2026-11-22 — owner-reported from a
+   screenshot: Continue read dark navy on blue instead of white. Root
+   cause: Continue is a <Link>/<a> styled with the plain, shared .btn class
+   (not a landing-page .btn-tint/.btn-white variant with its own override
+   below), and .wyp-landing a { color: inherit; } (above) has higher
+   specificity than .btn's own `color: #fff` — one class + one element beats
+   one class alone — so it inherited the modal's dark ink text instead. */
+.wyp-landing .modal .btn { color: #fff; }
+
 /* Final CTA band + footer */
 .wyp-landing .ctaband {
   background: var(--brand-blue);

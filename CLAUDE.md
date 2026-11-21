@@ -10335,3 +10335,17 @@ link is built only after the stack is proven on Add Contact.
   caught by checking globals.css directly rather than assuming, moved
   inside `.app` before shipping. `npx tsc --noEmit`/`npm run lint` both
   clean. No mockup — neither screen's own static HTML has this.
+- **Pre-Release Testing dialog's Continue button fixed to white text
+  (2026-11-22), `landing.css`.** Jim, from a screenshot: Continue read dark
+  navy on its own blue background instead of white — Cancel (a `.btn-
+  secondary` `<button>`) looked correct right beside it. Root cause:
+  Continue is a `<Link>`/`<a>` styled with the plain, shared `.btn` class
+  (the dialog reuses `globals.css`'s app-wide modal button, not one of this
+  page's own `.btn-tint`/`.btn-white` variants), and `landing.css`'s own
+  `.wyp-landing a { color: inherit; }` has higher CSS specificity (one
+  class + one element) than `.btn`'s `color: #fff` (one class alone) — so
+  it inherited the modal's dark ink text instead. New
+  `.wyp-landing .modal .btn { color: #fff; }` override, placed right next
+  to the existing `.wyp-landing .modal` positioning override this same
+  dialog already needed (2026-08-28). `npx tsc --noEmit`/`npm run lint`
+  both clean (CSS-only change). No mockup.
