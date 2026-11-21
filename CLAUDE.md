@@ -10349,3 +10349,48 @@ link is built only after the stack is proven on Add Contact.
   to the existing `.wyp-landing .modal` positioning override this same
   dialog already needed (2026-08-28). `npx tsc --noEmit`/`npm run lint`
   both clean (CSS-only change). No mockup.
+- **Real, structural bug found and fixed: signing in with the numeric code
+  skipped Create Free Account (and the new Welcome dialog) entirely, for
+  any account — `app/page.tsx` (2026-11-22), no migration.** Surfaced
+  chasing the hotmail Welcome-dialog report: Jim reset
+  `profiles.display_name` to null for `jimgillon@hotmail.com`, confirmed it
+  via a direct SQL query, then signed in fresh in a new incognito window
+  and landed straight on Main Screen again — with the row still showing
+  `display_name` null afterward, ruling out "the account already had a
+  profile" as the explanation this time. Traced it to a real design gap,
+  not a one-off: `app/auth/callback/page.tsx` is the *only* place that ever
+  checked `profiles.display_name` before deciding `/` vs `/account/new` —
+  but that route is only ever reached by the emailed magic-link flow (its
+  `emailRedirectTo` target). The numeric-code flow
+  (`app/login/page.tsx`'s `handleVerifyCode`, built 2026-09-29 for the iOS-
+  standalone-icon case but usable from any browser, including a plain
+  desktop incognito window) calls `router.replace('/')` directly, never
+  touching `/auth/callback` at all — and `app/page.tsx` itself only ever
+  asked "is there a valid session," never "is this profile actually
+  complete," so any authenticated session rendered `MainScreen`
+  unconditionally. The same hole also covered the cross-tab
+  `onAuthStateChange` broadcast (2026-08-18, an already-open `/` tab
+  picking up a session established elsewhere) and `app/login/page.tsx`'s
+  own "someone already signed in has no business on this screen" redirect
+  — every path that could land a session on `/` shared the identical gap.
+  **This means any real Pre-Release Tester who signed in with the code
+  instead of the link has been landing on a blank Main Screen with no
+  name, no time zone, and no Welcome dialog ever shown** — not limited to
+  this one test account.
+  Fixed by moving the profile-completeness check into `app/page.tsx`
+  itself — the one screen that actually decides whether to render
+  `MainScreen` — rather than patching every individual call site that
+  might ever do `router.replace('/')`. New `resolveAuthedState(userId)`
+  (inside the existing session-check effect) runs once a session is found,
+  by either the initial `checkSession()` loop or the `onAuthStateChange`
+  subscription, and redirects to `/account/new` via `router.replace()`
+  whenever `profiles.display_name` is still null, instead of ever setting
+  `status('authed')` for an incomplete profile. `app/auth/callback/page.tsx`
+  is unchanged — it already does the right thing for the one flow that
+  reaches it; this is a second, independent enforcement of the same rule
+  at the one place every flow actually converges. `npx tsc --noEmit`/`npm
+  run lint` both clean. No mockup — this is routing logic, not a screen.
+  **Not yet confirmed fixed live** — Jim can retest with
+  `jimgillon@hotmail.com` (already confirmed `display_name` null, no
+  further SQL needed) once this deploys; should now land on Create Free
+  Account and, on Save, the Welcome dialog.

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MainScreen from './components/MainScreen'
 import LandingPage from './components/LandingPage'
@@ -89,6 +90,30 @@ function hasStoredSupabaseSession(): boolean {
   return false
 }
 
+// Real, structural gap found and fixed 2026-11-22 — owner-reported:
+// signing in with the numeric sign-in code (rather than clicking the
+// emailed link) for a genuinely brand-new account landed straight on Main
+// Screen, completely skipping Create Free Account (and, as a direct
+// consequence, the new one-time Welcome dialog, 2026-11-21) — even though
+// profiles.display_name was confirmed still null via a direct SQL check.
+// Root cause: app/auth/callback/page.tsx is the ONLY place that ever
+// checked profiles.display_name before deciding whether to route to '/'
+// or '/account/new' — but that route is only ever reached by the emailed
+// magic-link flow (its emailRedirectTo target). The code-entry flow
+// (app/login/page.tsx's handleVerifyCode, built 2026-09-29 for the iOS-
+// standalone-icon case but usable from any browser) calls
+// `router.replace('/')` directly, never touching /auth/callback at all —
+// and this component's own routing below only ever asked "is there a
+// session," never "is this account's profile actually complete," so ANY
+// authenticated session rendered MainScreen regardless. The same gap also
+// applied to the cross-tab onAuthStateChange broadcast (2026-08-18) and to
+// /login/page.tsx's own "someone already signed in has no business on
+// this screen" redirect (line ~175, also a bare router.replace('/')) —
+// every path that lands a session on `/` had the same hole. Fixed by
+// making the profile-completeness check this screen's own responsibility,
+// via resolveAuthedState() below, so it's enforced exactly once,
+// regardless of which of those paths produced the session — rather than
+// trying to patch each call site that might ever do `router.replace('/')`.
 function parseAuthError(): string | null {
   if (typeof window === 'undefined' || !window.location.hash.includes('error=')) return null
   const params = new URLSearchParams(window.location.hash.slice(1))
@@ -102,6 +127,7 @@ function parseAuthError(): string | null {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [status, setStatus] = useState<'checking' | 'authed' | 'anon'>('checking')
   const [authError] = useState<string | null>(parseAuthError)
 
@@ -114,6 +140,27 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false
 
+    // The one place that decides a real session is actually ready to see
+    // Main Screen — see this file's own header comment for why this has
+    // to live here rather than in whichever flow happened to produce the
+    // session. A profile with no display_name yet means Create Free
+    // Account was never completed, same test app/auth/callback/page.tsx
+    // already makes; redirecting there (not rendering anything here first)
+    // keeps a half-set-up account from ever flashing Main Screen.
+    async function resolveAuthedState(userId: string) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', userId)
+        .single()
+      if (cancelled) return
+      if (!profile?.display_name) {
+        router.replace('/account/new')
+        return
+      }
+      setStatus('authed')
+    }
+
     async function checkSession() {
       const delaysMs = hasStoredSupabaseSession() ? [0, 600, 1600] : [0]
       for (let i = 0; i < delaysMs.length; i++) {
@@ -122,7 +169,7 @@ export default function Home() {
         const { data } = await supabase.auth.getSession()
         if (cancelled) return
         if (data.session) {
-          setStatus('authed')
+          await resolveAuthedState(data.session.user.id)
           return
         }
         if (i === delaysMs.length - 1) {
@@ -137,13 +184,17 @@ export default function Home() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return
-      setStatus(session ? 'authed' : 'anon')
+      if (session) {
+        resolveAuthedState(session.user.id)
+      } else {
+        setStatus('anon')
+      }
     })
     return () => {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [])
+  }, [router])
 
   if (status === 'checking') return <div>Loading…</div>
   if (status === 'authed') return <MainScreen />
