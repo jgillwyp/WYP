@@ -547,6 +547,16 @@ export default function TodoDetailForm() {
   const todoReminderAlreadySent = reminderSentAt !== null
   const todoReminderDisabled =
     todoReminderArchived || todoReminderPrereqsMissing || todoReminderIneligible || todoReminderAlreadySent
+
+  // Overdue Due Date (owner, 2026-11-20: "If past the Due Date on a ToDo, it
+  // should in ToDo Detail show the Due Date as red and bolded - which is
+  // done for Requests") — same calendar-date-only comparison as
+  // RequestDetailForm.tsx's own isOverdue (and every other overdue treatment
+  // in this app). A Done ToDo or an archived one is never "overdue"
+  // regardless of Due Date, matching the Reminder checkboxes' own grey-out
+  // reasoning above.
+  const isOverdue =
+    archivedAt === null && form.doneDate.trim() === '' && form.dueDate.trim() !== '' && form.dueDate < todayISODate()
   const todoReminderTooltip = todoReminderArchived
     ? 'Reminders are not available for archived ToDos.'
     : todoReminderPrereqsMissing
@@ -1333,6 +1343,7 @@ export default function TodoDetailForm() {
                   timeValue={form.dueTime}
                   onTimeChange={(v) => set('dueTime', v)}
                   timeEnabled={todoTimeEnabled}
+                  dateClassExtra={isOverdue ? 'overdue-date' : ''}
                 />
                 <DateTimeField
                   idPrefix="dnd"

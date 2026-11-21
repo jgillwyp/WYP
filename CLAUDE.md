@@ -10180,3 +10180,22 @@ link is built only after the stack is proven on Add Contact.
   tooltips reworded to drop "select Contact and" accordingly. `npx tsc
   --noEmit`/`npm run lint` both clean. No mockup — this feature family has
   none.
+- **ToDo Detail's Due Date now shows red/bold when overdue, matching
+  Request Detail — real gap, closed (2026-11-20), `TodoDetailForm.tsx`, no
+  migration.** Jim, with a paired screenshot of Request Detail (red/bold
+  Due Date) beside ToDo Detail (plain): "If past the Due Date on a ToDo,
+  it should in ToDo Detail show the Due Date as red and bolded - which is
+  done for Requests." `RequestDetailForm.tsx`'s own `isOverdue` (2026-08-22,
+  `.finput.overdue-date` CSS already shared in `app/globals.css`) was
+  simply never ported to this screen when `DateTimeField.tsx` unified both
+  files' Due/Done Date+Time markup (2026-10-08) — `dateClassExtra` already
+  exists on the shared component for exactly this purpose, just unused
+  here. Added the identical calendar-date-only comparison (`archivedAt ===
+  null && form.doneDate.trim() === '' && form.dueDate.trim() !== '' &&
+  form.dueDate < todayISODate()` — this file's own existing `todayISODate()`
+  helper is byte-identical to Request Detail's `todayIso()`) and passed
+  `dateClassExtra={isOverdue ? 'overdue-date' : ''}` to the Due Date
+  `DateTimeField` call, matching Request Detail's own call exactly. Done
+  Date is unaffected, same as Request Detail. `npx tsc --noEmit`/`npm run
+  lint` both clean. No mockup — this fix has none, same as Request Detail's
+  own 2026-08-22 original.
