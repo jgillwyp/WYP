@@ -10199,3 +10199,65 @@ link is built only after the stack is proven on Add Contact.
   Date is unaffected, same as Request Detail. `npx tsc --noEmit`/`npm run
   lint` both clean. No mockup — this fix has none, same as Request Detail's
   own 2026-08-22 original.
+- **"Private Tester"/"Private Testing" renamed "Pre-Release Tester"/
+  "Pre-Release Testing" throughout the app's user-facing text and outbound
+  email; LandingPage's gating dialog rebuilt from a blocking "email us"
+  dead end into a real Continue-to-signup prompt (2026-11-21), no
+  migration.** Jim turned on TestFlight's public link ("I turned on the
+  public TestFlight link... please modify our wording throughout the app
+  from 'Private Tester' to 'Pre-Release Tester' - and modify wording during
+  sign-up to match the new approach of public access to 'Pre-Release
+  Tester' status") and pasted his own mockup of a "Pre-Release Testing"
+  dialog with an iPhone/Android/Windows platform picker before Continue,
+  asking for a review ("maybe it would be better to not require a platform
+  selection... haven't thought it all the way through... Your thoughts?").
+  Scoped the rename to what a user (or a tester reading an email) actually
+  sees — JSX render text, dialog titles, aria-labelled headings, the
+  Privacy Policy, and the trial-closing-notice email template — rather than
+  every dated, historical code comment that narrates a past decision using
+  "Private Tester" as the name current at the time; rewriting those would
+  misrepresent what was actually said/built then, the same reasoning this
+  file's own entries are never rewritten after the fact. Files touched:
+  `AboutForm.tsx` (heading, explanatory paragraph, "You're a ... Tester,"
+  Feedback dialog title), `MainScreen.tsx` (Housekeeping chip, "Add ...
+  Tester"/"... Testing Close" row titles, Feedback dialog title + subnote),
+  `AdminAddTesterForm.tsx`/`AdminTrialCloseForm.tsx` (band titles, the
+  Admin screens' own explanatory/result text), `CreateFreeAccountForm.tsx`
+  (the dormant trial-notice banner), `SubscriptionPanels.tsx` (the
+  Pre-Release Tester box's explanatory text, the dormant free-trial status
+  line/paragraph), `login/page.tsx` (the gated-signup screen's title/body —
+  effectively a dead path now that the signup gate is permanently off, but
+  renamed in case it's ever re-enabled), `privacy/page.tsx` (two real
+  policy sentences), `email.ts` (the trial-closing-notice subject/HTML/
+  text), `TesterChecklistForm.tsx` (a checklist item's own visible text),
+  and `app/android/page.tsx` ("the direct install file for ... testers").
+  **AboutForm's own "Pre-Release Testing" paragraph was also corrected for
+  accuracy while in there, not just renamed** — its old text ("every
+  available feature is open to you... Private Testers will be given 30
+  days' notice") described the migration-098 auto-subscriber-trial-grant
+  mechanism, which migration 099 reverted the same day it shipped
+  (2026-11-16); current reality is that a new Free Account is automatically
+  enrolled as a Pre-Release Tester (migration 100's `tier_toggle_allowlist`/
+  `beta_allowlist`) but stays on Free tier until the account itself flips
+  "Subscribed? (testing only)" — rewritten to say that instead of repeating
+  a now-false claim.
+  **LandingPage.tsx's own "Private Testing" dialog got a real behavior
+  change, not just new words** — its premise (migration 015's invite-only
+  gate: "send an email to request access") stopped being true the moment
+  signup opened permanently (2026-11-17) and auto-enrollment shipped
+  (migration 100, 2026-11-17) — there was nothing left to request, yet the
+  dialog still dead-ended at a mailto link with only a Close button. Now a
+  plain heads-up ("Anyone can join — continue below...") with a real
+  **Continue** action (`<Link href="/login?intent=signup">`, styled `.btn`)
+  alongside **Cancel** (`.btn-secondary`), plus the existing "Already a
+  Pre-Release Tester? Sign In" link, unchanged in mechanism. **Jim's own
+  platform-picker mockup was not built** — flagged back as an open
+  recommendation in the dialog's own new header comment and in chat rather
+  than assumed: skip the picker, auto-detect the visitor's platform (this
+  app's own `isIOSDevice()`/`isAndroidDevice()`/etc. in
+  `app/src/lib/platform.ts` already exist for this) and show one
+  platform-appropriate link by default with small text fallbacks for the
+  other two, rather than adding a selection step and the risk of someone
+  picking the wrong one for their own device. `npx tsc --noEmit`/`npm run
+  lint` both clean. No mockup file updated — none of this feature's
+  surfaces have one beyond Jim's own pasted screenshots.

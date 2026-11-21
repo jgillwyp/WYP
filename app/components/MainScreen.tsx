@@ -2887,7 +2887,7 @@ export default function MainScreen() {
                     aria-selected={hkTab === 'tester'}
                     onClick={() => setHkTab('tester')}
                   >
-                    Private Tester
+                    Pre-Release Tester
                   </button>
                 </div>
               </div>
@@ -3177,7 +3177,7 @@ export default function MainScreen() {
                     onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/testers/new') }}
                   >
                     <span className="hktext">
-                      <span className="hktitle">Add Private Tester</span>
+                      <span className="hktitle">Add Pre-Release Tester</span>
                       <span className="hknote"> — allow someone new to sign in and test</span>
                     </span>
                   </div>
@@ -3285,7 +3285,7 @@ export default function MainScreen() {
                     onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/trial-close') }}
                   >
                     <span className="hktext">
-                      <span className="hktitle">Private Testing Close</span>
+                      <span className="hktitle">Pre-Release Testing Close</span>
                       <span className="hknote"> — schedule the free trial&rsquo;s end date (30-day notice)</span>
                     </span>
                   </div>
@@ -4177,11 +4177,11 @@ export default function MainScreen() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="feedback-dialog-title">
             <div className="modalhead">
               <p className="modal-title" id="feedback-dialog-title">
-                Private Tester Feedback
+                Pre-Release Tester Feedback
               </p>
             </div>
             <p className="subnote" style={{ marginTop: 10 }}>
-              This is a temporary feedback channel for the private testing period only — it won&rsquo;t be part of
+              This is a temporary feedback channel for the Pre-Release Testing period only — it won&rsquo;t be part of
               the finished app.
             </p>
             <div className="metarow" style={{ marginTop: 10 }}>

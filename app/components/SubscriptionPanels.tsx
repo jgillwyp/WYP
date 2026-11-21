@@ -1548,7 +1548,7 @@ function PrivateTesterBox({
     // globals.css's own comment at .testernote.
     <div className="testernote" style={{ marginBottom: 14 }}>
       <p className="checktext" style={{ margin: 0 }}>
-        As a Private Tester, what you see below is a normal Free/Subscriber page based on
+        As a Pre-Release Tester, what you see below is a normal Free/Subscriber page based on
         whether you&rsquo;ve used the toggle button below to switch to Subscriber status and how
         you may have &ldquo;paid for&rdquo; subscriptions or storage with a test-only credit
         card.
@@ -1620,7 +1620,7 @@ function PrivateTesterBox({
           it to avoid saying it twice. */}
       <div className="testertoggle">
         <p className="checktext" style={{ margin: 0 }}>
-          After the close of Private Testing, normal sign-up options apply.
+          After the close of Pre-Release Testing, normal sign-up options apply.
         </p>
         <button
           className="btn"
@@ -1755,14 +1755,14 @@ function SubscriberStatus({
             owner-reported — wraps to two lines on a narrower Android
             screen); the section's own band title already says "Account
             Status," so the repetition was never load-bearing. */}
-        {onTrial ? 'Status: Private Testing (Free Trial)' : `Status: ${cadenceWord ? `${cadenceWord} ` : ''}Subscriber`}
+        {onTrial ? 'Status: Pre-Release Testing (Free Trial)' : `Status: ${cadenceWord ? `${cadenceWord} ` : ''}Subscriber`}
         {!onTrial && cancelAtPeriodEnd && <> (until {formatRenewalDateShort(renewalDate)})</>}
       </div>
       {onTrial ? (
         <p className="promo-p" style={{ margin: '4px 0 0' }}>
           {trialCloseDate
-            ? `You have full, free Subscriber access during Would You Please's Private Testing period. This ends on ${trialCloseDate} — subscribe anytime before or after that date to keep every Subscriber feature.`
-            : `You have full, free Subscriber access during Would You Please's Private Testing period. We'll email you at least 30 days before this changes.`}
+            ? `You have full, free Subscriber access during Would You Please's Pre-Release Testing period. This ends on ${trialCloseDate} — subscribe anytime before or after that date to keep every Subscriber feature.`
+            : `You have full, free Subscriber access during Would You Please's Pre-Release Testing period. We'll email you at least 30 days before this changes.`}
         </p>
       ) : (
         <p className="promo-p" style={{ margin: '4px 0 0' }}>

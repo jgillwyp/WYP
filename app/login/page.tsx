@@ -360,7 +360,7 @@ function LoginScreen() {
 
         <div className="band">
           <span className="glabel">
-            {gated ? 'Private Testing' : isSignupIntent ? 'Sign In for Free Account' : 'Sign In'}
+            {gated ? 'Pre-Release Testing' : isSignupIntent ? 'Sign In for Free Account' : 'Sign In'}
           </span>
         </div>
 
@@ -379,9 +379,9 @@ function LoginScreen() {
                 </svg>
               </div>
 
-              <h2 className="sent-h">Private Testing</h2>
+              <h2 className="sent-h">Pre-Release Testing</h2>
               <p className="sent-p">
-                This app is currently in a private testing mode with a limited number of
+                This app is currently in Pre-Release Testing with a limited number of
                 users.
               </p>
               <p className="sent-p">
@@ -395,7 +395,7 @@ function LoginScreen() {
               </p>
               <p className="sent-p">
                 If your participation is approved, you will receive an email explaining the
-                Private Testing process, related limitations, the expected testing
+                Pre-Release Testing process, related limitations, the expected testing
                 duration, and a &ldquo;Start a Free Account&rdquo; link to click.
               </p>
 

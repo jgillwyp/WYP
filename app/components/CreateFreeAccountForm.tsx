@@ -269,8 +269,8 @@ export default function CreateFreeAccountForm() {
         {onTrial && (
           <div className="noticeband">
             {trialCloseDate
-              ? `Note: You're joining during Private Testing — full, free access to every Subscriber feature through ${trialCloseDate}. After that date, normal Free and Subscriber plans apply.`
-              : `Note: You're joining during Private Testing — full, free access to every Subscriber feature for now. We'll email you at least 30 days before that changes.`}
+              ? `Note: You're joining during Pre-Release Testing — full, free access to every Subscriber feature through ${trialCloseDate}. After that date, normal Free and Subscriber plans apply.`
+              : `Note: You're joining during Pre-Release Testing — full, free access to every Subscriber feature for now. We'll email you at least 30 days before that changes.`}
           </div>
         )}
 

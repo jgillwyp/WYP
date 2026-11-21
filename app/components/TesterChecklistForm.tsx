@@ -157,7 +157,7 @@ function buildItems(platform: Platform): ChecklistItem[] {
     },
     { id: 'quirk-1', group: 'quirks', title: '"Subscribe" won’t charge you', detail: "Real payment processing isn't connected yet — those buttons are safe to tap." },
     { id: 'quirk-2', group: 'quirks', title: 'First mic tap asks permission', detail: 'The first time you use Voice Dictation, you’ll be asked to allow microphone access — say yes, or dictation won’t work.' },
-    { id: 'fb-1', group: 'feedback', title: 'Use Private Tester → Feedback', detail: 'Housekeeping → Private Tester → Feedback, from the Main Screen.' },
+    { id: 'fb-1', group: 'feedback', title: 'Use Pre-Release Tester → Feedback', detail: 'Housekeeping → Pre-Release Tester → Feedback, from the Main Screen.' },
     { id: 'fb-2', group: 'feedback', title: 'Pick a Subject', detail: 'Error, Something Awkward, Something Missing, or Other.' },
     { id: 'fb-3', group: 'feedback', title: 'Say what happened and what you expected', detail: 'It goes straight to Jim by email, with a reply-to address back to you.' }
   )

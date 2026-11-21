@@ -77,6 +77,27 @@ import { SUBSCRIBER_FEATURES, FREE_TIER_ADVANCED_FEATURES, SubscriberComparisonT
 // versus a button that's just there. The added link is a plain <Link
 // href="/login"> — no new state, no gating logic, since Sign In already
 // works correctly for this case.
+//
+// Rebuilt 2026-11-21, "Private Tester" renamed "Pre-Release Tester"
+// app-wide — Jim turned on TestFlight's public link and asked for the
+// rename to "match the new approach of public access to 'Pre-Release
+// Tester' status." The premise this dialog was built on (migration 015's
+// invite-only gate, "send an email to request access") is no longer true:
+// signup has been fully open since 2026-11-17, and every new signup lands
+// as a Pre-Release Tester automatically (migration 100) — there's nothing
+// left to request. So this is no longer a blocking dead-end with a mailto
+// link and a bare Close button; it's a plain heads-up with a real Continue
+// action straight to /login?intent=signup, and Cancel to back out. "Already
+// an invited tester? Sign In" retitled "Already a Pre-Release Tester? Sign
+// In" to match. Jim also pasted a mockup of this same dialog adding a
+// platform picker (iPhone/Android/Windows) before Continue, unsure whether
+// that selection step is worth it — not built here, flagged back to him as
+// a recommendation rather than assumed: skip the picker and auto-detect the
+// platform instead (this app already has isIOSDevice()/isAndroidDevice()/
+// etc. in src/lib/platform.ts for exactly this), showing one obvious
+// platform-appropriate link with small text fallbacks for the other two —
+// one fewer tap, and no risk of someone picking the wrong platform for
+// their own device.
 export default function LandingPage({ errorMessage }: { errorMessage?: string | null }) {
   const [testingDialogOpen, setTestingDialogOpen] = useState(false)
   return (
@@ -451,20 +472,27 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
         <>
           <div className="scrim" onClick={() => setTestingDialogOpen(false)} />
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="testing-dialog-title">
-            <p className="modal-title" id="testing-dialog-title">Private Testing</p>
+            <p className="modal-title" id="testing-dialog-title">Pre-Release Testing</p>
             <p className="promo-p" style={{ margin: '0 0 12px' }}>
-              This app is currently in a small and limited Private Testing mode. If you
-              would like to participate, send an email to{' '}
-              <a href="mailto:notifications@wouldyouplease.com">notifications@wouldyouplease.com</a>{' '}
-              and introduce yourself and how you found out about us.
+              Would You Please is currently in Pre-Release Testing, ahead of our full public
+              launch. Anyone can join — continue below to create your own Free Account, and
+              you&rsquo;ll automatically become a Pre-Release Tester, with the option to try
+              every Subscriber feature for free while you&rsquo;re testing.
             </p>
             <p className="promo-p" style={{ margin: '0 0 12px' }}>
-              Already an invited tester? <Link href="/login">Sign In</Link>
+              Already a Pre-Release Tester? <Link href="/login">Sign In</Link>
             </p>
             <div className="modalacts">
-              <button type="button" className="btn" onClick={() => setTestingDialogOpen(false)}>
-                Close
+              <button type="button" className="btn-secondary" onClick={() => setTestingDialogOpen(false)}>
+                Cancel
               </button>
+              <Link
+                className="btn"
+                href="/login?intent=signup"
+                onClick={() => setTestingDialogOpen(false)}
+              >
+                Continue
+              </Link>
             </div>
           </div>
         </>

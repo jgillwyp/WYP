@@ -67,7 +67,7 @@ export default function AndroidDownloadPage() {
           <div className="form">
             <p>
               Would You Please isn&rsquo;t on the Google Play Store yet &mdash; this is the
-              direct install file for private testers. Installing takes two steps below &mdash;
+              direct install file for Pre-Release Testers. Installing takes two steps below &mdash;
               just opening this page doesn&rsquo;t install anything by itself.
             </p>
 

@@ -1615,13 +1615,13 @@ function formatLongDate(value: string): string {
 }
 
 export function buildTrialClosingNoticeSubject(): string {
-  return 'Would You Please — your free Private Testing access is ending soon'
+  return 'Would You Please — your free Pre-Release Testing access is ending soon'
 }
 
 export function buildTrialClosingNoticeHtml(fields: TrialClosingNoticeFields): string {
   const closeDate = formatLongDate(fields.closeDate)
   const body = [
-    `<p style="margin:0 0 18px;">Thank you for trying Would You Please during Private Testing. You've had full, free access to every Subscriber feature — this is a heads-up that Private Testing is ending.</p>`,
+    `<p style="margin:0 0 18px;">Thank you for trying Would You Please during Pre-Release Testing. You've had full, free access to every Subscriber feature — this is a heads-up that Pre-Release Testing is ending.</p>`,
     `<p style="margin:0 0 18px; font-weight:700;">Free Subscriber-tier access ends on ${escapeHtml(closeDate)}.</p>`,
     `<p style="margin:0 0 18px;">After that date, your account continues as a Free Account — you keep everything you've already created, with Free-tier limits going forward. If you'd like to keep every Subscriber feature, you can subscribe anytime before or after that date from Account Options.</p>`,
     `<p style="margin:0; font-size:13px; color:${EMAIL_INK};">No action is needed if you're happy with a Free Account.</p>`,
@@ -1632,7 +1632,7 @@ export function buildTrialClosingNoticeHtml(fields: TrialClosingNoticeFields): s
 export function buildTrialClosingNoticeText(fields: TrialClosingNoticeFields): string {
   const closeDate = formatLongDate(fields.closeDate)
   return [
-    `Thank you for trying Would You Please during Private Testing. You've had full, free access to every Subscriber feature — this is a heads-up that Private Testing is ending.`,
+    `Thank you for trying Would You Please during Pre-Release Testing. You've had full, free access to every Subscriber feature — this is a heads-up that Pre-Release Testing is ending.`,
     '',
     `Free Subscriber-tier access ends on ${closeDate}.`,
     '',

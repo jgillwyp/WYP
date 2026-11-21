@@ -156,7 +156,7 @@ export default function PrivacyPolicyPage() {
           <li>To send you transactional and account-service email: sign-in links, a notification
             when someone sends you a Request, the Reminder emails you&rsquo;ve chosen (day-before,
             day-of, and/or day-after a due date), and notices about your own account or changes to
-            the service &mdash; for example, if you joined during a free Private Testing period,
+            the service &mdash; for example, if you joined during a free Pre-Release Testing period,
             an advance notice (at least 30 days) before that period ends.</li>
           <li>To run scheduled background checks (roughly hourly) that look for Requests and
             ToDos coming due or overdue, so the Reminder emails above can go out automatically.</li>
@@ -203,7 +203,7 @@ export default function PrivacyPolicyPage() {
 
         <h2>Payments</h2>
         <p>
-          Would You Please is currently free to use while in Private Testing. We have not yet
+          Would You Please is currently free to use while in Pre-Release Testing. We have not yet
           launched paid subscriptions or connected a payment processor, so we do not collect or
           store any billing or payment card information today. This policy will be updated with
           the relevant details before that changes.

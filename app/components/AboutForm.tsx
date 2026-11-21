@@ -120,20 +120,21 @@ export default function AboutForm() {
           </div>
 
           <section className="about-section">
-            <h2 className="about-section-heading">Private Testing</h2>
+            <h2 className="about-section-heading">Pre-Release Testing</h2>
             <p className="about-section-copy">
-              Would You Please is currently in Private Testing, ahead of the launch of
-              the live application. During Private Testing there are no subscription
-              costs — every available feature is open to you. When the live application
-              becomes available, Private Testers will be given 30 days&apos; notice to
-              decide whether to continue as a Free account or a Subscribed account.
+              Would You Please is currently in Pre-Release Testing, ahead of our full public
+              launch. Signing up for a Free Account automatically makes you a Pre-Release
+              Tester — use the &ldquo;Subscribed? (testing only)&rdquo; toggle in Account Options
+              to try every Subscriber feature at no cost while you&apos;re testing, and if you
+              choose to subscribe for real later, Pre-Release Testers get a discounted
+              first-year rate.
             </p>
           </section>
 
           <section className="about-section">
             <h2 className="about-section-heading">Suggestions &amp; Feedback</h2>
             <p className="about-section-copy">
-              You&apos;re a Private Tester — if you have a suggestion, question, or hit a problem,
+              You&apos;re a Pre-Release Tester — if you have a suggestion, question, or hit a problem,
               we&apos;d like to hear it.
             </p>
             <div className="about-feedback-row">
@@ -159,7 +160,7 @@ export default function AboutForm() {
             <div className="modal" role="dialog" aria-modal="true" aria-labelledby="about-feedback-dialog-title">
               <div className="modalhead">
                 <p className="modal-title" id="about-feedback-dialog-title">
-                  Private Tester Feedback
+                  Pre-Release Tester Feedback
                 </p>
               </div>
               <p className="subnote" style={{ marginTop: 10 }}>

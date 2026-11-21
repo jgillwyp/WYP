@@ -100,7 +100,7 @@ export default function AdminTrialCloseForm() {
     setResult(
       nextCloseDate
         ? `Scheduled for ${nextCloseDate}. Notified ${json.notified ?? 0} account(s) on the trial.`
-        : 'Scheduled close canceled. Private Testing continues indefinitely.'
+        : 'Scheduled close canceled. Pre-Release Testing continues indefinitely.'
     )
     setCloseDate('')
   }
@@ -114,7 +114,7 @@ export default function AdminTrialCloseForm() {
         <div className="app">
           <WypHeader />
           <div className="band">
-            <span className="glabel">Private Testing Close</span>
+            <span className="glabel">Pre-Release Testing Close</span>
           </div>
         </div>
       </div>
@@ -127,7 +127,7 @@ export default function AdminTrialCloseForm() {
         <WypHeader />
 
         <div className="band">
-          <span className="glabel">Private Testing Close</span>
+          <span className="glabel">Pre-Release Testing Close</span>
           <span className="bandcluster">
             <button className="btn-secondary" type="button" onClick={handleClose}>
               Close
@@ -139,7 +139,7 @@ export default function AdminTrialCloseForm() {
           <div className="form">
             <p className="subnote">
               New signups while no close date is scheduled get full, free Subscriber-tier access as
-              part of Private Testing. Scheduling a close always gives every account currently on
+              part of Pre-Release Testing. Scheduling a close always gives every account currently on
               the trial at least {MIN_DAYS_OUT} days&rsquo; notice by email before it ends.
             </p>
 

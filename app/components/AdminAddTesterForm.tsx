@@ -136,7 +136,7 @@ export default function AdminAddTesterForm() {
         <WypHeader />
 
         <div className="band">
-          <span className="glabel">Add Private Tester</span>
+          <span className="glabel">Add Pre-Release Tester</span>
           <span className="bandcluster">
             <button className="btn" type="submit" form="add-tester-form" disabled={saving}>
               {saving ? 'Adding…' : 'Add'}
