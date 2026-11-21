@@ -10162,3 +10162,21 @@ link is built only after the stack is proven on Add Contact.
   no session for the dialog's own forwarded-JWT send to work with. `npx
   tsc --noEmit`/`npm run lint` both clean. No mockup — neither screen's
   own Feedback control has ever had one.
+- **Create Request: "Day of" and "Minutes before" Reminder checkboxes no
+  longer require a Contact — real bug, fixed (2026-11-20),
+  `CreateRequestForm.tsx`, no migration.** Jim: "the Minutes Before
+  setting is not allowed after a Date and a Time are entered unless the
+  Contact is selected. The presence of a selected Contact should only be
+  verified upon a Send (which it is)... The Day Before and Day After are
+  allowed to be set if only a Date is entered, but the Day Of also
+  requires a Contact name selection - which it should not." Confirmed via
+  `validate()` (already required before Send regardless) that gating
+  either checkbox on Contact too was pure redundancy with no real
+  benefit — `dayOfPrereqsMissing` dropped its `|| !selectedContact` clause
+  (now just `form.dueDate.trim() === ''`) and
+  `minutesBeforePrereqsMissing` dropped the same clause (now
+  `dueDate.trim() === '' || dueTime.trim() === ''`), matching "Day
+  before"/"Day after"'s own existing Contact-independent gating. Both
+  tooltips reworded to drop "select Contact and" accordingly. `npx tsc
+  --noEmit`/`npm run lint` both clean. No mockup — this feature family has
+  none.

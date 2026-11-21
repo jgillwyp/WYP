@@ -919,25 +919,25 @@ export default function CreateRequestForm() {
   // "Day of" (migration 042, 2026-08-22) — no MIN_DAYS_FOR_REMINDER-style
   // eligibility floor, unlike Day before: the whole point is same-day, so a
   // Due Date of today or tomorrow is exactly the case this exists for.
-  // Contact is always required here, with no hasAmpleReminderLeadTime-style
-  // relaxation — a same-day send needs the Recipient's own time zone to
-  // know what "today" means, and that need is, if anything, greater at
-  // short lead times, not smaller.
-  const dayOfPrereqsMissing = form.dueDate.trim() === '' || !selectedContact
+  // Contact is NOT required here (corrected 2026-11-20, owner-reported) —
+  // same reasoning as Day before/Day after: Contact is a real Send
+  // prerequisite (validate(), above) and gets verified there regardless;
+  // gating the checkbox on it too only blocked setting the Reminder before
+  // the Contact happened to be picked, with no real benefit.
+  const dayOfPrereqsMissing = form.dueDate.trim() === ''
   const dayOfTooltip = dayOfPrereqsMissing
-    ? 'Please select Contact and Due Date before modifying the Reminder.'
+    ? 'Please select Due Date before modifying the Reminder.'
     : undefined
 
   // "Minutes before" (migration 077, 2026-10-09) — needs Due Time as well
-  // as Due Date and Contact, since there's no exact moment to count back
-  // from with only a date. Same Contact requirement as "Day of" (no
-  // hasAmpleReminderLeadTime-style relaxation) — a precise lead time needs
-  // the Recipient's own zone just as much as a same-day send does.
-  const minutesBeforePrereqsMissing = form.dueDate.trim() === '' || form.dueTime.trim() === '' || !selectedContact
+  // as Due Date, since there's no exact moment to count back from with
+  // only a date. Contact is NOT required here either (corrected
+  // 2026-11-20, same reasoning as "Day of" just above).
+  const minutesBeforePrereqsMissing = form.dueDate.trim() === '' || form.dueTime.trim() === ''
   const minutesBeforeTooltip = minutesBeforePrereqsMissing
-    ? form.dueTime.trim() === '' && form.dueDate.trim() !== '' && selectedContact
-      ? 'A Minutes-before Reminder needs a Due Time.'
-      : 'Please select Contact and Due Date before modifying the Reminder.'
+    ? form.dueDate.trim() === ''
+      ? 'Please select Due Date before modifying the Reminder.'
+      : 'A Minutes-before Reminder needs a Due Time.'
     : undefined
 
   // Reminders until Done banner (§6.41 PROPOSED, 2026-08-20; extended with a
