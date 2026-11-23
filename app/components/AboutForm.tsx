@@ -179,11 +179,13 @@ export default function AboutForm() {
 
         {/* Private Tester Feedback (2026-11-20) — same .scrim/.modal dialog
             MainScreen.tsx's own Private Tester chip already offers, see
-            openFeedbackDialog's own comment above. */}
+            openFeedbackDialog's own comment above. feedback-modal
+            (globals.css, 2026-11-23) — see MainScreen.tsx's own identical
+            dialog for why. */}
         {feedbackDialogOpen && (
           <>
             <div className="scrim" onClick={() => setFeedbackDialogOpen(false)} />
-            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="about-feedback-dialog-title">
+            <div className="modal feedback-modal" role="dialog" aria-modal="true" aria-labelledby="about-feedback-dialog-title">
               <div className="modalhead">
                 <p className="modal-title" id="about-feedback-dialog-title">
                   Pre-Release Tester Feedback

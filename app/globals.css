@@ -1776,11 +1776,42 @@ body {
    shorter text there also leaves more width for the checkboxes not to
    wrap). max-height raised 80vh -> 92vh and top lowered (24px/+16px safe-
    area -> 10px/+6px) so a short Android viewport has more room before it
-   has to scroll at all. */
+   has to scroll at all.
+
+   2026-11-23 follow-up — owner, Android: "the dialog box could be a little
+   taller to not cut off the cancel and search buttons." A flat 92vh never
+   accounted for the device's own bottom gesture-nav safe area, so on a
+   phone with one, the last 8% could land Cancel/Search right under it;
+   separately, plain vh on a mobile browser with a collapsing address bar
+   doesn't track the real visible height the way dvh does (same reasoning
+   .app's own 100vh/100dvh pair already established). --advsearch-top holds
+   the existing top value once so max-height can subtract it, rather than
+   a flat percentage guessing how much room is left below; the bottom
+   reserve is the same max(..., safe-area+N) shape .updatebanner's own
+   padding-bottom already uses for this exact gesture-nav zone. */
 .advsearch-modal {
-  max-height: 92vh;
+  --advsearch-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
+  top: var(--advsearch-top);
+  max-height: calc(100vh - var(--advsearch-top) - max(16px, calc(env(safe-area-inset-bottom, 0px) + 10px)));
+  max-height: calc(100dvh - var(--advsearch-top) - max(16px, calc(env(safe-area-inset-bottom, 0px) + 10px)));
   overflow-y: auto;
-  top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
+  transform: translateX(-50%);
+}
+
+/* Feedback dialog (2026-11-23) — owner, Android: "the Feedback dialog
+   opens as cut-off on the top - and should be lower." Plain .modal centers
+   at top:34% via translate(-50%,-50%); once the image-attachment feature
+   (2026-11-22) made this dialog tall enough to need its own scroll on a
+   short phone, that centering pushed its top edge above the visible
+   viewport. Same top-anchor + bottom-safe-area-aware max-height as
+   .advsearch-modal above, applied via MainScreen.tsx's and AboutForm.tsx's
+   own Feedback dialog <div className="modal feedback-modal">. */
+.feedback-modal {
+  --feedback-modal-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
+  top: var(--feedback-modal-top);
+  max-height: calc(100vh - var(--feedback-modal-top) - max(16px, calc(env(safe-area-inset-bottom, 0px) + 10px)));
+  max-height: calc(100dvh - var(--feedback-modal-top) - max(16px, calc(env(safe-area-inset-bottom, 0px) + 10px)));
+  overflow-y: auto;
   transform: translateX(-50%);
 }
 

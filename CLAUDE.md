@@ -200,6 +200,34 @@ link is built only after the stack is proven on Add Contact.
   harmless `@next/next/no-img-element` warnings for the thumbnail
   previews, same as this app's existing attachment-preview usages of plain
   `<img>`). No mockup — this dialog has never had one.
+- **Two Feedback-dialog image-attachment follow-ups, same day, both real
+  modal-positioning bugs on Android (2026-11-23), no migration.** Jim
+  tested on Android/iPhone and confirmed the attach/paste feature itself
+  working on both; a reported Windows screenshot-shortcut failure turned
+  out to be PowerToys having disabled the Win key on his own machine, not
+  a WYP issue. Two real layout bugs surfaced from the same test: (1) the
+  Feedback dialog (`MainScreen.tsx`, `AboutForm.tsx`) "opens as cut-off on
+  the top" — it uses plain `.modal`, which centers at `top: 34%` via
+  `translate(-50%, -50%)`; once the 2026-11-22 image-attachment feature
+  made this dialog tall enough to need its own scroll on a short phone,
+  centering pushed its top edge above the visible viewport. (2) The
+  Advanced Search Filters dialog "could be a little taller to not cut off
+  the Cancel and Search buttons" — its existing `.advsearch-modal`
+  (2026-11-15) used a flat `max-height: 92vh` with no accounting for a
+  device's own bottom gesture-nav safe area, so the last slice of the
+  dialog (where Cancel/Search sit) could land under it; separately, plain
+  `vh` on a mobile browser with a collapsing address bar doesn't track the
+  real visible height the way `dvh` does (same reasoning `.app`'s own
+  `100vh`/`100dvh` pair already established, 2026-08-xx). Fixed both with
+  the same shape of change: `top` captured once into a CSS custom property
+  so `max-height` can subtract it, a `100vh`/`100dvh` pair (dvh wins where
+  supported), and an explicit bottom reserve —
+  `max(16px, env(safe-area-inset-bottom, 0px) + 10px)` — the same shape
+  `.updatebanner`'s own `padding-bottom` already uses for this exact
+  gesture-nav zone. New `.feedback-modal` class (`app/globals.css`) mirrors
+  `.advsearch-modal`'s own top-anchor/scroll-cap approach; applied via
+  `className="modal feedback-modal"` at both Feedback dialog call sites.
+  `npx tsc --noEmit`/`npm run lint` both clean.
 
 ## Known gaps
 

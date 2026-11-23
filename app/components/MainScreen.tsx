@@ -4203,11 +4203,15 @@ export default function MainScreen() {
 
       {/* Private Tester Feedback (2026-10-21, owner's own mockup) — see
           openFeedbackDialog's own comment above. Same .scrim/.modal
-          pattern as the Install dialog just above. */}
+          pattern as the Install dialog just above. feedback-modal
+          (globals.css, 2026-11-23) anchors it near the top with a scroll
+          cap instead of the default 34%-centered transform, which pushed
+          this dialog's top above the viewport on Android once the image-
+          attachment feature made it tall enough to need one. */}
       {feedbackDialogOpen && (
         <>
           <div className="scrim" onClick={() => setFeedbackDialogOpen(false)} />
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="feedback-dialog-title">
+          <div className="modal feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-dialog-title">
             <div className="modalhead">
               <p className="modal-title" id="feedback-dialog-title">
                 Pre-Release Tester Feedback
