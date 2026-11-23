@@ -21,10 +21,34 @@ export const runtime = 'nodejs'
  * spoofed. Sends to feedback@wouldyouplease.com (the owner's own mailbox,
  * forwarded to his personal address) with Reply-To set to the tester's own
  * email, so a reply goes straight back to them.
+ *
+ * Image attachments (2026-11-22) — Jim: "add the ability to paste captured
+ * images into the feedback email dialog." Sent as real nodemailer
+ * attachments, never stored anywhere server-side — matching this route's
+ * own existing "no stored record of a submission" design. The client
+ * (useFeedbackImages.ts) already restricts to image/* and a 3-image/5 MB
+ * cap via its own file picker/paste handler, but that's only ever a
+ * courtesy; parseImageAttachment() re-enforces the same limits here.
  */
 
 const FEEDBACK_TO_ADDRESS = 'feedback@wouldyouplease.com'
 const SUBJECTS = ['Error', 'Something Awkward', 'Something Missing', 'Other']
+const MAX_IMAGES = 3
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+type IncomingImage = { filename?: unknown; contentType?: unknown; dataUrl?: unknown }
+
+function parseImageAttachment(raw: IncomingImage, index: number) {
+  if (typeof raw.dataUrl !== 'string' || typeof raw.contentType !== 'string') return null
+  if (!raw.contentType.startsWith('image/')) return null
+  const match = /^data:[^;]+;base64,(.+)$/.exec(raw.dataUrl)
+  if (!match) return null
+  const content = Buffer.from(match[1], 'base64')
+  if (content.length === 0 || content.length > MAX_IMAGE_BYTES) return null
+  const filename =
+    typeof raw.filename === 'string' && raw.filename.trim() ? raw.filename.trim() : `screenshot-${index + 1}.png`
+  return { filename, content, contentType: raw.contentType }
+}
 
 function getSmtpTransport() {
   const host = process.env.EMAIL_SMTP_HOST
@@ -42,7 +66,7 @@ function getSmtpTransport() {
 }
 
 export async function POST(request: Request) {
-  let body: { subject?: string; body?: string }
+  let body: { subject?: string; body?: string; images?: IncomingImage[] }
   try {
     body = await request.json()
   } catch {
@@ -54,6 +78,11 @@ export async function POST(request: Request) {
   if (!message) {
     return Response.json({ sent: false, reason: 'bad_request' }, { status: 400 })
   }
+
+  const rawImages = Array.isArray(body.images) ? body.images.slice(0, MAX_IMAGES) : []
+  const attachments = rawImages
+    .map((img, i) => parseImageAttachment(img, i))
+    .filter((a): a is NonNullable<ReturnType<typeof parseImageAttachment>> => a !== null)
 
   const authHeader = request.headers.get('authorization')
   if (!authHeader) {
@@ -89,6 +118,7 @@ export async function POST(request: Request) {
       replyTo: testerEmail,
       subject: `WYP Tester Feedback: ${subject} (from ${testerEmail})`,
       text: message,
+      attachments: attachments.length > 0 ? attachments : undefined,
     })
 
     return Response.json({ sent: true }, { status: 200 })

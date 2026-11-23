@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import WypHeader from './WypHeader'
@@ -9,6 +9,7 @@ import WelcomeDialog from './WelcomeDialog'
 import { APP_VERSION, BUILD_DATE } from '@/version'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { useFeedbackImages } from '@/lib/useFeedbackImages'
 
 function formatBuildDate(value: string): string {
   return new Date(value).toLocaleDateString('en-US', {
@@ -48,6 +49,11 @@ export default function AboutForm() {
   const [feedbackError, setFeedbackError] = useState<string | null>(null)
   const [feedbackSent, setFeedbackSent] = useState(false)
   const feedbackDictation = useSpeechDictation(feedbackBody, setFeedbackBody)
+  // Image attachments (2026-11-22) — see useFeedbackImages.ts's own header
+  // comment. The hidden file input's own ref stays local here (not part of
+  // the hook's returned object) — see that file's own comment on why.
+  const feedbackImages = useFeedbackImages()
+  const feedbackFileInputRef = useRef<HTMLInputElement>(null)
 
   // Re-view the Welcome dialog (2026-11-21) — Jim: "add a button or
   // underlined link on the About screen to 'See the Would You Please app
@@ -62,6 +68,7 @@ export default function AboutForm() {
     setFeedbackDialogOpen(true)
     setFeedbackSent(false)
     setFeedbackError(null)
+    feedbackImages.reset()
     if (!feedbackEmail) {
       const { data } = await getCurrentUser()
       setFeedbackEmail(data.user?.email ?? null)
@@ -85,12 +92,13 @@ export default function AboutForm() {
       const res = await fetch('/api/feedback/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ subject: feedbackSubject, body: feedbackBody }),
+        body: JSON.stringify({ subject: feedbackSubject, body: feedbackBody, images: feedbackImages.images }),
       })
       const json = (await res.json().catch(() => ({}))) as { sent?: boolean }
       if (json.sent) {
         setFeedbackSent(true)
         setFeedbackBody('')
+        feedbackImages.reset()
       } else {
         setFeedbackError('Could not send feedback. Please try again.')
       }
@@ -217,6 +225,7 @@ export default function AboutForm() {
                     style={{ minHeight: 168 }}
                     value={feedbackBody}
                     onChange={(e) => setFeedbackBody(e.target.value)}
+                    onPaste={feedbackImages.handlePaste}
                   />
                   {feedbackDictation.supported && (
                     <button
@@ -233,6 +242,46 @@ export default function AboutForm() {
                   )}
                 </div>
               </div>
+              <div className="feedback-img-row">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => feedbackFileInputRef.current?.click()}
+                >
+                  Attach Screenshot
+                </button>
+                <input
+                  ref={feedbackFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={feedbackImages.handleFileInputChange}
+                />
+                <span className="subnote">{feedbackImages.hint}</span>
+              </div>
+              {feedbackImages.images.length > 0 && (
+                <div className="feedback-img-thumbs">
+                  {feedbackImages.images.map((img, i) => (
+                    <div key={i} className="feedback-img-thumb">
+                      <img src={img.dataUrl} alt={img.filename} />
+                      <button
+                        type="button"
+                        className="feedback-img-thumb-remove"
+                        aria-label={`Remove ${img.filename}`}
+                        onClick={() => feedbackImages.removeImage(i)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {feedbackImages.error && (
+                <p className="ferror" role="alert">
+                  {feedbackImages.error}
+                </p>
+              )}
               {feedbackError && (
                 <p className="ferror" role="alert">
                   {feedbackError}

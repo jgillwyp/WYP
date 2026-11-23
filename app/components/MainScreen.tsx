@@ -12,6 +12,7 @@ import { usePWAInstall } from './PWAProvider'
 import { printWithExpandedWindow } from '@/lib/platform'
 import { scrollLookupFieldToTop } from '@/lib/lookupField'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
+import { useFeedbackImages } from '@/lib/useFeedbackImages'
 import {
   isIOSDevice,
   isMacOSDevice,
@@ -1261,6 +1262,11 @@ export default function MainScreen() {
   // not a Subscriber feature, so it's offered to anyone whose browser
   // supports it.
   const feedbackDictation = useSpeechDictation(feedbackBody, setFeedbackBody)
+  // Image attachments (2026-11-22) — see useFeedbackImages.ts's own header
+  // comment. The hidden file input's own ref stays local here (not part of
+  // the hook's returned object) — see that file's own comment on why.
+  const feedbackImages = useFeedbackImages()
+  const feedbackFileInputRef = useRef<HTMLInputElement>(null)
 
   const [sentFilter, setSentFilter] = useState<FilterValue>(() =>
     readStoredChip(SENT_FILTER_KEY, FILTER_VALUES, 'all')
@@ -2011,6 +2017,7 @@ export default function MainScreen() {
     setFeedbackDialogOpen(true)
     setFeedbackSent(false)
     setFeedbackError(null)
+    feedbackImages.reset()
     if (!feedbackEmail) {
       const { data } = await getCurrentUser()
       setFeedbackEmail(data.user?.email ?? null)
@@ -2034,12 +2041,13 @@ export default function MainScreen() {
       const res = await fetch('/api/feedback/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ subject: feedbackSubject, body: feedbackBody }),
+        body: JSON.stringify({ subject: feedbackSubject, body: feedbackBody, images: feedbackImages.images }),
       })
       const json = (await res.json().catch(() => ({}))) as { sent?: boolean }
       if (json.sent) {
         setFeedbackSent(true)
         setFeedbackBody('')
+        feedbackImages.reset()
       } else {
         setFeedbackError('Could not send feedback. Please try again.')
       }
@@ -4241,6 +4249,7 @@ export default function MainScreen() {
                   style={{ minHeight: 168 }}
                   value={feedbackBody}
                   onChange={(e) => setFeedbackBody(e.target.value)}
+                  onPaste={feedbackImages.handlePaste}
                 />
                 {feedbackDictation.supported && (
                   <button
@@ -4257,6 +4266,46 @@ export default function MainScreen() {
                 )}
               </div>
             </div>
+            <div className="feedback-img-row">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => feedbackFileInputRef.current?.click()}
+              >
+                Attach Screenshot
+              </button>
+              <input
+                ref={feedbackFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={feedbackImages.handleFileInputChange}
+              />
+              <span className="subnote">{feedbackImages.hint}</span>
+            </div>
+            {feedbackImages.images.length > 0 && (
+              <div className="feedback-img-thumbs">
+                {feedbackImages.images.map((img, i) => (
+                  <div key={i} className="feedback-img-thumb">
+                    <img src={img.dataUrl} alt={img.filename} />
+                    <button
+                      type="button"
+                      className="feedback-img-thumb-remove"
+                      aria-label={`Remove ${img.filename}`}
+                      onClick={() => feedbackImages.removeImage(i)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {feedbackImages.error && (
+              <p className="ferror" role="alert">
+                {feedbackImages.error}
+              </p>
+            )}
             {feedbackError && (
               <p className="ferror" role="alert">
                 {feedbackError}

@@ -3918,6 +3918,71 @@ body {
   pointer-events: none;
 }
 
+/* Feedback dialog image attachments (2026-11-22, useFeedbackImages.ts) —
+   an "Attach Screenshot" button (opens the hidden file input) beside a
+   platform-tailored hint, then a thumbnail strip once at least one image
+   is attached. .feedback-img-thumb reuses .fclear's own small-circular-×
+   convention for Remove rather than .attremove's plain-text one, since it
+   has to sit on top of an image rather than beside a text row. */
+.feedback-img-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.feedback-img-row .subnote {
+  flex: 1 1 180px;
+}
+
+.feedback-img-thumbs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.feedback-img-thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1px solid var(--rule);
+  overflow: hidden;
+  background: var(--row-tint);
+}
+
+.feedback-img-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.feedback-img-thumb-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.feedback-img-thumb-remove:active {
+  background: var(--alert-red);
+}
+
 /* Archived badge — a matched row that is archived still renders in its own
    Sent/Received/ToDos section (never a separate list), tagged so it doesn't
    read as merely Done. Sits in .r2 alongside the Dialog/Attachments .ii

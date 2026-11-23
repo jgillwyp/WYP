@@ -161,6 +161,46 @@ link is built only after the stack is proven on Add Contact.
   not new here and don't need re-explaining.
 - Prefer concise, direct answers. Flag tradeoffs; don't bury them.
 
+- **Feedback dialog gains image attachments, pasted or picked, plus a
+  platform-specific screenshot hint — new (2026-11-22), no migration.**
+  Jim: "add the ability to paste captured images into the feedback email
+  dialog. Perhaps include a short platform-specific explanation for how to
+  capture screen images." New shared `app/src/lib/useFeedbackImages.ts` —
+  a hook, not a shared component, same precedent as `useSpeechDictation.ts`:
+  the logic (file reading, validation, paste handling) is meaty and
+  identical by both callers, while each dialog's own surrounding JSX stays
+  duplicated per this codebase's usual per-file convention. A desktop
+  screenshot tool (Win+Shift+S, Cmd+Shift+4) puts the image straight on the
+  clipboard, so pasting (wired via `onPaste` on the message `<textarea>`,
+  reading `e.clipboardData.items` for an `image/*` entry) is the natural
+  path there; a phone's own screenshot only ever saves to Photos/Gallery,
+  never the clipboard, so a new "Attach Screenshot" button (a hidden
+  `<input type="file" accept="image/*" multiple>`) is the real path on
+  mobile — `screenshotHint()` picks one short, accurate sentence per
+  platform via the existing `isIOSDevice()`/`isAndroidDevice()`/
+  `isMacOSDevice()` (`platform.ts`), safe to call directly (no mount-effect
+  deferral needed) since this hint is only ever rendered once the dialog is
+  already open, same reasoning `AddToCalendarAlarmsDialog.tsx`'s own
+  guidance text already established. Capped client-side at 3 images / 5 MB
+  each, with a thumbnail strip (new `.feedback-img-row`/`.feedback-img-
+  thumbs`/`.feedback-img-thumb` CSS) and a small × to remove one before
+  sending. **Real lint catch**: the hook's first draft also returned a
+  `fileInputRef` alongside the plain `images`/`error` state in one object —
+  ESLint's `react-hooks/refs` rule treats a whole returned object as
+  ref-tainted once any property on it is a ref, which then flagged every
+  other plain-value read off `feedbackImages.*` in render as an illegal ref
+  access; fixed by keeping the hidden file input's own ref local to each
+  caller (`MainScreen.tsx`, `AboutForm.tsx`) instead of inside the hook's
+  returned object. `/api/feedback/send/route.ts` now accepts an `images`
+  array and sends them as real `nodemailer` attachments — never stored
+  anywhere, matching this route's own existing "no stored record of a
+  submission" design — with `parseImageAttachment()` re-enforcing the same
+  3-image/5 MB caps server-side, since the client's own limits are only
+  ever a courtesy. `npx tsc --noEmit`/`npm run lint` both clean (two
+  harmless `@next/next/no-img-element` warnings for the thumbnail
+  previews, same as this app's existing attachment-preview usages of plain
+  `<img>`). No mockup — this dialog has never had one.
+
 ## Known gaps
 
 - **Live Privacy Policy page, `/privacy` (2026-09-01, `app/privacy/page.tsx`
