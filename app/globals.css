@@ -5526,9 +5526,14 @@ body {
    16px text above. A plain min-width (not touching type="date"/"time"'s
    own, already-fixed, iOS-specific appearance issue — this is a different
    element and a different platform) gives it enough room regardless of
-   the surrounding flex layout. */
+   the surrounding flex layout.
+   Raised 162px -> 210px (2026-11-23, same-day retest): 162px still clipped
+   on a real Android phone — Chrome's month control reserves its own room
+   for the dropdown indicator, so the text area is narrower than the box.
+   Each From/To pair now wraps onto its own line (.statfilterpair), so the
+   extra width costs nothing on a phone. */
 .statfilterinput[type="month"] {
-  min-width: 162px;
+  min-width: 210px;
 }
 
 /* .statchartwrap/.statlabels/.statlabelcell/.statchartscroll (the
