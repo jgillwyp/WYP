@@ -317,6 +317,15 @@ link is built only after the stack is proven on Add Contact.
   together so a label always wraps with its own field. The form rewrite was
   accidentally rejected mid-session by a stray click and restored from the
   transcript in a new session. `npx tsc --noEmit`/`npm run lint` clean.
+  **Month-picker width follow-up, same batch**: Android Chrome's
+  `<input type="month">` reserves internal room for its own dropdown
+  indicator, so the existing 16px font (kept to avoid iOS auto-zoom on
+  focus) clipped "September 2026" to "September 202" at the original
+  162px. New `.statfilterinput[type="month"] { min-width: ... }` rule in
+  `globals.css`: 210px fit Android but made the filter bar wrap on
+  Windows; **180px** (Jim's own estimate) fits both. Confirmed by Jim on
+  Android and Windows (iPhone isn't an Admin login, but it already fit
+  like Windows did).
 
 ## Known gaps
 
