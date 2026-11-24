@@ -135,7 +135,20 @@ const ENTITY_CONFIG: Record<
     columns: [
       { header: 'Period Start', key: 'period_start', width: 14 },
       { header: 'Period End', key: 'period_end', width: 14 },
+      // Widened to all 13 tracked features, migration 104 (2026-11-23).
       { header: 'Dialog Entry', key: 'dialog_entry', width: 12 },
+      { header: 'Request Created', key: 'request_created', width: 14 },
+      { header: 'ToDo Created', key: 'todo_created', width: 12 },
+      { header: 'Request Responded', key: 'request_responded', width: 16 },
+      { header: 'Attachment Added', key: 'attachment_added', width: 15 },
+      { header: 'Voice Dictation', key: 'voice_dictation', width: 14 },
+      { header: 'Receipt Confirmation', key: 'receipt_confirmation', width: 18 },
+      { header: 'Request Texting', key: 'request_texting', width: 14 },
+      { header: 'Reminder Set', key: 'reminder_set', width: 12 },
+      { header: 'Repeat Set', key: 'repeat_set', width: 11 },
+      { header: 'Calendar View', key: 'calendar_view', width: 13 },
+      { header: 'Archive Used', key: 'archive_used', width: 12 },
+      { header: 'Print Used', key: 'print_used', width: 11 },
     ],
   },
 }

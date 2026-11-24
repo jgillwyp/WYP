@@ -230,7 +230,7 @@ link is built only after the stack is proven on Add Contact.
   `npx tsc --noEmit`/`npm run lint` both clean.
 - **Real-usage tracking — `feature_usage` table, Dialog entries wired up as
   the first tracked feature, new Admin "Feature Usage" report — migration
-  103, DRAFTED, NOT YET CONFIRMED RUN (2026-11-23).** Jim: "I am interested
+  103, confirmed run by Jim, 2026-11-23.** Jim: "I am interested
   in automatically keeping track of app usage within Checklist (add a 'Add
   a Dialog entry'). This could potentially be used on an ongoing basis (and
   reported back for product development)." Scoped via `AskUserQuestion` to
@@ -300,6 +300,23 @@ link is built only after the stack is proven on Add Contact.
   gate and its exact `gatenote` wording, "Saving will email this Contact a
   link to approve text messaging"). `npx tsc --noEmit`/`npm run lint` both
   clean. No mockup — this screen has never had one.
+- **Feature-usage tracking widened to all 13 Checklist features; Admin
+  date-filter wrap fix on Android — migration 104 confirmed run by Jim,
+  2026-11-23.** Jim: "the only feature I see tracked is Dialog Entry. I
+  expected all features to be tracked," plus, on Android, Admin report
+  date filters didn't fit and a wrapping To date lost its "To" label.
+  `TrackedFeature` (`featureUsage.ts`) now covers dialog_entry,
+  request_created, todo_created, request_responded, attachment_added,
+  voice_dictation, receipt_confirmation, request_texting, reminder_set,
+  repeat_set, calendar_view, archive_used, print_used — each wired at its
+  real action site (print once in `platform.ts`'s shared print helper).
+  Migration 104 widens the CHECK constraint and `admin_get_feature_usage()`
+  (drop-then-create) to one column per feature; `AdminFeatureUsageForm.tsx`
+  and the `.xlsx` export's `feature_usage` config list all 13. Filter-bar
+  label+input pairs (`AdminStatsShared.tsx`, `globals.css`) are now wrapped
+  together so a label always wraps with its own field. The form rewrite was
+  accidentally rejected mid-session by a stray click and restored from the
+  transcript in a new session. `npx tsc --noEmit`/`npm run lint` clean.
 
 ## Known gaps
 

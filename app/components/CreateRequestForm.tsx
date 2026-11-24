@@ -821,6 +821,18 @@ export default function CreateRequestForm() {
       })
       if (!result.ok) throw new Error(result.message)
     }
+
+    // Feature-usage tracking (2026-11-23, migration 104) — one call per
+    // Send that staged at least one file, not one per file; mirrors
+    // AttachmentsPanel.tsx's own equivalent call for the existing-item
+    // upload path.
+    if (stagedFiles.length > 0) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'attachment_added' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (attachment_added) failed:', error.message)
+        })
+    }
   }
 
   function set<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
@@ -1220,6 +1232,44 @@ export default function CreateRequestForm() {
       .then(({ error }) => {
         if (error) console.error('log_event (request created) failed:', error.message)
       })
+
+    // Feature-usage tracking (2026-11-23, migration 104) — 'request_created'
+    // feeds the Tester Checklist's own "Create a Request" row; 'reminder_set'/
+    // 'repeat_set'/'receipt_confirmation' are gated on the exact same
+    // computed values the insert above just wrote, so they can't drift from
+    // what was actually saved.
+    void supabase
+      .rpc('log_feature_usage', { p_feature: 'request_created' })
+      .then(({ error }) => {
+        if (error) console.error('log_feature_usage (request_created) failed:', error.message)
+      })
+    if (
+      requestRemindersEnabled &&
+      (form.reminderEnabled ||
+        form.reminderDayOfEnabled ||
+        form.overdueReminderEnabled ||
+        (form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled))
+    ) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'reminder_set' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (reminder_set) failed:', error.message)
+        })
+    }
+    if (effectiveRepeatRule !== null) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'repeat_set' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (repeat_set) failed:', error.message)
+        })
+    }
+    if (offerReceiptConfirmation && receiptConfirmationRequested) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'receipt_confirmation' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (receipt_confirmation) failed:', error.message)
+        })
+    }
 
     // Dialog entries write second, against the id the insert above just
     // returned — see migration 004 and the file-level comment on why these

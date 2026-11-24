@@ -1245,6 +1245,30 @@ export default function RequestDetailForm() {
       return
     }
 
+    // Feature-usage tracking (2026-11-23, migration 104) — gated on the
+    // exact same values the update above just wrote, so they can't drift
+    // from what was actually saved. See CreateRequestForm.tsx's identical
+    // comment on its own insert path.
+    if (
+      form.reminderEnabled ||
+      form.reminderDayOfEnabled ||
+      form.overdueReminderEnabled ||
+      (form.dueTime.trim() !== '' && form.reminderMinutesBeforeEnabled)
+    ) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'reminder_set' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (reminder_set) failed:', error.message)
+        })
+    }
+    if (repeatRule !== null) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'repeat_set' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (repeat_set) failed:', error.message)
+        })
+    }
+
     void sendChangeNotification(changedFieldLabels)
 
     // router.back(), not push('/') — this screen is only ever reached by

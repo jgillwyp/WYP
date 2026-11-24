@@ -1325,6 +1325,17 @@ export default function ArchiveForm() {
       return { ...prev, [currentType]: next }
     })
 
+    // Feature-usage tracking (2026-11-23, migration 104) — matches the
+    // Checklist's own "Archive something, then find it again" wording;
+    // UnArchive doesn't count toward it.
+    if (isArchive) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'archive_used' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (archive_used) failed:', error.message)
+        })
+    }
+
     setArchiving(false)
     setConfirmMessage(
       isArchive

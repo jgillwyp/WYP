@@ -5489,6 +5489,20 @@ body {
   flex-wrap: wrap;
 }
 
+/* Owner-reported, Android (2026-11-23): a filter bar's label and its own
+   input could split across the wrap — "To" staying on the first line while
+   the To date dropped to a second line alone, with no label left on it.
+   .statfiltergroup's own flex-wrap wraps per flex-ITEM, so a label and its
+   input (previously two separate siblings) could always end up on
+   different lines; wrapping each pair in its own inline-flex span makes
+   the pair itself the wrap unit instead. */
+.statfilterpair {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
 .statfilterlabel {
   font-size: 12px;
   font-weight: 700;
@@ -5504,6 +5518,17 @@ body {
   border-radius: 6px;
   background: #fff;
   color: var(--ink);
+}
+
+/* Owner-reported, Android (2026-11-23): "September 2026"/"November 2026"
+   both rendered clipped ("September 202…") inside a <input type="month">
+   — its native rendered width on Android Chrome doesn't grow to fit the
+   16px text above. A plain min-width (not touching type="date"/"time"'s
+   own, already-fixed, iOS-specific appearance issue — this is a different
+   element and a different platform) gives it enough room regardless of
+   the surrounding flex layout. */
+.statfilterinput[type="month"] {
+  min-width: 162px;
 }
 
 /* .statchartwrap/.statlabels/.statlabelcell/.statchartscroll (the

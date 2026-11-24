@@ -2265,6 +2265,7 @@ grant update (welcome_dialog_shown_at) on public.profiles to authenticated;
 -- Migration 103 (2026-11-23) -- feature_usage, a general-purpose real-usage
 -- tracker; first feature wired up is Dialog entries, fed into a new
 -- "Add a Dialog entry" row on the Tester Checklist (TesterChecklistForm.tsx).
+-- CONFIRMED RUN by Jim, 2026-11-23.
 --
 -- Jim: "I am interested in automatically keeping track of app usage within
 -- Checklist (add a 'Add a Dialog entry'). This could potentially be used
@@ -2472,4 +2473,174 @@ grant execute on function public.admin_get_feature_usage(date, date, text, text,
 --   -- can't be unchecked.
 --   -- As an admin, open Admin -> Feature Usage -- confirm the Dialog
 --   -- Entry count for the period you just tested in is at least 1.
+-- ============================================================================
+
+-- ============================================================================
+-- Migration 104 (2026-11-23) -- widens feature_usage/admin_get_feature_usage()
+-- from the one feature (Dialog Entry) migration 103 shipped with, to one
+-- feature per row on the Tester Checklist's own "Features worth trying"
+-- group. Jim, once he saw the live Admin Feature Usage report: "the only
+-- feature I see tracked is Dialog Entry. I expected all features to be
+-- tracked." Same table, same three functions, same shape as migration 103
+-- -- this only widens the CHECK constraint and admin_get_feature_usage()'s
+-- own column list, exactly as that migration's own header comment already
+-- said a future addition would need to.
+--
+-- Twelve new feature keys, each wired at the real client-side action that
+-- performs it (see app/src/lib/featureUsage.ts's own header comment for
+-- the full one-line-per-feature mapping back to the Checklist's own rows):
+-- request_created, todo_created, request_responded, attachment_added,
+-- voice_dictation, receipt_confirmation, request_texting, reminder_set,
+-- repeat_set, calendar_view, archive_used, print_used.
+--
+-- log_feature_usage()/get_my_feature_usage() need no change at all -- both
+-- already accept/return any `feature` value the table itself allows, with
+-- no hardcoded list of their own; only the table's own CHECK constraint and
+-- admin_get_feature_usage()'s column list ever needed to grow.
+-- ============================================================================
+
+alter table public.feature_usage drop constraint if exists feature_usage_feature_check;
+alter table public.feature_usage add constraint feature_usage_feature_check
+  check (feature in (
+    'dialog_entry', 'request_created', 'todo_created', 'request_responded',
+    'attachment_added', 'voice_dictation', 'receipt_confirmation',
+    'request_texting', 'reminder_set', 'repeat_set', 'calendar_view',
+    'archive_used', 'print_used'
+  ));
+
+drop function if exists public.admin_get_feature_usage(date, date, text, text, uuid);
+
+create function public.admin_get_feature_usage(
+  p_from         date,
+  p_to           date,
+  p_granularity  text,
+  p_cohort       text,
+  p_profile_id   uuid default null
+)
+returns table (
+  period_start          date,
+  period_end            date,
+  dialog_entry          bigint,
+  request_created       bigint,
+  todo_created          bigint,
+  request_responded     bigint,
+  attachment_added      bigint,
+  voice_dictation       bigint,
+  receipt_confirmation  bigint,
+  request_texting       bigint,
+  reminder_set          bigint,
+  repeat_set            bigint,
+  calendar_view         bigint,
+  archive_used          bigint,
+  print_used            bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_granularity not in ('week', 'month') then
+    raise exception 'Invalid granularity.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'free', 'subscriber', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id
+    from auth.users u
+    left join public.profiles pr on pr.id = u.id
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+       or (p_cohort = 'free' and coalesce(pr.tier, 'free') = 'free')
+       or (p_cohort = 'subscriber' and pr.tier = 'subscriber')
+  ),
+  periods as (
+    select
+      gs::date as period_start,
+      (case when p_granularity = 'week'
+         then (gs + interval '6 days')
+         else (date_trunc('month', gs) + interval '1 month' - interval '1 day')
+       end)::date as period_end_natural
+    from generate_series(
+      case when p_granularity = 'week'
+        then date_trunc('week', p_from::timestamp + interval '1 day') - interval '1 day'
+        else date_trunc('month', p_from::timestamp)
+      end,
+      p_to::timestamp,
+      case when p_granularity = 'week' then interval '7 days' else interval '1 month' end
+    ) as gs
+  ),
+  bucketed as (
+    select p.period_start, least(p.period_end_natural, p_to) as period_end
+    from periods p
+  ),
+  fu as (
+    select
+      (case when p_granularity = 'week'
+         then (date_trunc('week', f.at + interval '1 day') - interval '1 day')
+         else date_trunc('month', f.at)
+       end)::date as period_start,
+      count(*) filter (where f.feature = 'dialog_entry') as dialog_entry,
+      count(*) filter (where f.feature = 'request_created') as request_created,
+      count(*) filter (where f.feature = 'todo_created') as todo_created,
+      count(*) filter (where f.feature = 'request_responded') as request_responded,
+      count(*) filter (where f.feature = 'attachment_added') as attachment_added,
+      count(*) filter (where f.feature = 'voice_dictation') as voice_dictation,
+      count(*) filter (where f.feature = 'receipt_confirmation') as receipt_confirmation,
+      count(*) filter (where f.feature = 'request_texting') as request_texting,
+      count(*) filter (where f.feature = 'reminder_set') as reminder_set,
+      count(*) filter (where f.feature = 'repeat_set') as repeat_set,
+      count(*) filter (where f.feature = 'calendar_view') as calendar_view,
+      count(*) filter (where f.feature = 'archive_used') as archive_used,
+      count(*) filter (where f.feature = 'print_used') as print_used
+    from public.feature_usage f
+    where f.user_id in (select id from cohort)
+      and f.at::date between p_from and p_to
+    group by 1
+  )
+  select
+    b.period_start,
+    b.period_end,
+    coalesce(fu.dialog_entry, 0),
+    coalesce(fu.request_created, 0),
+    coalesce(fu.todo_created, 0),
+    coalesce(fu.request_responded, 0),
+    coalesce(fu.attachment_added, 0),
+    coalesce(fu.voice_dictation, 0),
+    coalesce(fu.receipt_confirmation, 0),
+    coalesce(fu.request_texting, 0),
+    coalesce(fu.reminder_set, 0),
+    coalesce(fu.repeat_set, 0),
+    coalesce(fu.calendar_view, 0),
+    coalesce(fu.archive_used, 0),
+    coalesce(fu.print_used, 0)
+  from bucketed b
+  left join fu on fu.period_start = b.period_start
+  order by b.period_start;
+end;
+$$;
+
+revoke all on function public.admin_get_feature_usage(date, date, text, text, uuid) from public;
+grant execute on function public.admin_get_feature_usage(date, date, text, text, uuid) to authenticated;
+
+-- Verify after running:
+--   select conname, pg_get_constraintdef(oid) from pg_constraint
+--     where conrelid = 'public.feature_usage'::regclass;
+--     -- feature_usage_feature_check now lists all 13 feature values
+--   select * from public.admin_get_feature_usage(current_date - 30, current_date, 'month', 'all');
+--     -- 13 count columns, all present, all 0 or more -- no error
+--   -- Try several of the newly-tracked actions for real (create a
+--   -- Request, add an Attachment, use Voice Dictation, set a Reminder,
+--   -- set Repeat, open Calendar View, Archive something, Print
+--   -- something) -- confirm each one's own Checklist row auto-checks,
+--   -- and each shows a nonzero count on Admin -> Feature Usage.
 -- ============================================================================

@@ -15,6 +15,7 @@
 import { Capacitor } from '@capacitor/core'
 
 import NativePrint from './nativePrint'
+import { supabase } from './supabaseClient'
 
 export function isIOSDevice(): boolean {
   if (typeof navigator === 'undefined') return false
@@ -104,6 +105,18 @@ export function printWithExpandedWindow(): void {
   if (typeof window === 'undefined') {
     return
   }
+
+  // Feature-usage tracking (2026-11-23, migration 104) — one wiring point
+  // here covers every one of the app's ~9 Print buttons, since they all
+  // already funnel through this one shared function. Fire-and-forget, same
+  // posture as every other log_feature_usage() call; a signed-out caller
+  // (there are none today — every Print button sits behind RequireAuth)
+  // would just fail the RPC's own authenticated-only grant silently.
+  void supabase
+    .rpc('log_feature_usage', { p_feature: 'print_used' })
+    .then(({ error }) => {
+      if (error) console.error('log_feature_usage (print_used) failed:', error.message)
+    })
 
   // Added 2026-10-16, first real-device Capacitor test — a bare WebView
   // has no window.print() of its own (unlike a full browser or the

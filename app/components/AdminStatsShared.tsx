@@ -129,24 +129,28 @@ export function AdminStatsFilterBar(props: {
   return (
     <div className="statfilters no-print">
       <div className="statfiltergroup">
-        <label className="statfilterlabel" htmlFor="stat-from">From</label>
-        <input
-          id="stat-from"
-          type="month"
-          className="statfilterinput"
-          value={fromMonth}
-          max={toMonth}
-          onChange={(e) => onFromMonth(e.target.value)}
-        />
-        <label className="statfilterlabel" htmlFor="stat-to">To</label>
-        <input
-          id="stat-to"
-          type="month"
-          className="statfilterinput"
-          value={toMonth}
-          min={fromMonth}
-          onChange={(e) => onToMonth(e.target.value)}
-        />
+        <span className="statfilterpair">
+          <label className="statfilterlabel" htmlFor="stat-from">From</label>
+          <input
+            id="stat-from"
+            type="month"
+            className="statfilterinput"
+            value={fromMonth}
+            max={toMonth}
+            onChange={(e) => onFromMonth(e.target.value)}
+          />
+        </span>
+        <span className="statfilterpair">
+          <label className="statfilterlabel" htmlFor="stat-to">To</label>
+          <input
+            id="stat-to"
+            type="month"
+            className="statfilterinput"
+            value={toMonth}
+            min={fromMonth}
+            onChange={(e) => onToMonth(e.target.value)}
+          />
+        </span>
       </div>
 
       <div className="chips" role="tablist" aria-label="Granularity">
@@ -171,19 +175,21 @@ export function AdminStatsFilterBar(props: {
       </div>
 
       <div className="statfiltergroup">
-        <label className="statfilterlabel" htmlFor="stat-cohort">Accounts</label>
-        <select
-          id="stat-cohort"
-          className="statfilterinput"
-          value={cohort}
-          onChange={(e) => onCohort(e.target.value as Cohort)}
-        >
-          {cohortOptions.includes('all') && <option value="all">All accounts</option>}
-          {cohortOptions.includes('beta') && <option value="beta">Beta allowlist</option>}
-          {cohortOptions.includes('free') && <option value="free">Free accounts</option>}
-          {cohortOptions.includes('subscriber') && <option value="subscriber">Subscribed accounts</option>}
-          {cohortOptions.includes('profile') && <option value="profile">Specific account…</option>}
-        </select>
+        <span className="statfilterpair">
+          <label className="statfilterlabel" htmlFor="stat-cohort">Accounts</label>
+          <select
+            id="stat-cohort"
+            className="statfilterinput"
+            value={cohort}
+            onChange={(e) => onCohort(e.target.value as Cohort)}
+          >
+            {cohortOptions.includes('all') && <option value="all">All accounts</option>}
+            {cohortOptions.includes('beta') && <option value="beta">Beta allowlist</option>}
+            {cohortOptions.includes('free') && <option value="free">Free accounts</option>}
+            {cohortOptions.includes('subscriber') && <option value="subscriber">Subscribed accounts</option>}
+            {cohortOptions.includes('profile') && <option value="profile">Specific account…</option>}
+          </select>
+        </span>
         {cohort === 'profile' && cohortOptions.includes('profile') && (
           <select
             className="statfilterinput"
@@ -337,31 +343,35 @@ export function AdminAsOfFilterBar(props: {
   return (
     <div className="statfilters no-print">
       <div className="statfiltergroup">
-        <label className="statfilterlabel" htmlFor="stat-asof">As of</label>
-        <input
-          id="stat-asof"
-          type="date"
-          className="statfilterinput"
-          value={asOf}
-          max={todayISODate()}
-          onChange={(e) => onAsOf(e.target.value)}
-        />
+        <span className="statfilterpair">
+          <label className="statfilterlabel" htmlFor="stat-asof">As of</label>
+          <input
+            id="stat-asof"
+            type="date"
+            className="statfilterinput"
+            value={asOf}
+            max={todayISODate()}
+            onChange={(e) => onAsOf(e.target.value)}
+          />
+        </span>
       </div>
 
       <div className="statfiltergroup">
-        <label className="statfilterlabel" htmlFor="stat-cohort-asof">Accounts</label>
-        <select
-          id="stat-cohort-asof"
-          className="statfilterinput"
-          value={cohort}
-          onChange={(e) => onCohort(e.target.value as Cohort)}
-        >
-          <option value="all">All accounts</option>
-          <option value="beta">Beta allowlist</option>
-          <option value="free">Free accounts</option>
-          <option value="subscriber">Subscribed accounts</option>
-          <option value="profile">Specific account…</option>
-        </select>
+        <span className="statfilterpair">
+          <label className="statfilterlabel" htmlFor="stat-cohort-asof">Accounts</label>
+          <select
+            id="stat-cohort-asof"
+            className="statfilterinput"
+            value={cohort}
+            onChange={(e) => onCohort(e.target.value as Cohort)}
+          >
+            <option value="all">All accounts</option>
+            <option value="beta">Beta allowlist</option>
+            <option value="free">Free accounts</option>
+            <option value="subscriber">Subscribed accounts</option>
+            <option value="profile">Specific account…</option>
+          </select>
+        </span>
         {cohort === 'profile' && (
           <select
             className="statfilterinput"

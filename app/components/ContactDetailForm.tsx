@@ -407,6 +407,17 @@ export default function ContactDetailForm() {
     // Contact changed, re-requesting approval for the new number; that
     // path reaches here only via the phoneChanged() dialog above, which
     // already confirmed the user wants to proceed.
+    // Feature-usage tracking (2026-11-23, migration 104) — fired whenever
+    // Text is the saved send method at all, independent of the narrower
+    // "only re-request consent under these conditions" gate just below.
+    if (sendBy === 'text') {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'request_texting' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (request_texting) failed:', error.message)
+        })
+    }
+
     if (sendBy === 'text' && ((!smsConsent.given_at && !smsConsent.requested_at) || phoneChanged())) {
       try {
         const { data: consentToken } = await supabase.rpc('request_sms_consent', {

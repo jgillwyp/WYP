@@ -1126,6 +1126,16 @@ export default function TodoDetailForm() {
       return
     }
 
+    // Feature-usage tracking (2026-11-23, migration 104) — see
+    // RequestDetailForm.tsx's identical comment.
+    if (repeatRule !== null) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'repeat_set' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (repeat_set) failed:', error.message)
+        })
+    }
+
     // Admin Statistics instrumentation (migration 054, 2026-09-07) —
     // fire-and-forget, after the real save already succeeded, same
     // "never let this block or fail Save" posture as RequestDetailForm.

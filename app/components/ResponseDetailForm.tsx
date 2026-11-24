@@ -937,6 +937,17 @@ export default function ResponseDetailForm() {
       return
     }
 
+    // Feature-usage tracking (2026-11-23, migration 104) — only when this
+    // Send actually marked the Request Done, matching the Checklist's own
+    // "Respond to a Request... mark it Done" wording, not every edit/Save.
+    if (effectiveDoneDate.trim() !== '') {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'request_responded' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (request_responded) failed:', error.message)
+        })
+    }
+
     void sendChangeNotification(changedFieldLabels)
 
     // Re-take the dirty-gating snapshot now that this state has actually

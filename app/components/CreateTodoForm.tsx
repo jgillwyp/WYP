@@ -537,6 +537,16 @@ export default function CreateTodoForm() {
       })
       if (!result.ok) throw new Error(result.message)
     }
+
+    // Feature-usage tracking (2026-11-23, migration 104) — see
+    // CreateRequestForm.tsx's identical comment.
+    if (stagedFiles.length > 0) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'attachment_added' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (attachment_added) failed:', error.message)
+        })
+    }
   }
 
   function set<K extends keyof TodoFormState>(key: K, value: TodoFormState[K]) {
@@ -968,6 +978,21 @@ export default function CreateTodoForm() {
       .then(({ error }) => {
         if (error) console.error('log_event (todo created) failed:', error.message)
       })
+
+    // Feature-usage tracking (2026-11-23, migration 104) — see
+    // CreateRequestForm.tsx's identical comment.
+    void supabase
+      .rpc('log_feature_usage', { p_feature: 'todo_created' })
+      .then(({ error }) => {
+        if (error) console.error('log_feature_usage (todo_created) failed:', error.message)
+      })
+    if (effectiveRepeatRule !== null) {
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'repeat_set' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (repeat_set) failed:', error.message)
+        })
+    }
     if (effectiveDoneDate !== null) {
       void supabase
         .rpc('log_event', {

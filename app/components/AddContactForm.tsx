@@ -280,6 +280,13 @@ export default function AddContactForm() {
     // never already have sms_consent_given_at/requested_at, so there's no
     // "already asked" check needed here the way Contact Detail's does.
     if (sendBy === 'text') {
+      // Feature-usage tracking (2026-11-23, migration 104) — fired
+      // alongside the real consent-request flow below, same gate.
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'request_texting' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (request_texting) failed:', error.message)
+        })
       try {
         const { data: consentToken } = await supabase.rpc('request_sms_consent', {
           p_contact_id: inserted.id,

@@ -168,6 +168,17 @@ export default function CalendarView() {
     window.sessionStorage.removeItem(CALENDAR_ROUNDTRIP_KEY)
   }, [])
 
+  // Feature-usage tracking (2026-11-23, migration 104) — a view, not a
+  // save, so logged once per real mount rather than at any particular
+  // action inside the screen.
+  useEffect(() => {
+    void supabase
+      .rpc('log_feature_usage', { p_feature: 'calendar_view' })
+      .then(({ error }) => {
+        if (error) console.error('log_feature_usage (calendar_view) failed:', error.message)
+      })
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     async function load() {

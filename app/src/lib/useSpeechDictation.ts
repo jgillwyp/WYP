@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core'
 
 import NativeAudioSession from './nativeAudioSession'
 import NativeSpeech from './nativeSpeech'
+import { supabase } from './supabaseClient'
 
 type SpeechRecognitionResultLike = {
   isFinal: boolean
@@ -647,6 +648,18 @@ export function useSpeechDictation(value: string, setValue: (value: string) => v
         dictatingRef.current = true
         setDictating(true)
         setAwaitingFirstResult(true)
+        // Feature-usage tracking (2026-11-23, migration 104) — one wiring
+        // point here covers every caller of this shared hook (Create
+        // Request/Create ToDo's own Description, Request/ToDo Detail's
+        // Description, every Dialog Text field, the two Feedback dialogs)
+        // rather than duplicating a call at each one. Logged once per real
+        // dictation start, not on isRetry's own silent re-attempt or on a
+        // caught start() failure — only a start that actually succeeded.
+        void supabase
+          .rpc('log_feature_usage', { p_feature: 'voice_dictation' })
+          .then(({ error }) => {
+            if (error) console.error('log_feature_usage (voice_dictation) failed:', error.message)
+          })
         // Starts the real 4-second countdown immediately — otherwise a
         // dictation session opened and then never spoken into at all
         // would sit listening forever instead of timing out like every

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { supabase } from '@/lib/supabaseClient'
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_ITEM,
@@ -277,6 +278,19 @@ export default function AttachmentsPanel({
           onContentChange?.(next.filter((r) => r.kind === 'file').length)
           return next
         })
+        // Feature-usage tracking (2026-11-23, migration 104) — one wiring
+        // point here covers every real file upload across every screen this
+        // shared panel appears on. Only fired for a signed-in caller
+        // (authToken) — an anonymous /r/[token] uploader has no session for
+        // log_feature_usage()'s auth.uid() to attribute to, same posture as
+        // ResponseDetailForm.tsx's own Dialog-entry tracking.
+        if (authToken) {
+          void supabase
+            .rpc('log_feature_usage', { p_feature: 'attachment_added' })
+            .then(({ error }) => {
+              if (error) console.error('log_feature_usage (attachment_added) failed:', error.message)
+            })
+        }
       } else {
         setError(result.message)
       }
