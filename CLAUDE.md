@@ -353,6 +353,17 @@ link is built only after the stack is proven on Add Contact.
   opt-out list from the first STOP, which WYP never learned about. Side
   effect to remember: START re-enables texting on every Contact sharing
   the number, including one deliberately set to email.
+- **Texting-stopped status now visible to the account holder (2026-11-24),
+  no migration.** Jim, with his own mockup: a STOP reply flips the
+  Contact's `send_by` to email, and Contact Detail's texting `.gatenote`
+  only rendered while Text was selected, so nothing explained why texts
+  had stopped. `ContactDetailForm.tsx` now shows "Texting stopped by
+  `<Contact name>` on MM-DD-YYYY" (local date, new `formatMDYYYYLocal()`)
+  whenever `sms_opted_out_at` is set, regardless of which chip is
+  selected; it replaces the old "This Contact has opted out" note.
+  `ContactsList.tsx` rows append a red " · texting stopped". Both clear
+  automatically once a START reply clears `sms_opted_out_at`. `npx tsc
+  --noEmit`/`npm run lint` clean. No mockup beyond Jim's screenshot.
 
 ## Known gaps
 

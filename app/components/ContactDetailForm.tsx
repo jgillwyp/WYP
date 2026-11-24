@@ -64,6 +64,17 @@ function formatE164ForDisplay(e164: string | null): string {
 // Contact: consent is tied to the specific number carriers were told
 // about, not the Contact more broadly, so a changed number needs its own
 // fresh approval. See the phoneChanged() check below.
+// MM-DD-YYYY in the viewer's own local time zone, for a timestamptz
+// (sms_opted_out_at). Local getters on purpose — slicing the ISO string
+// would read the UTC calendar date, the bug formatMDYFromTimestamp fixed
+// elsewhere (2026-09-03).
+function formatMDYYYYLocal(value: string): string {
+  const d = new Date(value)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}-${dd}-${d.getFullYear()}`
+}
+
 function normalizeUsPhoneToE164(input: string): string | null {
   const digits = input.replace(/\D/g, '')
   if (digits.length === 10) return `+1${digits}`
@@ -808,16 +819,24 @@ export default function ContactDetailForm() {
                     </button>
                   )}
                 </div>
-                {tier === 'subscriber' ? (
+                {tier === 'subscriber' && smsConsent.opted_out_at ? (
+                  // Shown regardless of sendBy (2026-11-24, Jim's own
+                  // wording): a STOP reply flips send_by back to 'email'
+                  // (set_sms_opt_out_by_phone), so gating this on
+                  // sendBy === 'text' hid the one explanation for why this
+                  // Contact stopped getting texts. Built as one template
+                  // string, per this file family's SWC-whitespace caution.
+                  <div className="gatenote">
+                    {`Texting stopped by ${form.name.trim() || 'this Contact'} on ${formatMDYYYYLocal(smsConsent.opted_out_at)}`}
+                  </div>
+                ) : tier === 'subscriber' ? (
                   sendBy === 'text' &&
                   // Awaiting approval has its own .noticeband above instead
                   // of this inline note (2026-10-20) — null here, not a
                   // duplicate message.
                   !(smsConsent.requested_at && !smsConsent.given_at && !smsConsent.opted_out_at) && (
                     <div className="gatenote">
-                      {smsConsent.opted_out_at
-                        ? 'This Contact has opted out of text messaging.'
-                        : smsConsent.given_at
+                      {smsConsent.given_at
                           ? `Contact-verified text-to number: ${formatE164ForDisplay(smsConsent.phone)}`
                           : 'Saving will email this Contact a link to approve text messaging.'}
                     </div>

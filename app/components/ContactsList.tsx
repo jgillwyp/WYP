@@ -270,7 +270,15 @@ export default function ContactsList() {
                   >
                     <span className="hktext">
                       <span className="hktitle">{c.display_name}</span>
-                      <span className="hknote"> — {icon} {value}</span>
+                      <span className="hknote">
+                        {' — '}{icon}{' '}{value}
+                        {/* 2026-11-24: a STOP reply flips send_by to email,
+                            so without this the row gives no hint why texts
+                            stopped. Mirrors Contact Detail's stop line. */}
+                        {c.sms_opted_out_at && (
+                          <span style={{ color: 'var(--alert-red)' }}>{' · texting stopped'}</span>
+                        )}
+                      </span>
                     </span>
                   </div>
                 )
