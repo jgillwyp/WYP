@@ -779,6 +779,14 @@ export default function RequestDetailForm() {
       return
     }
 
+    // Feature-usage tracking (2026-11-23, migration 103) — see
+    // featureUsage.ts's own header comment.
+    void supabase
+      .rpc('log_feature_usage', { p_feature: 'dialog_entry' })
+      .then(({ error }) => {
+        if (error) console.error('log_feature_usage (dialog_entry) failed:', error.message)
+      })
+
     await loadDialog()
     setContentChanged(true)
     setDialogChanged(true)

@@ -663,6 +663,17 @@ export default function ResponseDetailForm() {
       return
     }
 
+    // Feature-usage tracking (2026-11-23, migration 103) — a signed-in
+    // recipient adding a Dialog entry counts the same as the owner's own
+    // side; the anonymous /r/[token] path (RequestResponseForm.tsx) has no
+    // session for log_feature_usage()'s auth.uid() to attribute to, so it's
+    // deliberately not wired here. See featureUsage.ts's own header comment.
+    void supabase
+      .rpc('log_feature_usage', { p_feature: 'dialog_entry' })
+      .then(({ error }) => {
+        if (error) console.error('log_feature_usage (dialog_entry) failed:', error.message)
+      })
+
     // Append the RPC's returned {id, created_at, who} locally rather than
     // re-running get_received_request — a re-fetch here would log a second,
     // semantically wrong 'viewed_by_recipient' event for what was actually

@@ -228,6 +228,55 @@ link is built only after the stack is proven on Add Contact.
   `.advsearch-modal`'s own top-anchor/scroll-cap approach; applied via
   `className="modal feedback-modal"` at both Feedback dialog call sites.
   `npx tsc --noEmit`/`npm run lint` both clean.
+- **Real-usage tracking — `feature_usage` table, Dialog entries wired up as
+  the first tracked feature, new Admin "Feature Usage" report — migration
+  103, DRAFTED, NOT YET CONFIRMED RUN (2026-11-23).** Jim: "I am interested
+  in automatically keeping track of app usage within Checklist (add a 'Add
+  a Dialog entry'). This could potentially be used on an ongoing basis (and
+  reported back for product development)." Scoped via `AskUserQuestion` to
+  the general, reusable mechanism rather than a one-off hack for Dialog
+  alone, since the stated intent is clearly ongoing/extensible. Mirrors
+  `ad_events`/`log_ad_event()`/`admin_get_ad_activity()` (migration 097,
+  2026-11-15) almost exactly — a dedicated, deny-all table is a better fit
+  than overloading `public.events`, which is keyed to Request/ToDo/Dialog/
+  Contact/Link *subjects* and has no admin-reporting layer of its own;
+  `events` is left completely untouched. New `feature_usage` (`id`, `at`,
+  `user_id`, `feature` text with a CHECK constraint — same idiom
+  `ad_events.kind` already uses) plus three functions: `log_feature_usage
+  (p_feature)` (fire-and-forget from the client, same posture as
+  `log_event()`/`log_ad_event()`), `get_my_feature_usage()` (powers the
+  Checklist's own auto-check — the caller's own distinct feature list, no
+  admin check needed since it's scoped to `auth.uid()`), and
+  `admin_get_feature_usage()` (same `p_from`/`p_to`/`p_granularity`/
+  `p_cohort`/`p_profile_id` shape and Sunday-week/calendar-month bucketing
+  as `admin_get_ad_activity()`, one `bigint` column per tracked feature —
+  adding a second feature later needs its own small migration, same
+  drop-then-create precedent every other `RETURNS TABLE` addition in this
+  schema already uses, same tradeoff `admin_stats_requests()`'s own
+  many-column shape already accepted). **Real pre-existing gap closed as
+  part of this**: Dialog entries added from the *owner's* own side (Create
+  Request, Request Detail, Create ToDo, ToDo Detail — all four are plain
+  client-side `dialog` table inserts) had never logged anything anywhere,
+  unlike the two RPC-mediated recipient paths (`add_dialog_by_token`,
+  `add_dialog_as_recipient`), which already write to `events`. New shared
+  `app/src/lib/featureUsage.ts` holds just a `TrackedFeature` type — the
+  one place a future feature key gets added, so a typo at any of the now-5
+  call sites (the four owner-side inserts, plus `ResponseDetailForm.tsx`'s
+  signed-in-recipient `add_dialog_as_recipient` path — the anonymous
+  `/r/[token]` path, `RequestResponseForm.tsx`, has no session for
+  `auth.uid()` to attribute to, so it's deliberately not wired) fails to
+  compile instead of silently never matching. New checklist row, "Add a
+  Dialog entry" (`TesterChecklistForm.tsx`), which — unlike every other
+  item on that screen — auto-checks itself the moment
+  `get_my_feature_usage()` reports it, and can't be manually unchecked
+  once it has (merged into the existing `localStorage` checkmarks, not a
+  separate state). New Admin > Feature Usage report
+  (`AdminFeatureUsageForm.tsx`, `/admin/feature-usage`), a straight port of
+  Ad Activity's own shape onto the new RPC, reachable from a new
+  Housekeeping row under the Admin tab; the `.xlsx` export route's generic
+  `ENTITY_CONFIG` path picks it up with no bespoke branch, same as Ad
+  Activity's own entry. `npx tsc --noEmit`/`npm run lint` both clean. No
+  mockup — this feature family has none.
 
 ## Known gaps
 

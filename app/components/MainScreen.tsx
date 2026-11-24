@@ -3306,6 +3306,24 @@ export default function MainScreen() {
                       <span className="hknote"> — impressions and clicks on the sample ad, by period</span>
                     </span>
                   </div>
+                  {/* Feature Usage (2026-11-23, migration 103) — Jim: "I am
+                      interested in automatically keeping track of app usage
+                      within Checklist... reported back for product
+                      development." Dialog entries are the first tracked
+                      feature; see AdminFeatureUsageForm.tsx's own header
+                      comment. */}
+                  <div
+                    className="hkrow"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push('/admin/feature-usage')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/feature-usage') }}
+                  >
+                    <span className="hktext">
+                      <span className="hktitle">Feature Usage</span>
+                      <span className="hknote"> — real usage of tracked features (Dialog entries), by period</span>
+                    </span>
+                  </div>
                   {/* Private Testing Close (2026-11-16, migration 098) —
                       schedule (or cancel) the free trial's end date, with the
                       committed 30-day email notice to everyone currently on

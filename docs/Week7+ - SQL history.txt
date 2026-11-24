@@ -2260,3 +2260,216 @@ grant update (welcome_dialog_shown_at) on public.profiles to authenticated;
 --   -- own first load rather than on Create Free Account's Save -- and that
 --   -- it does NOT appear again on a second sign-in afterward.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 103 (2026-11-23) -- feature_usage, a general-purpose real-usage
+-- tracker; first feature wired up is Dialog entries, fed into a new
+-- "Add a Dialog entry" row on the Tester Checklist (TesterChecklistForm.tsx).
+--
+-- Jim: "I am interested in automatically keeping track of app usage within
+-- Checklist (add a 'Add a Dialog entry'). This could potentially be used
+-- on an ongoing basis (and reported back for product development)." Scoped
+-- via AskUserQuestion to the general mechanism (not a one-off hack for
+-- Dialog alone), since the stated intent is clearly a reusable,
+-- extensible usage-tracking facility, not a single Checklist checkbox.
+--
+-- Mirrors ad_events/log_ad_event/admin_get_ad_activity (migration 097,
+-- 2026-11-15) almost exactly -- that is the established, proven shape for
+-- "a tester/account did a real thing, logged durably, reported in an Admin
+-- screen with date-range/granularity/cohort filters, exportable to .xlsx" --
+-- rather than overloading public.events, which is keyed to Request/ToDo/
+-- Dialog/Contact/Link *subjects* (subject_type/subject_id/request_id) and
+-- has no admin-reporting layer of its own. A generic "which feature did
+-- this account use" fact doesn't map cleanly onto that shape; a small,
+-- dedicated, deny-all table does, with none of the risk of disturbing the
+-- real domain audit trail events.* already is.
+--
+-- feature is a plain text column with a CHECK constraint, same idiom
+-- ad_events.kind already uses for its own 2-value domain -- extending this
+-- list to track a new feature later needs its own small migration (drop +
+-- re-add the constraint, plus a new filtered-count column on
+-- admin_get_feature_usage() below, same drop-then-create treatment this
+-- file's own RETURNS TABLE precedents already established whenever a
+-- column is added). That's an accepted, deliberate cost of a wide,
+-- one-row-per-period report (mirroring admin_stats_requests()'s own
+-- many-column shape) rather than a per-feature-row report that would need
+-- no migration to extend but would also need its own pivot/drill-down UI
+-- up front for a benefit not yet needed with only one feature tracked.
+--
+-- Real pre-existing gap this closes, found while scoping: Dialog entries
+-- added from the OWNER's own side (Create Request, Request Detail, Create
+-- ToDo, ToDo Detail -- all four are plain client-side `dialog` table
+-- inserts) have never logged anything to public.events either, unlike the
+-- two RPC-mediated recipient paths (add_dialog_by_token,
+-- add_dialog_as_recipient), which already do. This migration doesn't touch
+-- that gap in events itself -- it's a separate, narrower table for a
+-- separate purpose -- but it's the first durable record of an owner-side
+-- Dialog add existing anywhere.
+-- ============================================================================
+
+create table public.feature_usage (
+  id      bigint generated always as identity primary key,
+  at      timestamptz not null default now(),
+  user_id uuid references auth.users (id) on delete set null,
+  feature text not null check (feature in ('dialog_entry'))
+);
+
+create index feature_usage_at_idx        on public.feature_usage (at);
+create index feature_usage_user_idx      on public.feature_usage (user_id, at desc);
+create index feature_usage_user_feat_idx on public.feature_usage (user_id, feature);
+
+alter table public.feature_usage enable row level security;
+-- No policies -- every access goes through log_feature_usage()/
+-- get_my_feature_usage()/admin_get_feature_usage() below, same posture as
+-- public.ad_events.
+revoke all on public.feature_usage from anon, authenticated;
+grant select, insert on public.feature_usage to service_role;
+
+comment on table public.feature_usage is
+  'Real-usage log for product-development reporting and for auto-checking the Tester Checklist (TesterChecklistForm.tsx). Written only by log_feature_usage(); read only by get_my_feature_usage() (caller''s own rows) and admin_get_feature_usage(). No client ever reads or writes this table directly.';
+
+-- Called fire-and-forget from the client wherever a tracked action
+-- happens -- same posture as log_event()/log_ad_event(): no error surfaced
+-- to the end user, logged to the browser console instead so a real
+-- failure doesn't vanish without a trace (same 2026-09-18 lesson
+-- CreateRequestForm.tsx's own log_event call already learned).
+create or replace function public.log_feature_usage(
+  p_feature text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+begin
+  insert into public.feature_usage (user_id, feature)
+  values (auth.uid(), p_feature);
+end;
+$$;
+
+revoke all on function public.log_feature_usage(text) from public;
+grant execute on function public.log_feature_usage(text) to authenticated;
+
+-- Powers the Tester Checklist's own auto-check: which tracked features has
+-- THIS signed-in account ever logged, at least once. Scoped to auth.uid()
+-- internally -- no admin check needed, since every caller can only ever
+-- read their own rows.
+create or replace function public.get_my_feature_usage()
+returns table (feature text)
+language sql
+security definer
+set search_path = public, auth, extensions
+as $$
+  select distinct f.feature
+  from public.feature_usage f
+  where f.user_id = auth.uid();
+$$;
+
+revoke all on function public.get_my_feature_usage() from public;
+grant execute on function public.get_my_feature_usage() to authenticated;
+
+-- Admin report (new Admin > Feature Usage screen, AdminFeatureUsageForm.tsx)
+-- -- same p_from/p_to/p_granularity/p_cohort/p_profile_id shape and Sunday-
+-- week/calendar-month bucketing as admin_get_ad_activity(), so it fits the
+-- existing ENTITY_CONFIG-driven .xlsx export path
+-- (app/api/admin/stats/export/route.ts) unmodified, same as that function's
+-- own precedent.
+create or replace function public.admin_get_feature_usage(
+  p_from         date,
+  p_to           date,
+  p_granularity  text,
+  p_cohort       text,
+  p_profile_id   uuid default null
+)
+returns table (
+  period_start  date,
+  period_end    date,
+  dialog_entry  bigint
+)
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_is_admin boolean;
+begin
+  select p.is_admin into v_is_admin from public.profiles p where p.id = auth.uid();
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Not authorized.';
+  end if;
+  if p_granularity not in ('week', 'month') then
+    raise exception 'Invalid granularity.';
+  end if;
+  if p_cohort not in ('all', 'beta', 'free', 'subscriber', 'profile') then
+    raise exception 'Invalid cohort.';
+  end if;
+
+  return query
+  with cohort as (
+    select u.id
+    from auth.users u
+    left join public.profiles pr on pr.id = u.id
+    where p_cohort = 'all'
+       or (p_cohort = 'profile' and u.id = p_profile_id)
+       or (p_cohort = 'beta' and lower(u.email) in (select lower(email) from public.beta_allowlist))
+       or (p_cohort = 'free' and coalesce(pr.tier, 'free') = 'free')
+       or (p_cohort = 'subscriber' and pr.tier = 'subscriber')
+  ),
+  periods as (
+    select
+      gs::date as period_start,
+      (case when p_granularity = 'week'
+         then (gs + interval '6 days')
+         else (date_trunc('month', gs) + interval '1 month' - interval '1 day')
+       end)::date as period_end_natural
+    from generate_series(
+      case when p_granularity = 'week'
+        then date_trunc('week', p_from::timestamp + interval '1 day') - interval '1 day'
+        else date_trunc('month', p_from::timestamp)
+      end,
+      p_to::timestamp,
+      case when p_granularity = 'week' then interval '7 days' else interval '1 month' end
+    ) as gs
+  ),
+  bucketed as (
+    select p.period_start, least(p.period_end_natural, p_to) as period_end
+    from periods p
+  ),
+  fu as (
+    select
+      (case when p_granularity = 'week'
+         then (date_trunc('week', f.at + interval '1 day') - interval '1 day')
+         else date_trunc('month', f.at)
+       end)::date as period_start,
+      count(*) filter (where f.feature = 'dialog_entry') as dialog_entry
+    from public.feature_usage f
+    where f.user_id in (select id from cohort)
+      and f.at::date between p_from and p_to
+    group by 1
+  )
+  select
+    b.period_start,
+    b.period_end,
+    coalesce(fu.dialog_entry, 0) as dialog_entry
+  from bucketed b
+  left join fu on fu.period_start = b.period_start
+  order by b.period_start;
+end;
+$$;
+
+revoke all on function public.admin_get_feature_usage(date, date, text, text, uuid) from public;
+grant execute on function public.admin_get_feature_usage(date, date, text, text, uuid) to authenticated;
+
+-- Verify after running:
+--   select has_table_privilege('authenticated', 'feature_usage', 'select');
+--     -- should be false
+--   -- Signed in as any account, add a Dialog entry on a Request or ToDo
+--   -- (owner side, or as a signed-in Received recipient on Response
+--   -- Detail) -- confirm a new 'dialog_entry' row appears in
+--   -- feature_usage with your own user_id.
+--   -- Open the Tester Checklist (Housekeeping -> Pre-Release Tester ->
+--   -- Checklist) -- confirm "Add a Dialog entry" now shows checked and
+--   -- can't be unchecked.
+--   -- As an admin, open Admin -> Feature Usage -- confirm the Dialog
+--   -- Entry count for the period you just tested in is at least 1.
+-- ============================================================================

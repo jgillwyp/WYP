@@ -125,6 +125,19 @@ const ENTITY_CONFIG: Record<
       { header: 'Clicks', key: 'clicks', width: 10 },
     ],
   },
+  // Feature Usage (2026-11-23, migration 103) — admin_get_feature_usage()
+  // takes the same shape ad_activity above does, so it fits this generic
+  // path unmodified too. A future tracked feature adds its own column here
+  // alongside its own RPC column (see featureUsage.ts's own comment).
+  feature_usage: {
+    rpc: 'admin_get_feature_usage',
+    sheetName: 'Feature Usage',
+    columns: [
+      { header: 'Period Start', key: 'period_start', width: 14 },
+      { header: 'Period End', key: 'period_end', width: 14 },
+      { header: 'Dialog Entry', key: 'dialog_entry', width: 12 },
+    ],
+  },
 }
 
 export async function GET(request: Request) {

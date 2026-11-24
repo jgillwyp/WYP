@@ -7,6 +7,8 @@ import { Capacitor } from '@capacitor/core'
 import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { isAndroidDevice, isIOSDevice, isMacOSDevice } from '@/lib/platform'
+import { supabase } from '@/lib/supabaseClient'
+import type { TrackedFeature } from '@/lib/featureUsage'
 
 /**
  * Private Tester Checklist (2026-10-26) — supersedes the claude.ai Artifact
@@ -39,6 +41,17 @@ type ChecklistItem = {
   group: Group
   title: string
   detail: React.ReactNode
+  // Feature-usage tracking (2026-11-23, migration 103) — set only on an
+  // item that a real app action can confirm automatically; see
+  // featureUsage.ts's own header comment and FEATURE_ITEM_ID below.
+  autoFeature?: TrackedFeature
+}
+
+// The reverse of a ChecklistItem's own autoFeature — built once here,
+// independent of buildItems()/platform, since every auto-detectable item
+// in this file so far is pushed unconditionally regardless of platform.
+const FEATURE_ITEM_ID: Partial<Record<TrackedFeature, string>> = {
+  dialog_entry: 'feat-dialog',
 }
 
 const PLATFORM_TITLE: Record<Platform, string> = {
@@ -126,6 +139,14 @@ function buildItems(platform: Platform): ChecklistItem[] {
       title: 'Respond to a Request',
       detail: 'If you or someone else sends you one, find it under Received and mark it Done.',
     },
+    {
+      id: 'feat-dialog',
+      group: 'features',
+      title: 'Add a Dialog entry',
+      detail:
+        'Open a Request or ToDo and add a Question, Answer, or Comment under Dialog. This one checks itself off automatically once you do it — no need to tap the box.',
+      autoFeature: 'dialog_entry',
+    },
     { id: 'feat-4', group: 'features', title: 'Add an Attachment', detail: 'A photo, PDF, or other file on a Request or ToDo.' },
     { id: 'feat-5', group: 'features', title: 'Try Voice Dictation', detail: 'Tap the microphone icon in a Description field and speak instead of typing.' },
     {
@@ -205,6 +226,12 @@ export default function TesterChecklistForm() {
   const router = useRouter()
   const [platform, setPlatform] = useState<Platform>('windows')
   const [checked, setChecked] = useState<Record<string, boolean>>({})
+  // Feature-usage tracking (2026-11-23, migration 103) — which item ids a
+  // real app action has already confirmed, via get_my_feature_usage().
+  // Merged into `checked` the moment it resolves (so checkableDone/the
+  // Progress line reflect it immediately) and never cleared back out —
+  // toggle() below refuses to uncheck one of these.
+  const [autoDetected, setAutoDetected] = useState<Record<string, boolean>>({})
 
   // Platform-sensed title/content and localStorage checkmarks both read
   // client-only state — deferred one microtask past mount so the first
@@ -218,11 +245,39 @@ export default function TesterChecklistForm() {
     })
   }, [])
 
+  // Separate effect (a real network call, not just client-only state) —
+  // runs once on mount; this screen is RequireAuth-wrapped, so a session
+  // always exists.
+  useEffect(() => {
+    let cancelled = false
+    async function loadDetected() {
+      const { data, error } = await supabase.rpc('get_my_feature_usage')
+      if (cancelled || error || !Array.isArray(data)) return
+      const seen = new Set((data as { feature: string }[]).map((row) => row.feature))
+      const next: Record<string, boolean> = {}
+      for (const [feature, itemId] of Object.entries(FEATURE_ITEM_ID) as [TrackedFeature, string][]) {
+        if (seen.has(feature)) next[itemId] = true
+      }
+      if (Object.keys(next).length === 0) return
+      setAutoDetected(next)
+      setChecked((current) => {
+        const merged = { ...current, ...next }
+        saveChecked(merged)
+        return merged
+      })
+    }
+    void loadDetected()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const items = buildItems(platform)
   const checkableTotal = items.filter((it) => it.group !== 'quirks').length
   const checkableDone = items.filter((it) => it.group !== 'quirks' && checked[it.id]).length
 
   function toggle(id: string) {
+    if (autoDetected[id]) return
     const next = { ...checked, [id]: !checked[id] }
     setChecked(next)
     saveChecked(next)
@@ -286,10 +341,18 @@ export default function TesterChecklistForm() {
                       </div>
                     ) : (
                       <label key={it.id} className="checkrow">
-                        <input type="checkbox" checked={!!checked[it.id]} onChange={() => toggle(it.id)} />
+                        <input
+                          type="checkbox"
+                          checked={!!checked[it.id]}
+                          disabled={!!autoDetected[it.id]}
+                          onChange={() => toggle(it.id)}
+                        />
                         <div>
                           <span className="checktext">{it.title}</span>
                           <span className="checknote">{it.detail}</span>
+                          {autoDetected[it.id] && (
+                            <span className="checknote">Detected automatically — you&rsquo;ve already done this.</span>
+                          )}
                         </div>
                       </label>
                     )

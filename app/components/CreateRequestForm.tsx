@@ -1248,6 +1248,15 @@ export default function CreateRequestForm() {
         )
         return
       }
+
+      // Feature-usage tracking (2026-11-23, migration 103) — one call per
+      // Send that staged at least one Dialog entry, not one per entry. See
+      // featureUsage.ts's own header comment.
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'dialog_entry' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (dialog_entry) failed:', error.message)
+        })
     }
 
     // Attachments write third, same "hold as draft state until there's a

@@ -916,6 +916,15 @@ export default function CreateTodoForm() {
         )
         return
       }
+
+      // Feature-usage tracking (2026-11-23, migration 103) — see
+      // CreateRequestForm.tsx's identical comment and featureUsage.ts's own
+      // header comment.
+      void supabase
+        .rpc('log_feature_usage', { p_feature: 'dialog_entry' })
+        .then(({ error }) => {
+          if (error) console.error('log_feature_usage (dialog_entry) failed:', error.message)
+        })
     }
 
     // Attachments write third, same "hold as draft state until there's a
