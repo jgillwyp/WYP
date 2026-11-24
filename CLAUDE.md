@@ -341,6 +341,18 @@ link is built only after the stack is proven on Add Contact.
   failure not yet confirmed. Suspects: the Twilio console webhook URL
   (apex vs. `www`, which changes the signature), or `sms_consent_phone`
   not stored as `+1XXXXXXXXXX`.
+  **Root cause found and fixed the same day — a Twilio console setting,
+  not code.** The Messaging Service's Settings → Inbound messages was set
+  to "Receive the message," which keeps inbound texts in Twilio and never
+  calls a webhook, so no STOP/START had ever reached WYP. Jim switched it
+  to "Send a webhook" → `https://www.wouldyouplease.com/api/sms/inbound`
+  (POST). Confirmed in the new logs: STOP and START each arrived and
+  updated all 3 Contacts sharing +19253515407. `sms_consent_phone` was
+  already stored correctly. A text Request sent afterward arrived. The
+  earlier undelivered Request was most likely blocked by Twilio's own
+  opt-out list from the first STOP, which WYP never learned about. Side
+  effect to remember: START re-enables texting on every Contact sharing
+  the number, including one deliberately set to email.
 
 ## Known gaps
 
