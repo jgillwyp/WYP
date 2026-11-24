@@ -277,6 +277,29 @@ link is built only after the stack is proven on Add Contact.
   `ENTITY_CONFIG` path picks it up with no bespoke branch, same as Ad
   Activity's own entry. `npx tsc --noEmit`/`npm run lint` both clean. No
   mockup — this feature family has none.
+- **Tester Checklist marks which activities genuinely require a
+  Subscription; two new items added (2026-11-23), no migration.** Jim:
+  "There should be an indication of which activities require a
+  Subscription." Scoped via `AskUserQuestion` to the Checklist only (not
+  the Admin report), and to items that are actually gated on
+  `tier === 'subscriber'` — not the free-tier-available-with-caps ones
+  (Attachments: 100 MB; Repeat: 3 concurrent), which don't require
+  anything, just cap it. New `ChecklistItem.requiresSubscription`, rendered
+  as a `" — Subscriber feature"` badge after the title using the existing
+  `.checkword` component (the same brand-blue/bold span Account Options'
+  own squint-test keyword prefixes already use, 2026-11-02). Three items
+  carry it: "Try Voice Dictation" (already existed, confirmed genuinely
+  gated — `tier === 'subscriber'` on every Description/Dialog field across
+  Create/Detail screens), and two new items Jim asked to be added outright
+  since neither existed on this screen before — "Try Receipt Confirmation"
+  (Account Options → Requests (sent) → "Show optional Receipt
+  Confirmation," Subscriber-only per migration 074, then the per-item
+  checkbox on Create Request) and "Try Request Texting" (choosing Text as
+  a Contact's send method, unlocked for Subscribers per migration 079 —
+  confirmed against `AddContactForm.tsx`'s own `tier === 'subscriber'`
+  gate and its exact `gatenote` wording, "Saving will email this Contact a
+  link to approve text messaging"). `npx tsc --noEmit`/`npm run lint` both
+  clean. No mockup — this screen has never had one.
 
 ## Known gaps
 

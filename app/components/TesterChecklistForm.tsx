@@ -45,6 +45,15 @@ type ChecklistItem = {
   // item that a real app action can confirm automatically; see
   // featureUsage.ts's own header comment and FEATURE_ITEM_ID below.
   autoFeature?: TrackedFeature
+  // Subscription indication (2026-11-23) — Jim: "There should be an
+  // indication of which activities require a Subscription." Scoped to
+  // just the items that are genuinely gated on tier === 'subscriber'
+  // (Voice Dictation, Receipt Confirmation, Request Texting) — not the
+  // free-tier-available-with-caps ones (Attachments, Repeat), which don't
+  // actually require anything. Renders the existing .checkword badge
+  // (same component Account Options' own squint-test prefixes use) after
+  // the title.
+  requiresSubscription?: boolean
 }
 
 // The reverse of a ChecklistItem's own autoFeature — built once here,
@@ -148,7 +157,29 @@ function buildItems(platform: Platform): ChecklistItem[] {
       autoFeature: 'dialog_entry',
     },
     { id: 'feat-4', group: 'features', title: 'Add an Attachment', detail: 'A photo, PDF, or other file on a Request or ToDo.' },
-    { id: 'feat-5', group: 'features', title: 'Try Voice Dictation', detail: 'Tap the microphone icon in a Description field and speak instead of typing.' },
+    {
+      id: 'feat-5',
+      group: 'features',
+      title: 'Try Voice Dictation',
+      detail: 'Tap the microphone icon in a Description field and speak instead of typing.',
+      requiresSubscription: true,
+    },
+    {
+      id: 'feat-receipt',
+      group: 'features',
+      title: 'Try Receipt Confirmation',
+      detail:
+        "In Account Options → Requests (sent), turn on \"Show optional Receipt Confirmation,\" then check it on a new Request. Opening the Request's own link — from the email or a text — confirms receipt automatically.",
+      requiresSubscription: true,
+    },
+    {
+      id: 'feat-texting',
+      group: 'features',
+      title: 'Try Request Texting',
+      detail:
+        'On a Contact, choose Text instead of Email as the send method. Saving emails that Contact a link to approve text messaging — no real text goes out until they approve.',
+      requiresSubscription: true,
+    },
     {
       id: 'feat-6',
       group: 'features',
@@ -348,7 +379,10 @@ export default function TesterChecklistForm() {
                           onChange={() => toggle(it.id)}
                         />
                         <div>
-                          <span className="checktext">{it.title}</span>
+                          <span className="checktext">
+                            {it.title}
+                            {it.requiresSubscription && <span className="checkword"> — Subscriber feature</span>}
+                          </span>
                           <span className="checknote">{it.detail}</span>
                           {autoDetected[it.id] && (
                             <span className="checknote">Detected automatically — you&rsquo;ve already done this.</span>
