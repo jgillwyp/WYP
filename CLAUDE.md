@@ -326,6 +326,21 @@ link is built only after the stack is proven on Add Contact.
   Windows; **180px** (Jim's own estimate) fits both. Confirmed by Jim on
   Android and Windows (iPhone isn't an Admin login, but it already fit
   like Windows did).
+- **Inbound SMS: START now re-opts a Contact in, every outcome is logged —
+  migration 105 confirmed run by Jim, 2026-11-24.** Jim: a STOP
+  reply to a WYP text didn't update the Contact, and texts still didn't
+  arrive after replying START. `app/api/sms/inbound/route.ts` previously
+  wrote nothing to the log, so whether Twilio's webhook arrived, failed
+  signature validation (403), or matched no Contact was invisible. It now
+  logs all three, trusts Twilio's own `OptOutType` param (Advanced Opt-Out)
+  ahead of the plain keyword match, and handles START/UNSTOP/YES via new
+  `set_sms_opt_in_by_phone()`, which clears `sms_opted_out_at` and restores
+  `send_by = 'text'`, but only for a Contact that had real web-opt-in
+  consent. `set_sms_opt_out_by_phone()` now returns the matched-row count
+  (void → integer, drop-then-create). Root cause of Jim's specific STOP
+  failure not yet confirmed. Suspects: the Twilio console webhook URL
+  (apex vs. `www`, which changes the signature), or `sms_consent_phone`
+  not stored as `+1XXXXXXXXXX`.
 
 ## Known gaps
 

@@ -2644,3 +2644,82 @@ grant execute on function public.admin_get_feature_usage(date, date, text, text,
 --   -- something) -- confirm each one's own Checklist row auto-checks,
 --   -- and each shows a nonzero count on Admin -> Feature Usage.
 -- ============================================================================
+
+-- ============================================================================
+-- Migration 105 (2026-11-24) -- inbound SMS: START re-opts a Contact back in,
+-- and both STOP/START functions report how many Contacts they matched.
+-- CONFIRMED RUN by Jim, 2026-11-24.
+--
+-- Jim-reported: a STOP reply to a WYP text didn't update the Contact, and
+-- after replying START, texts still didn't arrive. Two gaps on WYP's side:
+-- (1) nothing ever handled START at all -- if a STOP *had* been recorded,
+-- sms_opted_out_at stayed set and send_by stayed 'email' forever, so
+-- contactSmsNumber() kept falling back to email even after Twilio itself
+-- unblocked the number; (2) set_sms_opt_out_by_phone returned void, so the
+-- inbound route couldn't tell "matched a Contact" apart from "matched
+-- nothing" -- a silent no-op was invisible in the logs.
+--
+-- set_sms_opt_out_by_phone changes return type (void -> integer), so it
+-- needs drop-then-create, not create-or-replace; grants re-applied after.
+-- set_sms_opt_in_by_phone is new. START only restores a Contact WYP itself
+-- had opted out (sms_opted_out_at not null) AND that had real consent on
+-- file (sms_consent_given_at not null) -- it never turns on texting for a
+-- Contact that never went through the web opt-in.
+-- ============================================================================
+
+drop function if exists public.set_sms_opt_out_by_phone(text);
+
+create function public.set_sms_opt_out_by_phone(p_phone text)
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_count integer;
+begin
+  update public.contacts
+    set sms_opted_out_at = now(),
+        send_by = 'email'
+    where sms_consent_phone = p_phone
+      and sms_opted_out_at is null;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke all on function public.set_sms_opt_out_by_phone(text) from public;
+grant execute on function public.set_sms_opt_out_by_phone(text) to service_role;
+
+create or replace function public.set_sms_opt_in_by_phone(p_phone text)
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_count integer;
+begin
+  update public.contacts
+    set sms_opted_out_at = null,
+        send_by = 'text'
+    where sms_consent_phone = p_phone
+      and sms_opted_out_at is not null
+      and sms_consent_given_at is not null;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke all on function public.set_sms_opt_in_by_phone(text) from public;
+grant execute on function public.set_sms_opt_in_by_phone(text) to service_role;
+
+-- Verify after running:
+--   select proname, pg_get_function_result(oid) from pg_proc
+--     where proname in ('set_sms_opt_out_by_phone', 'set_sms_opt_in_by_phone');
+--     -- both return integer
+--   -- Check the stored number format matches Twilio's From (+1XXXXXXXXXX):
+--   select display_name, send_by, sms_consent_phone, sms_consent_given_at,
+--          sms_opted_out_at
+--     from public.contacts where sms_consent_phone is not null;
+-- ============================================================================

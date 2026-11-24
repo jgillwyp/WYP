@@ -39,6 +39,10 @@ export const runtime = 'nodejs'
  */
 
 const STOP_KEYWORDS = new Set(['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT'])
+// Twilio's own default opt-in keywords. START re-opts a Contact back in
+// (migration 105) -- previously unhandled, so a recorded STOP was permanent
+// on WYP's side even after Twilio itself unblocked the number.
+const START_KEYWORDS = new Set(['START', 'UNSTOP', 'YES'])
 
 function emptyTwimlResponse() {
   const twiml = new twilio.twiml.MessagingResponse()
@@ -65,20 +69,41 @@ export async function POST(request: Request) {
   const webhookUrl = `${siteUrl}/api/sms/inbound`
 
   if (!signature || !twilio.validateRequest(authToken, signature, webhookUrl, params)) {
+    // Logged (2026-11-24): this route previously wrote nothing to the log at
+    // all, so a misconfigured console URL (e.g. the bare apex, which 308s to
+    // www and signs against a different URL) was invisible in Vercel's logs.
+    console.error('[sms/inbound] signature rejected', { webhookUrl, hasSignature: !!signature })
     return new Response('Invalid signature.', { status: 403 })
   }
 
   const from = typeof params.From === 'string' ? params.From : null
   const body = typeof params.Body === 'string' ? params.Body.trim().toUpperCase() : ''
+  // With Twilio's Advanced Opt-Out on, OptOutType ('STOP' | 'START' | 'HELP')
+  // reports Twilio's own classification, including any custom keywords set
+  // in the console -- trusted first, the plain keyword match as a fallback.
+  const optOutType = typeof params.OptOutType === 'string' ? params.OptOutType.toUpperCase() : ''
+  const isStop = optOutType === 'STOP' || STOP_KEYWORDS.has(body)
+  const isStart = optOutType === 'START' || START_KEYWORDS.has(body)
 
-  if (from && STOP_KEYWORDS.has(body)) {
+  console.log('[sms/inbound] received', { from, body, optOutType })
+
+  if (from && (isStop || isStart)) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (supabaseUrl && serviceRoleKey) {
       const sb = createClient(supabaseUrl, serviceRoleKey, {
         auth: { persistSession: false, autoRefreshToken: false },
       })
-      await sb.rpc('set_sms_opt_out_by_phone', { p_phone: from })
+      const fn = isStop ? 'set_sms_opt_out_by_phone' : 'set_sms_opt_in_by_phone'
+      const { data, error } = await sb.rpc(fn, { p_phone: from })
+      if (error) {
+        console.error('[sms/inbound] ' + fn + ' failed', { from, error: error.message })
+      } else {
+        // 0 means no Contact's sms_consent_phone matched this number exactly.
+        console.log('[sms/inbound] ' + fn, { from, contactsUpdated: data })
+      }
+    } else {
+      console.error('[sms/inbound] Supabase service role not configured')
     }
   }
 
