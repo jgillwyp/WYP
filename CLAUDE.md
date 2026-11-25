@@ -10658,3 +10658,24 @@ link is built only after the stack is proven on Add Contact.
   sat too high on Android: new `.repeat-modal` (`globals.css`) centers it
   at 50% with a safe-area-aware max-height and internal scroll, applied in
   `RepeatControl.tsx`. `npx tsc --noEmit`/`npm run lint` clean.
+- **Admin > Add Pre-Release Tester removed, with its pending-provisioning
+  machinery — migration 106, confirmed run by Jim (2026-11-25).** Step 1
+  showed three never-signed-in queued rows (Matt Kavanaugh, two Eric
+  Gillon entries, one a typo'd `.comcom`) — their pre-filled names were
+  dropped; Create Free Account will ask if they ever sign up.
+  Jim: "does it have any use now?" -> "yes, go ahead and remove it." Open
+  signup plus `handle_new_user()`'s automatic allowlist grants (migration
+  100) left it only pre-filling a name/time zone that Create Free Account
+  already asks for. Removed `AdminAddTesterForm.tsx`, `/admin/testers/new`,
+  the Admin Housekeeping row (`MainScreen.tsx`), cron/tick's Phase F
+  (`provision_pending_testers()` call + `testersProvisioned` count),
+  `docs/add-tester.mjs`, `docs/delete-tester.mjs`, and
+  `docs/add-private-tester.sql`; `docs/tester-management-snippets.sql`
+  trimmed to the snippets that still apply. Migration 106 drops
+  `admin_add_private_tester()`, `provision_pending_testers()`, and
+  `pending_tester_setup` — deploy the app change first so the hourly cron
+  stops calling the dropped function. Same session: orphan
+  `beta_allowlist`/`tier_toggle_allowlist` rows (emails with no account)
+  were deleted by Jim directly, and `jimgillon@hotmail.com` re-added to
+  both after an earlier tester removal had dropped it from the Beta
+  cohort. `npx tsc --noEmit`/`npm run lint` clean.

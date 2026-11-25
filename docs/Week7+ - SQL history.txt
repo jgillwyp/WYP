@@ -2723,3 +2723,42 @@ grant execute on function public.set_sms_opt_in_by_phone(text) to service_role;
 --          sms_opted_out_at
 --     from public.contacts where sms_consent_phone is not null;
 -- ============================================================================
+
+
+-- ============================================================================
+-- Migration 106 (2026-11-25) -- removes Admin > Add Pre-Release Tester and
+-- its pending-provisioning machinery.
+--
+-- Jim: "we should drop 'Add Pre-Release Tester'? does it have any use now?"
+-- -> "yes, go ahead and remove it." Open signup (2026-11-17) plus
+-- handle_new_user()'s own automatic beta_allowlist/tier_toggle_allowlist
+-- grants (migration 100) left this feature with one remaining effect:
+-- pre-filling a person's display name/time zone before first sign-in,
+-- which Create Free Account already asks for anyway.
+--
+-- App side (same commit): AdminAddTesterForm.tsx, /admin/testers/new, the
+-- Admin Housekeeping row, cron/tick's Phase F, docs/add-tester.mjs,
+-- docs/delete-tester.mjs and docs/add-private-tester.sql are all removed.
+-- Deploy that app change BEFORE running this, or the hourly cron will log
+-- an error calling the dropped provision_pending_testers() until it does.
+--
+-- Run step 1 first. If it returns rows, those people were queued with a
+-- name/time zone but never signed in -- dropping the table only loses that
+-- pre-fill (Create Free Account will ask them on first sign-in instead).
+-- ============================================================================
+
+-- Step 1: check for still-unprovisioned queue rows (informational).
+select email, display_name, time_zone, requested_at
+from public.pending_tester_setup
+where provisioned_at is null;
+
+-- Step 2: drop.
+drop function if exists public.admin_add_private_tester(text, text, text);
+drop function if exists public.provision_pending_testers();
+drop table if exists public.pending_tester_setup;
+
+-- Verify (should return 0 rows):
+--   select proname from pg_proc
+--   where proname in ('admin_add_private_tester', 'provision_pending_testers');
+--   select to_regclass('public.pending_tester_setup');  -- expect null
+-- ============================================================================

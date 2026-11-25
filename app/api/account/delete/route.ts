@@ -67,7 +67,7 @@ export const runtime = 'nodejs'
  *    not assumed — nothing in that graph is `on delete restrict`/"no
  *    action" against a row this deletion touches, so the admin call
  *    cannot fail on an unexpected FK violation. `beta_allowlist`/
- *    `tier_toggle_allowlist`/`pending_tester_setup`/`app_settings` are all
+ *    `tier_toggle_allowlist`/`app_settings` are all
  *    keyed by email, not a FK to `auth.users`, and are deliberately left
  *    alone — harmless if this same email ever signs up again.
  *

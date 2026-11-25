@@ -3210,24 +3210,6 @@ export default function MainScreen() {
               // screens.
               <div className="subbody">
                 <div className="hkrows">
-                  {/* Add Private Tester (2026-11-06) — replaces running
-                      docs/add-tester.mjs from a terminal. Jim: "The entry of
-                      the time zone is really awkward, the Grant Subscriber
-                      access is not required... Perhaps we could add this to
-                      the Statistics tab, rename the tab Admin and add an
-                      'Add Private Tester' choice." */}
-                  <div
-                    className="hkrow"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => router.push('/admin/testers/new')}
-                    onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/testers/new') }}
-                  >
-                    <span className="hktext">
-                      <span className="hktitle">Add Pre-Release Tester</span>
-                      <span className="hknote"> — allow someone new to sign in and test</span>
-                    </span>
-                  </div>
                   {/* Stripe Audit (2026-11-12, migration 093) — Jim: "create
                       an audit of purchase/cancel/reduction transactions...
                       expose it as a view under the Admin chip as
