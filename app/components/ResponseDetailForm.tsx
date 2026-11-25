@@ -1242,13 +1242,17 @@ export default function ResponseDetailForm() {
               <div className="metarow">
                 <span className="mlabel">Due:</span>
                 <span className="mval">
-                  {data.due_date ? formatLongDate(data.due_date) : '—'}
-                  {/* Due Time suffix — only when the issuer has Due/Done Time
-                      turned on (migration 019/020, 2026-08-13). See
-                      RequestResponseForm.tsx's identical gate. */}
-                  {data.owner_request_time_enabled && data.due_time && (
-                    <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>
-                  )}
+                  {/* Overdue (not Done, Due Date passed) shows red/bold, same
+                      treatment as Request Detail's Due Date (2026-11-25). */}
+                  <span className={!data.done_date && data.due_date && data.due_date < todayISODate() ? 'overdue-date' : undefined}>
+                    {data.due_date ? formatLongDate(data.due_date) : '—'}
+                    {/* Due Time suffix — only when the issuer has Due/Done Time
+                        turned on (migration 019/020, 2026-08-13). See
+                        RequestResponseForm.tsx's identical gate. */}
+                    {data.owner_request_time_enabled && data.due_time && (
+                      <>&nbsp;&nbsp;{formatTime12h(data.due_time)}</>
+                    )}
+                  </span>
                   {/* Repeat footnote marker — see RequestResponseForm.tsx's
                       identical addition for the full reasoning. */}
                   {data.repeat_rule && (

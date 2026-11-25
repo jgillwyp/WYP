@@ -701,6 +701,9 @@ export default function CreateTodoForm() {
             />
             <span>Day after</span>
           </label>
+          {/* Hidden until a Due Time exists — same rule as ToDo Detail
+              (owner request, 2026-11-25). */}
+          {todoTimeEnabled && form.dueTime.trim() !== '' && (
           <label
             className={`reminderitem${todoMinutesBeforePrereqsMissing ? ' reminderitem-disabled' : ''}`}
             title={todoMinutesBeforeTooltip}
@@ -727,6 +730,7 @@ export default function CreateTodoForm() {
               minutes before
             </span>
           </label>
+          )}
         </div>
       </div>
     )

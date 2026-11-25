@@ -647,6 +647,10 @@ export default function TodoDetailForm() {
             />
             <span>Day after</span>
           </label>
+          {/* Minutes before only makes sense against an exact Due Time, so
+              it's hidden entirely (not just greyed) until one is set
+              (owner request, 2026-11-25). */}
+          {todoTimeEnabled && form.dueTime.trim() !== '' && (
           <label
             className={`reminderitem${todoMinutesBeforeDisabled ? ' reminderitem-disabled' : ''}`}
             title={todoMinutesBeforeTooltip}
@@ -673,6 +677,7 @@ export default function TodoDetailForm() {
               minutes before
             </span>
           </label>
+          )}
         </div>
       </div>
     )

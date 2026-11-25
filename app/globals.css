@@ -807,7 +807,8 @@ body {
    substitute for it. Best-effort: WebKit/Blink (Chrome, Edge, Safari) apply
    `color` to a date input's own digits; a browser that doesn't honor it
    just shows the value in its default color, no breakage either way. */
-.finput.overdue-date {
+.finput.overdue-date,
+.mval .overdue-date {
   color: var(--alert-red);
   font-weight: 700;
 }
@@ -1813,6 +1814,31 @@ body {
   max-height: calc(100dvh - var(--feedback-modal-top) - max(16px, calc(env(safe-area-inset-bottom, 0px) + 10px)));
   overflow-y: auto;
   transform: translateX(-50%);
+}
+
+/* Narrow-screen column-heading abbreviation (2026-11-25) — owner, Android:
+   with Priority's sort pill active, ToDos' "Category" heading overlapped
+   "Created." ColSort renders both spellings when given a shortLabel (only
+   passed while Priority is the active sort); the short one shows only on a
+   narrow screen. A ~480px desktop window still fits the full word. */
+.lbl-short { display: none; }
+@media (max-width: 440px) {
+  .colbar .lbl-full { display: none; }
+  .colbar .lbl-short { display: inline; }
+}
+
+/* Add/Edit Repeat dialog (2026-11-25) — owner, Android: "Edit Repeat
+   dialog is too high." Plain .modal centers around top:34%, which pushes a
+   tall dialog's title up toward the status bar. This one centers on the
+   real middle of the screen instead, with a max-height (safe-area aware on
+   both ends) so it can never run past the top or bottom edge — it scrolls
+   internally on a very short screen rather than clipping. Applied via
+   RepeatControl.tsx's own <div className="modal repeat-modal">. */
+.repeat-modal {
+  top: 50%;
+  max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px);
+  overflow-y: auto;
 }
 
 .advlabelrow {

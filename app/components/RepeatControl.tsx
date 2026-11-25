@@ -332,7 +332,7 @@ export default function RepeatControl({ rule, dueDate, onSave, onRemove, disable
       {open && (
         <>
           <div className="scrim" onClick={() => setOpen(false)} />
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="repeat-title">
+          <div className="modal repeat-modal" role="dialog" aria-modal="true" aria-labelledby="repeat-title">
             <div className="modalhead">
               <p className="modal-title" id="repeat-title">
                 {rule ? 'Edit Repeat' : 'Add Repeat'}

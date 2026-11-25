@@ -820,9 +820,14 @@ function ColSort({
   dir,
   onClick,
   disabled = false,
+  shortLabel,
 }: {
   className: string
   label: string
+  // Abbreviated label shown instead of `label` on a narrow screen only
+  // (.lbl-short/.lbl-full, globals.css) — 2026-11-25, ToDos' Category
+  // heading while Priority's pill is active. aria-label keeps the full word.
+  shortLabel?: string
   active: boolean
   dir: SortDir
   onClick: () => void
@@ -847,7 +852,16 @@ function ColSort({
       disabled={disabled}
       aria-label={`Sort by ${label}${stateLabel}`}
     >
-      {showActive ? <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span> : label}
+      {showActive ? (
+        <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span>
+      ) : shortLabel ? (
+        <>
+          <span className="lbl-full">{label}</span>
+          <span className="lbl-short">{shortLabel}</span>
+        </>
+      ) : (
+        label
+      )}
     </button>
   )
 }
@@ -2755,7 +2769,7 @@ export default function MainScreen() {
                       live sort column (retired 2026-08-17, see TodoSortKey's
                       own comment above). */}
                   {todoCategoriesEnabled && (
-                    <ColSort className="c-cat" label="Category" active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
+                    <ColSort className="c-cat" label="Category" shortLabel={todoSort.key === 'priority' ? 'Ctgry' : undefined} active={todoSort.key === 'category'} dir={todoSort.dir} onClick={() => sortTodos('category')} />
                   )}
                 </span>
                 <ColSort className="c-dt" label="Created" active={todoSort.key === 'date'} dir={todoSort.dir} onClick={() => sortTodos('date')} />

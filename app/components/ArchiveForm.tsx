@@ -481,12 +481,15 @@ function ColSort({
   active,
   dir,
   onClick,
+  shortLabel,
 }: {
   className: string
   label: string
   active: boolean
   dir: SortDir
   onClick: () => void
+  // Narrow-screen-only abbreviation — see MainScreen.tsx's identical prop.
+  shortLabel?: string
 }) {
   const stateLabel = active ? `, currently sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''
   return (
@@ -496,7 +499,16 @@ function ColSort({
       onClick={onClick}
       aria-label={`Sort by ${label}${stateLabel}`}
     >
-      {active ? <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span> : label}
+      {active ? (
+        <span className="pill">{label}&nbsp;{dir === 'asc' ? '▲' : '▼'}</span>
+      ) : shortLabel ? (
+        <>
+          <span className="lbl-full">{label}</span>
+          <span className="lbl-short">{shortLabel}</span>
+        </>
+      ) : (
+        label
+      )}
     </button>
   )
 }
@@ -1778,6 +1790,7 @@ export default function ArchiveForm() {
                         <ColSort
                           className="c-cat"
                           label="Category"
+                          shortLabel={todoSort.key === 'priority' ? 'Ctgry' : undefined}
                           active={todoSort.key === 'category'}
                           dir={todoSort.dir}
                           onClick={() => sortTodoColumn('category')}

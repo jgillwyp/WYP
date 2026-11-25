@@ -10641,3 +10641,20 @@ link is built only after the stack is proven on Add Contact.
   only ever differed in `dismissLabel`/`onDismiss`, confirming the shared-
   component design from the day before was the right call. `npx tsc
   --noEmit`/`npm run lint` both clean. No mockup — this dialog has none.
+
+- **Four small fixes from real-device screenshots (2026-11-25), no
+  migration.** (1) An overdue Due Date (not Done, date passed) on Response
+  Detail and Request Response now shows red/bold, matching Request Detail
+  and ToDo Detail -- the `Due:` metarow's date+time is wrapped in a span
+  using the existing `.overdue-date` rule, widened to also match
+  `.mval .overdue-date`. (2) The "Minutes before" Reminder checkbox on
+  ToDo Detail and Create ToDo is now hidden entirely (not just greyed)
+  until the ToDo actually has a Due Time. (3) ToDos' sortable Category column
+  heading on Main Screen and Archive reads "Ctgry" only on a narrow screen
+  (max-width 440px) and only while Priority is the active sort -- on
+  Android Priority's pill pushed "Category" into "Created." Everywhere else
+  it stays "Category" (ColSort's new `shortLabel` prop + `.lbl-full`/
+  `.lbl-short` CSS). Print headings unchanged. (4) The Add/Edit Repeat dialog
+  sat too high on Android: new `.repeat-modal` (`globals.css`) centers it
+  at 50% with a safe-area-aware max-height and internal scroll, applied in
+  `RepeatControl.tsx`. `npx tsc --noEmit`/`npm run lint` clean.
