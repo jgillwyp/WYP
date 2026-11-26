@@ -178,6 +178,16 @@
   margin-top: 16px;
   line-height: 1.4;
 }
+/* "Efficient task delegation" key phrase (2026-11-26) — the product's own
+   one-line positioning, and a candidate Google Ads keyword, so it reads
+   bolder/whiter than the .h2 line above it. */
+.wyp-landing .keyline {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 12px;
+  line-height: 1.35;
+}
 .wyp-landing .lede {
   font-size: 14.5px;
   line-height: 1.55;

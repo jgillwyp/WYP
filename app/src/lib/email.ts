@@ -318,6 +318,11 @@ function emailDescriptionBox(html: string): string {
 // for a quicker read of what's actually being offered.
 export const SIGNUP_CTA_TEXT = 'Get a Free Account to: send Requests & manage your ToDos'
 
+// Key-phrase line under "New to Would You Please?" (2026-11-26, Jim's own
+// wording) — "free version available" rather than "free trial" so it never
+// implies a cutoff period.
+const SIGNUP_KEYLINE = 'Efficient task delegation, free version available.'
+
 // Recipient account status (2026-10-03, owner-reported) — until now, this
 // footer showed the signup pitch unconditionally, even to a Recipient who
 // already has their own WYP account (e.g. a self-sent Request, or two
@@ -341,6 +346,7 @@ function emailSignupFooter(siteUrl: string, accountStatus: RecipientAccountStatu
   }
   return [
     `<p style="margin:18px 0 8px; font-size:17px; font-weight:700; color:${EMAIL_BLUE_PRESSED};">New to Would You Please?</p>`,
+    `<p style="margin:0 0 10px;">${SIGNUP_KEYLINE}</p>`,
     `<p style="margin:0;">${emailButton(siteUrl, SIGNUP_CTA_TEXT)}</p>`,
   ].join('\n')
 }
@@ -351,7 +357,7 @@ function emailSignupFooter(siteUrl: string, accountStatus: RecipientAccountStatu
 // sentence), so the trailing colon before the URL reads as the only one.
 function textSignupFooterLines(siteUrl: string, accountStatus: RecipientAccountStatus): string[] {
   if (accountStatus !== 'none') return [accountStatusThankYou(accountStatus)]
-  return [`New to Would You Please? ${SIGNUP_CTA_TEXT.replace(':', '')}:`, siteUrl]
+  return [`New to Would You Please? ${SIGNUP_KEYLINE}`, `${SIGNUP_CTA_TEXT.replace(':', '')}:`, siteUrl]
 }
 
 // ----------------------------------------------------------------------------

@@ -212,6 +212,7 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 </div>
               </div>
               <div className="h2">The simple way to ask anyone for anything — and actually see it through.</div>
+              <div className="keyline">Achieve Very Efficient Task Delegation with Would You Please.</div>
               <div className="lede">
                 Asks sent by email or chat get buried, forgotten, and lost in long threads.
                 With Would You Please, every ask is turned into a structured, trackable
@@ -220,10 +221,9 @@ export default function LandingPage({ errorMessage }: { errorMessage?: string | 
                 alongside, on one dashboard.
               </div>
               <div className="reassure">
-                No credit card needed for the free version. Use it right in your browser
-                today — native iOS and Android apps are in testing now.
+                No credit card needed for a very functional free version. Use it in your
+                browser, as a native iOS app, or as a native Android app.
               </div>
-              <div className="reassure-note">Ask about joining the native app testing.</div>
             </div>
 
             {/* Hero illustration — hand-built SVG, not the AI placeholder photo;
