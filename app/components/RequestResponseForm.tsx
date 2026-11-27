@@ -1394,6 +1394,7 @@ export default function RequestResponseForm() {
                 Create your own Free Account
               </Link>
               <p className="promo-p">The simple way to ask anyone for anything, and actually see it through.</p>
+              <p className="promo-p" style={{ fontWeight: 700 }}>Efficient task delegation, free version available.</p>
             </div>
             )}
 
