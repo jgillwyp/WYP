@@ -10,6 +10,7 @@ import { APP_VERSION, BUILD_DATE } from '@/version'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { useFeedbackImages } from '@/lib/useFeedbackImages'
+import { markLocalChecklistUsage } from '@/lib/featureUsage'
 
 function formatBuildDate(value: string): string {
   return new Date(value).toLocaleDateString('en-US', {
@@ -96,6 +97,7 @@ export default function AboutForm() {
       })
       const json = (await res.json().catch(() => ({}))) as { sent?: boolean }
       if (json.sent) {
+        markLocalChecklistUsage('feedback_sent')
         setFeedbackSent(true)
         setFeedbackBody('')
         feedbackImages.reset()

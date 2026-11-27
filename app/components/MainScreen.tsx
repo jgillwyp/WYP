@@ -13,6 +13,7 @@ import { printWithExpandedWindow } from '@/lib/platform'
 import { scrollLookupFieldToTop } from '@/lib/lookupField'
 import { useSpeechDictation } from '@/lib/useSpeechDictation'
 import { useFeedbackImages } from '@/lib/useFeedbackImages'
+import { markLocalChecklistUsage } from '@/lib/featureUsage'
 import {
   isIOSDevice,
   isMacOSDevice,
@@ -2059,6 +2060,7 @@ export default function MainScreen() {
       })
       const json = (await res.json().catch(() => ({}))) as { sent?: boolean }
       if (json.sent) {
+        markLocalChecklistUsage('feedback_sent')
         setFeedbackSent(true)
         setFeedbackBody('')
         feedbackImages.reset()

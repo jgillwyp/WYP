@@ -8,7 +8,8 @@ import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { isAndroidDevice, isIOSDevice, isMacOSDevice } from '@/lib/platform'
 import { supabase } from '@/lib/supabaseClient'
-import type { TrackedFeature } from '@/lib/featureUsage'
+import { readLocalChecklistMarks } from '@/lib/featureUsage'
+import type { LocalChecklistMark, TrackedFeature } from '@/lib/featureUsage'
 
 /**
  * Private Tester Checklist (2026-10-26) — supersedes the claude.ai Artifact
@@ -31,6 +32,19 @@ import type { TrackedFeature } from '@/lib/featureUsage'
  * Housekeeping-reached screen (Archive/Contacts/Private Categories/
  * Storage Management) rather than HelpTopicShell's own `push('/')` — this
  * isn't a chained "what to try next" flow, just a single destination.
+ *
+ * Fully automatic (2026-11-27) — Jim: "To make this really easy, we keep
+ * track of what features you have used and mark them accordingly... Maybe
+ * show the checkboxes for the 17 features checked or unchecked as
+ * appropriate but as disabled checkboxes." Every checkbox is now disabled;
+ * nothing is tapped by hand. Each row is checked from one of two sources:
+ * the account's own feature_usage rows (get_my_feature_usage(), the 13
+ * features in FEATURE_ITEM_ID) or a device-local marker
+ * (featureUsage.ts's readLocalChecklistMarks(), LOCAL_MARK_ITEM_IDS) for the
+ * few rows feature_usage doesn't cover — Jim was fine with those staying in
+ * the browser. The old manual-checkmark localStorage key
+ * (wyp.testerChecklistChecked) is no longer read: a hand-ticked box from
+ * before this change can't be told apart from real usage.
  */
 
 type Group = 'start' | 'features' | 'quirks' | 'feedback'
@@ -59,8 +73,31 @@ type ChecklistItem = {
 // The reverse of a ChecklistItem's own autoFeature — built once here,
 // independent of buildItems()/platform, since every auto-detectable item
 // in this file so far is pushed unconditionally regardless of platform.
-const FEATURE_ITEM_ID: Partial<Record<TrackedFeature, string>> = {
+// Until 2026-11-27 only dialog_entry was mapped here, even though migration
+// 104 had already started logging all 13 — the rest never auto-checked.
+const FEATURE_ITEM_ID: Record<TrackedFeature, string> = {
+  request_created: 'feat-1',
+  todo_created: 'feat-2',
+  request_responded: 'feat-3',
   dialog_entry: 'feat-dialog',
+  attachment_added: 'feat-4',
+  voice_dictation: 'feat-5',
+  receipt_confirmation: 'feat-receipt',
+  request_texting: 'feat-texting',
+  reminder_set: 'feat-6',
+  repeat_set: 'feat-7',
+  calendar_view: 'feat-8',
+  archive_used: 'feat-9',
+  print_used: 'feat-9b',
+}
+
+// Rows with no feature_usage counterpart, checked from this device's own
+// localStorage markers instead. One sent Feedback covers all three "How to
+// report something" rows — they describe the steps of a single send.
+const LOCAL_MARK_ITEM_IDS: Record<LocalChecklistMark, string[]> = {
+  feedback_sent: ['fb-1', 'fb-2', 'fb-3'],
+  tier_toggled: ['feat-10'],
+  link_opened_app: ['start-2'],
 }
 
 const PLATFORM_TITLE: Record<Platform, string> = {
@@ -83,22 +120,12 @@ const PLATFORM_TITLE: Record<Platform, string> = {
 // Any platform-specific duration/instructions belong in whatever channel
 // recruits that round of testers (an email, or the testing organization's
 // own instructions to its participants), not hardcoded into this screen.
-// iOS's own wording also updated here — it no longer claims "the
-// dedicated iPhone app is still being built": TestFlight External Testing
-// is real and already in use (see the Features-Exposure history), so a
-// tester reaching this screen's iOS branch may already be running that
-// app, not only Safari. Mac's wording touched too, for consistency, even
-// though the owner's own message didn't name it — the same "no fixed
-// program length" reasoning applies there equally.
-const PLATFORM_INTRO: Record<Platform, string> = {
-  android: "Your phone, real Requests and ToDos. You're testing the installed Android app itself, not just the website.",
-  ios: "Your iPhone, real Requests and ToDos. You're testing either the TestFlight app, if you installed it, or through Safari (or another browser) — including from a Home Screen icon if you've added one.",
-  mac: "Your Mac, real Requests and ToDos. You're testing through a browser, or the installed app if you've added it to your Dock.",
-  windows: "Your PC, real Requests and ToDos. You're testing through a browser, or the installed desktop app if you've added its icon.",
-}
-
-const PLATFORM_INTRO_TAIL =
-  " Work through this at your own pace — check off what you've tried as you go (your checkmarks stay on this device only). This list can change in a future app update, so check back."
+//
+// Per-platform intro sentences dropped entirely (2026-11-27) — Jim replaced
+// the whole intro with one platform-neutral paragraph; only the title above
+// still names the platform.
+const CHECKLIST_INTRO =
+  'Work through this at your own pace. To make this really easy, we keep track of what features you have used and mark them accordingly. This list can change in app updates, so please check back.'
 
 function detectPlatform(): Platform {
   if (Capacitor.isNativePlatform()) {
@@ -145,15 +172,15 @@ function buildItems(platform: Platform): ChecklistItem[] {
     {
       id: 'feat-3',
       group: 'features',
-      title: 'Respond to a Request',
-      detail: 'If you or someone else sends you one, find it under Received and mark it Done.',
+      title: 'Respond to a Request you send to yourself',
+      detail:
+        'Find it under Received and mark it Done. This provides you with a full view of the whole Request/Response process.',
     },
     {
       id: 'feat-dialog',
       group: 'features',
       title: 'Add a Dialog entry',
-      detail:
-        'Open a Request or ToDo and add a Question, Answer, or Comment under Dialog. This one checks itself off automatically once you do it — no need to tap the box.',
+      detail: 'Open a Request or ToDo and add a Question, Answer, or Comment under Dialog.',
       autoFeature: 'dialog_entry',
     },
     { id: 'feat-4', group: 'features', title: 'Add an Attachment', detail: 'A photo, PDF, or other file on a Request or ToDo.' },
@@ -201,13 +228,12 @@ function buildItems(platform: Platform): ChecklistItem[] {
       title: 'Compare Free vs. Subscriber',
       detail: (
         <>
-          Your account starts with Subscriber access so you can try everything. In <code>Account Options → Subscriber
-          section</code>, uncheck <code>Subscribed? (testing only)</code> to see the Free experience, then check it
-          again — worth trying both, since most real users will be on Free.
+          In <code>Account Options → Account Status</code>, use the testing-only switch to move between Free and
+          Subscriber — worth trying both, since most real users will be on Free.
         </>
       ),
     },
-    { id: 'quirk-1', group: 'quirks', title: '"Subscribe" won’t charge you', detail: "Real payment processing isn't connected yet — those buttons are safe to tap." },
+    { id: 'quirk-1', group: 'quirks', title: '"Subscribe" won’t charge you', detail: 'Payments run in Stripe test mode during Pre-Release Testing, so nothing is ever charged. To try a sign-up, use the test card 4242 4242 4242 4242.' },
     { id: 'quirk-2', group: 'quirks', title: 'First mic tap asks permission', detail: 'The first time you use Voice Dictation, you’ll be asked to allow microphone access — say yes, or dictation won’t work.' },
     { id: 'fb-1', group: 'feedback', title: 'Use Pre-Release Tester → Feedback', detail: 'Housekeeping → Pre-Release Tester → Feedback, from the Main Screen.' },
     { id: 'fb-2', group: 'feedback', title: 'Pick a Subject', detail: 'Error, Something Awkward, Something Missing, or Other.' },
@@ -234,37 +260,16 @@ const GROUP_LABEL: Record<Group, string> = {
 }
 
 const GROUP_ORDER: Group[] = ['start', 'features', 'quirks', 'feedback']
-const STORAGE_KEY = 'wyp.testerChecklistChecked'
-
-function loadChecked(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveChecked(map: Record<string, boolean>) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
-  } catch {
-    // Private window or blocked storage — checkmarks just won't persist.
-  }
-}
 
 export default function TesterChecklistForm() {
   const router = useRouter()
   const [platform, setPlatform] = useState<Platform>('windows')
+  // Item ids confirmed by real usage — the union of the account's own
+  // feature_usage rows and this device's local markers (see the header
+  // comment). There is no manual checking any more.
   const [checked, setChecked] = useState<Record<string, boolean>>({})
-  // Feature-usage tracking (2026-11-23, migration 103) — which item ids a
-  // real app action has already confirmed, via get_my_feature_usage().
-  // Merged into `checked` the moment it resolves (so checkableDone/the
-  // Progress line reflect it immediately) and never cleared back out —
-  // toggle() below refuses to uncheck one of these.
-  const [autoDetected, setAutoDetected] = useState<Record<string, boolean>>({})
 
-  // Platform-sensed title/content and localStorage checkmarks both read
+  // Platform-sensed title/content and localStorage markers both read
   // client-only state — deferred one microtask past mount so the first
   // render (server and client alike) stays identical, same
   // react-hooks/set-state-in-effect-safe pattern as CreateRequestForm.tsx's
@@ -272,7 +277,11 @@ export default function TesterChecklistForm() {
   useEffect(() => {
     queueMicrotask(() => {
       setPlatform(detectPlatform())
-      setChecked(loadChecked())
+      const local: Record<string, boolean> = {}
+      for (const mark of readLocalChecklistMarks()) {
+        for (const itemId of LOCAL_MARK_ITEM_IDS[mark] ?? []) local[itemId] = true
+      }
+      setChecked((current) => ({ ...current, ...local }))
     })
   }, [])
 
@@ -290,12 +299,7 @@ export default function TesterChecklistForm() {
         if (seen.has(feature)) next[itemId] = true
       }
       if (Object.keys(next).length === 0) return
-      setAutoDetected(next)
-      setChecked((current) => {
-        const merged = { ...current, ...next }
-        saveChecked(merged)
-        return merged
-      })
+      setChecked((current) => ({ ...current, ...next }))
     }
     void loadDetected()
     return () => {
@@ -306,13 +310,6 @@ export default function TesterChecklistForm() {
   const items = buildItems(platform)
   const checkableTotal = items.filter((it) => it.group !== 'quirks').length
   const checkableDone = items.filter((it) => it.group !== 'quirks' && checked[it.id]).length
-
-  function toggle(id: string) {
-    if (autoDetected[id]) return
-    const next = { ...checked, [id]: !checked[id] }
-    setChecked(next)
-    saveChecked(next)
-  }
 
   return (
     <div className="frame-none">
@@ -329,8 +326,7 @@ export default function TesterChecklistForm() {
         <div className="scroll">
           <div style={{ padding: '14px var(--pad) 6px' }}>
             <p className="help-lead" style={{ marginBottom: 16 }}>
-              {PLATFORM_INTRO[platform]}
-              {PLATFORM_INTRO_TAIL}
+              {CHECKLIST_INTRO}
             </p>
 
             <div className="metarow" style={{ marginBottom: 18 }}>
@@ -371,12 +367,13 @@ export default function TesterChecklistForm() {
                         </div>
                       </div>
                     ) : (
-                      <label key={it.id} className="checkrow">
+                      <div key={it.id} className="checkrow" style={{ cursor: 'default' }}>
                         <input
                           type="checkbox"
                           checked={!!checked[it.id]}
-                          disabled={!!autoDetected[it.id]}
-                          onChange={() => toggle(it.id)}
+                          disabled
+                          readOnly
+                          aria-label={checked[it.id] ? 'Used' : 'Not yet used'}
                         />
                         <div>
                           <span className="checktext">
@@ -384,11 +381,8 @@ export default function TesterChecklistForm() {
                             {it.requiresSubscription && <span className="checkword"> — Subscriber feature</span>}
                           </span>
                           <span className="checknote">{it.detail}</span>
-                          {autoDetected[it.id] && (
-                            <span className="checknote">Detected automatically — you&rsquo;ve already done this.</span>
-                          )}
                         </div>
-                      </label>
+                      </div>
                     )
                   )}
                 </div>

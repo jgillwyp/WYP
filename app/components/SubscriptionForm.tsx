@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import WypHeader from './WypHeader'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { AccountStatusSection } from './SubscriptionPanels'
+import { markLocalChecklistUsage } from '@/lib/featureUsage'
 
 /**
  * Account Status — the full-page click-through screen (2026-08-26, Jim's own
@@ -222,6 +223,7 @@ export default function SubscriptionForm() {
         setSaving(false)
         return
       }
+      markLocalChecklistUsage('tier_toggled')
       setRenewalDate(null)
       setStorageGb(5)
       setHasRealSubscription(false)
@@ -240,6 +242,7 @@ export default function SubscriptionForm() {
       setSaving(false)
       return
     }
+    markLocalChecklistUsage('tier_toggled')
 
     const { data } = await supabase
       .from('profiles')

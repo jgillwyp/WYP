@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 
 import { APP_VERSION } from '@/version'
+import { markLocalChecklistUsage } from '@/lib/featureUsage'
 
 // BeforeInstallPromptEvent isn't part of TypeScript's DOM lib — it's a
 // Chromium-only extension, not a web standard — so its shape is declared
@@ -191,6 +192,9 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
 
     const listenerPromise = CapacitorApp.addListener('appUrlOpen', (event) => {
       if (!event.url) return
+      // Tester Checklist's Android "Confirm links open the app" row
+      // (2026-11-27) — a link reaching this listener IS that confirmation.
+      markLocalChecklistUsage('link_opened_app')
       try {
         window.location.href = event.url
       } catch {

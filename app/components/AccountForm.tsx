@@ -7,6 +7,7 @@ import WypHeader from './WypHeader'
 import AppFooter from './AppFooter'
 import { supabase, getCurrentUser } from '@/lib/supabaseClient'
 import { AccountStatusSection } from './SubscriptionPanels'
+import { markLocalChecklistUsage } from '@/lib/featureUsage'
 
 /**
  * Account (2026-08-13) — new, deliberately minimal. Every other time this
@@ -672,6 +673,7 @@ export default function AccountForm() {
         setSaving(false)
         return
       }
+      markLocalChecklistUsage('tier_toggled')
       setRenewalDate(null)
       setStorageGb(5)
       setHasRealSubscription(false)
@@ -690,6 +692,7 @@ export default function AccountForm() {
       setSaving(false)
       return
     }
+    markLocalChecklistUsage('tier_toggled')
 
     // Migration 047 sets subscription_renewal_date server-side on the
     // subscriber transition — re-read the fresh row rather than guessing

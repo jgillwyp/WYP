@@ -50,3 +50,38 @@ export type TrackedFeature =
   | 'calendar_view'
   | 'archive_used'
   | 'print_used'
+
+// Device-local checklist marks (2026-11-27) — Jim: the Tester Checklist
+// should auto-check every item, with no manual checkboxes ("we keep track of
+// what features you have used"), and "if it is needed to be kept on a
+// per-account basis in the database for implementation, the usage information
+// can stay in their browser - as it is now." The 13 features above are
+// already logged per-account (feature_usage); these remaining checklist rows
+// (sending Feedback, switching Free/Subscriber, a link opening the installed
+// Android app) are recorded in this browser's localStorage instead, so no
+// migration is needed. Read by TesterChecklistForm.tsx alongside
+// get_my_feature_usage().
+export type LocalChecklistMark = 'feedback_sent' | 'tier_toggled' | 'link_opened_app'
+
+const LOCAL_MARKS_KEY = 'wyp.checklistLocalMarks'
+
+export function readLocalChecklistMarks(): Set<LocalChecklistMark> {
+  try {
+    const raw = localStorage.getItem(LOCAL_MARKS_KEY)
+    const list = raw ? (JSON.parse(raw) as unknown) : []
+    return new Set(Array.isArray(list) ? (list as LocalChecklistMark[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export function markLocalChecklistUsage(mark: LocalChecklistMark) {
+  try {
+    const marks = readLocalChecklistMarks()
+    if (marks.has(mark)) return
+    marks.add(mark)
+    localStorage.setItem(LOCAL_MARKS_KEY, JSON.stringify([...marks]))
+  } catch {
+    // Private window or blocked storage — the checklist just won't see it.
+  }
+}
