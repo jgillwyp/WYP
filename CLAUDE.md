@@ -10679,3 +10679,36 @@ link is built only after the stack is proven on Add Contact.
   were deleted by Jim directly, and `jimgillon@hotmail.com` re-added to
   both after an earlier tester removal had dropped it from the Beta
   cohort. `npx tsc --noEmit`/`npm run lint` clean.
+- **Tester Checklist is now fully automatic — no manual checkboxes
+  (2026-11-27), no migration.** Jim: "we keep track of what features you
+  have used and mark them accordingly... show the checkboxes for the 17
+  features checked or unchecked as appropriate but as disabled
+  checkboxes." Every row in `TesterChecklistForm.tsx` is now a disabled,
+  read-only checkbox. Real gap closed along the way: migration 104 had
+  been logging all 13 `TrackedFeature` values since 2026-11-23, but
+  `FEATURE_ITEM_ID` only ever mapped `dialog_entry`, so the other 12 never
+  auto-checked — now all 13 are mapped. The four rows with no
+  `feature_usage` counterpart use device-local localStorage markers
+  instead (Jim: "the usage information can stay in their browser"), via
+  new `markLocalChecklistUsage()`/`readLocalChecklistMarks()` in
+  `featureUsage.ts` (key `wyp.checklistLocalMarks`): `feedback_sent` (a
+  successful Feedback send from MainScreen.tsx or AboutForm.tsx — checks
+  all three "How to report something" rows), `tier_toggled` (a
+  successful Free/Subscriber testing switch in either direction,
+  AccountForm.tsx/SubscriptionForm.tsx), and `link_opened_app` (the
+  Android-only "Confirm links open the app" row, set in PWAProvider.tsx's
+  `appUrlOpen` listener). The old manual-checkmark key
+  (`wyp.testerChecklistChecked`) is no longer read, since a hand-ticked
+  box can't be told apart from real use. Wording, Jim's own: the
+  per-platform intro sentences are gone, replaced by one paragraph ("Work
+  through this at your own pace. To make this really easy, we keep track
+  of what features you have used and mark them accordingly..."); the title
+  still names the platform. "Respond to a Request" became "Respond to a
+  Request you send to yourself" ("Find it under Received and mark it
+  Done. This provides you with a full view of the whole Request/Response
+  process."). The stale Free vs. Subscriber detail (claimed accounts start
+  as Subscriber, pointed at a "Subscribed?" checkbox) now points at
+  Account Options → Account Status's testing-only switch, and the
+  "Subscribe won't charge you" quirk now explains Stripe test mode and the
+  4242 4242 4242 4242 test card (the other card values can be made up).
+  `npx tsc --noEmit`/`npm run lint` clean.

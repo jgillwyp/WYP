@@ -233,7 +233,7 @@ function buildItems(platform: Platform): ChecklistItem[] {
         </>
       ),
     },
-    { id: 'quirk-1', group: 'quirks', title: '"Subscribe" won’t charge you', detail: 'Payments run in Stripe test mode during Pre-Release Testing, so nothing is ever charged. To try a sign-up, use the test card 4242 4242 4242 4242.' },
+    { id: 'quirk-1', group: 'quirks', title: '"Subscribe" won’t charge you', detail: 'Payments run in Stripe test mode during Pre-Release Testing, so nothing is ever charged. To try a sign-up, use the test card 4242 4242 4242 4242 (the other card values can be made-up).' },
     { id: 'quirk-2', group: 'quirks', title: 'First mic tap asks permission', detail: 'The first time you use Voice Dictation, you’ll be asked to allow microphone access — say yes, or dictation won’t work.' },
     { id: 'fb-1', group: 'feedback', title: 'Use Pre-Release Tester → Feedback', detail: 'Housekeeping → Pre-Release Tester → Feedback, from the Main Screen.' },
     { id: 'fb-2', group: 'feedback', title: 'Pick a Subject', detail: 'Error, Something Awkward, Something Missing, or Other.' },
